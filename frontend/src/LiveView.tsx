@@ -3,17 +3,50 @@ import { useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
-import { StatsEngine } from './lib/StatsEngine';
+import { StatsEngine, MatchStats } from './lib/StatsEngine';
 import { SOCKET_URL } from './config';
 
 const LiveView: React.FC = () => {
     const { roomId } = useParams<{ roomId: string }>();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [gameState, setGameState] = useState<State | null>(null);
-    const [stats, setStats] = useState(() => roomId ? StatsEngine.compute(roomId) : { perPlayer: [
-        { playerIndex: 0, totalShots: 0, potCount: 0, totalPoints: 0, potRate: 0, avgShotTimeMs: 0, quickShotCount: 0, quickShotRate: 0, maxBreakPoints: 0, safeCount: 0, safeSuccessRate: 0 },
-        { playerIndex: 1, totalShots: 0, potCount: 0, totalPoints: 0, potRate: 0, avgShotTimeMs: 0, quickShotCount: 0, quickShotRate: 0, maxBreakPoints: 0, safeCount: 0, safeSuccessRate: 0 },
-    ], eventsCount: 0 });
+    const [stats, setStats] = useState<MatchStats>(() => roomId ? StatsEngine.compute(roomId) : {
+        perPlayer: [
+            {
+                playerIndex: 0,
+                totalShots: 0,
+                potCount: 0,
+                totalPoints: 0,
+                potRate: 0,
+                avgShotTimeMs: 0,
+                quickShotCount: 0,
+                quickShotRate: 0,
+                maxBreakPoints: 0,
+                safeCount: 0,
+                safeSuccessRate: 0,
+                foulCount: 0,
+                potByBall: { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 },
+                shotTimeBuckets: [0, 0, 0, 0],
+            },
+            {
+                playerIndex: 1,
+                totalShots: 0,
+                potCount: 0,
+                totalPoints: 0,
+                potRate: 0,
+                avgShotTimeMs: 0,
+                quickShotCount: 0,
+                quickShotRate: 0,
+                maxBreakPoints: 0,
+                safeCount: 0,
+                safeSuccessRate: 0,
+                foulCount: 0,
+                potByBall: { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 },
+                shotTimeBuckets: [0, 0, 0, 0],
+            },
+        ],
+        eventsCount: 0,
+    });
     const [showEndModal, setShowEndModal] = useState(false);
 
     useEffect(() => {
