@@ -8,7 +8,7 @@ import PlayerCard from './components/PlayerCard';
 import { StatsEngine } from './lib/StatsEngine';
 
 interface ScoreboardProps {
-    gameState: State;
+    gameState: State | null;
     setGameState: React.Dispatch<React.SetStateAction<State | null>>;
 }
 
@@ -115,6 +115,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleUndo = () => {
+        if (!gameState) return;
         const newState = gameState.undo();
         updateAndBroadcastState(newState);
     };

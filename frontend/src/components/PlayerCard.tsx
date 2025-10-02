@@ -30,13 +30,13 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, isCurrentPlayer, isFree
       <h3 className={nameClasses}>{player.name} ({player.memberId})</h3>
       <div className={scoreClasses}>{player.score}</div>
       <div className="flex justify-around">
-        <div className={framesClasses}>Frames: {player.frames}</div>
+        <div className={framesClasses}>Frames: {player.framesWon}</div>
       </div>
       {player.highBreaks.filter(br => br.score >= 20).length > 0 && (
         <div className="mt-2">
             <h4 className={`${framesClasses} text-lg text-center`}>High Break</h4>
             <div className="text-center mt-1">
-                {player.highBreaks.filter(br => br.score >= 20).map((br, index) => (
+                {player.highBreaks.filter(br => br.score >= 20).map((br) => (
                     <div key={`${br.score}-${br.time}`} className="text-gray-300 text-sm">
                         {br.score} ({formatTime(br.time)})
                     </div>

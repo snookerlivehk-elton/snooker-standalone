@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import Admin from './Admin';
 import Scoreboard from './Scoreboard';
 import Setup from './Setup';
@@ -10,18 +10,14 @@ import Overlay from './Overlay';
 
 function App() {
   const [gameState, setGameState] = useState<State | null>(null);
-  const navigate = useNavigate();
 
   const handleStartMatch = (settings: any) => {
-    const newGameState = new State(
-      settings.playersInfo.map((p: any) => p.name),
-      settings.settings
-    );
-    newGameState.players[0].name = settings.playersInfo[0].name;
-    newGameState.players[0].memberId = settings.playersInfo[0].memberId;
-    newGameState.players[1].name = settings.playersInfo[1].name;
-    newGameState.players[1].memberId = settings.playersInfo[1].memberId;
-    newGameState.currentPlayerIndex = settings.startingPlayerIndex;
+    // 以物件參數建立 State，避免建構子參數數量錯誤
+    const newGameState = new State({
+      playersInfo: settings.playersInfo,
+      settings: settings.settings,
+      startingPlayerIndex: settings.startingPlayerIndex,
+    });
     setGameState(newGameState);
   };
 

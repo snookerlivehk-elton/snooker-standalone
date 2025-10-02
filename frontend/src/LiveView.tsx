@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
 import { StatsEngine, MatchStats } from './lib/StatsEngine';
@@ -8,7 +8,7 @@ import { SOCKET_URL } from './config';
 
 const LiveView: React.FC = () => {
     const { roomId } = useParams<{ roomId: string }>();
-    const [socket, setSocket] = useState<Socket | null>(null);
+    // LiveView 不需要持久保存 socket 實例，避免未使用變數警告
     const [gameState, setGameState] = useState<State | null>(null);
     const [stats, setStats] = useState<MatchStats>(() => roomId ? StatsEngine.compute(roomId) : {
         perPlayer: [
@@ -50,15 +50,15 @@ const LiveView: React.FC = () => {
     const [showEndModal, setShowEndModal] = useState(false);
 
     useEffect(() => {
-    const newSocket = io(SOCKET_URL);
-        setSocket(newSocket);
+        const newSocket = io(SOCKET_URL);
 
         if (roomId) {
             newSocket.emit('join room', roomId);
         }
 
         newSocket.on('gameState updated', (newGameState) => {
-            const deserializedState = Object.assign(new State(newGameState.players.map(p => p.name), newGameState.settings), newGameState);
+            // 以 State.fromJSON 正確反序列化，避免建構子參數數量錯誤與隱含 any
+            const deserializedState = State.fromJSON(newGameState);
             setGameState(deserializedState);
         });
 

@@ -397,7 +397,7 @@ export class State {
         if (!this.isMatchOver) {
             return null;
         }
-        return this.players.reduce((a, b) => a.frames > b.frames ? a : b);
+        return this.players.reduce((a, b) => a.framesWon > b.framesWon ? a : b);
     }
 
     public toJSON() {

@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { SOCKET_URL } from './config';
 import { State } from './lib/State';
 // StatsEngine not required for overlay rendering; remove unused import
 
 const Overlay: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [gameState, setGameState] = useState<State | null>(null);
 
   useEffect(() => {
@@ -27,7 +26,6 @@ const Overlay: React.FC = () => {
 
   useEffect(() => {
     const s = io(SOCKET_URL);
-    setSocket(s);
     if (roomId) s.emit('join room', roomId);
     s.on('gameState updated', (newGameState) => {
       try {
@@ -37,7 +35,9 @@ const Overlay: React.FC = () => {
         console.warn('Failed to parse gameState for overlay:', e);
       }
     });
-    return () => s.disconnect();
+    return () => {
+      s.disconnect();
+    };
   }, [roomId]);
 
   if (!gameState) {
