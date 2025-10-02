@@ -1,0 +1,122 @@
+// Prisma schema for Snooker master database
+// Provider: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums for constrained columns
+enum EventType {
+  pot
+  foul
+  miss
+  safe
+  switch
+  newFrame
+  concede
+  freeBallToggle
+}
+
+enum BallName {
+  red
+  yellow
+  green
+  brown
+  blue
+  pink
+  black
+}
+
+model Member {
+  id           String       @id @default(uuid())
+  name         String
+  member_code  String?      @unique
+  created_at   DateTime     @default(now())
+
+  matchPlayers MatchPlayer[]
+  matchesWon   Match[]      @relation("winner_member")
+}
+
+model Match {
+  id               String       @id @default(uuid())
+  room_id          String
+  name             String
+  frames_required  Int
+  red_balls        Int
+  started_at       DateTime?
+  ended_at         DateTime?
+  version          Int          @default(1)
+
+  // winner relation
+  winner_member_id String?
+  winner_member    Member?      @relation(name: "winner_member", fields: [winner_member_id], references: [id])
+
+  players          MatchPlayer[]
+  events           Event[]
+  foulTotals       FoulTotals?
+  stats            MatchStats?
+
+  @@index([started_at])
+  @@index([winner_member_id])
+  @@index([room_id])
+}
+
+model MatchPlayer {
+  id                String   @id @default(uuid())
+  match_id          String
+  member_id         String
+
+  match             Match    @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  member            Member   @relation(fields: [member_id], references: [id])
+
+  frames_won        Int      @default(0)
+  total_points      Int      @default(0)
+  pot_rate          Decimal  @default(0)
+  avg_shot_time_ms  Int      @default(0)
+  max_break_points  Int      @default(0)
+  foul_count        Int      @default(0)
+  quick_shot_rate   Decimal  @default(0)
+  safe_success_rate Decimal  @default(0)
+  pot_by_ball       Json     @db.JsonB
+  shot_time_buckets Json     @db.JsonB
+
+  @@index([match_id, member_id])
+  @@index([member_id])
+}
+
+model Event {
+  id                BigInt     @id @default(autoincrement())
+  match_id          String
+
+  match             Match      @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  idx               Int
+  type              EventType
+  player_index      Int
+  player_member_id  String
+  ball_name         BallName?
+  points            Int?
+  timestamp         BigInt?
+  shot_time_ms      Int?
+
+  @@index([match_id, idx])
+  @@index([match_id, timestamp])
+}
+
+model FoulTotals {
+  match_id      String  @id
+  match         Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  player0_total Int     @default(0)
+  player1_total Int     @default(0)
+}
+
+model MatchStats {
+  match_id     String  @id
+  match        Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  events_count Int     @default(0)
+  per_player   Json    @db.JsonB
+}

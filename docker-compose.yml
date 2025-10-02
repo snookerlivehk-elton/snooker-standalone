@@ -1,0 +1,36 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      - PORT=3000
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8080}
+      - ENV_AUDIT_ENABLED=${ENV_AUDIT_ENABLED:-true}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://snooker:snooker@postgres:5432/snooker?schema=public}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/env-history.jsonl:/app/env-history.jsonl
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=snooker
+      - POSTGRES_PASSWORD=snooker
+      - POSTGRES_DB=snooker
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./backend/.pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snooker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

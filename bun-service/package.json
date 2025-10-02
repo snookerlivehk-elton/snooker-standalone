@@ -1,0 +1,12 @@
+{
+  "name": "bun-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.tsx",
+    "dev": "bun --hot index.tsx"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  }
+}

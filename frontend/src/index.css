@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+
+@layer components {
+    .ball-3d {
+        border-radius: 50%;
+        position: relative;
+        box-shadow: inset -10px -10px 20px rgba(0,0,0,0.5), 0 5px 15px rgba(0,0,0,0.5);
+        background-image: radial-gradient(circle at 30% 30%, white, transparent 50%);
+    }
+    .ball-3d::before {
+        content: '';
+        position: absolute;
+        top: 5%;
+        left: 15%;
+        width: 30%;
+        height: 30%;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.6);
+        filter: blur(5px);
+    }
+}

@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  backend:
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      DATABASE_URL: ${DATABASE_URL}
+      SOCKET_IO_PATH: ${SOCKET_IO_PATH:-/socket.io}
+    ports:
+      - "3000:3000"
+    # 若在雲端直接 build，可把 image 移除，使用 Dockerfile build
+    # image: your-registry/snooker-backend:latest
+
+  frontend:
+    environment:
+      VITE_SOCKET_URL: ${VITE_SOCKET_URL}
+      VITE_SOCKET_PATH: ${VITE_SOCKET_PATH:-/socket.io}
+    ports:
+      - "5173:5173"
+    # image: your-registry/snooker-frontend:latest
+    # 若改用靜態託管，雲端可不啟動此服務
+
+  # 可選：若需要 Nginx 反向代理，請在正式環境加入以下服務
+  # proxy:
+  #   image: nginx:stable
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx/cloud.conf:/etc/nginx/conf.d/default.conf:ro
+  #   depends_on:
+  #     - backend
+  #     - frontend
