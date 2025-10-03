@@ -48,9 +48,16 @@ const LiveView: React.FC = () => {
         eventsCount: 0,
     });
     const [showEndModal, setShowEndModal] = useState(false);
+    const [statsPage, setStatsPage] = useState(0);
+    const totalPages = 3; // 將統計分為 3 版輪播
 
     useEffect(() => {
-        const newSocket = io(SOCKET_URL);
+        const newSocket = io(SOCKET_URL, {
+            transports: ['websocket'],
+            path: '/socket.io',
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+        });
 
         if (roomId) {
             newSocket.emit('join room', roomId);
@@ -88,6 +95,14 @@ const LiveView: React.FC = () => {
         gameState?.players[1].score,
     ]);
 
+    // 自動輪播統計頁面（每 8 秒）
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setStatsPage((p) => (p + 1) % totalPages);
+        }, 8000);
+        return () => clearInterval(timer);
+    }, [totalPages]);
+
     useEffect(() => {
         if (isMatchOver) setShowEndModal(true);
     }, [isMatchOver]);
@@ -105,11 +120,10 @@ const LiveView: React.FC = () => {
         <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
             <div className="w-full max-w-5xl mx-auto">
                 <div className="text-center mb-4">
-                    <h1 className="text-3xl font-bold tracking-wider">{gameState.settings.matchName}</h1>
-                    <p className="text-xl text-gray-400">{gameState.players[0].framesWon} ({gameState.settings.framesRequired}) {gameState.players[1].framesWon}</p>
+                    <h1 className="text-5xl md:text-6xl font-extrabold tracking-widest drop-shadow-md">{gameState.settings.matchName}</h1>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="grid grid-cols-2 gap-6 mb-4">
                     {gameState.players.map((player, index) => (
                         <PlayerCard
                             key={player.memberId}
@@ -120,8 +134,56 @@ const LiveView: React.FC = () => {
                     ))}
                 </div>
 
+                {/* 中央計分條（置中），左右顯示 Fouls / Miss / Safeties 即時數據 */}
+                <div className="w-full max-w-[1920px] mx-auto mb-6 grid grid-cols-3 items-center bg-green-800 border-4 border-yellow-400 rounded-xl px-8 py-4">
+                    {/* 左側：球員1即時數據（三欄居中，與標題對齊中置） */}
+                    <div className="flex items-center justify-start">
+                        <div className="grid grid-cols-3 gap-4 bg-black/40 rounded-lg px-6 py-3 border border-yellow-400/30 w-[560px]">
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Fouls</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[0].fouls}</div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Miss</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[0].misses}</div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Safeties</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[0].safeties}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 中央：雙方得局（整體膠囊，總局數置中以括號顯示） */}
+                    <div className="flex items-center justify-center">
+                        <div className="bg-black text-yellow-300 font-extrabold text-3xl rounded px-6 py-2 flex items-center gap-6">
+                            <span>{gameState.players[0].framesWon}</span>
+                            <span>({gameState.settings.framesRequired})</span>
+                            <span>{gameState.players[1].framesWon}</span>
+                        </div>
+                    </div>
+
+                    {/* 右側：球員2即時數據（三欄居中，與標題對齊中置） */}
+                    <div className="flex items-center justify-end">
+                        <div className="grid grid-cols-3 gap-4 bg-black/40 rounded-lg px-6 py-3 border border-yellow-400/30 w-[560px]">
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Fouls</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[1].fouls}</div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Miss</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[1].misses}</div>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <div className="text-xl font-semibold text-gray-300">Safeties</div>
+                                <div className="text-2xl font-bold text-yellow-300">{gameState.players[1].safeties}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="bg-gray-800 rounded-lg p-4 mb-6 text-center">
-                    <div className="grid grid-cols-4 gap-4 text-lg">
+                    <div className="grid grid-cols-6 gap-4 text-lg">
                         <div>
                             <p className="text-gray-400">Lead</p>
                             <p className="font-bold text-2xl">{lead > 0 ? `${leader.memberId} +${lead}` : 'Tied'}</p>
@@ -138,93 +200,86 @@ const LiveView: React.FC = () => {
                             <p className="text-gray-400">Reds Left</p>
                             <p className="font-bold text-2xl">{gameState.redsRemaining}</p>
                         </div>
+                        <div>
+                            <p className="text-gray-400">Frame Time</p>
+                            <p className="font-bold text-2xl">{formatTime(gameState.timers.frameTime)}</p>
+                        </div>
+                        <div>
+                            <p className="text-gray-400">Match Time</p>
+                            <p className="font-bold text-2xl">{formatTime(gameState.timers.matchTime)}</p>
+                        </div>
                     </div>
                     {lastShot && (
-                        <p className="text-sm text-gray-300 mt-4">
+                        <p className="text-xl font-semibold text-gray-300 mt-4">
                             Last: {`${gameState.players[lastShot.player].memberId}: ${lastShot.type} ${lastShot.ball ? `(Ball ${lastShot.ball})` : ''} - ${lastShot.points} pts`}
                         </p>
                     )}
                 </div>
 
-                <div className="text-center mb-6 text-gray-400 grid grid-cols-2 gap-4">
-                    <div>
-                        <p>Frame Time</p>
-                        <p className="font-bold text-white text-xl">{formatTime(gameState.timers.frameTime)}</p>
-                    </div>
-                    <div>
-                        <p>Match Time</p>
-                        <p className="font-bold text-white text-xl">{formatTime(gameState.timers.matchTime)}</p>
-                    </div>
-                </div>
+                {/* 已將 Frame Time 與 Match Time 併入上方統計群組 */}
 
-                {/* Live Stats */}
-                <div className="w-full max-w-5xl mx-auto mb-6 bg-gray-800/60 rounded-lg p-4">
-                    <h2 className="text-xl font-semibold mb-2 text-center">Live Stats — {gameState.settings.matchName}</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        {[0, 1].map((pi) => (
-                            <div key={pi} className="bg-gray-700/50 rounded-md p-3">
-                                <p className="font-semibold">{gameState.players[pi].name} ({gameState.players[pi].memberId})</p>
-                                <div className="text-sm text-gray-300 space-y-1 mt-2">
-                                    <p>Shots: {stats.perPlayer[pi].totalShots}</p>
-                                    <p>Pot Rate: {(stats.perPlayer[pi].potRate * 100).toFixed(1)}%</p>
-                                    <p>Avg Shot Time: {(stats.perPlayer[pi].avgShotTimeMs / 1000).toFixed(2)}s</p>
-                                    <p>Quick Shots (≤7s): {(stats.perPlayer[pi].quickShotRate * 100).toFixed(1)}%</p>
-                                    <p>Total Points: {stats.perPlayer[pi].totalPoints}</p>
-                                    <p>Max Break: {stats.perPlayer[pi].maxBreakPoints}</p>
-                                    <p>Safe Success: {(stats.perPlayer[pi].safeSuccessRate * 100).toFixed(1)}%</p>
-                                    <p>Fouls: {stats.perPlayer[pi].foulCount}</p>
-                                </div>
-
-                                {/* Color Pot Distribution */}
-                                <div className="mt-3">
-                                    <p className="text-xs text-gray-400 mb-1">Color Distribution</p>
-                                    {(() => {
-                                        const pb = stats.perPlayer[pi].potByBall;
-                                        const totals = [pb.red, pb.yellow, pb.green, pb.brown, pb.blue, pb.pink, pb.black];
-                                        const labels = ['Red', 'Yellow', 'Green', 'Brown', 'Blue', 'Pink', 'Black'];
-                                        const colors = ['#dc2626','#f59e0b','#22c55e','#a16207','#3b82f6','#ec4899','#111827'];
-                                        const max = Math.max(1, ...totals);
-                                        return (
-                                            <div className="space-y-1">
-                                                {totals.map((v, idx) => (
-                                                    <div key={idx} className="flex items-center gap-2">
-                                                        <span className="w-12 text-xs">{labels[idx]}</span>
-                                                        <div className="flex-1 h-2 rounded bg-gray-600 overflow-hidden">
-                                                            <div style={{ width: `${(v / max) * 100}%`, backgroundColor: colors[idx] }} className="h-2" />
-                                                        </div>
-                                                        <span className="w-6 text-xs text-right">{v}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-
-                                {/* Shot Time Histogram */}
-                                <div className="mt-3">
-                                    <p className="text-xs text-gray-400 mb-1">Shot Time Histogram</p>
-                                    {(() => {
-                                        const buckets = stats.perPlayer[pi].shotTimeBuckets;
-                                        const labels = ['0-5s','5-10s','10-20s','>20s'];
-                                        const max = Math.max(1, ...buckets);
-                                        return (
-                                            <div className="space-y-1">
-                                                {buckets.map((v, idx) => (
-                                                    <div key={idx} className="flex items-center gap-2">
-                                                        <span className="w-12 text-xs">{labels[idx]}</span>
-                                                        <div className="flex-1 h-2 rounded bg-gray-600 overflow-hidden">
-                                                            <div style={{ width: `${(v / max) * 100}%`, backgroundColor: '#10b981' }} className="h-2" />
-                                                        </div>
-                                                        <span className="w-6 text-xs text-right">{v}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-                        ))}
+                {/* Live Stats (VS layout, 1920x1080-friendly, carousel) */}
+                <div className="w-full max-w-[1920px] mx-auto mb-6 bg-gray-800/60 rounded-lg p-8">
+                    <h2 className="text-4xl font-bold tracking-wider mb-6 text-center">Live Stats — {gameState.settings.matchName}</h2>
+                    <div className="flex items-baseline justify-between mb-8">
+                        <div className="flex-1 text-right text-2xl font-bold tracking-wide">{gameState.players[0].name} ({gameState.players[0].memberId})</div>
+                        <div className="mx-8 text-2xl text-gray-300 tracking-wide">vs</div>
+                        <div className="flex-1 text-left text-2xl font-bold tracking-wide">{gameState.players[1].name} ({gameState.players[1].memberId})</div>
                     </div>
+
+                    {(() => {
+                        const s0 = stats.perPlayer[0];
+                        const s1 = stats.perPlayer[1];
+                        const pages: { label: string; left: string | number; right: string | number }[][] = [
+                            [
+                                { label: 'Shots', left: s0.totalShots, right: s1.totalShots },
+                                { label: 'Pots', left: s0.potCount, right: s1.potCount },
+                                { label: 'Points', left: s0.totalPoints, right: s1.totalPoints },
+                                { label: 'Pot Rate', left: `${(s0.potRate * 100).toFixed(1)}%`, right: `${(s1.potRate * 100).toFixed(1)}%` },
+                            ],
+                            [
+                                { label: 'Avg Shot Time', left: `${(s0.avgShotTimeMs / 1000).toFixed(2)}s`, right: `${(s1.avgShotTimeMs / 1000).toFixed(2)}s` },
+                                { label: 'Quick Shot Rate', left: `${(s0.quickShotRate * 100).toFixed(1)}%`, right: `${(s1.quickShotRate * 100).toFixed(1)}%` },
+                                { label: 'Max Break', left: s0.maxBreakPoints, right: s1.maxBreakPoints },
+                                { label: 'Fouls', left: s0.foulCount, right: s1.foulCount },
+                                { label: 'Safes', left: s0.safeCount, right: s1.safeCount },
+                                { label: 'Safe Success', left: `${(s0.safeSuccessRate * 100).toFixed(1)}%`, right: `${(s1.safeSuccessRate * 100).toFixed(1)}%` },
+                            ],
+                            [
+                                { label: 'Red Pots', left: s0.potByBall.red, right: s1.potByBall.red },
+                                { label: 'Yellow Pots', left: s0.potByBall.yellow, right: s1.potByBall.yellow },
+                                { label: 'Green Pots', left: s0.potByBall.green, right: s1.potByBall.green },
+                                { label: 'Brown Pots', left: s0.potByBall.brown, right: s1.potByBall.brown },
+                                { label: 'Blue Pots', left: s0.potByBall.blue, right: s1.potByBall.blue },
+                                { label: 'Pink Pots', left: s0.potByBall.pink, right: s1.potByBall.pink },
+                                { label: 'Black Pots', left: s0.potByBall.black, right: s1.potByBall.black },
+                            ],
+                        ];
+                        const rows = pages[statsPage] || pages[0];
+                        return (
+                            <>
+                                <div className="space-y-4">
+                                    {rows.map((row) => (
+                                        <div key={row.label} className="flex items-center justify-between">
+                                            <div className="flex-1 text-right text-3xl font-semibold tracking-wider">{row.left}</div>
+                                            <div className="mx-10 text-2xl font-medium tracking-wider">{row.label}</div>
+                                            <div className="flex-1 text-left text-3xl font-semibold tracking-wider">{row.right}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center justify-center gap-2 mt-8">
+                                    {[0,1,2].map((i) => (
+                                        <button
+                                            key={i}
+                                            className={`w-3 h-3 rounded-full ${i === statsPage ? 'bg-yellow-400' : 'bg-gray-500'}`}
+                                            onClick={() => setStatsPage(i)}
+                                            aria-label={`Stats page ${i+1}`}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
             {showEndModal && (

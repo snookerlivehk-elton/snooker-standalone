@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from './config';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface Room {
@@ -13,7 +14,7 @@ const Admin: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('/api/rooms')
+    fetch(`${API_URL}/api/rooms`)
       .then((res) => res.json())
       .then((data) => setRooms(data));
   }, []);
@@ -21,7 +22,7 @@ const Admin: React.FC = () => {
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    fetch('/api/rooms', {
+    fetch(`${API_URL}/api/rooms`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -39,7 +40,7 @@ const Admin: React.FC = () => {
         setRooms([...rooms, newRoom]);
         setNewRoomName('');
         setError(null);
-        navigate(`/room/${newRoom.id}/setup`);
+        // Stay on Admin page after creating a room; no redirect.
       })
       .catch((error) => {
         console.error(error);
@@ -48,7 +49,7 @@ const Admin: React.FC = () => {
   };
 
   const handleDeleteRoom = (roomId: string) => {
-      fetch(`/api/rooms/${roomId}`, {
+      fetch(`${API_URL}/api/rooms/${roomId}`, {
           method: 'DELETE',
       })
       .then(response => {
@@ -74,9 +75,9 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}`;
+                      const url = `${window.location.origin}/room/${room.id}/setup`;
                       navigator.clipboard.writeText(url).then(() => {
-                        alert(`已複製房間連結：\n${url}`);
+                        alert(`已複製房間 Setup 連結：\n${url}`);
                       });
                     }}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"

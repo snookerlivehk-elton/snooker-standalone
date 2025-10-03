@@ -3,11 +3,12 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { startEnvAudit } from './envAudit.js';
+import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
     ? '*'
@@ -69,6 +70,52 @@ app.delete('/api/rooms/:roomId', (req, res) => {
         res.status(404).json({ error: 'Room not found' });
     }
 });
+// Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)
+function adminAuth(req, res, next) {
+    if (!ADMIN_TOKEN)
+        return next();
+    const token = req.headers['x-admin-token'] || req.query.token || '';
+    if (token !== ADMIN_TOKEN) {
+        return res.status(401).json({ error: 'unauthorized' });
+    }
+    next();
+}
+// Admin overview: basic runtime, DB, sockets, rooms
+app.get('/admin/overview', adminAuth, async (_req, res) => {
+    let dbStatus = 'ok';
+    let dbError;
+    try {
+        await prisma.$queryRaw `SELECT 1`;
+    }
+    catch (err) {
+        dbStatus = 'error';
+        dbError = String(err);
+    }
+    res.json({
+        status: 'ok',
+        timestamp: Date.now(),
+        uptime: process.uptime(),
+        port: PORT,
+        corsOrigins,
+        sockets: { clientsCount: io?.engine?.clientsCount ?? null },
+        rooms: { count: rooms.length },
+        db: { status: dbStatus, error: dbError }
+    });
+});
+// Admin env history tail
+app.get('/admin/env-history', adminAuth, (req, res) => {
+    const linesRaw = req.query.lines || '100';
+    const lines = Math.max(1, Math.min(500, Number(linesRaw) || 100));
+    const tail = getEnvHistoryTail(lines).map((s) => {
+        try {
+            return JSON.parse(s);
+        }
+        catch {
+            return { raw: s };
+        }
+    });
+    res.json({ lines, tail });
+});
 io.on('connection', (socket) => {
     console.log('a user connected');
     socket.on('join room', (roomId) => {
@@ -84,14 +131,16 @@ io.on('connection', (socket) => {
         if (room) {
             room.gameState = newState;
         }
-        io.to(roomId).emit('gameState updated', newState);
+        // Avoid echoing back to the sender to preserve local history (UNDO)
+        // Broadcast to other clients in the room only
+        socket.broadcast.to(roomId).emit('gameState updated', newState);
     });
     socket.on('disconnect', () => {
         console.log('user disconnected');
     });
 });
-server.listen(PORT, () => {
-    console.log(`listening on *:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`listening on 0.0.0.0:${PORT}`);
 });
 process.on('SIGINT', async () => {
     await prisma.$disconnect();

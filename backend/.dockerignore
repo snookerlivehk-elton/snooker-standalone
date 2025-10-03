@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*
+.pgdata
+html-report
+__tests__
+jest.config.cjs
+env-history.jsonl
+.env.example
+.env.cloud.example

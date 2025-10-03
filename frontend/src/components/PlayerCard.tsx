@@ -8,10 +8,10 @@ interface PlayerCardProps {
 }
 
 const PlayerCard: React.FC<PlayerCardProps> = ({ player, isCurrentPlayer, isFreeBall }) => {
-  const cardClasses = `p-4 rounded-lg shadow-md transition-all duration-300 ${isCurrentPlayer ? 'bg-blue-500' : 'bg-yellow-800'}`;
-  const nameClasses = `font-bold text-2xl ${isCurrentPlayer ? 'text-black' : 'text-gray-300'}`;
-  const scoreClasses = `text-6xl font-bold my-2 ${isCurrentPlayer ? 'text-white' : 'text-gray-100'}`;
-  const framesClasses = `text-lg font-semibold ${isCurrentPlayer ? 'text-blue-200' : 'text-gray-400'}`;
+  const cardClasses = `relative p-4 rounded-lg shadow-md transition-all duration-300 bg-gray-800 ${isCurrentPlayer ? 'border-4 border-yellow-400 shadow-yellow-300' : 'border-2 border-transparent'}`;
+  const nameClasses = `font-bold text-2xl text-white`;
+  const scoreClasses = `text-6xl font-bold my-2 text-yellow-200`;
+  const framesClasses = `text-lg font-semibold text-gray-300`;
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -29,9 +29,6 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, isCurrentPlayer, isFree
       )}
       <h3 className={nameClasses}>{player.name} ({player.memberId})</h3>
       <div className={scoreClasses}>{player.score}</div>
-      <div className="flex justify-around">
-        <div className={framesClasses}>Frames: {player.framesWon}</div>
-      </div>
       {player.highBreaks.filter(br => br.score >= 20).length > 0 && (
         <div className="mt-2">
             <h4 className={`${framesClasses} text-lg text-center`}>High Break</h4>
@@ -44,11 +41,6 @@ const PlayerCard: React.FC<PlayerCardProps> = ({ player, isCurrentPlayer, isFree
             </div>
         </div>
       )}
-      <div className="mt-4 pt-2 border-t border-gray-500 flex justify-around text-sm">
-        <div className={framesClasses}>Fouls: {player.fouls}</div>
-        <div className={framesClasses}>Misses: {player.misses}</div>
-        <div className={framesClasses}>Safeties: {player.safeties}</div>
-      </div>
     </div>
   );
 };

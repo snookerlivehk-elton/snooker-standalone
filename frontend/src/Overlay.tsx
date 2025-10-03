@@ -83,33 +83,85 @@ const Overlay: React.FC = () => {
   };
 
   const panelStyle: React.CSSProperties = {
-    background: 'rgba(0,0,0,0.9)',
+    background: '#121212',
     border: '4px solid #f5d000',
     color: '#fff',
-    padding: '8px 16px',
-    borderRadius: 12,
-    minWidth: 320,
+    padding: '12px 24px',
+    borderRadius: 16,
+    minWidth: 460,
     textAlign: 'center',
   };
 
-  const centerStyle: React.CSSProperties = {
+  const matchNameBox: React.CSSProperties = {
+    background: '#2a5f2a',
+    border: '4px solid #f5d000',
+    color: '#fff',
+    // 寬度增加一倍、高度增加 50%（以 padding 調整）
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '12px 28px',
+    borderRadius: 16,
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    zIndex: 1,
+  };
+
+  const centerBandStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    background: '#2a5f2a',
+    background: '#000000',
     border: '4px solid #f5d000',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: '8px 12px',
     color: '#fff',
   };
 
-  const scoreBox: React.CSSProperties = {
-    background: '#000',
-    color: '#ffd700',
+  const scoreBoxYellow: React.CSSProperties = {
+    background: '#ffd700',
+    color: '#000',
     borderRadius: 8,
-    padding: '4px 12px',
-    fontWeight: 800,
-    fontSize: 28,
+    padding: '6px 16px',
+    fontWeight: 900,
+    fontSize: 34,
+  };
+
+  const framesBox: React.CSSProperties = {
+    background: '#000',
+    color: '#ffffff',
+    borderRadius: 8,
+    padding: '4px 10px',
+    fontWeight: 700,
+    fontSize: 24,
+    opacity: 0.95,
+  };
+
+  // Unified black bar (merge left panel + center band + right panel)
+  const unifiedBarStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    background: '#000000',
+    border: '4px solid #f5d000',
+    borderRadius: 16,
+    padding: '8px 12px',
+    color: '#fff',
+    // 拓寬整個計分條（高度與字體不變），貼近電視轉播樣式
+    width: '85vw',
+    maxWidth: 1700,
+    justifyContent: 'space-between',
+    // 讓上方綠色膠囊與黑色組別邊框重疊
+    marginTop: -4,
+  };
+
+  // Yellow triangle indicator style (current player at table)
+  const indicatorStyle: React.CSSProperties = {
+    fontSize: 22,
+    fontWeight: 900,
+    color: '#ffd700',
   };
 
   return (
@@ -127,47 +179,45 @@ const Overlay: React.FC = () => {
           'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif',
       }}
     >
-      {/* Center overlay bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-        }}
-      >
-        {/* Left player panel */}
-        <div style={panelStyle}>
+      {/* Match name (green) + unified black bar */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+        <div style={matchNameBox}>{gameState.settings.matchName}</div>
+        <div style={unifiedBarStyle}>
+          {/* Left name */}
           <span style={{ fontSize: 28, fontWeight: 700 }}>{nameWithBreak(0)}</span>
-        </div>
-
-        {/* Center scores and match name */}
-        <div style={centerStyle}>
-          <span style={{ fontSize: 16, opacity: 0.9 }}>{gameState.settings.matchName}</span>
-          <div style={scoreBox}>{gameState.players[0].score}</div>
-          <span style={{ fontSize: 20, fontWeight: 800, color: '#ffd700' }}>▶</span>
-          <div style={scoreBox}>{gameState.players[1].score}</div>
-        </div>
-
-        {/* Right player panel */}
-        <div style={panelStyle}>
+          {/* Center scores */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flex: 1 }}>
+            <span style={{ ...indicatorStyle, opacity: gameState.currentPlayerIndex === 0 ? 1 : 0 }}>◀</span>
+            <div style={scoreBoxYellow}>{gameState.players[0].score}</div>
+            <div style={framesBox}>{gameState.players[0].framesWon} ({gameState.settings.framesRequired}) {gameState.players[1].framesWon}</div>
+            <div style={scoreBoxYellow}>{gameState.players[1].score}</div>
+            <span style={{ ...indicatorStyle, opacity: gameState.currentPlayerIndex === 1 ? 1 : 0 }}>▶</span>
+          </div>
+          {/* Right name */}
           <span style={{ fontSize: 28, fontWeight: 700 }}>{nameWithBreak(1)}</span>
         </div>
       </div>
 
-      {/* Info strip below center */}
+      {/* Info strip below center (green capsule) */}
       <div
         style={{
-          marginTop: 16,
-          background: 'rgba(0,0,0,0.7)',
-          color: '#b7ffc4',
+          // 讓綠色膠囊與上方黑色組別的黃色描邊重疊
+          marginTop: -4,
+          background: '#2a5f2a',
+          color: '#ffffff',
           padding: '6px 12px',
-          borderRadius: 8,
-          border: '2px solid #2ea44f',
+          borderRadius: 12,
+          border: '4px solid #f5d000',
           fontSize: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 28,
+          zIndex: 1,
         }}
       >
-        <span style={{ marginRight: 12 }}>Break: {breakScore}</span>
-        <span style={{ marginRight: 12 }}>{leader.name} is {lead} ahead</span>
+        <span>Break: {breakScore}</span>
+        <span>{leader.name} is {lead} ahead</span>
         <span>Remaining: {remainingPoints}</span>
       </div>
     </div>

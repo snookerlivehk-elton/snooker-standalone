@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { SOCKET_URL } from './config';
+import { SOCKET_URL, API_URL } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
@@ -17,10 +17,17 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const navigate = useNavigate();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [endModalDismissed, setEndModalDismissed] = useState(false);
+    // 當本地送出更新後，忽略一次伺服器回送，避免覆蓋本地 history 造成 UNDO 失效
+    const ignoreNextSocketUpdateRef = useRef(false);
     const liveViewUrl = `${window.location.origin}/room/${roomId}/live`;
 
     useEffect(() => {
-        const newSocket = io(SOCKET_URL);
+        const newSocket = io(SOCKET_URL, {
+            transports: ['websocket'],
+            path: '/socket.io',
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+        });
         setSocket(newSocket);
 
         if (roomId) {
@@ -39,6 +46,11 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     useEffect(() => {
         if (socket) {
             socket.on('gameState updated', (newGameState) => {
+                // 若此更新為本地剛發送的回送，跳過以保留本地 history
+                if (ignoreNextSocketUpdateRef.current) {
+                    ignoreNextSocketUpdateRef.current = false;
+                    return;
+                }
                 const deserializedState = State.fromJSON(newGameState);
                 setGameState(deserializedState);
             });
@@ -47,6 +59,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     const updateAndBroadcastState = (newState: State) => {
         if (socket) {
+            // 標記忽略下一次回送更新（伺服器會回送給發送者）
+            ignoreNextSocketUpdateRef.current = true;
             socket.emit('update gameState', { roomId, newState });
         }
         setGameState(newState);
@@ -65,7 +79,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handlePot = (ball: number) => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         newState.pot(ball);
         if (roomId) {
             const lastShot = newState.shotHistory[newState.shotHistory.length - 1];
@@ -83,7 +97,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleFoul = (penalty: number) => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         newState.foul(penalty);
         if (roomId) {
             const lastShot = newState.shotHistory[newState.shotHistory.length - 1];
@@ -101,7 +115,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleSwitchPlayer = () => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         if (roomId) {
             const prevIndex = newState.currentPlayerIndex;
             RoomStorage.appendEvent(roomId!, {
@@ -116,12 +130,21 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     const handleUndo = () => {
         if (!gameState) return;
-        const newState = gameState.undo();
+        // 每次按一次回退一步
+        let popped = 0;
+        const ev = roomId ? RoomStorage.popLastEvent(roomId!) : null;
+        if (ev) {
+            popped = 1;
+            if (ev.type === 'foul' && typeof ev.points === 'number') {
+                RoomStorage.decrementFoulTotal(roomId!, ev.playerIndex, ev.points);
+            }
+        }
+        const newState = popped ? gameState.undoSteps(1) : gameState.undo();
         updateAndBroadcastState(newState);
     };
 
     const handleNewFrame = () => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         if (roomId) {
             RoomStorage.appendEvent(roomId!, {
                 type: 'newFrame',
@@ -135,7 +158,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     const handleConcede = () => {
         if (window.confirm('Are you sure you want to concede the frame?')) {
-            const newState = State.fromJSON(JSON.stringify(gameState));
+            const newState = gameState!.clone();
             if (roomId) {
                 RoomStorage.appendEvent(roomId!, {
                     type: 'concede',
@@ -149,7 +172,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleMiss = () => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         if (roomId) {
             const shooter = newState.currentPlayerIndex;
             RoomStorage.appendEvent(roomId!, {
@@ -164,7 +187,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleSafe = () => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         if (roomId) {
             const shooter = newState.currentPlayerIndex;
             RoomStorage.appendEvent(roomId!, {
@@ -179,7 +202,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     };
 
     const handleToggleFreeBall = () => {
-        const newState = State.fromJSON(JSON.stringify(gameState));
+        const newState = gameState!.clone();
         if (roomId) {
             RoomStorage.appendEvent(roomId!, {
                 type: 'freeBallToggle',
@@ -247,7 +270,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                             memberId: i === 0 ? (hasP1 ? p1Id : null) : (hasP2 ? p2Id : null),
                                         }));
 
-                                        const createRes = await fetch('/api/matches', {
+                                        const createRes = await fetch(`${API_URL}/api/matches`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -261,7 +284,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                         const { matchId } = await createRes.json();
 
                                         // 追加事件
-                                        const eventsRes = await fetch(`/api/matches/${matchId}/events`, {
+                                        const eventsRes = await fetch(`${API_URL}/api/matches/${matchId}/events`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -282,7 +305,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                         const winnerMemberId = (record.winnerIndex !== null)
                                             ? (record.players[record.winnerIndex].memberId || null)
                                             : null;
-                                        const finalizeRes = await fetch(`/api/matches/${matchId}/finalize`, {
+                                        const finalizeRes = await fetch(`${API_URL}/api/matches/${matchId}/finalize`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -453,7 +476,12 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center">
                         <div className="bg-gray-800 p-8 rounded-lg text-center">
                             <h2 className="text-4xl font-bold mb-4">Match Over</h2>
-                            <p className="text-2xl mb-6">{gameState.getWinner()?.name} wins the match!</p>
+                            <p className="text-2xl mb-6">
+                                {(() => {
+                                    const winner = gameState.getWinner();
+                                    return winner ? `${winner.name} wins the match!` : 'Match Drawn';
+                                })()}
+                            </p>
                             <button onClick={() => {
                                 if (roomId) {
                                     navigate(`/room/${roomId}/live`);

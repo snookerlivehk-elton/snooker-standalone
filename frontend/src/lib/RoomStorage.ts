@@ -89,12 +89,27 @@ export const RoomStorage = {
     write(roomId, data);
   },
 
+  decrementFoulTotal(roomId: string, playerIndex: number, points: number) {
+    const data = read(roomId);
+    const idx = playerIndex === 0 ? 0 : 1;
+    data.foulTotals[idx] = Math.max(0, (data.foulTotals[idx] ?? 0) - Math.max(0, points));
+    write(roomId, data);
+  },
+
   clearRoom(roomId: string) {
     write(roomId, { events: [], foulTotals: [0, 0] });
   },
 
   exportRoomData(roomId: string): string {
     return JSON.stringify(read(roomId));
+  },
+
+  popLastEvent(roomId: string): RoomEvent | null {
+    const data = read(roomId);
+    if (!data.events.length) return null;
+    const ev = data.events.pop() || null;
+    write(roomId, data);
+    return ev;
   },
 
   // Query helpers

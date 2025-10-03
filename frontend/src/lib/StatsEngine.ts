@@ -138,11 +138,24 @@ export const StatsEngine = {
     const stats = this.compute(roomId);
     const startTs = events[0]?.timestamp ?? null;
     const endTs = events[events.length - 1]?.timestamp ?? null;
-    const winnerIndex = gameState
-      ? (gameState.players[0].framesWon >= gameState.settings.framesRequired
-          ? 0
-          : (gameState.players[1].framesWon >= gameState.settings.framesRequired ? 1 : null))
-      : null;
+    let winnerIndex: number | null = null;
+    if (gameState) {
+      const totalRequired = gameState.settings.framesRequired;
+      const a = gameState.players[0].framesWon;
+      const b = gameState.players[1].framesWon;
+      if (totalRequired % 2 === 0) {
+        // 偶數局：打完所有局後比較局數；相同為平手
+        if ((a + b) >= totalRequired) {
+          winnerIndex = a === b ? null : (a > b ? 0 : 1);
+        }
+      } else {
+        // 奇數局：先達到多數局者勝
+        const framesToWin = Math.ceil(totalRequired / 2);
+        if (a >= framesToWin) winnerIndex = 0;
+        else if (b >= framesToWin) winnerIndex = 1;
+        else winnerIndex = null;
+      }
+    }
 
     return {
       roomId,

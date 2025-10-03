@@ -356,6 +356,8 @@ export class State {
     saveState() {
         const json = JSON.stringify(this);
         const copy = State.fromJSON(JSON.parse(json));
+        // 將當前的歷史鏈複製到快照上，確保連續多步撤銷可行
+        copy.history = this.history.slice();
         this.history.push(copy);
     }
 
@@ -369,13 +371,52 @@ export class State {
         return this;
     }
 
+    // Undo multiple steps. Returns the resulting previous state after popping up to `steps` snapshots.
+    // If `steps` <= 0 or history is shorter, it gracefully stops when history is exhausted.
+    undoSteps(steps: number): State {
+        let count = Math.max(0, Math.floor(steps || 0));
+        let current: State = this;
+        while (count > 0 && current.history.length > 0) {
+            const prev = current.history.pop();
+            if (!prev) break;
+            current = prev;
+            count--;
+        }
+        return current;
+    }
+
+    // Deep clone preserving players, fields, and the history chain.
+    clone(): State {
+        const base = new State({
+            playersInfo: this.players.map(p => ({ name: p.name, memberId: p.memberId })),
+            settings: { ...this.settings },
+            startingPlayerIndex: this.currentPlayerIndex,
+        });
+        Object.assign(base, JSON.parse(JSON.stringify(this)));
+        base.players = this.players.map(p => p.clone());
+        // Preserve the existing history chain (snapshots are immutable copies)
+        base.history = this.history.slice();
+        return base;
+    }
+
     private checkMatchOver(): void {
-        const framesToWin = Math.ceil(this.settings.framesRequired / 2);
-        for (const player of this.players) {
-            if (player.framesWon === framesToWin) {
+        const totalRequired = this.settings.framesRequired;
+        if (totalRequired % 2 === 0) {
+            // 偶數局：打完所有局數才判定勝負，可出現平手
+            const framesPlayed = this.players[0].framesWon + this.players[1].framesWon;
+            if (framesPlayed >= totalRequired) {
                 this.isMatchOver = true;
                 this.status = 'ended';
-                break;
+            }
+        } else {
+            // 奇數局：採用「best-of」邏輯，先拿到多數局者勝
+            const framesToWin = Math.ceil(totalRequired / 2);
+            for (const player of this.players) {
+                if (player.framesWon >= framesToWin) {
+                    this.isMatchOver = true;
+                    this.status = 'ended';
+                    break;
+                }
             }
         }
     }
@@ -397,7 +438,19 @@ export class State {
         if (!this.isMatchOver) {
             return null;
         }
-        return this.players.reduce((a, b) => a.framesWon > b.framesWon ? a : b);
+        if (this.settings.framesRequired % 2 === 0) {
+            // 偶數局：打完所有局後比較局數，多者勝；相同為平手
+            const a = this.players[0].framesWon;
+            const b = this.players[1].framesWon;
+            if (a === b) return null;
+            return a > b ? this.players[0] : this.players[1];
+        }
+        // 奇數局：有人先達到多數局即為勝者
+        const framesToWin = Math.ceil(this.settings.framesRequired / 2);
+        for (const player of this.players) {
+            if (player.framesWon >= framesToWin) return player;
+        }
+        return null;
     }
 
     public toJSON() {
