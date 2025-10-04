@@ -32,8 +32,9 @@
 ## 3. 設定環境變數
 - `Variables` 中新增或確認：
   - `DATABASE_URL`：你的 PostgreSQL 連線，例如 `postgresql://user:pass@host:5432/db?schema=public`
-  - `CORS_ORIGIN`：前端公開網址，可多域以逗號分隔，如 `https://your-frontend.app,https://overlay.app`
+  - `CORS_ORIGIN`：前端公開網址，可多域以逗號分隔，如 `https://snookerhk.live,https://www.snookerhk.live,https://snookerlivehk-elton.github.io`
   - 可選：`SOCKET_IO_PATH`（預設 `/socket.io`）、`ENV_AUDIT_ENABLED`（預設 `true`）
+  - 管理員保護：`ADMIN_TOKEN=wwww5678`（示範值，請於正式環境改為更安全的字串）
 
 注意：
 - 不要手動設定 `PORT`；Railway 會自動注入 `PORT`，後端程式已使用 `process.env.PORT` 監聽對應埠。
@@ -47,8 +48,17 @@
   - 進程以 `node dist/index.js` 啟動且無錯誤。
   - 出現 `listening on 0.0.0.0:XXXX` 字樣（`XXXX` 為 Railway 注入的 `PORT`）。
 - 瀏覽器驗證：
-  - `GET /health` 應回 `{ status: 'ok' }`
-  - `GET /health/db` 應回 200；若失敗，檢查 `DATABASE_URL` 與資料庫可達性。
+  - `GET /health` 應回 `200 OK` 且無 `X-Railway-Fallback`。
+  - `GET /health/db` 應回 `200 OK`；若失敗，檢查 `DATABASE_URL` 與資料庫可達性。
+  - Admin 概覽（需 Token）：`GET /admin/overview`，以標頭 `x-admin-token: wwww5678` 或查詢 `?token=wwww5678` 驗證。
+
+Windows 直接驗證指令（PowerShell）：
+
+```
+curl.exe -i https://<你的後端>.up.railway.app/health
+curl.exe -i https://<你的後端>.up.railway.app/health/db
+curl.exe -i https://<你的後端>.up.railway.app/admin/overview -H "x-admin-token: wwww5678"
+```
   - 若前端（WebSocket）握手失敗，先確認 `CORS_ORIGIN` 是否包含前端完整公開網址。
 
 ## 5. 常見狀況
@@ -72,6 +82,11 @@
 - 確認 `Variables`：`DATABASE_URL` 來源為 Railway Postgres 連線字串；`CORS_ORIGIN` 含你的前端公開網址（可多域逗號分隔）。
 - 嘗試 `GET /health` 與 `GET /health/db`；若 DB 健康檢查失敗，先在 Railway DB 服務頁確認可連線（如 `psql` 或 DataGrip）。
 - 若 UI 無法切換至 Nixpacks，直接使用現有 Dockerfile（已在 runner 階段 `npx prisma generate`）。
+ - 若出現 `X-Railway-Fallback: true`：
+   - 檢查 `Settings → Source → Root Directory` 是否為 `backend`。
+   - 檢查 `Build Command` 與 `Start Command` 是否正確（`npm ci && npm run build`、`npm start`）。
+   - 檢查 Deploy Logs 是否存在 `node dist/index.js` 與 `listening on 0.0.0.0:`；若缺少，代表服務未啟動。
+   - 確認 `DATABASE_URL` 已設；雖然 `/health` 不需 DB，但 `prisma generate` 需正確依賴存在。
 
 ## 8. UI 對照（Railway）
 - `Settings → Source → Root Directory`：填 `backend`

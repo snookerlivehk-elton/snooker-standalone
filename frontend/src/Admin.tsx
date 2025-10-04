@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from './config';
-import { Link, useNavigate } from 'react-router-dom';
 
 interface Room {
   id: string;
@@ -11,7 +10,6 @@ const Admin: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`${API_URL}/api/rooms`)
@@ -86,7 +84,7 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}/live`;
+                      const url = `${window.location.origin}/room/${room.id}/live?enableSocket=true&socketUrl=${encodeURIComponent(API_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Live 連結：\n${url}`);
                       });
@@ -97,7 +95,7 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}/overlay`;
+                      const url = `${window.location.origin}/room/${room.id}/overlay?enableSocket=true&socketUrl=${encodeURIComponent(API_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Overlay 連結：\n${url}`);
                       });

@@ -21,6 +21,7 @@ export interface RoomEvent {
 export interface RoomData {
   events: RoomEvent[];
   foulTotals: [number, number]; // index 0: player A, index 1: player B
+  state?: any; // serialized State for no-backend mode syncing
 }
 
 const STORAGE_PREFIX = 'snooker_room_';
@@ -42,6 +43,7 @@ function read(roomId: string): RoomData {
       foulTotals: Array.isArray(parsed?.foulTotals) && parsed.foulTotals.length === 2
         ? parsed.foulTotals
         : [0, 0],
+      state: parsed?.state,
     };
   } catch {
     return { events: [], foulTotals: [0, 0] };
@@ -67,6 +69,17 @@ export const RoomStorage = {
 
   getFoulTotals(roomId: string): [number, number] {
     return read(roomId).foulTotals;
+  },
+
+  // Serialized State helpers for no-backend mode
+  getState(roomId: string): any | null {
+    return read(roomId).state ?? null;
+  },
+
+  setState(roomId: string, state: any) {
+    const data = read(roomId);
+    data.state = state;
+    write(roomId, data);
   },
 
   appendEvent(roomId: string, event: RoomEvent) {

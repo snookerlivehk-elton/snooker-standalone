@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Admin from './Admin';
 import Scoreboard from './Scoreboard';
 import Setup from './Setup';
@@ -23,11 +23,15 @@ function App() {
 
   return (
       <Routes>
+        {/* Home route: redirect to Admin Login to avoid blank page */}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
         <Route path="/room/:roomId" element={<Scoreboard gameState={gameState} setGameState={setGameState} />} />
         <Route path="/room/:roomId/setup" element={<Setup onStartMatch={handleStartMatch} />} />
         <Route path="/room/:roomId/live" element={<LiveView />} />
         <Route path="/room/:roomId/overlay" element={<Overlay />} />
+        {/* Fallback: any unknown route goes to Admin */}
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
   );
 }

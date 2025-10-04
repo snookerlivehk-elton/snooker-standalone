@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { SOCKET_URL } from './config';
+import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH } from './config';
+import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 // StatsEngine not required for overlay rendering; remove unused import
 
@@ -25,7 +26,33 @@ const Overlay: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const s = io(SOCKET_URL);
+    if (!ENABLE_SOCKET) {
+      // No-backend mode: poll RoomStorage for serialized State
+      const updateFromStorage = () => {
+        if (!roomId) return;
+        const raw = RoomStorage.getState(roomId!);
+        if (raw) {
+          try {
+            const deserialized = State.fromJSON(raw);
+            setGameState(deserialized);
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+      };
+      updateFromStorage();
+      const id = setInterval(updateFromStorage, 500);
+      const onStorage = (e: StorageEvent) => {
+        if (!e.key || !roomId) return;
+        if (e.key.includes(`snooker_room_${roomId}`)) updateFromStorage();
+      };
+      window.addEventListener('storage', onStorage);
+      return () => {
+        clearInterval(id);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
+    const s = io(SOCKET_URL, { transports: ['websocket'], path: SOCKET_PATH });
     if (roomId) s.emit('join room', roomId);
     s.on('gameState updated', (newGameState) => {
       try {
@@ -82,15 +109,7 @@ const Overlay: React.FC = () => {
     return gameState.currentPlayerIndex === pi && breakScore > 0 ? `${name} (${breakScore})` : name;
   };
 
-  const panelStyle: React.CSSProperties = {
-    background: '#121212',
-    border: '4px solid #f5d000',
-    color: '#fff',
-    padding: '12px 24px',
-    borderRadius: 16,
-    minWidth: 460,
-    textAlign: 'center',
-  };
+  // Removed unused panelStyle to satisfy TypeScript noUnusedLocals
 
   const matchNameBox: React.CSSProperties = {
     background: '#2a5f2a',
@@ -109,16 +128,7 @@ const Overlay: React.FC = () => {
     zIndex: 1,
   };
 
-  const centerBandStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    background: '#000000',
-    border: '4px solid #f5d000',
-    borderRadius: 16,
-    padding: '8px 12px',
-    color: '#fff',
-  };
+  // Removed unused centerBandStyle to satisfy TypeScript noUnusedLocals
 
   const scoreBoxYellow: React.CSSProperties = {
     background: '#ffd700',

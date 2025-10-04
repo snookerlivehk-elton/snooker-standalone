@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { APP_NAME } from './config';
 import { useNavigate, useParams } from 'react-router-dom';
 
 interface SetupProps {
@@ -34,7 +35,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     return (
         <div className="min-h-screen bg-green-900 p-4 flex flex-col items-center justify-center">
             <div className="max-w-md w-full bg-yellow-800 rounded-xl shadow-md p-6">
-                <h1 className="text-4xl font-bold text-center text-white mb-2 font-serif italic">Snooker Live HK</h1>
+                <h1 className="text-4xl font-bold text-center text-white mb-2 font-serif italic">{APP_NAME}</h1>
                 <p className="text-base text-center text-gray-300 mb-6 -mt-2">Scoreboard System</p>
                 <h2 className="text-2xl font-bold text-center text-white mb-6">Create Match</h2>
                 <div className="space-y-4">

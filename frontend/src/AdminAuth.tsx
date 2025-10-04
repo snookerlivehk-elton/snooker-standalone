@@ -8,10 +8,19 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Auto-auth with saved token if present
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('token') || '';
     const saved = localStorage.getItem('adminToken') || '';
-    if (!saved) return;
-    fetch(`${API_URL}/admin/overview`, { headers: { 'x-admin-token': saved } })
-      .then(res => { if (res.ok) setIsAuthenticated(true); })
+
+    const tryToken = fromUrl || saved;
+    if (!tryToken) return;
+    fetch(`${API_URL}/admin/overview`, { headers: { 'x-admin-token': tryToken } })
+      .then(res => {
+        if (res.ok) {
+          if (fromUrl) localStorage.setItem('adminToken', fromUrl);
+          setIsAuthenticated(true);
+        }
+      })
       .catch(() => {});
   }, []);
 

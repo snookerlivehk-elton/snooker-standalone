@@ -4,7 +4,8 @@ import { io } from 'socket.io-client';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
 import { StatsEngine, MatchStats } from './lib/StatsEngine';
-import { SOCKET_URL } from './config';
+import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH } from './config';
+import { RoomStorage } from './lib/RoomStorage';
 
 const LiveView: React.FC = () => {
     const { roomId } = useParams<{ roomId: string }>();
@@ -52,9 +53,32 @@ const LiveView: React.FC = () => {
     const totalPages = 3; // 將統計分為 3 版輪播
 
     useEffect(() => {
+        if (!ENABLE_SOCKET) {
+            const updateFromStorage = () => {
+                if (!roomId) return;
+                const raw = RoomStorage.getState(roomId!);
+                if (raw) {
+                    try {
+                        const deserializedState = State.fromJSON(raw);
+                        setGameState(deserializedState);
+                    } catch {}
+                }
+            };
+            updateFromStorage();
+            const id = setInterval(updateFromStorage, 500);
+            const onStorage = (e: StorageEvent) => {
+                if (!e.key || !roomId) return;
+                if (e.key.includes(`snooker_room_${roomId}`)) updateFromStorage();
+            };
+            window.addEventListener('storage', onStorage);
+            return () => {
+                clearInterval(id);
+                window.removeEventListener('storage', onStorage);
+            };
+        }
         const newSocket = io(SOCKET_URL, {
             transports: ['websocket'],
-            path: '/socket.io',
+            path: SOCKET_PATH,
             reconnection: true,
             reconnectionAttempts: Infinity,
         });

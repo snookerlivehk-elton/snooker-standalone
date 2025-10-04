@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Root path for user/organization GitHub Pages (username.github.io)
+  base: '/',
   server: {
     proxy: {
       '/api': {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { SOCKET_URL, API_URL } from './config';
+import { SOCKET_URL, API_URL, ENABLE_SOCKET, SOCKET_PATH } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
@@ -19,12 +19,17 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const [endModalDismissed, setEndModalDismissed] = useState(false);
     // 當本地送出更新後，忽略一次伺服器回送，避免覆蓋本地 history 造成 UNDO 失效
     const ignoreNextSocketUpdateRef = useRef(false);
-    const liveViewUrl = `${window.location.origin}/room/${roomId}/live`;
+    const baseUrl = (import.meta.env.BASE_URL || '/');
+    const liveViewUrl = `${window.location.origin}${baseUrl}room/${roomId}/live`;
 
     useEffect(() => {
+        if (!ENABLE_SOCKET) {
+            setSocket(null);
+            return;
+        }
         const newSocket = io(SOCKET_URL, {
             transports: ['websocket'],
-            path: '/socket.io',
+            path: SOCKET_PATH,
             reconnection: true,
             reconnectionAttempts: Infinity,
         });
@@ -64,6 +69,12 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             socket.emit('update gameState', { roomId, newState });
         }
         setGameState(newState);
+        if (roomId) {
+            // 持久化序列化狀態以供 Overlay/LiveView 在無後端模式下讀取
+            try {
+                RoomStorage.setState(roomId!, newState.toJSON());
+            } catch {}
+        }
     };
 
     const formatTime = (seconds: number) => {

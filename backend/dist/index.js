@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
     ? '*'
@@ -43,7 +44,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: corsOrigins,
-    }
+    },
+    path: SOCKET_IO_PATH,
 });
 const rooms = [];
 app.get('/api/rooms', (req, res) => {
@@ -97,6 +99,7 @@ app.get('/admin/overview', adminAuth, async (_req, res) => {
         uptime: process.uptime(),
         port: PORT,
         corsOrigins,
+        socketPath: SOCKET_IO_PATH,
         sockets: { clientsCount: io?.engine?.clientsCount ?? null },
         rooms: { count: rooms.length },
         db: { status: dbStatus, error: dbError }
