@@ -23,7 +23,6 @@ RUN apk add --no-cache openssl
 RUN npm ci --omit=dev
 RUN npx prisma generate
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/.env.example ./.env.example
 EXPOSE 3000
 # Use npm lifecycle so prestart runs `prisma generate` before app starts
 CMD ["npm", "run", "start"]
