@@ -32,6 +32,11 @@ jobs:
         run: npm ci
       - name: Build frontend
         working-directory: snooker-standalone/frontend
+        env:
+          VITE_ENABLE_SOCKET: "false"
+          VITE_SUPABASE_URL: https://somxineomfxjldgvpdhv.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbXhpbmVvbWZ4amxkZ3ZwZGh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTI0NTAsImV4cCI6MjA3NTMyODQ1MH0.iUAMZ--Ysz01vLEPtnQT14Qe91OSSYweLqtfVF5y58o
+          VITE_DEFAULT_ROOM_ID: default
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
