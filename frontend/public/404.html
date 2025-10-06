@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redirecting...</title>
+    <script>
+      // GitHub Pages SPA fallback: preserve path/query and redirect to index with ?redirect=
+      (function() {
+        try {
+          var path = window.location.pathname || '/';
+          var search = window.location.search || '';
+          var hash = window.location.hash || '';
+          var base = '/snooker-standalone/';
+          // If already at base, no need to redirect
+          if (path === base || path === base.replace(/\/$/, '')) return;
+          var target = base + '?redirect=' + encodeURIComponent(path + search + hash);
+          window.location.replace(target);
+        } catch (e) {
+          // Fallback: go to base
+          window.location.replace('/snooker-standalone/');
+        }
+      })();
+    </script>
+  </head>
+  <body></body>
+  </html>

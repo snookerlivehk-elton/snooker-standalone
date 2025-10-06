@@ -5,6 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snooker Scoreboard</title>
+    <script>
+      // Early redirect handling for GitHub Pages: rewrite ?redirect= to real path
+      (function () {
+        try {
+          var url = new URL(window.location.href);
+          var params = url.searchParams;
+          var redirect = params.get('redirect');
+          if (redirect) {
+            var parts = url.pathname.split('/').filter(Boolean);
+            var base = '/' + (parts.length > 0 ? parts[0] + '/' : '');
+            var normalized = redirect.charAt(0) === '/' ? redirect.slice(1) : redirect;
+            params.delete('redirect');
+            var qs = params.toString();
+            var target = base + normalized + (qs ? ('?' + qs) : '');
+            if ((url.pathname + url.search) !== target) {
+              window.history.replaceState(null, '', target);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
