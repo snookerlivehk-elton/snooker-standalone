@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH } from './config';
+import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 // StatsEngine not required for overlay rendering; remove unused import
 
 const Overlay: React.FC = () => {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { roomId: routeRoomId } = useParams<{ roomId: string }>();
+  const roomId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
   const [gameState, setGameState] = useState<State | null>(null);
 
   useEffect(() => {
@@ -26,20 +27,20 @@ const Overlay: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Hybrid: 即使在 socket 模式，也先嘗試從 RoomStorage 初始化一次（同瀏覽器場景更快顯示）
+    const updateFromStorage = () => {
+      if (!roomId) return;
+      const raw = RoomStorage.getState(roomId!);
+      if (raw) {
+        try {
+          const deserialized = State.fromJSON(raw);
+          setGameState(deserialized);
+        } catch {}
+      }
+    };
+
     if (!ENABLE_SOCKET) {
       // No-backend mode: poll RoomStorage for serialized State
-      const updateFromStorage = () => {
-        if (!roomId) return;
-        const raw = RoomStorage.getState(roomId!);
-        if (raw) {
-          try {
-            const deserialized = State.fromJSON(raw);
-            setGameState(deserialized);
-          } catch (e) {
-            // ignore parse errors
-          }
-        }
-      };
       updateFromStorage();
       const id = setInterval(updateFromStorage, 500);
       const onStorage = (e: StorageEvent) => {
@@ -52,7 +53,10 @@ const Overlay: React.FC = () => {
         window.removeEventListener('storage', onStorage);
       };
     }
-    const s = io(SOCKET_URL, { transports: ['websocket'], path: SOCKET_PATH });
+
+    // Socket 模式：先做一次本地初始化（若同瀏覽器有快照），再連 socket 以接收跨裝置更新
+    updateFromStorage();
+    const s = io(SOCKET_URL, { transports: ['websocket', 'polling'], path: SOCKET_PATH });
     if (roomId) s.emit('join room', roomId);
     s.on('gameState updated', (newGameState) => {
       try {
@@ -62,8 +66,17 @@ const Overlay: React.FC = () => {
         console.warn('Failed to parse gameState for overlay:', e);
       }
     });
+    // 在 socket 模式下也開啟常時輪詢與 storage 事件，以避免不同進程（如 OBS）未觸發事件或 socket 暫時不可用時漏接更新
+    const id = setInterval(updateFromStorage, 500);
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key || !roomId) return;
+      if (e.key.includes(`snooker_room_${roomId}`)) updateFromStorage();
+    };
+    window.addEventListener('storage', onStorage);
     return () => {
       s.disconnect();
+      clearInterval(id);
+      window.removeEventListener('storage', onStorage);
     };
   }, [roomId]);
 

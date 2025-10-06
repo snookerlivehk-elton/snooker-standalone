@@ -28,7 +28,10 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             startingPlayerIndex,
         });
         if (roomId) {
-            navigate(`/room/${roomId}`);
+            // 保留目前頁面的查詢參數（如 enableSocket、socketUrl、apiUrl、socketPath）
+            // 以確保從 Setup 進入 Scoreboard 時不會丟失 socket 設定
+            const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+            navigate(`/room/${roomId}${qs}`);
         }
     };
 

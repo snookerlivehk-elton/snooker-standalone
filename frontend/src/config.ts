@@ -8,6 +8,15 @@ export const ENABLE_SOCKET: boolean = enableSocketParam != null
   ? (enableSocketParam === 'true' || enableSocketParam === '1')
   : envEnableSocket;
 
+// Simple mode: single scoreboard + single overlay, fixed room id
+const simpleParam = params?.get('simple');
+export const SIMPLE_MODE: boolean = simpleParam === 'true' || simpleParam === '1';
+const defaultRoomOverride = params?.get('room') || params?.get('defaultRoom') || undefined;
+export const DEFAULT_ROOM_ID: string =
+  defaultRoomOverride ||
+  (import.meta.env.VITE_DEFAULT_ROOM_ID as string | undefined) ||
+  'default';
+
 // Socket URL resolution:
 // - Use VITE_SOCKET_URL when provided
 // - In dev, default to http://localhost:3000

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { API_URL } from './config';
+import { API_URL, SOCKET_PATH, SOCKET_URL } from './config';
 
 interface Room {
   id: string;
@@ -62,6 +62,35 @@ const Admin: React.FC = () => {
     <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center">
       <div className="w-full max-w-2xl">
         <h1 className="text-4xl font-bold mb-8 text-center">Admin Panel</h1>
+        {/* Simple Mode: one scoreboard + one overlay, no room creation */}
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-semibold mb-4">Simple Mode</h2>
+          <p className="text-sm text-gray-300 mb-4">單一計分版與 OBS 連結（不需建立房間）。</p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/room/default?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  alert(`已複製簡化模式 Scoreboard 連結：\n${url}`);
+                });
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
+            >
+              Copy Simple Scoreboard Link
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/room/default/overlay?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  alert(`已複製簡化模式 Overlay 連結：\n${url}`);
+                });
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors"
+            >
+              Copy Simple Overlay Link
+            </button>
+          </div>
+        </div>
         <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4">Rooms</h2>
           <ul className="space-y-4">
@@ -74,7 +103,8 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}/setup`;
+                      // 將 socket 參數一併帶入 Setup 連結，確保從 Setup 進入 Scoreboard 時不會丟失設定
+                      const url = `${window.location.origin}/room/${room.id}/setup?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製房間 Setup 連結：\n${url}`);
                       });
@@ -85,7 +115,7 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}/live?enableSocket=true&socketUrl=${encodeURIComponent(API_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
+                      const url = `${window.location.origin}/room/${room.id}/live?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Live 連結：\n${url}`);
                       });
@@ -96,7 +126,7 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const url = `${window.location.origin}/room/${room.id}/overlay?enableSocket=true&socketUrl=${encodeURIComponent(API_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
+                      const url = `${window.location.origin}/room/${room.id}/overlay?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Overlay 連結：\n${url}`);
                       });

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
-import { SOCKET_URL, API_URL, ENABLE_SOCKET, SOCKET_PATH } from './config';
+import { SOCKET_URL, API_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
@@ -13,14 +13,32 @@ interface ScoreboardProps {
 }
 
 const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
-    const { roomId } = useParams<{ roomId: string }>();
+    const { roomId: routeRoomId } = useParams<{ roomId: string }>();
+    const roomId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
     const navigate = useNavigate();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [endModalDismissed, setEndModalDismissed] = useState(false);
     // 當本地送出更新後，忽略一次伺服器回送，避免覆蓋本地 history 造成 UNDO 失效
     const ignoreNextSocketUpdateRef = useRef(false);
     const baseUrl = (import.meta.env.BASE_URL || '/');
-    const liveViewUrl = `${window.location.origin}${baseUrl}room/${roomId}/live`;
+    const liveViewUrl = roomId ? `${window.location.origin}${baseUrl}room/${roomId}/live` : `${window.location.origin}${baseUrl}`;
+
+    useEffect(() => {
+        // 簡化模式：若尚未建立比賽狀態，初始化為預設單場
+        if (SIMPLE_MODE && !gameState) {
+            try {
+                const initial = new State({
+                    playersInfo: [
+                        { name: 'Player A', memberId: 'P1' },
+                        { name: 'Player B', memberId: 'P2' },
+                    ],
+                    settings: { matchName: 'Simple Match', redBalls: 15, framesRequired: 1 },
+                    startingPlayerIndex: 0,
+                });
+                setGameState(initial);
+            } catch {}
+        }
+    }, [SIMPLE_MODE, gameState, setGameState]);
 
     useEffect(() => {
         if (!ENABLE_SOCKET) {
@@ -28,7 +46,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             return;
         }
         const newSocket = io(SOCKET_URL, {
-            transports: ['websocket'],
+            transports: ['websocket', 'polling'],
             path: SOCKET_PATH,
             reconnection: true,
             reconnectionAttempts: Infinity,
@@ -61,6 +79,33 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             });
         }
     }, [socket, setGameState]);
+
+    // 每秒遞增計時（僅在 playing 狀態），並同步至其他視圖
+    useEffect(() => {
+        const id = setInterval(() => {
+            setGameState((prev) => {
+                if (!prev) return prev;
+                if (prev.status !== 'playing') return prev;
+                const next = prev.clone();
+                next.timers.frameTime += 1;
+                next.timers.matchTime += 1;
+                if (next.breakScore > 0) next.breakTime += 1;
+                // 廣播到房間（若啟用 socket）
+                if (socket) {
+                    ignoreNextSocketUpdateRef.current = true;
+                    socket.emit('update gameState', { roomId, newState: next });
+                }
+                // 持久化到本地儲存供 Overlay/LiveView 輪詢
+                if (roomId) {
+                    try {
+                        RoomStorage.setState(roomId!, next.toJSON());
+                    } catch {}
+                }
+                return next;
+            });
+        }, 1000);
+        return () => clearInterval(id);
+    }, [roomId, socket]);
 
     const updateAndBroadcastState = (newState: State) => {
         if (socket) {
@@ -246,7 +291,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     return (
         <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
-            {gameState.isMatchOver && !endModalDismissed && (
+            {!SIMPLE_MODE && gameState.isMatchOver && !endModalDismissed && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
                     <div className="bg-yellow-800 p-8 rounded-lg shadow-xl text-center">
                         <h2 className="text-2xl font-bold mb-4">比賽結束</h2>

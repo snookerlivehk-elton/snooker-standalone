@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Overview (Local Helper)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; }
+      input, button, textarea { padding: 8px; font-size: 14px; }
+      .row { margin-bottom: 12px; }
+      pre { background: #f5f5f5; padding: 12px; overflow: auto; }
+      .note { color: #555; }
+      a.btn { display:inline-block; padding:8px 12px; border:1px solid #888; border-radius:6px; text-decoration:none; }
+    </style>
+  </head>
+  <body>
+    <h2>Admin Overview（本地輔助頁）</h2>
+    <p class="note">
+      此頁用來快速開啟或抓取系統的 Admin 概覽。<br />
+      Admin 概覽是後端保護路由（`/admin/overview`），與 Socket 測試頁不同。
+    </p>
+
+    <div class="row">
+      <a class="btn" target="_blank" href="https://snookerhk.live/admin/overview?token=wwww5678">打開系統 Admin 概覽（snookerhk.live）</a>
+    </div>
+
+    <div class="row">
+      <label>Backend URL: <input id="backendUrl" placeholder="https://snookerhk.live" value="https://snookerhk.live" /></label>
+    </div>
+    <div class="row">
+      <label>Admin Token: <input id="token" placeholder="wwww5678" value="wwww5678" /></label>
+    </div>
+    <div class="row">
+      <button id="fetchBtn">取得概覽（fetch）</button>
+      <button id="healthBtn">健康檢查</button>
+    </div>
+
+    <div class="row">
+      <strong>結果：</strong>
+      <pre id="output">(尚未取得)</pre>
+    </div>
+
+    <p class="note">
+      注意：若從本地 `http://localhost:5173` 以 fetch 讀取遠端後端，需後端允許 CORS（包含 `http://localhost:5173`）。
+      直接「打開系統 Admin 概覽」按鈕會在新分頁請求該網址，不受 CORS 限制。
+    </p>
+
+    <script>
+      const out = document.getElementById('output');
+      function show(obj) {
+        try { out.textContent = JSON.stringify(obj, null, 2); } catch { out.textContent = String(obj); }
+      }
+      async function getJson(url) {
+        const res = await fetch(url, { method: 'GET' });
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return { status: res.status, body: text }; }
+      }
+      document.getElementById('fetchBtn').onclick = async () => {
+        const base = document.getElementById('backendUrl').value.trim().replace(/\/$/, '');
+        const token = encodeURIComponent(document.getElementById('token').value.trim());
+        if (!base) return alert('Backend URL required');
+        const url = `${base}/admin/overview?token=${token}`;
+        try { const data = await getJson(url); show(data); } catch (e) { show({ error: String(e) }); }
+      };
+      document.getElementById('healthBtn').onclick = async () => {
+        const base = document.getElementById('backendUrl').value.trim().replace(/\/$/, '');
+        if (!base) return alert('Backend URL required');
+        try {
+          const h1 = await getJson(`${base}/health`);
+          const h2 = await getJson(`${base}/health/db`);
+          show({ health: h1, healthDb: h2 });
+        } catch (e) { show({ error: String(e) }); }
+      };
+    </script>
+  </body>
+  </html>

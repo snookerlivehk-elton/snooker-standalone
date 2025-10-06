@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-HK">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Login – Cross-Origin Test</title>
+    <style>
+      :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+      body { margin: 0; padding: 24px; background: #0f172a; color: #e2e8f0; }
+      .card { max-width: 860px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      label { font-size: 12px; color: #9ca3af; }
+      input, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #374151; background: #0b1220; color: #e5e7eb; }
+      input::placeholder { color: #6b7280; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      button { padding: 10px 14px; border: 1px solid #1f2937; border-radius: 8px; background: #1f2937; color: #e5e7eb; cursor: pointer; }
+      button.primary { background: #2563eb; border-color: #1d4ed8; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      .kbd { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: #0b1220; border: 1px solid #1f2937; border-radius: 6px; padding: 1px 6px; }
+      .log { background: #0b1220; border: 1px solid #1f2937; border-radius: 12px; padding: 12px; white-space: pre-wrap; overflow: auto; max-height: 300px; }
+      .ok { color: #10b981; }
+      .err { color: #ef4444; }
+      .muted { color: #94a3b8; }
+      footer { margin-top: 10px; font-size: 12px; color: #94a3b8; text-align: right; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Admin Login – 跨網域實測入口</h1>
+      <p class="muted">此頁面由 <span class="kbd">http://localhost:5173</span> 提供，以跨網域測試雲端後端 <span class="kbd">https://snookerhk.live</span> 的 CORS 與 Admin 存取。</p>
+
+      <div class="grid">
+        <div>
+          <label for="apiBase">API Base</label>
+          <input id="apiBase" placeholder="https://snookerhk.live" value="https://snookerhk.live" />
+        </div>
+        <div>
+          <label for="token">Admin Token</label>
+          <input id="token" placeholder="wwww5678" value="wwww5678" />
+        </div>
+      </div>
+
+      <div style="height:8px"></div>
+      <div class="grid">
+        <div>
+          <label for="socketPath">Socket Path</label>
+          <input id="socketPath" placeholder="/socket.io" value="/socket.io" />
+        </div>
+        <div>
+          <label for="transports">Transports</label>
+          <select id="transports" multiple>
+            <option selected>websocket</option>
+            <option>polling</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="row">
+        <button id="btnHealth">Health</button>
+        <button id="btnDb">Health DB</button>
+        <button id="btnOverview" class="primary">Admin Overview</button>
+        <button id="btnSocket">Connect Socket</button>
+        <button id="btnClear">Clear Log</button>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="log" id="log"></div>
+
+      <footer>
+        來源：<span class="kbd" id="origin"></span>
+      </footer>
+    </div>
+
+    <script>
+      const logEl = document.getElementById('log');
+      const originEl = document.getElementById('origin');
+      originEl.textContent = window.location.origin;
+
+      function log(msg, cls) {
+        const time = new Date().toLocaleTimeString();
+        const line = document.createElement('div');
+        line.className = cls || '';
+        line.textContent = `[${time}] ${msg}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+      function logJson(title, obj, cls) {
+        const time = new Date().toLocaleTimeString();
+        const pre = document.createElement('pre');
+        pre.className = cls || '';
+        pre.textContent = `[${time}] ${title}:\n` + JSON.stringify(obj, null, 2);
+        logEl.appendChild(pre);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+      function getInputs() {
+        return {
+          apiBase: document.getElementById('apiBase').value.trim().replace(/\/$/, ''),
+          token: document.getElementById('token').value.trim(),
+          socketPath: document.getElementById('socketPath').value.trim() || '/socket.io',
+          transports: Array.from(document.getElementById('transports').selectedOptions).map(o => o.value)
+        };
+      }
+
+      async function xfetch(path, opts = {}) {
+        const { apiBase } = getInputs();
+        const url = apiBase + path;
+        log(`Fetch ${url}`);
+        try {
+          const res = await fetch(url, opts);
+          const allowOrigin = res.headers.get('access-control-allow-origin');
+          log(`Status ${res.status}; ACAO=${allowOrigin || 'n/a'}`, res.ok ? 'ok' : 'err');
+          const ct = res.headers.get('content-type') || '';
+          let body;
+          if (ct.includes('application/json')) {
+            body = await res.json();
+          } else {
+            body = await res.text();
+          }
+          logJson('Response', body, res.ok ? 'ok' : 'err');
+        } catch (e) {
+          log('Fetch error: ' + (e && e.message ? e.message : String(e)), 'err');
+        }
+      }
+
+      document.getElementById('btnHealth').onclick = () => xfetch('/health');
+      document.getElementById('btnDb').onclick = () => xfetch('/health/db');
+      document.getElementById('btnOverview').onclick = () => {
+        const { token } = getInputs();
+        xfetch('/admin/overview', { headers: { 'x-admin-token': token } });
+      };
+      document.getElementById('btnClear').onclick = () => { logEl.textContent = ''; };
+
+      let socket;
+      document.getElementById('btnSocket').onclick = () => {
+        const { apiBase, socketPath, transports } = getInputs();
+        if (socket) { try { socket.disconnect(); } catch {} }
+        log(`Socket connect to ${apiBase} path=${socketPath}`);
+        try {
+          socket = io(apiBase, { path: socketPath, transports });
+          socket.on('connect', () => log(`Socket connected id=${socket.id}`, 'ok'));
+          socket.on('connect_error', (err) => log('Socket connect_error: ' + err.message, 'err'));
+          socket.on('error', (err) => log('Socket error: ' + (err && err.message ? err.message : String(err)), 'err'));
+          socket.on('disconnect', (reason) => log('Socket disconnected: ' + reason));
+        } catch (e) {
+          log('Socket init error: ' + (e && e.message ? e.message : String(e)), 'err');
+        }
+      };
+    </script>
+  </body>
+  </html>

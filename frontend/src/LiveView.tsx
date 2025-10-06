@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { State } from './lib/State';
@@ -51,6 +51,42 @@ const LiveView: React.FC = () => {
     const [showEndModal, setShowEndModal] = useState(false);
     const [statsPage, setStatsPage] = useState(0);
     const totalPages = 3; // 將統計分為 3 版輪播
+    // 調試：顯示更新來源與連線狀態
+    const [connStatus, setConnStatus] = useState<'init' | 'socket_connected' | 'socket_error' | 'socket_disconnected'>('init');
+    const [updateSource, setUpdateSource] = useState<'none' | 'storage' | 'socket'>('none');
+    const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
+    // 移除重複定義：formatTime 已在上方宣告
+    const debug = useMemo(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('debug') === 'true';
+        } catch { return false; }
+    }, []);
+    // socket 失敗時的輪詢回退
+    const pollRef = useRef<number | null>(null);
+    const startPolling = () => {
+        if (!roomId) return;
+        if (pollRef.current != null) return;
+        const updateFromStorage = () => {
+            const raw = RoomStorage.getState(roomId!);
+            if (raw) {
+                try {
+                    const deserializedState = State.fromJSON(raw);
+                    setGameState(deserializedState);
+                    setUpdateSource('storage');
+                    setLastUpdateTs(Date.now());
+                } catch {}
+            }
+        };
+        updateFromStorage();
+        pollRef.current = window.setInterval(updateFromStorage, 500);
+    };
+    const stopPolling = () => {
+        if (pollRef.current != null) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    };
 
     useEffect(() => {
         if (!ENABLE_SOCKET) {
@@ -76,8 +112,38 @@ const LiveView: React.FC = () => {
                 window.removeEventListener('storage', onStorage);
             };
         }
+        // 先以本機儲存狀態作為初始顯示（即使在 socket 模式），避免初次加入房間時沒有快照
+        if (roomId) {
+            const raw = RoomStorage.getState(roomId!);
+            if (raw) {
+                try {
+                    const deserializedState = State.fromJSON(raw);
+                    setGameState(deserializedState);
+                    setUpdateSource('storage');
+                    setLastUpdateTs(Date.now());
+                } catch {}
+            }
+        }
+        // 在 socket 模式下也開啟常時輪詢，避免 storage 事件在某些環境未觸發而造成更新漏接
+        startPolling();
+        // 在 socket 模式也監聽 storage 事件，確保當 Scoreboard 在無後端模式更新本地儲存時，LiveView 仍可自動更新
+        const onStorage = (e: StorageEvent) => {
+            if (!e.key || !roomId) return;
+            if (e.key.includes(`snooker_room_${roomId}`)) {
+                try {
+                    const raw = RoomStorage.getState(roomId!);
+                    if (raw) {
+                        const deserialized = State.fromJSON(raw);
+                        setGameState(deserialized);
+                        setUpdateSource('storage');
+                        setLastUpdateTs(Date.now());
+                    }
+                } catch {}
+            }
+        };
+        window.addEventListener('storage', onStorage);
         const newSocket = io(SOCKET_URL, {
-            transports: ['websocket'],
+            transports: ['websocket', 'polling'],
             path: SOCKET_PATH,
             reconnection: true,
             reconnectionAttempts: Infinity,
@@ -91,10 +157,31 @@ const LiveView: React.FC = () => {
             // 以 State.fromJSON 正確反序列化，避免建構子參數數量錯誤與隱含 any
             const deserializedState = State.fromJSON(newGameState);
             setGameState(deserializedState);
+            setUpdateSource('socket');
+            setLastUpdateTs(Date.now());
+        });
+
+        // 連線狀態紀錄（不再停止輪詢）
+        newSocket.on('connect', () => {
+            setConnStatus('socket_connected');
+        });
+        newSocket.on('connect_error', () => {
+            setConnStatus('socket_error');
+        });
+        newSocket.on('reconnect_error', () => {
+            setConnStatus('socket_error');
+        });
+        newSocket.on('reconnect_failed', () => {
+            setConnStatus('socket_error');
+        });
+        newSocket.on('disconnect', () => {
+            setConnStatus('socket_disconnected');
         });
 
         return () => {
             newSocket.disconnect();
+            stopPolling();
+            window.removeEventListener('storage', onStorage);
         };
     }, [roomId]);
 
@@ -132,7 +219,19 @@ const LiveView: React.FC = () => {
     }, [isMatchOver]);
 
     if (!gameState) {
-        return <div className="min-h-screen bg-gray-900 text-white flex justify-center items-center">Loading...</div>;
+        return (
+            <div className="min-h-screen bg-gray-900 text-white flex justify-center items-center">
+                Loading...
+                {debug && (
+                    <div className="fixed bottom-2 right-2 bg-black/60 text-xs px-3 py-2 rounded">
+                        <div>room: {roomId}</div>
+                        <div>conn: {connStatus}</div>
+                        <div>src: {updateSource}</div>
+                        <div>ts: {lastUpdateTs ? new Date(lastUpdateTs).toLocaleTimeString() : '-'}</div>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     const remainingPoints = gameState.getRemainingPoints();
@@ -141,6 +240,7 @@ const LiveView: React.FC = () => {
     const lastShot = gameState.shotHistory[gameState.shotHistory.length - 1];
 
     return (
+        <>
         <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
             <div className="w-full max-w-5xl mx-auto">
                 <div className="text-center mb-4">
@@ -352,6 +452,15 @@ const LiveView: React.FC = () => {
                 </div>
             )}
         </div>
+        {debug && (
+            <div className="fixed bottom-2 right-2 bg-black/60 text-xs px-3 py-2 rounded">
+                <div>room: {roomId}</div>
+                <div>conn: {connStatus}</div>
+                <div>src: {updateSource}</div>
+                <div>ts: {lastUpdateTs ? new Date(lastUpdateTs).toLocaleTimeString() : '-'}</div>
+            </div>
+        )}
+        </>
     );
 };
 
