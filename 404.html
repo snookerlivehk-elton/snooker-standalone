@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -14,7 +14,13 @@
           var base = '/snooker-standalone/';
           // If already at base, no need to redirect
           if (path === base || path === base.replace(/\/$/, '')) return;
-          var target = base + '?redirect=' + encodeURIComponent(path + search + hash);
+          // Strip base from path to avoid duplicating it in ?redirect=
+          var stripped = (function(p){
+            if (p.indexOf(base) === 0) return p.slice(base.length);
+            if (p.charAt(0) === '/') return p.slice(1);
+            return p;
+          })(path);
+          var target = base + '?redirect=' + encodeURIComponent(stripped + search + hash);
           window.location.replace(target);
         } catch (e) {
           // Fallback: go to base
