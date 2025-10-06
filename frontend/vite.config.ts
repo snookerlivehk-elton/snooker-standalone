@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Root path for user/organization GitHub Pages (username.github.io)
-  base: '/',
+  base: process.env.BASE_PATH ?? '/',
   server: {
     proxy: {
       '/api': {

@@ -26,22 +26,23 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: snooker-standalone/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
-        working-directory: snooker-standalone/frontend
+        working-directory: frontend
         run: npm ci
       - name: Build frontend
-        working-directory: snooker-standalone/frontend
+        working-directory: frontend
         env:
           VITE_ENABLE_SOCKET: "false"
           VITE_SUPABASE_URL: https://somxineomfxjldgvpdhv.supabase.co
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbXhpbmVvbWZ4amxkZ3ZwZGh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTI0NTAsImV4cCI6MjA3NTMyODQ1MH0.iUAMZ--Ysz01vLEPtnQT14Qe91OSSYweLqtfVF5y58o
           VITE_DEFAULT_ROOM_ID: default
+          BASE_PATH: /snooker-standalone/
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: snooker-standalone/frontend/dist
+          path: frontend/dist
 
   deploy:
     environment:
