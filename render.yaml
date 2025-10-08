@@ -28,10 +28,11 @@ services:
         value: "/socket.io"
 
   # Frontend static site (Vite React)
-  - type: static_site
+  - type: web
     name: snooker-frontend
     rootDir: frontend
-    plan: free
+    runtime: static
+    # plan is optional for static runtime; omit to avoid validation errors
     buildCommand: VITE_SOCKET_URL="https://${BACKEND_HOST}.onrender.com" VITE_API_URL="https://${BACKEND_HOST}.onrender.com" VITE_SOCKET_PATH="/socket.io" npm ci && npm run build
     staticPublishPath: dist
     envVars:
