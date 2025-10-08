@@ -7,7 +7,7 @@ services:
     name: snooker-backend
     runtime: node
     rootDir: backend
-    plan: free
+    plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm run start:migrate
     autoDeploy: true
@@ -28,12 +28,12 @@ services:
         value: "/socket.io"
 
   # Frontend static site (Vite React)
-  - type: web
+  - type: static_site
     name: snooker-frontend
-    runtime: static
+    rootDir: frontend
     plan: free
-    buildCommand: cd frontend && VITE_SOCKET_URL="https://${BACKEND_HOST}.onrender.com" VITE_API_URL="https://${BACKEND_HOST}.onrender.com" VITE_SOCKET_PATH="/socket.io" npm ci && npm run build
-    staticPublishPath: ./frontend/dist
+    buildCommand: VITE_SOCKET_URL="https://${BACKEND_HOST}.onrender.com" VITE_API_URL="https://${BACKEND_HOST}.onrender.com" VITE_SOCKET_PATH="/socket.io" npm ci && npm run build
+    staticPublishPath: dist
     envVars:
       - key: BACKEND_HOST
         fromService:
