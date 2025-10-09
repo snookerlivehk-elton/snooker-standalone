@@ -38,7 +38,7 @@
         </div>
         <div>
           <label for="token">Admin Token</label>
-          <input id="token" placeholder="wwww5678" value="wwww5678" />
+          <input id="token" placeholder="admin token（可留白）" value="" />
         </div>
       </div>
 
@@ -148,6 +148,19 @@
           log('Socket init error: ' + (e && e.message ? e.message : String(e)), 'err');
         }
       };
+
+      // Prefill token from URL or localStorage
+      (function initTokenPrefill() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const fromUrl = params.get('token') || '';
+          const saved = localStorage.getItem('adminToken') || '';
+          const tokenEl = document.getElementById('token');
+          const value = fromUrl || saved || '';
+          if (value) tokenEl.value = value;
+          if (fromUrl) localStorage.setItem('adminToken', fromUrl);
+        } catch {}
+      })();
     </script>
   </body>
   </html>

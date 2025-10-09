@@ -21,14 +21,14 @@
     </p>
 
     <div class="row">
-      <a class="btn" target="_blank" href="https://snookerhk.live/admin/overview?token=wwww5678">打開系統 Admin 概覽（snookerhk.live）</a>
+      <a class="btn" id="openLink" target="_blank" href="https://snookerhk.live/admin/overview">打開系統 Admin 概覽（snookerhk.live）</a>
     </div>
 
     <div class="row">
       <label>Backend URL: <input id="backendUrl" placeholder="https://snookerhk.live" value="https://snookerhk.live" /></label>
     </div>
     <div class="row">
-      <label>Admin Token: <input id="token" placeholder="wwww5678" value="wwww5678" /></label>
+      <label>Admin Token: <input id="token" placeholder="admin token（可留白）" value="" /></label>
     </div>
     <div class="row">
       <button id="fetchBtn">取得概覽（fetch）</button>
@@ -71,6 +71,29 @@
           show({ health: h1, healthDb: h2 });
         } catch (e) { show({ error: String(e) }); }
       };
+
+      // Prefill token from URL or localStorage and keep open link in sync
+      (function initTokenAndLink() {
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get('token') || '';
+        const saved = localStorage.getItem('adminToken') || '';
+        const tokenEl = document.getElementById('token');
+        const backendEl = document.getElementById('backendUrl');
+        const openLink = document.getElementById('openLink');
+        const value = fromUrl || saved || '';
+        if (value) tokenEl.value = value;
+        if (fromUrl) localStorage.setItem('adminToken', fromUrl);
+
+        function updateLink() {
+          const base = backendEl.value.trim().replace(/\/$/, '');
+          const token = tokenEl.value.trim();
+          const href = token ? `${base}/admin/overview?token=${encodeURIComponent(token)}` : `${base}/admin/overview`;
+          openLink.href = href;
+        }
+        backendEl.addEventListener('input', updateLink);
+        tokenEl.addEventListener('input', updateLink);
+        updateLink();
+      })();
     </script>
   </body>
   </html>
