@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -11,7 +11,7 @@
           var path = window.location.pathname || '/';
           var search = window.location.search || '';
           var hash = window.location.hash || '';
-          var base = '/snooker-standalone/';
+          var base = '/';
           // If already at base, no need to redirect
           if (path === base || path === base.replace(/\/$/, '')) return;
           // Strip base from path to avoid duplicating it in ?redirect=
@@ -24,7 +24,7 @@
           window.location.replace(target);
         } catch (e) {
           // Fallback: go to base
-          window.location.replace('/snooker-standalone/');
+          window.location.replace('/');
         }
       })();
     </script>
