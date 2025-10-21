@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "postbuild": "node -e \"fs=require('fs');fs.copyFileSync('dist/index.html','dist/404.html')\"",
+    "postbuild": "echo Using public/404.html for GitHub Pages SPA redirect",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
@@ -20,7 +20,8 @@
     "react-dom": "^18.2.0",
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.9.3",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "@supabase/supabase-js": "^2.45.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",

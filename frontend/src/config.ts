@@ -50,3 +50,14 @@ export const API_URL: string =
 
 // App display name (UI + document.title)
 export const APP_NAME: string = (import.meta.env.VITE_APP_NAME as string | undefined) || 'Snooker Standalone';
+
+// Supabase configuration (optional for simple-mode realtime without self-hosted backend)
+const supabaseUrlOverride = params?.get('supabaseUrl') || undefined;
+const supabaseKeyOverride = params?.get('supabaseKey') || undefined;
+export const SUPABASE_URL: string | undefined =
+  supabaseUrlOverride || (import.meta.env.VITE_SUPABASE_URL as string | undefined);
+export const SUPABASE_ANON_KEY: string | undefined =
+  supabaseKeyOverride || (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+
+// Enable Supabase when credentials exist and either simple mode is on or sockets are disabled
+export const ENABLE_SUPABASE: boolean = !!SUPABASE_URL && !!SUPABASE_ANON_KEY && (!ENABLE_SOCKET || SIMPLE_MODE);
