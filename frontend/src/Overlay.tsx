@@ -11,7 +11,7 @@ const Overlay: React.FC = () => {
   const { roomId: routeRoomId } = useParams<{ roomId: string }>();
   const roomId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
   const [gameState, setGameState] = useState<State | null>(null);
-  const [scale, setScale] = useState(1);
+  const [scale] = useState(1);
 
   useEffect(() => {
     // Make the whole page transparent for OBS Browser Source
@@ -139,19 +139,13 @@ const Overlay: React.FC = () => {
   const leader = gameState.players[0].score >= gameState.players[1].score ? gameState.players[0] : gameState.players[1];
   const remainingPoints = gameState.getRemainingPoints();
   const breakScore = gameState.breakScore;
-  
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
 
-  const nameWithBreak = (pi: number) => {
-    const name = gameState.players[pi].name;
-    return gameState.currentPlayerIndex === pi && breakScore > 0 ? `${name} (${breakScore})` : name;
+  const nameWithBreak = (index: number) => {
+    const name = gameState.players[index].name;
+    const isOnTable = gameState.currentPlayerIndex === index;
+    const breakDisplay = isOnTable && breakScore > 0 ? ` [${breakScore}]` : '';
+    return `${name}${breakDisplay}`;
   };
-
-  // Removed unused panelStyle to satisfy TypeScript noUnusedLocals
 
   const matchNameBox: React.CSSProperties = {
     background: '#f5d000',
@@ -175,8 +169,6 @@ const Overlay: React.FC = () => {
     zIndex: 1,
     borderBottomWidth: 0, // flush with black group top edge
   };
-
-  // Removed unused centerBandStyle to satisfy TypeScript noUnusedLocals
 
   const scoreBoxYellow: React.CSSProperties = {
     background: '#ffd700',
@@ -213,15 +205,12 @@ const Overlay: React.FC = () => {
     marginTop: 0, // keep flush with top capsule
   };
 
-  // Yellow triangle indicator style (current player at table)
   const indicatorStyle: React.CSSProperties = {
     fontSize: 18, // 20% reduction from 22 -> ~18
     fontWeight: 900,
     color: '#ffd700',
   };
 
-  // removed duplicate scaling effect (now declared above early return)
-  // scaling effect moved to top-level
   return (
     <div
       style={{
@@ -274,27 +263,22 @@ const Overlay: React.FC = () => {
           </div>
 
           {/* Info strip below score bar (green capsule) */}
-          <div
-            style={{
-              marginTop: 0, // flush below black group without overlap
-              background: '#2a5f2a',
-              color: '#ffffff',
-              padding: '4px 12px', // height -30%
-              borderRadius: 16, // match black group's corner radius
-              border: '4px solid #f5d000',
-              borderTopWidth: 0, // flush with black group bottom edge
-              fontSize: 18, // font +15%
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 28,
-              zIndex: 1,
-            }}
-          >
-            <span>Break Time: {formatTime(gameState.breakTime)}</span>
-            <span>Break: {breakScore}</span>
-            <span>{leader.name} is {lead} ahead</span>
-            <span>Remaining: {remainingPoints}</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginTop: 4,
+          }}>
+            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
+              Lead: {lead}
+            </div>
+            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
+              Remaining: {remainingPoints}
+            </div>
+            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
+              Leader: {leader.name}
+            </div>
           </div>
         </div>
       </div>
