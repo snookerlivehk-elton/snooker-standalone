@@ -1,0 +1,49 @@
+name: Render Redeploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: render-redeploy
+  cancel-in-progress: false
+
+env:
+  RENDER_BACKEND_SERVICE_ID: srv-d3j8lguuk2gs738dsf50
+  RENDER_FRONTEND_SERVICE_ID: srv-d3jk3ai4d50c73f8vkc0
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check prerequisites
+        run: |
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "RENDER_API_KEY is not set in GitHub Secrets." >&2
+            exit 1
+          fi
+          echo "Secrets present. Proceeding to trigger redeploys."
+
+      - name: Trigger backend redeploy
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            "https://api.render.com/v1/services/${RENDER_BACKEND_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":false,"triggerReason":"github-actions"}'
+
+      - name: Trigger frontend redeploy
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            "https://api.render.com/v1/services/${RENDER_FRONTEND_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":false,"triggerReason":"github-actions"}'
+
+      - name: Note
+        run: |
+          echo "Triggered redeploys for backend (${RENDER_BACKEND_SERVICE_ID}) and frontend (${RENDER_FRONTEND_SERVICE_ID})."
+          echo "Monitor progress in Render Dashboard → Services → Deploy logs."
