@@ -15,22 +15,17 @@ CREATE TABLE IF NOT EXISTS "MemberSequence" (
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Trigger to update updated_at on change (PostgreSQL)
-DO $$
+-- Trigger function to update updated_at
+CREATE OR REPLACE FUNCTION set_member_sequence_updated_at()
+RETURNS TRIGGER AS $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'member_sequence_set_updated_at'
-  ) THEN
-    CREATE OR REPLACE FUNCTION set_member_sequence_updated_at()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      NEW."updated_at" := CURRENT_TIMESTAMP;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
+  NEW."updated_at" := CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-    CREATE TRIGGER member_sequence_set_updated_at
-    BEFORE UPDATE ON "MemberSequence"
-    FOR EACH ROW EXECUTE PROCEDURE set_member_sequence_updated_at();
-  END IF;
-END $$;
+-- Trigger definition (dropped first to ensure idempotency)
+DROP TRIGGER IF EXISTS member_sequence_set_updated_at ON "MemberSequence";
+CREATE TRIGGER member_sequence_set_updated_at
+BEFORE UPDATE ON "MemberSequence"
+FOR EACH ROW EXECUTE PROCEDURE set_member_sequence_updated_at();
