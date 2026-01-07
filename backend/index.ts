@@ -31,9 +31,10 @@ app.use(cors({ origin: corsOrigins as any }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ strict: false }));
 app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const ct = String(_req.headers['content-type'] || '');
-  if (err instanceof SyntaxError && ct.includes('application/json')) {
-    return res.status(400).json({ error: 'invalid JSON' });
+  // Handle JSON parse errors from body-parser
+  if (err instanceof SyntaxError && 'body' in err && (err as any).status === 400) {
+    console.error('JSON Parse Error:', err.message);
+    return res.status(400).json({ error: 'Invalid JSON payload' });
   }
   next(err);
 });
