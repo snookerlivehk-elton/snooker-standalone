@@ -763,6 +763,15 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
 
     const endedAt = timestamps?.end ? new Date(Number(timestamps.end)) : new Date();
 
+    const matchUpdateData: any = {
+      ended_at: endedAt,
+      winner_member_id: winnerMemberId ? String(winnerMemberId) : null,
+    };
+    if (Array.isArray(matchMeta?.handicaps)) {
+      matchUpdateData.handicap0 = Number(matchMeta.handicaps[0] || 0);
+      matchUpdateData.handicap1 = Number(matchMeta.handicaps[1] || 0);
+    }
+
     const ops: any[] = [
       prisma.foulTotals.upsert({
         where: { match_id: matchId },
@@ -776,12 +785,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
       }),
       prisma.match.update({
         where: { id: matchId },
-        data: {
-          ended_at: endedAt,
-          winner_member_id: winnerMemberId ? String(winnerMemberId) : null,
-          handicap0: Array.isArray(matchMeta?.handicaps) ? Number(matchMeta.handicaps[0] || 0) : undefined,
-          handicap1: Array.isArray(matchMeta?.handicaps) ? Number(matchMeta.handicaps[1] || 0) : undefined,
-        },
+        data: matchUpdateData,
       }),
     ];
     // Upsert per-player frames/points, ensure non-member opponent存在
