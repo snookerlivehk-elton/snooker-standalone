@@ -581,25 +581,6 @@ app.get('/admin/env-history', adminAuth, (req, res) => {
   res.json({ lines, tail });
 });
 
-app.get('/admin/debug/latest-members', async (_req, res) => {
-  try {
-    const members = await prisma.member.findMany({
-      take: 5,
-      orderBy: { created_at: 'desc' },
-      select: {
-        member_id: true,
-        c_name: true,
-        e_name: true,
-        created_at: true,
-        district: true
-      }
-    });
-    res.json({ status: 'ok', count: members.length, members });
-  } catch (err: any) {
-    res.status(500).json({ error: String(err) });
-  }
-});
-
 // Temporary online multi-device test page, served from allowed origin
 app.get('/test', (_req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
