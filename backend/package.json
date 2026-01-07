@@ -10,12 +10,15 @@
   "scripts": {
     "prestart": "prisma generate",
     "start": "node dist/index.js",
+    "start:migrate": "prisma migrate deploy && node dist/index.js",
     "build": "tsc",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "env:check": "node envCheck.mjs",
     "env:export": "node envExport.mjs",
+    "members:import": "ts-node scripts/importMembersCsv.ts",
     "postinstall": "prisma generate"
   },
   "keywords": [],
@@ -32,7 +35,7 @@
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.14.2",
+    "@types/node": "^24.6.2",
     "@types/socket.io": "^3.0.1",
     "@types/supertest": "^6.0.3",
     "cross-env": "^10.1.0",

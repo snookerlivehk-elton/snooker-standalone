@@ -35,19 +35,43 @@ enum BallName {
 model Member {
   id           String       @id @default(uuid())
   name         String
+  // Registration fields
+  email        String?      @unique
+  district_code String?
+  phone        String?
+  birth_date   DateTime?
+  is_guest     Boolean      @default(false)
+  // Member number (code prefix + digits). Using existing member_code for compatibility.
   member_code  String?      @unique
+  // Email verification
+  email_verified_at DateTime?
+  email_verification_token String?
+  email_verification_expires_at DateTime?
   created_at   DateTime     @default(now())
 
   matchPlayers MatchPlayer[]
   matchesWon   Match[]      @relation("winner_member")
 }
 
+// Sequence table for district-based member code generation (no country prefix for now)
+model MemberSequence {
+  district_code String   @id
+  next_seq      Int      @default(1)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
 model Match {
   id               String       @id @default(uuid())
   room_id          String
   name             String
+  name_part        String?
+  match_key_normalized String?
+  match_code       String?
   frames_required  Int
   red_balls        Int
+  handicap0        Int          @default(0)
+  handicap1        Int          @default(0)
   started_at       DateTime?
   ended_at         DateTime?
   version          Int          @default(1)
@@ -64,6 +88,7 @@ model Match {
   @@index([started_at])
   @@index([winner_member_id])
   @@index([room_id])
+  @@index([match_key_normalized])
 }
 
 model MatchPlayer {
@@ -87,6 +112,7 @@ model MatchPlayer {
 
   @@index([match_id, member_id])
   @@index([member_id])
+  @@unique([match_id, member_id], name: "match_id_member_id")
 }
 
 model Event {
