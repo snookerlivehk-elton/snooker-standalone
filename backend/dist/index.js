@@ -5,19 +5,29 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
+import { randomUUID, randomBytes } from 'crypto';
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
 const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
     ? '*'
     : corsOriginRaw.split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({ origin: corsOrigins }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ strict: false }));
+app.use((err, _req, res, next) => {
+    const ct = String(_req.headers['content-type'] || '');
+    if (err instanceof SyntaxError && ct.includes('application/json')) {
+        return res.status(400).json({ error: 'invalid JSON' });
+    }
+    next(err);
+});
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
 // Health check for cloud deployments
@@ -38,6 +48,100 @@ app.get('/health/db', async (_req, res) => {
         res.status(500).json({ status: 'error', error: String(err) });
     }
 });
+// Strict match creation: require valid memberId for both players; if any missing or not found, reject
+app.post('/api/matches/strict', writeAuth, async (req, res) => {
+    try {
+        const { roomId, match, players, timestamps } = req.body || {};
+        if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
+            return res.status(400).json({ error: 'invalid payload' });
+        }
+        const p0 = players[0]?.memberId;
+        const p1 = players[1]?.memberId;
+        if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
+            return res.status(400).json({ error: 'memberId required for both players' });
+        }
+        const found = await prisma.member.findMany({ where: { id: { in: [p0, p1] } }, select: { id: true } });
+        const ids = new Set(found.map(f => f.id));
+        if (!ids.has(p0) || !ids.has(p1)) {
+            return res.status(404).json({ error: 'memberId not found' });
+        }
+        const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
+        const created = await prisma.match.create({
+            data: {
+                room_id: String(roomId),
+                name: String(match.name || 'Snooker Match'),
+                name_part: match.namePart ? String(match.namePart) : null,
+                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
+                match_code: match.matchCode ? String(match.matchCode) : null,
+                frames_required: Number(match.framesRequired || 1),
+                red_balls: Number(match.redBalls || 15),
+                handicap0: Array.isArray(match.handicaps) ? Number(match.handicaps[0] || 0) : 0,
+                handicap1: Array.isArray(match.handicaps) ? Number(match.handicaps[1] || 0) : 0,
+                started_at: startedAt,
+            },
+        });
+        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+        await prisma.$transaction([
+            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+        ]);
+        res.status(201).json({ matchId: created.id });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.post('/api/matches/partial', writeAuth, async (req, res) => {
+    try {
+        const { roomId, match, players, timestamps } = req.body || {};
+        if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
+            return res.status(400).json({ error: 'invalid payload' });
+        }
+        const candidateIds = [players[0]?.memberId, players[1]?.memberId].filter((x) => typeof x === 'string');
+        const found = candidateIds.length > 0
+            ? await prisma.member.findMany({ where: { id: { in: candidateIds } }, select: { id: true } })
+            : [];
+        const validSet = new Set(found.map(f => f.id));
+        const acceptedMemberIds = candidateIds.filter(id => validSet.has(id));
+        const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
+        const created = await prisma.match.create({
+            data: {
+                room_id: String(roomId),
+                name: String(match.name || 'Snooker Match'),
+                name_part: match.namePart ? String(match.namePart) : null,
+                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
+                match_code: match.matchCode ? String(match.matchCode) : null,
+                frames_required: Number(match.framesRequired || 1),
+                red_balls: Number(match.redBalls || 15),
+                started_at: startedAt,
+            },
+        });
+        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+        const txOps = [];
+        for (let i = 0; i < players.length; i++) {
+            const p = players[i];
+            let memberId = null;
+            if (p?.memberId && typeof p.memberId === 'string' && validSet.has(p.memberId)) {
+                memberId = p.memberId;
+            }
+            else if (!p?.memberId && p?.name) {
+                const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
+                memberId = guest.id;
+            }
+            if (memberId) {
+                txOps.push(prisma.matchPlayer.create({
+                    data: { match_id: created.id, member_id: memberId, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] },
+                }));
+            }
+        }
+        if (txOps.length)
+            await prisma.$transaction(txOps);
+        res.status(201).json({ matchId: created.id, acceptedMemberIds });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
 // Start environment audit logging to record every update and snapshot (can be disabled)
 if (process.env.ENV_AUDIT_ENABLED !== 'false') {
     startEnvAudit();
@@ -52,6 +156,11 @@ const io = new Server(server, {
 const rooms = [];
 app.get('/api/rooms', (req, res) => {
     res.json(rooms);
+});
+app.get('/rooms/:roomId/state', (req, res) => {
+    const roomId = String(req.params.roomId);
+    const room = rooms.find(r => r.id === roomId);
+    res.json({ roomId, state: room?.gameState ?? null });
 });
 app.post('/api/rooms', (req, res) => {
     const { name } = req.body;
@@ -275,6 +384,162 @@ app.get('/admin/login', (_req, res) => {
             log('Socket init error: ' + (e && e.message ? e.message : String(e)), 'err');
           }
         };
+  </script>
+  </body>
+  </html>`);
+});
+// District codes API for registration dropdown (public)
+app.get('/api/district-codes', (_req, res) => {
+    const items = Object.entries(DISTRICT_CODE_MAP).map(([name, code]) => ({ name, code }));
+    const byCode = {};
+    for (const it of items) {
+        if (!byCode[it.code])
+            byCode[it.code] = it;
+    }
+    res.json({ districts: Object.values(byCode) });
+});
+// Same-origin Member Registration page (mobile-friendly)
+app.get('/admin/register', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+      <title>Member Registration – Same-Origin</title>
+      <style>
+        :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color-scheme: light dark; }
+        body { margin: 0; background: #0f172a; color: #e2e8f0; }
+        .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+        .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px; }
+        h1 { font-size: 20px; margin: 0 0 12px; }
+        .row { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+        label { font-size:12px; color:#9ca3af; }
+        input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #374151; background: #0b1220; color: #e5e7eb; }
+        input::placeholder { color:#6b7280; }
+        button { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #1f2937; background: #2563eb; color: #e5e7eb; cursor: pointer; font-weight: 600; }
+        .muted { color:#94a3b8; font-size:12px; }
+        .log { background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px; white-space:pre-wrap; overflow:auto; max-height:240px; }
+        .ok { color:#10b981; }
+        .err { color:#ef4444; }
+        .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        @media (max-width: 480px) { .grid-2 { grid-template-columns: 1fr; } }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="card">
+          <h1>會員註冊（同源）</h1>
+          <p class="muted">此頁由後端提供，所有請求為同源，適配手機排版。</p>
+
+          <div class="row">
+            <label>Email（必填）</label>
+            <input id="email" type="email" placeholder="example@domain.com" />
+          </div>
+          <div class="row">
+            <label>姓名（必填）</label>
+            <input id="name" type="text" placeholder="您的姓名" />
+          </div>
+          <div class="row">
+            <label>地區（必填，香港區份代碼）</label>
+            <select id="district"></select>
+            <p class="muted">示例：元朗區 → NYL</p>
+          </div>
+          <div class="grid-2">
+            <div class="row">
+              <label>電話（選填）</label>
+              <input id="phone" type="tel" placeholder="9123 4567" />
+            </div>
+            <div class="row">
+              <label>出生日期（選填）</label>
+              <input id="birthDate" type="date" />
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="btnRegister">提交註冊</button>
+          </div>
+
+          <div class="row">
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        const logEl = document.getElementById('log');
+        function log(msg, cls) {
+          const time = new Date().toLocaleTimeString();
+          const div = document.createElement('div');
+          div.className = cls || '';
+          div.textContent = '[' + time + '] ' + msg;
+          logEl.appendChild(div);
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        async function loadDistricts() {
+          try {
+            const res = await fetch('/api/district-codes');
+            const data = await res.json();
+            const sel = document.getElementById('district');
+            sel.innerHTML = '';
+            for (const d of data.districts) {
+              const opt = document.createElement('option');
+              opt.value = d.code; opt.textContent = d.code + ' — ' + d.name;
+              sel.appendChild(opt);
+            }
+          } catch (err) {
+            log('載入地區失敗：' + (err?.message || err), 'err');
+          }
+        }
+
+        async function register() {
+          const emailEl = document.getElementById('email');
+          const email = emailEl.value.trim().normalize('NFKC');
+          // 將規範化後的值回寫，避免 checkValidity() 基於未規範化的原值誤判
+          if (emailEl && typeof emailEl.value === 'string') {
+            emailEl.value = email;
+          }
+          const name = document.getElementById('name').value.trim();
+          const districtCode = document.getElementById('district').value.trim();
+          const phone = document.getElementById('phone').value.trim();
+          const birthDate = document.getElementById('birthDate').value.trim();
+
+          if (!email || !name || !districtCode) {
+            log('請填寫 email、姓名與地區。', 'err');
+            return;
+          }
+          if (emailEl && typeof emailEl.checkValidity === 'function' && !emailEl.checkValidity()) {
+            emailEl.reportValidity?.();
+            log('email 格式不正確。', 'err');
+            return;
+          }
+
+          try {
+            const res = await fetch('/api/members/register', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({ email, name, districtCode, phone: phone || undefined, birthDate: birthDate || undefined })
+            });
+            const ct = res.headers.get('content-type') || '';
+            const isJson = ct.toLowerCase().includes('application/json');
+            const data = isJson ? await res.json() : { errorText: await res.text() };
+            if (!res.ok) {
+              const msg = (data && (data.error || data.errorText)) ? (data.error || data.errorText) : res.statusText;
+              log('註冊失敗：' + msg, 'err');
+              return;
+            }
+            log('註冊成功！會員號：' + data.memberCode, 'ok');
+          } catch (err) {
+            log('註冊異常：' + (err?.message || err), 'err');
+          }
+        }
+
+        document.getElementById('btnRegister').addEventListener('click', register);
+        loadDistricts();
       </script>
     </body>
   </html>`);
@@ -404,6 +669,10 @@ app.post('/api/matches', writeAuth, async (req, res) => {
             data: {
                 room_id: String(roomId),
                 name: String(match.name || 'Snooker Match'),
+                // Optional normalized fields from frontend
+                name_part: match.namePart ? String(match.namePart) : null,
+                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
+                match_code: match.matchCode ? String(match.matchCode) : null,
                 frames_required: Number(match.framesRequired || 1),
                 red_balls: Number(match.redBalls || 15),
                 started_at: startedAt,
@@ -456,12 +725,12 @@ app.post('/api/matches/:matchId/events', writeAuth, async (req, res) => {
 app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
     try {
         const matchId = req.params.matchId;
-        const { foulTotals, stats, timestamps, winnerMemberId } = req.body || {};
+        const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
         if (!matchId || !foulTotals || !Array.isArray(foulTotals) || foulTotals.length !== 2 || !stats) {
             return res.status(400).json({ error: 'invalid payload' });
         }
         const endedAt = timestamps?.end ? new Date(Number(timestamps.end)) : new Date();
-        await prisma.$transaction([
+        const ops = [
             prisma.foulTotals.upsert({
                 where: { match_id: matchId },
                 update: { player0_total: Number(foulTotals[0] || 0), player1_total: Number(foulTotals[1] || 0) },
@@ -474,9 +743,33 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
             }),
             prisma.match.update({
                 where: { id: matchId },
-                data: { ended_at: endedAt, winner_member_id: winnerMemberId ?? null },
+                data: {
+                    ended_at: endedAt,
+                    winner_member_id: winnerMemberId ?? null,
+                    handicap0: Array.isArray(matchMeta?.handicaps) ? Number(matchMeta.handicaps[0] || 0) : undefined,
+                    handicap1: Array.isArray(matchMeta?.handicaps) ? Number(matchMeta.handicaps[1] || 0) : undefined,
+                },
             }),
-        ]);
+        ];
+        // Upsert per-player frames/points, ensure non-member opponent存在
+        if (Array.isArray(playersFinal)) {
+            for (const pf of playersFinal) {
+                let mid = pf.memberId ? String(pf.memberId) : null;
+                if (!mid && pf.name) {
+                    const guest = await prisma.member.create({ data: { name: String(pf.name), is_guest: true } });
+                    mid = guest.id;
+                }
+                if (mid) {
+                    const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+                    ops.push(prisma.matchPlayer.upsert({
+                        where: { match_id_member_id: { match_id: matchId, member_id: mid } },
+                        update: { frames_won: Number(pf.framesWon || 0), total_points: Number(pf.score || 0) },
+                        create: { match_id: matchId, member_id: mid, frames_won: Number(pf.framesWon || 0), total_points: Number(pf.score || 0), pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] },
+                    }));
+                }
+            }
+        }
+        await prisma.$transaction(ops);
         res.json({ finalized: true });
     }
     catch (err) {
@@ -611,9 +904,8 @@ io.on('connection', (socket) => {
         if (room) {
             room.gameState = newState;
         }
-        // Avoid echoing back to the sender to preserve local history (UNDO)
-        // Broadcast to other clients in the room only
-        socket.broadcast.to(roomId).emit('gameState updated', newState);
+        // Broadcast to entire room (include sender) to ensure OBS/browser sources receive updates
+        io.to(roomId).emit('gameState updated', newState);
     });
     socket.on('disconnect', () => {
         console.log('user disconnected');
@@ -625,5 +917,211 @@ server.listen(PORT, '0.0.0.0', () => {
 process.on('SIGINT', async () => {
     await prisma.$disconnect();
     process.exit(0);
+});
+// Members: registration and admin list
+// Register a new member with district-based sequential member_code (no country prefix for now)
+app.post('/api/members/register', async (req, res) => {
+    try {
+        const payload = (req.body || {});
+        const email = String(payload.email || '').trim().normalize('NFKC');
+        const name = String(payload.name || '').trim();
+        const phone = payload.phone ? String(payload.phone).trim() : undefined;
+        const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+        if (!email || !name) {
+            return res.status(400).json({ error: 'email 與 name 為必填' });
+        }
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailOk) {
+            return res.status(400).json({ error: 'email 格式不正確' });
+        }
+        const resolvedDistrict = resolveDistrictCode(payload.districtCode || payload.districtName || '');
+        if (!resolvedDistrict) {
+            return res.status(400).json({ error: '地區代碼/名稱無效，需為 3-4 位英文代碼或已知名稱' });
+        }
+        const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
+        if (birthDateStr && Number.isNaN(birthDate.getTime())) {
+            return res.status(400).json({ error: '出生日期格式無效，請使用 ISO 格式，如 1990-01-31' });
+        }
+        const district = resolvedDistrict;
+        const result = await prisma.$transaction(async (tx) => {
+            // 確保 email 不重覆
+            const existsEmail = await tx.member.findFirst({ where: { email } });
+            if (existsEmail) {
+                throw new Error('email 已存在');
+            }
+            // 以遞增的序列產生會員號（3-4位代碼 + 5位數字）
+            const seq = await tx.memberSequence.upsert({
+                where: { district_code: district },
+                update: { next_seq: { increment: 1 } },
+                create: { district_code: district, next_seq: 2 },
+                select: { next_seq: true },
+            });
+            const current = seq.next_seq - 1; // 使用更新前的序號
+            const memberCode = `${district}${String(current).padStart(5, '0')}`;
+            // 生成驗證 token（一次性），24h 有效
+            const token = Buffer.from(randomBytes(24)).toString('hex');
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            const created = await tx.member.create({
+                data: {
+                    id: randomUUID(),
+                    name,
+                    email,
+                    district_code: district,
+                    phone: phone ?? null,
+                    birth_date: birthDate ?? null,
+                    member_code: memberCode,
+                    email_verification_token: token,
+                    email_verification_expires_at: expiresAt,
+                },
+            });
+            return { id: created.id, memberCode, token };
+        });
+        // 寄送驗證信（若已配置郵件供應商）
+        if (RESEND_API_KEY) {
+            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(result.token)}`;
+            try {
+                await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${RESEND_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        from: 'no-reply@snookerhk.live',
+                        to: email,
+                        subject: '驗證你的電子郵件',
+                        html: `<p>您好 ${name}，請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
+                    })
+                });
+            }
+            catch (e) {
+                // 不阻斷流程，僅記錄
+                console.warn('Failed to send verification email:', e);
+            }
+        }
+        res.status(201).json({ id: result.id, memberCode: result.memberCode });
+    }
+    catch (err) {
+        const msg = String(err?.message || err);
+        const status = msg.includes('email 已存在') ? 409 : 500;
+        res.status(status).json({ error: msg });
+    }
+});
+// Verify email by token
+app.get('/verify-email', async (req, res) => {
+    try {
+        const token = String(req.query.token || '').trim();
+        if (!token)
+            return res.status(400).send('missing token');
+        const member = await prisma.member.findFirst({
+            where: { email_verification_token: token }
+        });
+        if (!member)
+            return res.status(404).send('invalid token');
+        if (member.email_verification_expires_at && new Date(member.email_verification_expires_at).getTime() < Date.now()) {
+            return res.status(410).send('token expired');
+        }
+        await prisma.member.update({
+            where: { id: member.id },
+            data: { email_verified_at: new Date(), email_verification_token: null, email_verification_expires_at: null }
+        });
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Email Verified</title></head><body style="font-family:system-ui"><h2>電子郵件驗證成功</h2><p>你可以關閉此頁面。</p></body></html>`);
+    }
+    catch (e) {
+        res.status(500).send(String(e?.message || e));
+    }
+});
+// Resend verification email
+app.post('/api/members/resend-email', async (req, res) => {
+    try {
+        const { email } = (req.body || {});
+        const normalized = String(email || '').trim().normalize('NFKC');
+        if (!normalized)
+            return res.status(400).json({ error: 'email required' });
+        const member = await prisma.member.findFirst({ where: { email: normalized } });
+        if (!member)
+            return res.status(404).json({ error: 'not found' });
+        if (member.email_verified_at)
+            return res.status(200).json({ ok: true, message: 'already verified' });
+        const token = Buffer.from(randomBytes(24)).toString('hex');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await prisma.member.update({
+            where: { id: member.id },
+            data: { email_verification_token: token, email_verification_expires_at: expiresAt }
+        });
+        if (RESEND_API_KEY) {
+            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(token)}`;
+            await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${RESEND_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from: 'no-reply@snookerhk.live',
+                    to: normalized,
+                    subject: '重寄電子郵件驗證',
+                    html: `<p>請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
+                })
+            });
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+// Fetch member by id
+app.get('/api/members/:id', async (req, res) => {
+    try {
+        const id = String(req.params.id);
+        const m = await prisma.member.findUnique({ where: { id } });
+        if (!m)
+            return res.status(404).json({ error: 'not found' });
+        res.json(m);
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Validate a list of member IDs (existence check)
+app.get('/api/members/validate', async (req, res) => {
+    try {
+        const idsParam = req.query.ids || '';
+        const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+        if (ids.length === 0) {
+            return res.status(400).json({ error: 'ids is required (comma-separated)' });
+        }
+        const found = await prisma.member.findMany({
+            where: { id: { in: ids } },
+            select: { id: true },
+        });
+        const set = new Set(found.map(f => f.id));
+        const exists = {};
+        for (const id of ids)
+            exists[id] = set.has(id);
+        res.json({ exists });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Admin: list members (requires admin token)
+app.get('/api/admin/members', adminAuth, async (req, res) => {
+    try {
+        const page = Number(req.query.page || '1');
+        const pageSize = Number(req.query.pageSize || '20');
+        const take = Math.max(1, Math.min(pageSize, 100));
+        const skip = Math.max(0, (page - 1) * take);
+        const [total, members] = await prisma.$transaction([
+            prisma.member.count(),
+            prisma.member.findMany({ skip, take, orderBy: { created_at: 'desc' } }),
+        ]);
+        res.json({ total, page, pageSize: take, members });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
 });
 //# sourceMappingURL=index.js.map

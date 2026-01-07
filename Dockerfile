@@ -15,7 +15,7 @@ COPY backend/tsconfig.json ./
 RUN apk add --no-cache openssl
 
 # Install deps (will run postinstall -> prisma generate) with schema present
-RUN npm ci
+RUN npm ci || npm install --no-audit --no-fund
 
 # Copy the rest of the backend source for build
 COPY backend ./
@@ -31,13 +31,13 @@ COPY --from=builder /app/prisma ./prisma
 RUN apk add --no-cache openssl
 
 # Install only production deps and guarantee Prisma client is generated
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev || npm install --omit=dev --no-audit --no-fund
 RUN npx prisma generate
 
 # Copy compiled dist and sample env
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/.env.example ./.env.example
 
-EXPOSE 3000
-# Use npm lifecycle so prestart runs prisma generate before app starts
-CMD ["npm", "run", "start"]
+EXPOSE 10000
+# Start with automatic Prisma migration then launch the server
+CMD ["npm", "run", "start:migrate"]

@@ -13,7 +13,14 @@ Endpoints
     ```json
     {
       "roomId": "1",
-      "match": { "name": "Snooker Live", "framesRequired": 5, "redBalls": 15 },
+      "match": {
+        "name": "Snooker Live",
+        "framesRequired": 5,
+        "redBalls": 15,
+        "namePart": "Snooker Live",
+        "matchKeyNormalized": "snooker-live",
+        "matchCode": "Live"
+      },
       "players": [
         { "name": "Alice", "memberId": "A1" },
         { "name": "Bob", "memberId": "B2" }
@@ -68,3 +75,8 @@ Notes
 - Pagination for events recommended: `GET /api/matches/{id}/events?page=...`.
 - Validation: enforce enums for `type` and `ballName`.
 - Security: authorize write endpoints in production; audit via append-only logs.
+ - Optional match fields: `namePart`, `matchKeyNormalized`, `matchCode`.
+   - `matchKeyNormalized` derives from `namePart` only; do not include code text.
+   - Backend persists to Prisma columns `name_part`, `match_key_normalized`, `match_code`.
+   - Ensure database schema is migrated to include these columns and index on `match_key_normalized`.
+   - Migration command (development): `npx prisma migrate dev --name add_match_name_parts` in `backend/` with valid `DATABASE_URL`.

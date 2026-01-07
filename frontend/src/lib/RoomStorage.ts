@@ -110,7 +110,7 @@ export const RoomStorage = {
   },
 
   clearRoom(roomId: string) {
-    write(roomId, { events: [], foulTotals: [0, 0] });
+    write(roomId, { events: [], foulTotals: [0, 0], state: undefined });
   },
 
   exportRoomData(roomId: string): string {

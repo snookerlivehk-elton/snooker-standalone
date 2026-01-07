@@ -1,28 +1,18 @@
-# Backend Dockerfile for cloud-ready build
-FROM node:20-alpine AS builder
+FROM node:18-alpine
 WORKDIR /app
+
+# Install deps with fallback to npm install when lock mismatches
 COPY package*.json ./
-# Ensure Prisma schema exists before npm ci runs postinstall
-COPY prisma ./prisma
-COPY tsconfig.json ./
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
-# Install deps (will run postinstall -> prisma generate) with schema present
-RUN npm ci
-# Copy the rest of the source after dependencies for better caching
+RUN apk add --no-cache openssl && (npm ci || npm install --no-audit --no-fund)
+
+# Copy source
 COPY . .
+
+# Build TypeScript
 RUN npm run build
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/prisma ./prisma
-# Ensure OpenSSL is present at runtime for Prisma
-RUN apk add --no-cache openssl
-RUN npm ci --omit=dev
-RUN npx prisma generate
-COPY --from=builder /app/dist ./dist
-EXPOSE 3000
-# Use npm lifecycle so prestart runs `prisma generate` before app starts
-CMD ["npm", "run", "start"]
+# Runtime env (Railway/Render will override as needed)
+ENV PORT=10000
+
+# Apply pending migrations on start (sqlite or other)
+CMD ["npm","run","start:migrate"]

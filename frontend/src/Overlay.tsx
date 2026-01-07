@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID, ENABLE_SUPABASE } from './config';
+import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID, ENABLE_SUPABASE, API_URL } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import { getRoomChannel } from './lib/supabase';
+import { findRoomIdByCode } from './lib/roomCode';
 // StatsEngine not required for overlay rendering; remove unused import
 
 const Overlay: React.FC = () => {
   const { roomId: routeRoomId } = useParams<{ roomId: string }>();
-  const roomId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
+  const slugId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
+  const paramsRaw = typeof window !== 'undefined' ? new URLSearchParams(window.location.search || '') : null;
+  const overrideSocketRoom = paramsRaw?.get('socketRoom') || undefined;
+  const roomId = slugId ? (findRoomIdByCode(slugId) || slugId) : slugId; // 用於本機 RoomStorage
+  const socketRoom = (overrideSocketRoom && overrideSocketRoom.trim()) || slugId || roomId; // 用於 socket 加入房間鍵
   const [gameState, setGameState] = useState<State | null>(null);
   const [scale] = useState(1);
 
@@ -62,6 +67,11 @@ const Overlay: React.FC = () => {
     // 優先使用 Supabase Realtime（簡化版或無後端）；否則使用 Socket
     let s: any = null;
     let ch: any = null;
+    // 允許以查詢參數強制指定 socket 傳輸方式（OBS 兼容：polling）
+    const transportParam = paramsRaw?.get('socketTransport') || undefined;
+    const transports = transportParam === 'polling' ? ['polling'] : ['websocket', 'polling'];
+    const enablePollFallback = (paramsRaw?.get('enablePoll') === 'true' || paramsRaw?.get('enablePoll') === '1');
+
     if (ENABLE_SUPABASE && roomId) {
       ch = getRoomChannel(roomId);
       if (ch) {
@@ -76,8 +86,27 @@ const Overlay: React.FC = () => {
         });
       }
     } else {
-      s = io(SOCKET_URL, { transports: ['websocket', 'polling'], path: SOCKET_PATH });
-      if (roomId) s.emit('join room', roomId);
+      s = io(SOCKET_URL, {
+        transports,
+        path: SOCKET_PATH,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 8000,
+        timeout: 10000,
+      });
+      s.on('connect', () => {
+        if (socketRoom) s.emit('join room', socketRoom);
+      });
+      s.on('reconnect', () => {
+        if (socketRoom) s.emit('join room', socketRoom);
+      });
+      s.on('connect_error', () => {
+        // 讓 OBS 長時間靜止後也可自行恢復：不報錯、不中斷、依賴 socket.io 自動重連
+      });
+      s.on('disconnect', () => {
+        // 等待自動重連；重連成功會在上方 on('reconnect') 重新加入房間
+      });
       s.on('gameState updated', (newGameState: any) => {
         try {
           const deserialized = State.fromJSON(newGameState);
@@ -86,20 +115,49 @@ const Overlay: React.FC = () => {
           console.warn('Failed to parse gameState for overlay:', e);
         }
       });
+      let pollId: any = null;
+      const startPoll = () => {
+        if (!enablePollFallback) return;
+        if (!socketRoom) return;
+        const url = `${API_URL.replace(/\/$/,'')}/rooms/${encodeURIComponent(String(socketRoom))}/state`;
+        pollId = setInterval(async () => {
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (res.status === 404) { clearInterval(pollId); pollId = null; return; }
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.state) {
+                try {
+                  const deserialized = State.fromJSON(data.state);
+                  setGameState(deserialized);
+                } catch {}
+              }
+            }
+          } catch {}
+        }, 1000);
+      };
+      startPoll();
+      return () => { try { clearInterval(pollId); } catch {} try { s && s.disconnect(); } catch {} try { ch && ch.unsubscribe(); } catch {} };
     }
 
-    // 同步輪詢與 storage 事件，避免漏接
-    const id = setInterval(updateFromStorage, 500);
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key || !roomId) return;
-      if (e.key.includes(`snooker_room_${roomId}`)) updateFromStorage();
-    };
-    window.addEventListener('storage', onStorage);
+    // 在無後端模式下才啟用本地輪詢與 storage 事件；避免與 socket/supabase 更新互相覆蓋造成跳動
+    if (!ENABLE_SOCKET && !ENABLE_SUPABASE) {
+      const id = setInterval(updateFromStorage, 500);
+      const onStorage = (e: StorageEvent) => {
+        if (!e.key || !roomId) return;
+        if (e.key.includes(`snooker_room_${roomId}`)) updateFromStorage();
+      };
+      window.addEventListener('storage', onStorage);
+      return () => {
+        try { s && s.disconnect(); } catch {}
+        try { ch && ch.unsubscribe(); } catch {}
+        clearInterval(id);
+        window.removeEventListener('storage', onStorage);
+      };
+    }
     return () => {
       try { s && s.disconnect(); } catch {}
       try { ch && ch.unsubscribe(); } catch {}
-      clearInterval(id);
-      window.removeEventListener('storage', onStorage);
     };
   }, [roomId]);
 
@@ -140,75 +198,213 @@ const Overlay: React.FC = () => {
   const remainingPoints = gameState.getRemainingPoints();
   const breakScore = gameState.breakScore;
 
-  const nameWithBreak = (index: number) => {
+  const renderNameWithHandicap = (index: number) => {
     const name = gameState.players[index].name;
-    const isOnTable = gameState.currentPlayerIndex === index;
-    const breakDisplay = isOnTable && breakScore > 0 ? ` [${breakScore}]` : '';
-    return `${name}${breakDisplay}`;
+    const rawAny: any = Array.isArray(gameState.settings.handicaps) ? (gameState.settings.handicaps as any)[index] : undefined;
+    const isBlank = rawAny === null || rawAny === undefined || (typeof rawAny === 'string' && rawAny.trim() === '');
+    const showH = !isBlank;
+    const n = typeof rawAny === 'number' ? rawAny : Number(rawAny);
+    const signed = isNaN(n) ? String(rawAny) : (n > 0 ? `+${n}` : `${n}`);
+    return (
+      <span style={getNameStyle(index)}>
+        {name}
+        {showH && (
+          <span style={{ marginLeft: 6, fontSize: 'clamp(14px, 1.6vw, 22px)', fontWeight: 600, color: '#cfe3cf' }}>
+            ({signed})
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  // 樣式切換參數（預設 legacy）
+  const paramsUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const styleParam = paramsUrl?.get('style') || paramsUrl?.get('styleVersion') || 'legacy';
+  const isCompact = styleParam === 'compact';
+
+  // 工具：時間格式化（Break Time 等）
+  const formatTime = (seconds: number) => {
+    const s = Math.max(0, Math.floor(seconds || 0));
+    const m = Math.floor(s / 60);
+    const ss = String(s % 60).padStart(2, '0');
+    return `${m}:${ss}`;
   };
 
   const matchNameBox: React.CSSProperties = {
-    background: '#f5d000',
-    border: '4px solid #f5d000',
-    color: '#000',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 28,
-    padding: '0 24px',
-    borderRadius: 16,
+    background: '#ffd700',
+    color: 'black',
+    border: '2px solid #ffd700',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    borderBottomLeftRadius: 0, // remove bottom rounding per request
-    borderBottomRightRadius: 0, // remove bottom rounding per request
-    fontSize: 22,
-    lineHeight: 22,
+    borderBottomLeftRadius: isCompact ? 0 : 16,
+    borderBottomRightRadius: isCompact ? 0 : 16,
+    borderBottomWidth: isCompact ? 0 : undefined,
+    padding: isCompact ? '6px 16px' : '8px 18px',
     fontWeight: 700,
-    letterSpacing: 0.5,
-    textAlign: 'center',
-    zIndex: 1,
-    borderBottomWidth: 0, // flush with black group top edge
+    fontSize: isCompact ? 20 : 22,
+    letterSpacing: 0.2,
+    marginBottom: isCompact ? -2 : 4,
   };
 
-  const scoreBoxYellow: React.CSSProperties = {
+  // 合併黑區與資訊列的統一容器
+  const blackContainerStyle: React.CSSProperties = {
+    background: "#111",
+    color: "#f6f7f9",
+    borderRadius: isCompact ? 10 : 12,
+    padding: isCompact ? "3px 8px" : "6px 10px",
+    boxSizing: "border-box",
+    position: "relative",
+    boxShadow: "0 1px 10px rgba(0,0,0,0.5)",
+    display: "flex",
+    flexDirection: "column",
+    gap: isCompact ? 3 : 4,
+    // 將上方黑色主分牌寬度與下方綠色區塊一致
+    width: isCompact ? '68vw' : '85vw',
+    maxWidth: isCompact ? 1400 : 1700,
+  };
+
+  // 第一行（姓名/星號/分數/局數）
+  const sideBarWidth = 14;
+  const headerRowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: isCompact ? 8 : 10,
+    position: "relative",
+    zIndex: 2,
+    paddingLeft: sideBarWidth,
+    paddingRight: sideBarWidth,
+  };
+  const leftBarStyle: React.CSSProperties = {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    width: sideBarWidth,
     background: '#ffd700',
-    color: '#000',
-    borderRadius: 8,
-    padding: '3px 16px', // 20% reduction from 4px -> ~3px
-    fontWeight: 900,
-    fontSize: 27, // 20% reduction from 34 -> ~27
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
+    transition: 'opacity 200ms ease',
+    zIndex: 1,
+    opacity: 0
+  };
+  const rightBarStyle: React.CSSProperties = {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    height: '100%',
+    width: sideBarWidth,
+    background: '#ffd700',
+    borderTopLeftRadius: 6,
+    borderBottomLeftRadius: 6,
+    transition: 'opacity 200ms ease',
+    zIndex: 1,
+    opacity: 0
+  };
+  const centerClusterStyle: React.CSSProperties = {
+    position: 'absolute',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: isCompact ? 10 : 14,
+    minWidth: 360,
+    justifyContent: 'center',
+    zIndex: 3,
+    whiteSpace: 'nowrap'
+  };
+
+  // 第二行資訊列（放置 Lead/Remaining/Break/Break Time/Reds Left）
+  const infoRowStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: isCompact ? "1px 0" : "2px 0",
+  };
+
+  // 底部獨立資訊方塊（含 Lead / Remaining / Break / Break Time）
+  const bottomInfoBlockStyle: React.CSSProperties = {
+    marginTop: isCompact ? 6 : 8,
+    background: '#2a5f2a',
+    color: '#ffffff',
+    padding: isCompact ? '6px 12px' : '8px 14px',
+    borderRadius: 12,
+    border: '3px solid #f5d000',
+    fontSize: isCompact ? 19 : 21,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: isCompact ? 16 : 20,
+    flexWrap: 'wrap',
+    overflow: 'hidden',
+    width: isCompact ? '68vw' : '85vw',
+    maxWidth: isCompact ? 1400 : 1700,
+  };
+
+  const bottomInfoItemStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+    fontWeight: 700,
+    flex: '1 1 24%',
+    minWidth: 0,
+    justifyContent: 'center',
+    whiteSpace: 'nowrap'
+  };
+
+  // 純文字資訊項：不使用膠囊背景
+  const infoItemTextStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+    fontSize: isCompact ? 16 : 18,
+    fontWeight: 600,
+    color: '#e6e6e6',
+  };
+
+  const nameBox: React.CSSProperties = {
+    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: isCompact ? 8 : 10,
+    padding: isCompact ? '4px 12px' : '4px 14px',
+  };
+
+  const getNameStyle = (idx: number): React.CSSProperties => ({
+    fontSize: 'clamp(18px, 2.2vw, 28px)',
+    fontWeight: 700,
+    color: '#fff',
+    letterSpacing: 0.2,
+    lineHeight: 1.1,
+    display: 'block',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis'
+  });
+
+  const scoreBoxYellow: React.CSSProperties = {
+    background: '#ffd700', color: 'black', borderRadius: 12,
+    padding: isCompact ? '3px 16px' : '4px 20px',
+    fontWeight: 700,
+    fontSize: isCompact ? 26 : 32,
+    minWidth: isCompact ? 60 : 72,
+    textAlign: 'center',
   };
 
   const framesBox: React.CSSProperties = {
-    background: '#000',
-    color: '#ffffff',
-    borderRadius: 8,
-    padding: '2px 10px', // 20% reduction from 3px -> ~2px
-    fontWeight: 700,
-    fontSize: 19, // 20% reduction from 24 -> ~19
-    opacity: 0.95,
-  };
-
-  // Unified black bar (merge left panel + center band + right panel)
-  const unifiedBarStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 13, // 20% reduction from 16 -> ~13
-    background: '#000000',
-    border: '4px solid #f5d000',
-    borderRadius: 16,
-    padding: '5px 10px', // horizontal padding also -20% (12 -> ~10)
-    color: '#fff',
-    width: '68vw', // 80% of previous 85vw
-    maxWidth: 1360, // 80% of previous 1700
-    justifyContent: 'space-between',
-    marginTop: 0, // keep flush with top capsule
+    background: '#ffd700', color: 'black', borderRadius: 12,
+    padding: isCompact ? '3px 10px' : '3px 12px',
+    fontWeight: 600,
+    fontSize: isCompact ? 17 : 22,
+    minWidth: isCompact ? 44 : 54,
+    textAlign: 'center',
   };
 
   const indicatorStyle: React.CSSProperties = {
-    fontSize: 18, // 20% reduction from 22 -> ~18
-    fontWeight: 900,
-    color: '#ffd700',
+    fontSize: isCompact ? 16 : 20,
+    fontWeight: 700,
+    color: '#7fffd4',
+    minWidth: 26,
+    textAlign: 'center',
   };
 
   return (
@@ -237,53 +433,98 @@ const Overlay: React.FC = () => {
             'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif',
         }}
       >
-        {/* Match name (green) above unified black bar */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-          {/* Match name capsule above, tightly attached */}
-          <div style={{ marginBottom: -4, zIndex: 2 }}>
-            <div style={matchNameBox}>{gameState.settings.matchName}</div>
-          </div>
+        {/* Match name (yellow) above unified black bar */}
+        <div style={matchNameBox}>
+          <span style={{ fontWeight: 800 }}>{gameState.settings.matchName}</span>
+        </div>
 
-          {/* Unified black bar */}
-          <div style={unifiedBarStyle}>
+        <div style={blackContainerStyle}>
+          <div style={{ ...leftBarStyle, opacity: gameState.currentPlayerIndex === 0 ? 1 : 0 }} />
+          <div style={{ ...rightBarStyle, opacity: gameState.currentPlayerIndex === 1 ? 1 : 0 }} />
+          <div style={headerRowStyle}>
             {/* Left name */}
-            <span style={{ fontSize: 22, fontWeight: 700 }}>{nameWithBreak(0)}</span>
+            <div style={{ 
+              ...nameBox, 
+              width: '40%', 
+              flex: '0 0 40%', 
+              minWidth: 0, 
+              paddingLeft: sideBarWidth + 16, 
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+              position: 'relative',
+              zIndex: 3
+            }}>
+              {renderNameWithHandicap(0)}
+            </div>
 
-            {/* Center scores */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flex: 1 }}>
-              <span style={{ ...indicatorStyle, opacity: gameState.currentPlayerIndex === 0 ? 1 : 0 }}>◀</span>
+            {/* Score boxes */}
+            <div style={centerClusterStyle}>
               <div style={scoreBoxYellow}>{gameState.players[0].score}</div>
-              <div style={framesBox}>{gameState.players[0].framesWon} ({gameState.settings.framesRequired}) {gameState.players[1].framesWon}</div>
+              <div style={framesBox}>{gameState.players[0].framesWon}</div>
+              <div style={{ color: '#ddd', fontSize: isCompact ? 20 : 24, fontWeight: 600, whiteSpace: 'nowrap', minWidth: isCompact ? 40 : 56, textAlign: 'center' }}>({gameState.settings.framesRequired})</div>
+              <div style={framesBox}>{gameState.players[1].framesWon}</div>
               <div style={scoreBoxYellow}>{gameState.players[1].score}</div>
-              <span style={{ ...indicatorStyle, opacity: gameState.currentPlayerIndex === 1 ? 1 : 0 }}>▶</span>
             </div>
 
             {/* Right name */}
-            <span style={{ fontSize: 22, fontWeight: 700 }}>{nameWithBreak(1)}</span>
+            <div style={{ 
+              ...nameBox, 
+              width: '40%', 
+              flex: '0 0 40%', 
+              justifyContent: 'flex-end', 
+              minWidth: 0, 
+              paddingRight: sideBarWidth + 16, 
+              textAlign: 'right',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+              position: 'relative',
+              zIndex: 3
+            }}>
+              {renderNameWithHandicap(1)}
+            </div>
           </div>
 
-          {/* Info strip below score bar (green capsule) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            marginTop: 4,
-          }}>
-            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
-              Lead: {lead}
-            </div>
-            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
-              Remaining: {remainingPoints}
-            </div>
-            <div style={{ background: '#4caf50', color: '#102a12', borderRadius: 12, padding: '4px 8px', fontWeight: 700, fontSize: 18 }}>
-              Leader: {leader.name}
-            </div>
+          {/* Info row under header inside the same black container (pure text) */}
+          <div style={infoRowStyle}>
+            {gameState?.isFreeBall && (
+              <div style={{
+                background: '#7c3aed',
+                color: '#fff',
+                padding: '4px 10px',
+                borderRadius: 12,
+                fontWeight: 800,
+                fontSize: isCompact ? 16 : 18,
+                alignSelf: 'center',
+                border: '2px solid #e9d5ff'
+              }}>
+                Free Ball
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom independent info block (moved outside black container to avoid overlap) */}
+        <div style={bottomInfoBlockStyle}>
+          <div style={bottomInfoItemStyle}>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Lead</span>
+            <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{leader.name} +{lead}</span>
+          </div>
+          <div style={bottomInfoItemStyle}>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Remaining</span>
+            <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{remainingPoints}</span>
+          </div>
+          <div style={bottomInfoItemStyle}>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Break</span>
+            <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{gameState.breakScore}</span>
+          </div>
+          <div style={bottomInfoItemStyle}>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Break Time</span>
+            <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{formatTime(gameState.breakTime)}</span>
           </div>
         </div>
       </div>
-    </div>
+      </div>
   );
-};
+}
 
 export default Overlay;

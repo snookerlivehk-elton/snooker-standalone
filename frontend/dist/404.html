@@ -2,13 +2,32 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Snooker Scoreboard</title>
-    <script type="module" crossorigin src="/assets/index-Qv_kRySB.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-w4bFAWp7.css">
+    <title>Redirecting...</title>
+    <script>
+      // GitHub Pages SPA fallback: preserve path/query and redirect to index with ?redirect=
+      (function() {
+        try {
+          var path = window.location.pathname || '/';
+          var search = window.location.search || '';
+          var hash = window.location.hash || '';
+          var base = '/';
+          // If already at base, no need to redirect
+          if (path === base || path === base.replace(/\/$/, '')) return;
+          // Strip base from path to avoid duplicating it in ?redirect=
+          var stripped = (function(p){
+            if (p.indexOf(base) === 0) return p.slice(base.length);
+            if (p.charAt(0) === '/') return p.slice(1);
+            return p;
+          })(path);
+          var target = base + '?redirect=' + encodeURIComponent(stripped + search + hash);
+          window.location.replace(target);
+        } catch (e) {
+          // Fallback: go to base
+          window.location.replace('/');
+        }
+      })();
+    </script>
   </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
+  <body></body>
+  </html>

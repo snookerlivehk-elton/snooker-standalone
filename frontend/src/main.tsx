@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
@@ -16,7 +16,9 @@ document.title = APP_NAME;
     const redirect = params.get('redirect');
     const base = (import.meta.env.BASE_URL || '/');
     if (redirect) {
-      const normalized = redirect.startsWith('/') ? redirect.slice(1) : redirect;
+      const normalized = redirect.startsWith(base)
+      ? redirect.slice(base.length)
+      : (redirect.startsWith('/') ? redirect.slice(1) : redirect);
       const newUrl = `${base}${normalized}`;
       // Remove the redirect param from query while preserving others
       params.delete('redirect');
@@ -51,3 +53,4 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     )}
   </React.StrictMode>,
 )
+

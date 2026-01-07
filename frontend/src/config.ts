@@ -26,7 +26,7 @@ const socketUrlOverride = params?.get('socketUrl') || params?.get('socket') || u
 export const SOCKET_URL: string =
   socketUrlOverride ||
   (import.meta.env.VITE_SOCKET_URL as string | undefined) ||
-  (isDev ? 'http://localhost:3000' : window.location.origin);
+  (isDev ? 'http://localhost:3000' : (typeof window !== 'undefined' && window.location.hostname.endsWith('snookerhk.live') ? 'https://api.snookerhk.live' : window.location.origin));
 
 // Socket path resolution (for proxies/custom paths)
 // - Allow URL param `socketPath`/`path`
@@ -46,7 +46,7 @@ const apiUrlOverride = params?.get('apiUrl') || params?.get('api') || undefined;
 export const API_URL: string =
   apiUrlOverride ||
   (import.meta.env.VITE_API_URL as string | undefined) ||
-  (isDev ? 'http://localhost:3000' : window.location.origin);
+  (isDev ? 'http://localhost:3000' : (typeof window !== 'undefined' && window.location.hostname.endsWith('snookerhk.live') ? 'https://api.snookerhk.live' : window.location.origin));
 
 // App display name (UI + document.title)
 export const APP_NAME: string = (import.meta.env.VITE_APP_NAME as string | undefined) || 'Snooker Standalone';

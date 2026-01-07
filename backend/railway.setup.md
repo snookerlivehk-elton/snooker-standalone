@@ -18,7 +18,7 @@
 - 在 `Settings → Build`：
   - 將 `Builder` 選為 `Nixpacks`（或 `Build with Nixpacks`）。
   - `Build Command`：`npm ci && npm run build`
-  - `Start Command`：`npm start`
+  - `Start Command`：`npm run start:migrate`
 
 提示與相容性：
 - 專案目前已在 `backend/package.json` 設定：
@@ -42,10 +42,10 @@
 
 > 已在 `backend/package.json` 加入 `prestart: prisma generate` 與 `postinstall: prisma generate`，並將 `prisma` 置於 `dependencies`；因此 Nixpacks 與 Docker 兩種模式都能自動生成 Prisma Client。
 
-## 4. 重新部署與驗證
+## 4. 重新部署與驗證（含自動遷移）
 - 觸發 `Deploy`，在 `Logs` 檢查：
   - 有 `Prisma Client` 生成成功（或顯示已存在）。
-  - 進程以 `node dist/index.js` 啟動且無錯誤。
+  - 進程以 `npm run start:migrate` 執行，先套用 `prisma migrate deploy`，再以 `node dist/index.js` 啟動且無錯誤。
   - 出現 `listening on 0.0.0.0:XXXX` 字樣（`XXXX` 為 Railway 注入的 `PORT`）。
 - 瀏覽器驗證：
   - `GET /health` 應回 `200 OK` 且無 `X-Railway-Fallback`。
@@ -84,7 +84,7 @@ curl.exe -i https://<你的後端>.up.railway.app/admin/overview -H "x-admin-tok
 - 若 UI 無法切換至 Nixpacks，直接使用現有 Dockerfile（已在 runner 階段 `npx prisma generate`）。
  - 若出現 `X-Railway-Fallback: true`：
    - 檢查 `Settings → Source → Root Directory` 是否為 `backend`。
-   - 檢查 `Build Command` 與 `Start Command` 是否正確（`npm ci && npm run build`、`npm start`）。
+   - 檢查 `Build Command` 與 `Start Command` 是否正確（`npm ci && npm run build`、`npm run start:migrate`）。
    - 檢查 Deploy Logs 是否存在 `node dist/index.js` 與 `listening on 0.0.0.0:`；若缺少，代表服務未啟動。
    - 確認 `DATABASE_URL` 已設；雖然 `/health` 不需 DB，但 `prisma generate` 需正確依賴存在。
 
@@ -92,5 +92,5 @@ curl.exe -i https://<你的後端>.up.railway.app/admin/overview -H "x-admin-tok
 - `Settings → Source → Root Directory`：填 `backend`
 - `Settings → Build → Builder`：選 `Nixpacks`
 - `Settings → Build → Build Command`：`npm ci && npm run build`
-- `Settings → Build → Start Command`：`npm start`
+- `Settings → Build → Start Command`：`npm run start:migrate`
 - `Settings → Variables`：新增 `DATABASE_URL`、`CORS_ORIGIN`（不要手動設 `PORT`）

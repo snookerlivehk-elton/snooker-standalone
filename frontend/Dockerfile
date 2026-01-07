@@ -2,8 +2,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 # Ensure Vite build embeds backend URLs when building via Docker
-ENV VITE_API_URL=https://snookerhk.live
-ENV VITE_SOCKET_URL=https://snookerhk.live
+ENV VITE_API_URL=https://api.snookerhk.live
+ENV VITE_SOCKET_URL=https://api.snookerhk.live
 ENV VITE_SOCKET_PATH=/socket.io
 ENV VITE_ENABLE_SOCKET=true
 COPY package*.json ./

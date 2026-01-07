@@ -7,6 +7,10 @@ import AdminAuth from './AdminAuth';
 import LiveView from './LiveView';
 import { State } from './lib/State';
 import Overlay from './Overlay';
+import MemberRegister from './MemberRegister';
+import MemberProfile from './MemberProfile';
+import AdminMembers from './AdminMembers';
+import MemberLogin from './MemberLogin';
 
 function App() {
   const [gameState, setGameState] = useState<State | null>(null);
@@ -26,6 +30,10 @@ function App() {
         {/* Home route: redirect to Admin Login to avoid blank page */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
+        <Route path="/members/register" element={<MemberRegister />} />
+        <Route path="/members/login" element={<MemberLogin />} />
+        <Route path="/member/:id" element={<MemberProfile />} />
+        <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/room/:roomId" element={<Scoreboard gameState={gameState} setGameState={setGameState} />} />
         <Route path="/room/:roomId/setup" element={<Setup onStartMatch={handleStartMatch} />} />
         <Route path="/room/:roomId/live" element={<LiveView />} />

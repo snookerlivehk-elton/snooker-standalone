@@ -1,27 +1,28 @@
-databases:
-  - name: snooker-db
-    plan: free
+# Databases section removed to avoid free-tier limit; reuse existing DB via env var
 
 services:
   - type: web
     name: snooker-backend
     runtime: node
     rootDir: backend
-    plan: starter
     buildCommand: npm ci && npm run build
     startCommand: npm run start:migrate
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
-      # Use Render Postgres internal connection string for Prisma
+      # Pin Node runtime to v20 to avoid EBADENGINE/cache mismatches
+      - key: NODE_VERSION
+        value: "20"
       - key: DATABASE_URL
-        fromDatabase:
-          name: snooker-db
-          property: connectionString
+        sync: false
       # Comma-separated origins for CORS; set in dashboard for your domains
       - key: CORS_ORIGIN
-        sync: false
+        value: "https://ballstream-frontend.onrender.com"
       # Admin token to protect /admin endpoints; set securely in dashboard
       - key: ADMIN_TOKEN
+        sync: false
+      # Optional write token for match write endpoints
+      - key: WRITE_TOKEN
         sync: false
       # Socket.io path (defaults to /socket.io)
       - key: SOCKET_IO_PATH
@@ -32,8 +33,8 @@ services:
     name: snooker-frontend
     rootDir: frontend
     runtime: static
-    # plan is optional for static runtime; omit to avoid validation errors
-    buildCommand: VITE_SOCKET_URL="https://${BACKEND_HOST}.onrender.com" VITE_API_URL="https://${BACKEND_HOST}.onrender.com" VITE_SOCKET_PATH="/socket.io" npm ci && npm run build
+    # No paid plan; static runtime stays free
+    buildCommand: VITE_SOCKET_URL="https://${BACKEND_HOST}.onrender.com" VITE_API_URL="https://${BACKEND_HOST}.onrender.com" VITE_SOCKET_PATH="/socket.io" node ../scripts/generate-admin-redirect.js && npm ci && npm run build
     staticPublishPath: dist
     envVars:
       - key: BACKEND_HOST

@@ -1,0 +1,84 @@
+name: Deploy Backend
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Railway CLI
+        run: npm i -g @railway/cli
+      - name: Railway login
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ]; then echo "Missing RAILWAY_TOKEN"; exit 1; fi
+          railway login --token "$RAILWAY_TOKEN"
+      - name: Link Railway project
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN}" ]; then
+            echo "Missing RAILWAY_TOKEN secret"; exit 1;
+          fi
+          if [ -z "${RAILWAY_PROJECT_ID}" ]; then
+            echo "Missing RAILWAY_PROJECT_ID secret"; exit 1;
+          fi
+          railway link --project "$RAILWAY_PROJECT_ID"
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          ALLOW_ORIGINS: ${{ secrets.ALLOW_ORIGINS }}
+          SOCKET_PATH: ${{ secrets.SOCKET_PATH }}
+          PORT: ${{ secrets.PORT }}
+          DB_FILE: ${{ secrets.DB_FILE }}
+          RAILWAY_SERVICE_NAME: ${{ secrets.RAILWAY_SERVICE_NAME }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: |
+          SERVICE_NAME="${RAILWAY_SERVICE_NAME:-snooker-standalone-backend}"
+          railway up --service "$SERVICE_NAME" --project "$RAILWAY_PROJECT_ID"
+          railway variables set ADMIN_TOKEN="$ADMIN_TOKEN" --service "$SERVICE_NAME" || true
+          railway variables set ALLOW_ORIGINS="$ALLOW_ORIGINS" --service "$SERVICE_NAME" || true
+          railway variables set SOCKET_PATH="$SOCKET_PATH" --service "$SERVICE_NAME" || true
+          railway variables set PORT="$PORT" --service "$SERVICE_NAME" || true
+          railway variables set DB_FILE="$DB_FILE" --service "$SERVICE_NAME" || true
+          railway variables set NIXPACKS_NODE_INSTALL_CMD="npm install --no-audit --no-fund" --service "$SERVICE_NAME" || true
+      - name: Get Service Domain
+        id: domain
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway status --json > status.json
+          cat status.json | jq -r '.projects[0].services[0].domains[0]' > domain.txt || echo "" > domain.txt
+          echo "railway_domain=$(cat domain.txt)" >> $GITHUB_OUTPUT
+      - name: Configure Porkbun CNAME
+        if: steps.domain.outputs.railway_domain != ''
+        env:
+          PORKBUN_API_KEY: ${{ secrets.PORKBUN_API_KEY }}
+          PORKBUN_API_SECRET: ${{ secrets.PORKBUN_API_SECRET }}
+          RAILWAY_DOMAIN: ${{ steps.domain.outputs.railway_domain }}
+        run: |
+          curl -s -X POST https://api.porkbun.com/api/json/v3/dns/create \
+            -H "Content-Type: application/json" \
+            -d "{\"apikey\":\"$PORKBUN_API_KEY\",\"secretapi\":\"$PORKBUN_API_SECRET\",\"name\":\"api\",\"type\":\"CNAME\",\"content\":\"$RAILWAY_DOMAIN\",\"ttl\":\"300\",\"domain\":\"snookerhk.live\"}" || true
+      - name: Health check (railway domain)
+        if: steps.domain.outputs.railway_domain != ''
+        run: |
+          curl -s "https://${{ steps.domain.outputs.railway_domain }}/admin/overview?format=json&token=${{ secrets.ADMIN_TOKEN }}" || true

@@ -1,6 +1,6 @@
 param(
   [string]$BackendSubdomainUrl = "https://snooker-standalone-backend-production.up.railway.app",
-  [string]$BackendCustomUrl = "https://snookerhk.live",
+  [string]$BackendCustomUrl = "https://api.snookerhk.live",
   [string]$AdminToken = "",
   [switch]$Insecure = $true
 )

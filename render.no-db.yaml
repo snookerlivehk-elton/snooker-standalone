@@ -1,0 +1,53 @@
+# No-database Render Blueprint to avoid free-tier Postgres limit
+
+services:
+  - type: web
+    name: snooker-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:migrate
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Pin Node runtime to v20
+      - key: NODE_VERSION
+        value: "20"
+      # Provide DATABASE_URL in dashboard; do not store in repo
+      - key: DATABASE_URL
+        sync: false
+      # Comma-separated origins for CORS; include your domains
+      - key: CORS_ORIGIN
+        value: "https://www.snookerhk.live,https://snookerhk.live"
+      # Admin token to protect /admin endpoints; set securely in dashboard
+      - key: ADMIN_TOKEN
+        sync: false
+      # Optional write token for match write endpoints
+      - key: WRITE_TOKEN
+        sync: false
+      # Socket.io path (defaults to /socket.io)
+      - key: SOCKET_IO_PATH
+        value: "/socket.io"
+
+  # Frontend static site (Vite React)
+  - type: web
+    name: snooker-frontend
+    rootDir: frontend
+    runtime: static
+    staticPublishPath: dist
+    envVars:
+      # Build-time embedding for API/socket URLs
+      - key: VITE_API_URL
+        value: "https://api.snookerhk.live"
+      - key: VITE_SOCKET_URL
+        value: "https://api.snookerhk.live"
+      - key: VITE_SOCKET_PATH
+        value: "/socket.io"
+      - key: VITE_ENABLE_SOCKET
+        value: "true"
+      # Optionally expose backend host for diagnostics
+      - key: BACKEND_HOST
+        fromService:
+          name: snooker-backend
+          type: web
+          property: host

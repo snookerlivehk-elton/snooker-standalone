@@ -6,6 +6,38 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState('');
 
+  // Resolve backend base: prefer configured API_URL; if same-origin, use nginx proxy /api
+  function getBackendBase(): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    if (host.endsWith('github.io')) {
+      return 'https://api.snookerhk.live';
+    }
+    return origin.replace(/\/$/, '') + '/api';
+  }
+
+  // Try auth via query param first (avoids CORS preflight); then header
+  async function tryAuthenticate(tok: string): Promise<boolean> {
+    const base = getBackendBase();
+    // Query-token GET (same-origin or proxied) — avoids preflight
+    try {
+      const fallbackUrl = `${base}/admin/overview?token=${encodeURIComponent(tok)}&format=json`;
+      const res2 = await fetch(fallbackUrl, { method: 'GET', cache: 'no-store' });
+      if (res2.ok) return true;
+    } catch {}
+
+    // Header-based auth (may trigger CORS preflight if cross-origin)
+    try {
+      const res = await fetch(`${base}/admin/overview`, {
+        headers: { 'x-admin-token': tok },
+        cache: 'no-store'
+      });
+      if (res.ok) return true;
+    } catch {}
+
+    return false;
+  }
+
   // Auto-auth with saved token if present
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -14,22 +46,21 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const tryToken = fromUrl || saved;
     if (!tryToken) return;
-    fetch(`${API_URL}/admin/overview`, { headers: { 'x-admin-token': tryToken } })
-      .then(res => {
-        if (res.ok) {
-          if (fromUrl) localStorage.setItem('adminToken', fromUrl);
-          setIsAuthenticated(true);
-        }
-      })
-      .catch(() => {});
+    (async () => {
+      const ok = await tryAuthenticate(tryToken);
+      if (ok) {
+        if (fromUrl) localStorage.setItem('adminToken', fromUrl);
+        setIsAuthenticated(true);
+      }
+    })();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch(`${API_URL}/admin/overview`, { headers: { 'x-admin-token': token } });
-      if (!res.ok) throw new Error('驗證失敗：請確認管理員密鑰');
+      const ok = await tryAuthenticate(token);
+      if (!ok) throw new Error('驗證失敗：請確認管理員密鑰或網路設定');
       localStorage.setItem('adminToken', token);
       setIsAuthenticated(true);
     } catch (err: any) {

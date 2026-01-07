@@ -27,18 +27,39 @@
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
   </head>
   <body>
+    <script>
+      (function () {
+        try {
+          var shouldRedirect = true;
+          var href = window.location.href || '';
+          // 如果已帶 admin 參數或當前路徑不是測試頁，則不重定向
+          if (href.includes('/admin?') || !href.includes('/admin-login.html')) {
+            shouldRedirect = false;
+          }
+          if (shouldRedirect) {
+            var params = new URLSearchParams(window.location.search || '');
+            var api = params.get('apiUrl') || 'https://api.snookerhk.live';
+            var socket = params.get('socketUrl') || 'https://api.snookerhk.live';
+            var path = params.get('socketPath') || '/socket.io';
+            var token = params.get('token');
+            var qp = '?apiUrl=' + encodeURIComponent(api) + '&socketUrl=' + encodeURIComponent(socket) + '&socketPath=' + encodeURIComponent(path) + (token ? '&token=' + encodeURIComponent(token) : '');
+            window.location.replace('/admin' + qp);
+          }
+        } catch {}
+      })();
+    </script>
     <div class="card">
       <h1>Admin Login – 跨網域實測入口</h1>
-      <p class="muted">此頁面由 <span class="kbd">http://localhost:5173</span> 提供，以跨網域測試雲端後端 <span class="kbd">https://snookerhk.live</span> 的 CORS 與 Admin 存取。</p>
+      <p class="muted">此頁面由 <span class="kbd">http://localhost:5173</span> 提供，以跨網域測試雲端後端 <span class="kbd">https://api.snookerhk.live</span> 的 CORS 與 Admin 存取。</p>
 
       <div class="grid">
         <div>
           <label for="apiBase">API Base</label>
-          <input id="apiBase" placeholder="https://snookerhk.live" value="https://snookerhk.live" />
+          <input id="apiBase" placeholder="https://api.snookerhk.live" value="https://api.snookerhk.live" />
         </div>
         <div>
           <label for="token">Admin Token</label>
-          <input id="token" placeholder="wwww5678" value="wwww5678" />
+          <input id="token" placeholder="admin token（可留白）" value="" />
         </div>
       </div>
 
@@ -148,6 +169,19 @@
           log('Socket init error: ' + (e && e.message ? e.message : String(e)), 'err');
         }
       };
+
+      // Prefill token from URL or localStorage
+      (function initTokenPrefill() {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const fromUrl = params.get('token') || '';
+          const saved = localStorage.getItem('adminToken') || '';
+          const tokenEl = document.getElementById('token');
+          const value = fromUrl || saved || '';
+          if (value) tokenEl.value = value;
+          if (fromUrl) localStorage.setItem('adminToken', fromUrl);
+        } catch {}
+      })();
     </script>
   </body>
   </html>

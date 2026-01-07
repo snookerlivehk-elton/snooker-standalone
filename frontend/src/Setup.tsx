@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { APP_NAME } from './config';
 import { useNavigate, useParams } from 'react-router-dom';
+import { parseMatchName, normalizeKey } from './lib/matchName';
+import { RoomStorage } from './lib/RoomStorage';
+import { getCodeForRoom } from './lib/roomCode';
 
 interface SetupProps {
     onStartMatch: (settings: any) => void;
@@ -9,9 +12,11 @@ interface SetupProps {
 const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const [matchName, setMatchName] = useState('Snooker Match');
     const [p1Name, setP1Name] = useState('Player 1');
-    const [p1MemberId, setP1MemberId] = useState('P1');
+    const [p1MemberId, setP1MemberId] = useState('');
     const [p2Name, setP2Name] = useState('Player 2');
-    const [p2MemberId, setP2MemberId] = useState('P2');
+    const [p2MemberId, setP2MemberId] = useState('');
+    const [p1Handicap, setP1Handicap] = useState(0);
+    const [p2Handicap, setP2Handicap] = useState(0);
     const [redBalls, setRedBalls] = useState(15);
     const [framesRequired, setFramesRequired] = useState(1);
     const [startingPlayerIndex, setStartingPlayerIndex] = useState(0);
@@ -19,15 +24,28 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const { roomId } = useParams();
 
     const handleStartMatch = () => {
+        const { namePart, codePart } = parseMatchName(matchName);
+        const matchKeyNormalized = normalizeKey(namePart);
+        const codeValue = getCodeForRoom(roomId || '') || null;
+        const codePrefix = codeValue ? `[${codeValue}] ` : '';
         onStartMatch({
             playersInfo: [
                 { name: p1Name, memberId: p1MemberId },
                 { name: p2Name, memberId: p2MemberId },
             ],
-            settings: { matchName, redBalls, framesRequired },
+            settings: {
+                matchName: `${codePrefix}${matchName}`,
+                redBalls,
+                framesRequired,
+                matchNamePart: namePart,
+                matchKeyNormalized,
+                matchCode: codeValue ?? codePart ?? null,
+                handicaps: [p1Handicap || 0, p2Handicap || 0],
+            },
             startingPlayerIndex,
         });
         if (roomId) {
+            try { RoomStorage.clearRoom(roomId); } catch {}
             // 保留目前頁面的查詢參數（如 enableSocket、socketUrl、apiUrl、socketPath）
             // 以確保從 Setup 進入 Scoreboard 時不會丟失 socket 設定
             const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
@@ -63,6 +81,16 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <label htmlFor="p1MemberId" className="block text-sm font-medium text-white">Member ID</label>
                                 <input type="text" id="p1MemberId" value={p1MemberId} onChange={(e) => setP1MemberId(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
+                            <div className="input-group mt-2">
+                                <label htmlFor="p1Handicap" className="block text-sm font-medium text-white">Handicap (起始分，可負數)</label>
+                                <input
+                                    type="number"
+                                    id="p1Handicap"
+                                    value={p1Handicap}
+                                    onChange={(e) => setP1Handicap(parseInt(e.target.value, 10) || 0)}
+                                    className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"
+                                />
+                            </div>
                         </div>
                         <div>
                             <h2 className="text-lg font-medium text-white">Player 2</h2>
@@ -73,6 +101,16 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             <div className="input-group mt-2">
                                 <label htmlFor="p2MemberId" className="block text-sm font-medium text-white">Member ID</label>
                                 <input type="text" id="p2MemberId" value={p2MemberId} onChange={(e) => setP2MemberId(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                            </div>
+                            <div className="input-group mt-2">
+                                <label htmlFor="p2Handicap" className="block text-sm font-medium text-white">Handicap (起始分，可負數)</label>
+                                <input
+                                    type="number"
+                                    id="p2Handicap"
+                                    value={p2Handicap}
+                                    onChange={(e) => setP2Handicap(parseInt(e.target.value, 10) || 0)}
+                                    className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"
+                                />
                             </div>
                         </div>
                     </div>
