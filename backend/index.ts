@@ -657,7 +657,85 @@ io.on('connection', (socket) => {
     console.log('user disconnected');
   });
 });
-
+app.get('/api/district-codes', (_req, res) => {
+  const DISTRICT_CODE_MAP: Record<string, string> = {
+    '元朗區': 'NYL',
+    '北區': 'NKT',
+    '沙田區': 'NST',
+    '觀塘區': 'EKT',
+    '荃灣區': 'NTW',
+  };
+  const items = Object.entries(DISTRICT_CODE_MAP).map(([name, code]) => ({ name, code }));
+  const byCode: Record<string, { code: string; name: string }> = {};
+  for (const it of items) if (!byCode[it.code]) byCode[it.code] = it;
+  res.json({ districts: Object.values(byCode) });
+});
+app.get('/admin/register', (_req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+      <title>Member Registration – Same-Origin</title>
+      <style>
+        :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color-scheme: light dark; }
+        body { margin: 0; background: #0f172a; color: #e2e8f0; }
+        .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+        .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px; }
+        h1 { font-size: 20px; margin: 0 0 12px; }
+        .row { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+        label { font-size:12px; color:#9ca3af; }
+        input, select { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #374151; background: #0b1220; color: #e5e7eb; }
+        button { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #1f2937; background: #2563eb; color: #e5e7eb; cursor: pointer; font-weight: 600; }
+        .muted { color:#94a3b8; font-size:12px; }
+        .log { background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:12px; white-space:pre-wrap; overflow:auto; max-height:240px; }
+        .ok { color:#10b981; } .err { color:#ef4444; }
+        .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        @media (max-width: 480px) { .grid-2 { grid-template-columns: 1fr; } }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="card">
+          <h1>會員註冊（同源）</h1>
+          <p class="muted">此頁由後端提供，所有請求為同源，適配手機排版。</p>
+          <div class="row"><label>Email（必填）</label><input id="email" type="email" placeholder="example@domain.com" /></div>
+          <div class="row"><label>姓名（必填）</label><input id="name" type="text" placeholder="您的姓名" /></div>
+          <div class="row"><label>地區（必填，香港區份代碼）</label><select id="district"></select><p class="muted">示例：元朗區 → NYL</p></div>
+          <div class="grid-2">
+            <div class="row"><label>電話（選填）</label><input id="phone" type="tel" placeholder="9123 4567" /></div>
+            <div class="row"><label>出生日期（選填）</label><input id="birthDate" type="date" /></div>
+          </div>
+          <div class="row"><button id="btnRegister">提交註冊</button></div>
+          <div class="row"><div id="log" class="log"></div></div>
+        </div>
+      </div>
+      <script>
+        const logEl=document.getElementById('log');
+        function log(m,c){const t=new Date().toLocaleTimeString();const d=document.createElement('div');d.className=c||'';d.textContent='['+t+'] '+m;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
+        async function loadDistricts(){try{const r=await fetch('/api/district-codes');const d=await r.json();const s=document.getElementById('district');s.innerHTML='';for(const x of d.districts){const o=document.createElement('option');o.value=x.code;o.textContent=x.code+' — '+x.name;s.appendChild(o)}}catch(e){log('載入地區失敗：'+(e?.message||e),'err');}}
+        async function register(){
+          const e=document.getElementById('email');const email=(e.value||'').trim().normalize('NFKC');e.value=email;
+          const name=document.getElementById('name').value.trim();
+          const districtCode=document.getElementById('district').value.trim();
+          const phone=document.getElementById('phone').value.trim();
+          const birthDate=document.getElementById('birthDate').value.trim();
+          if(!email||!name||!districtCode){log('請填寫 email、姓名與地區。','err');return;}
+          if(typeof e.checkValidity==='function'&&!e.checkValidity()){e.reportValidity?.();log('email 格式不正確。','err');return;}
+          try{
+            const r=await fetch('/api/members/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name,districtCode,phone:phone||undefined,birthDate:birthDate||undefined})});
+            const d=await r.json();
+            if(!r.ok){log('註冊失敗：'+(d.error||r.statusText),'err');return;}
+            log('註冊成功！會員號：'+d.memberCode,'ok');
+          }catch(e){log('註冊異常：'+(e?.message||e),'err');}
+        }
+        document.getElementById('btnRegister').addEventListener('click',register);
+        loadDistricts();
+      </script>
+    </body>
+  </html>`);
+});
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`listening on 0.0.0.0:${PORT}`);
 });
