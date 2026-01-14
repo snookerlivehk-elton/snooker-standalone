@@ -53,6 +53,7 @@ const AdminMembers: React.FC = () => {
           member_code: rec.memberCode || '',
           phone: opt[email]?.phone || '',
           birthDate: opt[email]?.birthDate || '',
+          role: 'MEMBER',
           created_at: Date.now(),
         };
       });
@@ -116,6 +117,8 @@ const AdminMembers: React.FC = () => {
       member_code: e.member_code,
       phone: e.phone,
       birthDate: e.birthDate,
+      role: e.role,
+      membershipExpiresAt: e.membership_expires_at || e.membershipExpiresAt,
     };
     if (!error && adminToken) {
       await updateMember(API_URL, adminToken, id, payload);
@@ -149,12 +152,17 @@ const AdminMembers: React.FC = () => {
     const tokenFromUrl = params.get('token') || '';
     const tokenSaved = localStorage.getItem('adminToken') || '';
     const adminToken = tokenFromUrl || tokenSaved;
-    if (!error && adminToken) {
-      await deleteMember(API_URL, adminToken, id);
-      setMembers((prev) => prev.filter((m) => m.id !== id));
-      return;
+    try {
+      if (!error && adminToken) {
+        await deleteMember(API_URL, adminToken, id);
+        setMembers((prev) => prev.filter((m) => m.id !== id));
+        return;
+      }
+      setLocalMembers((prev) => prev.filter((m) => m.id !== id));
+    } catch (err: any) {
+      console.error('Failed to delete member', err);
+      setError(err?.message || '刪除會員失敗');
     }
-    setLocalMembers((prev) => prev.filter((m) => m.id !== id));
   }
   async function regenerateCodeFor(m: any) {
     const params = new URLSearchParams(window.location.search);
@@ -205,6 +213,7 @@ const AdminMembers: React.FC = () => {
             member_code: m.member_code,
             phone: m.phone,
             birthDate: m.birthDate,
+            role: m.role,
           });
         }
         ok++;
@@ -263,8 +272,10 @@ const AdminMembers: React.FC = () => {
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>Email</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>分區</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員編碼</th>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員等級</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>電話</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>出生日期</th>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>有效期</th>
                 <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>建立時間</th>
               </tr>
             </thead>
@@ -272,7 +283,7 @@ const AdminMembers: React.FC = () => {
               {(error ? localMembers : members).map((m) => (
                 <>
                   <tr>
-                    <td colSpan={8} style={{ borderBottom: '1px solid #eee', padding: 6 }}>
+                    <td colSpan={10} style={{ borderBottom: '1px solid #eee', padding: 6 }}>
                       {!editing[m.id] ? (
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => startEdit(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}>編輯</button>
@@ -312,6 +323,20 @@ const AdminMembers: React.FC = () => {
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
                       {editing[m.id] ? (
+                        <select
+                          value={editing[m.id].role || m.role || 'MEMBER'}
+                          onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), role: e.target.value } }))}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="MEMBER">普通會員</option>
+                          <option value="ADMIN">管理者</option>
+                        </select>
+                      ) : (
+                        (m.role === 'ADMIN' ? '管理者' : '普通會員')
+                      )}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
+                      {editing[m.id] ? (
                         <input value={editing[m.id].phone || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), phone: e.target.value } }))} style={{ width: '100%' }} />
                       ) : (m.phone ?? '-')}
                     </td>
@@ -319,6 +344,34 @@ const AdminMembers: React.FC = () => {
                       {editing[m.id] ? (
                         <input value={editing[m.id].birthDate || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), birthDate: e.target.value } }))} style={{ width: '100%' }} />
                       ) : (m.birthDate ?? m.birth_date ?? '-')}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
+                      {editing[m.id] ? (
+                        <input
+                          type="date"
+                          value={
+                            editing[m.id].membershipExpiresAt ||
+                            editing[m.id].membership_expires_at ||
+                            (m.membership_expires_at
+                              ? new Date(m.membership_expires_at).toISOString().slice(0, 10)
+                              : '')
+                          }
+                          onChange={(e) =>
+                            setEditing((p) => ({
+                              ...p,
+                              [m.id]: {
+                                ...(p[m.id] || m),
+                                membershipExpiresAt: e.target.value,
+                              },
+                            }))
+                          }
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        m.membership_expires_at
+                          ? new Date(m.membership_expires_at).toLocaleDateString()
+                          : '-'
+                      )}
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
                   </tr>

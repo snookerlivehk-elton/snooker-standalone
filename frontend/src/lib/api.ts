@@ -230,6 +230,20 @@ export async function getMember(
   return res.json(); // { member }
 }
 
+export async function renewMembership(
+  apiUrl: string,
+  id: string,
+  years?: number,
+) {
+  const res = await fetch(`${apiUrl}/api/members/${id}/renew`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(years ? { years } : {}),
+  });
+  if (!res.ok) throw new Error(`續期申請失敗 (${res.status})`);
+  return res.json() as Promise<{ member: any }>;
+}
+
 export async function listMembers(
   apiUrl: string,
   adminToken: string,
@@ -259,6 +273,7 @@ export async function updateMember(
     phone?: string;
     birthDate?: string;
     member_code?: string;
+    role?: string;
   },
 ) {
   const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {

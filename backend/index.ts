@@ -228,7 +228,7 @@ app.get('/api/rooms', (req, res) => {
 
 app.get('/rooms/:roomId/state', (req, res) => {
   const roomId = String(req.params.roomId);
-  const room = rooms.find(r => r.id === roomId);
+  const room = rooms.find(r => r.id === roomId || r.code === roomId);
   res.json({ roomId, state: room?.gameState ?? null });
 });
 
@@ -1030,14 +1030,14 @@ io.on('connection', (socket) => {
   socket.on('join room', (roomId) => {
     socket.join(roomId);
     console.log(`a user joined room ${roomId}`);
-    const room = rooms.find(r => r.id === roomId);
+    const room = rooms.find(r => r.id === roomId || r.code === roomId);
     if (room && room.gameState) {
       socket.emit('gameState updated', room.gameState);
     }
   });
 
   socket.on('update gameState', ({ roomId, newState }) => {
-    const room = rooms.find(r => r.id === roomId);
+    const room = rooms.find(r => r.id === roomId || r.code === roomId);
     if (room) {
       room.gameState = newState;
     }
@@ -1134,6 +1134,10 @@ app.post('/api/members/register', async (req, res) => {
       const token = Buffer.from(randomBytes(24)).toString('hex');
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+      const now = new Date();
+      const membershipExpires = new Date(now.getTime());
+      membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
+
       const created = await tx.member.create({
         data: {
           id: randomUUID(),
@@ -1146,6 +1150,7 @@ app.post('/api/members/register', async (req, res) => {
           member_code: memberCode,
           email_verification_token: token,
           email_verification_expires_at: expiresAt,
+          membership_expires_at: membershipExpires,
         },
       });
       return { id: created.id, memberCode, token };
@@ -1241,13 +1246,52 @@ app.post('/api/members/resend-email', async (req, res) => {
     res.status(500).json({ error: String(e?.message || e) });
   }
 });
-// Fetch member by id
+
+async function findMemberByIdOrEmail(identifier: string) {
+  const value = String(identifier || '').trim();
+  if (!value) return null;
+  return prisma.member.findFirst({
+    where: {
+      OR: [
+        { id: value },
+        { email: value },
+      ],
+    },
+  });
+}
+
 app.get('/api/members/:id', async (req, res) => {
   try {
-    const id = String(req.params.id);
-    const m = await prisma.member.findUnique({ where: { id } });
+    const idOrEmail = String(req.params.id || '').trim();
+    const m = await findMemberByIdOrEmail(idOrEmail);
     if (!m) return res.status(404).json({ error: 'not found' });
     res.json(m);
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/members/:id/renew', async (req, res) => {
+  try {
+    const idOrEmail = String(req.params.id || '').trim();
+    if (!idOrEmail) {
+      return res.status(400).json({ error: '缺少會員 ID' });
+    }
+    const yearsRaw = (req.body as any)?.years;
+    const years = Number.isFinite(Number(yearsRaw)) && Number(yearsRaw) > 0 ? Number(yearsRaw) : 3;
+    const now = new Date();
+    const member = await findMemberByIdOrEmail(idOrEmail);
+    if (!member) {
+      return res.status(404).json({ error: '會員不存在' });
+    }
+    const base = member.membership_expires_at && member.membership_expires_at > now ? member.membership_expires_at : now;
+    const next = new Date(base.getTime());
+    next.setFullYear(next.getFullYear() + years);
+    const updated = await prisma.member.update({
+      where: { id: member.id },
+      data: { membership_expires_at: next },
+    });
+    res.json({ member: updated });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -1461,6 +1505,12 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       phone?: string | null;
       birthDate?: string | null;
       birth_date?: string | null;
+<<<<<<< HEAD
+=======
+      role?: string | null;
+      membershipExpiresAt?: string | null;
+      membership_expires_at?: string | null;
+>>>>>>> fbd8271 (feat: member validity and email-based renew API)
     };
 
     const data: any = {};
@@ -1482,6 +1532,33 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         data.birth_date = d;
       }
     }
+<<<<<<< HEAD
+=======
+    if (body.role !== undefined) {
+      const roleRaw = String(body.role || '').trim();
+      if (!roleRaw) {
+        data.role = 'MEMBER';
+      } else if (roleRaw === 'MEMBER' || roleRaw === 'ADMIN') {
+        data.role = roleRaw;
+      } else {
+        return res.status(400).json({ error: '會員等級無效' });
+      }
+    }
+
+    const membershipRaw = body.membershipExpiresAt ?? body.membership_expires_at;
+    if (membershipRaw !== undefined) {
+      const s = String(membershipRaw || '').trim();
+      if (!s) {
+        data.membership_expires_at = null;
+      } else {
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ error: '會員有效期格式不正確' });
+        }
+        data.membership_expires_at = d;
+      }
+    }
+>>>>>>> fbd8271 (feat: member validity and email-based renew API)
 
     const member = await prisma.member.update({
       where: { id },
@@ -1519,6 +1596,10 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+<<<<<<< HEAD
+=======
+
+>>>>>>> fbd8271 (feat: member validity and email-based renew API)
 // Admin: list matches (requires admin token, optional filter by memberId)
 app.get('/api/admin/matches', adminAuth, async (req, res) => {
   try {
