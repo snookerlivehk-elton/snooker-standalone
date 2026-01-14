@@ -48,7 +48,7 @@ model Member {
   birth_date   DateTime?
   // is_guest     Boolean      @default(false)
   // role         MemberRole   @default(MEMBER)
-  // membership_expires_at DateTime?
+  membership_expires_at DateTime?
   // Member number (code prefix + digits). Using existing member_code for compatibility.
   member_code  String?      @unique
   // Email verification
