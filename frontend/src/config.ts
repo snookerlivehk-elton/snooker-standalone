@@ -17,16 +17,28 @@ export const DEFAULT_ROOM_ID: string =
   (import.meta.env.VITE_DEFAULT_ROOM_ID as string | undefined) ||
   'default';
 
+const isDev = import.meta.env.DEV;
+const prodDefaultBackend = (() => {
+  if (typeof window === 'undefined') return '';
+  const host = window.location.hostname;
+  if (host === 'snookerlivehk-elton.github.io') {
+    return 'https://snooker-backend-production.up.railway.app';
+  }
+  if (host.endsWith('snookerhk.live')) {
+    return 'https://api.snookerhk.live';
+  }
+  return window.location.origin;
+})();
+
 // Socket URL resolution:
 // - Use VITE_SOCKET_URL when provided
 // - In dev, default to http://localhost:3000
-// - In prod, default to window.location.origin (assuming same-origin backend)
-const isDev = import.meta.env.DEV;
+// - In prod, default to prodDefaultBackend (Railway / custom domain)
 const socketUrlOverride = params?.get('socketUrl') || params?.get('socket') || undefined;
 export const SOCKET_URL: string =
   socketUrlOverride ||
   (import.meta.env.VITE_SOCKET_URL as string | undefined) ||
-  (isDev ? 'http://localhost:3000' : (typeof window !== 'undefined' && window.location.hostname.endsWith('snookerhk.live') ? 'https://api.snookerhk.live' : window.location.origin));
+  (isDev ? 'http://localhost:3000' : prodDefaultBackend);
 
 // Socket path resolution (for proxies/custom paths)
 // - Allow URL param `socketPath`/`path`
@@ -38,15 +50,11 @@ export const SOCKET_PATH: string =
   (import.meta.env.VITE_SOCKET_PATH as string | undefined) ||
   '/socket.io';
 
-// API base URL resolution
-// - Use VITE_API_URL when provided
-// - In dev, default to http://localhost:3000
-// - In prod, default to window.location.origin (assuming same-origin backend)
 const apiUrlOverride = params?.get('apiUrl') || params?.get('api') || undefined;
 export const API_URL: string =
   apiUrlOverride ||
   (import.meta.env.VITE_API_URL as string | undefined) ||
-  (isDev ? 'http://localhost:3000' : (typeof window !== 'undefined' && window.location.hostname.endsWith('snookerhk.live') ? 'https://api.snookerhk.live' : window.location.origin));
+  (isDev ? 'http://localhost:3000' : prodDefaultBackend);
 
 // App display name (UI + document.title)
 export const APP_NAME: string = (import.meta.env.VITE_APP_NAME as string | undefined) || 'Snooker Standalone';

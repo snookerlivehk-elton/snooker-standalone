@@ -217,7 +217,16 @@ const MemberRegister: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6">
-        <h2 className="text-2xl font-bold mb-4">會員註冊</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold">會員註冊</h2>
+          <button
+            type="button"
+            onClick={() => navigate('/members/login')}
+            className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-sm"
+          >
+            已有帳號？前往登入
+          </button>
+        </div>
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">Email</label>

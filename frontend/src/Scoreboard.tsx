@@ -393,18 +393,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         return (
             <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center justify-center">
                 {slugId && (
-                    <div
-                        className="fixed left-3 bottom-3 z-40 pointer-events-none"
-                        style={{ opacity: 0.65 }}
-                    >
-                        <span
-                            className="text-white font-bold tracking-widest"
-                            style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
-                        >
-                            {slugId}
-                        </span>
-                    </div>
-                )}
+          <div
+            className="fixed left-3 bottom-3 z-50 pointer-events-none"
+            style={{ opacity: 0.65 }}
+          >
+            <span
+              className="text-white font-bold tracking-widest"
+              style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+            >
+              {slugId}
+            </span>
+          </div>
+        )}
                 <div className="bg-yellow-800 p-6 rounded-lg shadow-xl text-center max-w-md w-full">
                     <h2 className="text-2xl font-bold mb-2">尚未有比賽狀態</h2>
                     <p className="mb-4 text-sm text-gray-200">請先於 Setup 建立比賽，或等待同步來源提供狀態。</p>
@@ -594,16 +594,16 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     return (
         <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
-            {slugId && (
+            {(gameState?.settings?.matchCode || slugId) && (
                 <div
-                    className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                    className="fixed left-3 bottom-3 z-50 pointer-events-none"
                     style={{ opacity: 0.65 }}
                 >
                     <span
                         className="text-white font-bold tracking-widest"
                         style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
                     >
-                        {slugId}
+                        {gameState?.settings?.matchCode || slugId}
                     </span>
                 </div>
             )}
@@ -700,6 +700,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                             writeToken,
                                         );
 
+                                        try {
+                                            RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
+                                        } catch {}
                                         alert('比賽資料已上傳完成');
                                         setEndModalDismissed(true);
                                         navigate(target);

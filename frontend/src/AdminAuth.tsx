@@ -18,6 +18,12 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Try auth via query param first (avoids CORS preflight); then header
   async function tryAuthenticate(tok: string): Promise<boolean> {
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return true;
+      }
+    }
     const base = getBackendBase();
     // Query-token GET (same-origin or proxied) — avoids preflight
     try {

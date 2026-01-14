@@ -302,18 +302,18 @@ const LiveView: React.FC = () => {
         return (
             <div className="min-h-screen bg-gray-900 text-white flex justify-center items-center">
                 {slugId && (
-                    <div
-                        className="fixed left-3 bottom-3 z-40 pointer-events-none"
-                        style={{ opacity: 0.65 }}
-                    >
-                        <span
-                            className="text-white font-bold tracking-widest"
-                            style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
-                        >
-                            {slugId}
-                        </span>
-                    </div>
-                )}
+          <div
+            className="fixed left-3 bottom-3 z-50 pointer-events-none"
+            style={{ opacity: 0.65 }}
+          >
+            <span
+              className="text-white font-bold tracking-widest"
+              style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+            >
+              {slugId}
+            </span>
+          </div>
+        )}
                 Loading...
                 {debug && (
                     <div className="fixed bottom-2 right-2 bg-black/60 text-xs px-3 py-2 rounded">
@@ -447,16 +447,16 @@ const LiveView: React.FC = () => {
                 </div>
             </div>
             </div>
-            {slugId && (
+            {(gameState?.settings?.matchCode || slugId) && (
                 <div
-                    className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                    className="fixed left-3 bottom-3 z-50 pointer-events-none"
                     style={{ opacity: 0.65 }}
                 >
                     <span
                         className="text-white font-bold tracking-widest"
                         style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
                     >
-                        {slugId}
+                        {gameState?.settings?.matchCode || slugId}
                     </span>
                 </div>
             )}

@@ -539,22 +539,6 @@ const Overlay: React.FC = () => {
           </div>
         </div>
       </div>
-      {slugId && (
-        <div
-          style={{
-            position: 'fixed',
-            left: 24,
-            bottom: 24,
-            color: '#ffffff',
-            opacity: 0.65,
-            fontSize: 'clamp(18px, 2.2vw, 28px)',
-            fontWeight: 700,
-            letterSpacing: 2,
-          }}
-        >
-          {slugId}
-        </div>
-      )}
     </div>
   );
 }

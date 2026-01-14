@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_PATH, SOCKET_URL } from './config';
 import { RoomStorage } from './lib/RoomStorage';
-import { nextRoomCode, setCodeForRoom, getCodeForRoom } from './lib/roomCode';
+import { setCodeForRoom, getCodeForRoom } from './lib/roomCode';
 
 interface Room {
   id: string;
   name: string;
+  code?: string;
 }
 
 const Admin: React.FC = () => {
@@ -17,12 +18,24 @@ const Admin: React.FC = () => {
   useEffect(() => {
     fetch(`${API_URL}/api/rooms`)
       .then((res) => res.json())
-      .then((data) => setRooms(data));
+      .then((data) => setRooms(data))
+      .catch((err) => {
+        console.error('Failed to load rooms:', err);
+        if (import.meta.env.DEV && typeof window !== 'undefined') {
+          const host = window.location.hostname;
+          if (host === 'localhost' || host === '127.0.0.1') {
+            setRooms([
+              { id: 'dev-1', name: 'Dev Room', code: 'AAAAA0001' },
+            ]);
+          }
+        }
+      });
   }, []);
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
     fetch(`${API_URL}/api/rooms`, {
       method: 'POST',
       headers: {
@@ -40,8 +53,9 @@ const Admin: React.FC = () => {
       .then((newRoom) => {
         setRooms([...rooms, newRoom]);
         try {
-          const code = nextRoomCode();
-          setCodeForRoom(newRoom.id, code);
+          if (newRoom.code) {
+            setCodeForRoom(newRoom.id, newRoom.code);
+          }
         } catch {}
         setNewRoomName('');
         setError(null);
@@ -72,7 +86,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/members?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=members`;
+              const url = `${window.location.origin}/admin/members${tok ? `?token=${encodeURIComponent(tok)}&v=members` : '?v=members'}`;
               window.location.href = url;
             }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -82,7 +96,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/matches?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=matches`;
+              const url = `${window.location.origin}/admin/matches${tok ? `?token=${encodeURIComponent(tok)}&v=matches` : '?v=matches'}`;
               window.location.href = url;
             }}
             className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -92,7 +106,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/regions?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=regions`;
+              const url = `${window.location.origin}/admin/regions${tok ? `?token=${encodeURIComponent(tok)}&v=regions` : '?v=regions'}`;
               window.location.href = url;
             }}
             className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -132,20 +146,21 @@ const Admin: React.FC = () => {
         <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4">Rooms</h2>
           <ul className="space-y-4">
-            {rooms.map((room) => (
+            {rooms.map((room) => {
+              const displayId = room.code || getCodeForRoom(room.id) || room.id;
+              return (
               <li key={room.id} className="flex justify-between items-center bg-gray-700 p-4 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <Link to={`/room/${getCodeForRoom(room.id) || room.id}`} className="text-lg hover:text-blue-400 transition-colors">
-                    {getCodeForRoom(room.id) ? `[${getCodeForRoom(room.id)}] ${room.name}` : room.name}
+                  <Link to={`/room/${displayId}`} className="text-lg hover:text-blue-400 transition-colors">
+                    {displayId !== room.name ? `[${displayId}] ${room.name}` : room.name}
                   </Link>
-                  <span className="text-sm text-gray-300">(ID: {getCodeForRoom(room.id) || room.id})</span>
+                  <span className="text-sm text-gray-300">(ID: {displayId})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      // 將 socket 參數一併帶入 Setup 連結，確保從 Setup 進入 Scoreboard 時不會丟失設定
-                      const rid = getCodeForRoom(room.id) || room.id;
-                      const url = `${window.location.origin}/room/${rid}/setup?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                      const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
+                      const url = `${window.location.origin}/room/${displayId}/setup${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製房間 Setup 連結：\n${url}`);
                       });
@@ -166,8 +181,8 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const rid = getCodeForRoom(room.id) || room.id;
-                      const url = `${window.location.origin}/room/${rid}/live?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                      const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
+                      const url = `${window.location.origin}/room/${displayId}/live${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Live 連結：\n${url}`);
                       });
@@ -178,8 +193,8 @@ const Admin: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
-                      const rid = getCodeForRoom(room.id) || room.id;
-                      const url = `${window.location.origin}/room/${rid}/overlay?enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                      const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
+                      const url = `${window.location.origin}/room/${displayId}/overlay${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Overlay 連結：\n${url}`);
                       });
@@ -191,7 +206,7 @@ const Admin: React.FC = () => {
                   <button onClick={() => handleDeleteRoom(room.id)} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">Delete</button>
                 </div>
               </li>
-            ))}
+            )})}
           </ul>
         </div>
         <div className="bg-gray-800 rounded-lg shadow-lg p-6">

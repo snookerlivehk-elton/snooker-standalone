@@ -20,8 +20,10 @@ export interface RoomEvent {
 
 export interface RoomData {
   events: RoomEvent[];
-  foulTotals: [number, number]; // index 0: player A, index 1: player B
-  state?: any; // serialized State for no-backend mode syncing
+  foulTotals: [number, number];
+  state?: any;
+  locked?: boolean;
+  lockedAt?: number | null;
 }
 
 const STORAGE_PREFIX = 'snooker_room_';
@@ -34,19 +36,20 @@ function read(roomId: string): RoomData {
   try {
     const raw = localStorage.getItem(getKey(roomId));
     if (!raw) {
-      return { events: [], foulTotals: [0, 0] };
+      return { events: [], foulTotals: [0, 0], locked: false, lockedAt: null };
     }
     const parsed = JSON.parse(raw);
-    // Basic shape guard
     return {
       events: Array.isArray(parsed?.events) ? parsed.events : [],
       foulTotals: Array.isArray(parsed?.foulTotals) && parsed.foulTotals.length === 2
         ? parsed.foulTotals
         : [0, 0],
       state: parsed?.state,
+      locked: Boolean(parsed?.locked),
+      lockedAt: typeof parsed?.lockedAt === 'number' ? parsed.lockedAt : null,
     };
   } catch {
-    return { events: [], foulTotals: [0, 0] };
+    return { events: [], foulTotals: [0, 0], locked: false, lockedAt: null };
   }
 }
 
@@ -110,7 +113,14 @@ export const RoomStorage = {
   },
 
   clearRoom(roomId: string) {
-    write(roomId, { events: [], foulTotals: [0, 0], state: undefined });
+    write(roomId, { events: [], foulTotals: [0, 0], state: undefined, locked: false, lockedAt: null });
+  },
+
+  lockRoom(roomId: string, endedAt?: number | null) {
+    const data = read(roomId);
+    data.locked = true;
+    data.lockedAt = endedAt ?? Date.now();
+    write(roomId, data);
   },
 
   exportRoomData(roomId: string): string {

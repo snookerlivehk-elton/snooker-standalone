@@ -38,8 +38,8 @@
           }
           if (shouldRedirect) {
             var params = new URLSearchParams(window.location.search || '');
-            var api = params.get('apiUrl') || 'https://api.snookerhk.live';
-            var socket = params.get('socketUrl') || 'https://api.snookerhk.live';
+            var api = params.get('apiUrl') || 'https://snooker-backend-production.up.railway.app';
+            var socket = params.get('socketUrl') || 'https://snooker-backend-production.up.railway.app';
             var path = params.get('socketPath') || '/socket.io';
             var token = params.get('token');
             var qp = '?apiUrl=' + encodeURIComponent(api) + '&socketUrl=' + encodeURIComponent(socket) + '&socketPath=' + encodeURIComponent(path) + (token ? '&token=' + encodeURIComponent(token) : '');
@@ -50,12 +50,12 @@
     </script>
     <div class="card">
       <h1>Admin Login – 跨網域實測入口</h1>
-      <p class="muted">此頁面由 <span class="kbd">http://localhost:5173</span> 提供，以跨網域測試雲端後端 <span class="kbd">https://api.snookerhk.live</span> 的 CORS 與 Admin 存取。</p>
+      <p class="muted">此頁面由 <span class="kbd">http://localhost:5173</span> 提供，以跨網域測試雲端後端 <span class="kbd">https://snooker-backend-production.up.railway.app</span> 的 CORS 與 Admin 存取。</p>
 
       <div class="grid">
         <div>
           <label for="apiBase">API Base</label>
-          <input id="apiBase" placeholder="https://api.snookerhk.live" value="https://api.snookerhk.live" />
+          <input id="apiBase" placeholder="https://snooker-backend-production.up.railway.app" value="https://snooker-backend-production.up.railway.app" />
         </div>
         <div>
           <label for="token">Admin Token</label>

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { APP_NAME } from './config';
+import { APP_NAME, API_URL } from './config';
 import { useNavigate, useParams } from 'react-router-dom';
 import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
-import { getCodeForRoom } from './lib/roomCode';
+import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
+import { State } from './lib/State';
 
 interface SetupProps {
     onStartMatch: (settings: any) => void;
@@ -22,11 +23,86 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const [startingPlayerIndex, setStartingPlayerIndex] = useState(0);
     const navigate = useNavigate();
     const { roomId } = useParams();
+    const matchId = (() => {
+        const slug = roomId || '';
+        if (!slug) return '';
+        const pattern = /^[A-Z]{5}\d{4}$/;
+        if (pattern.test(slug)) return slug;
+        const fromMap = getCodeForRoom(slug);
+        return fromMap || slug;
+    })();
 
-    const handleStartMatch = () => {
+    const handleStartMatch = async () => {
+        if (roomId) {
+            const storageRoomId = findRoomIdByCode(roomId) || roomId;
+            const existing = RoomStorage.getRoomData(storageRoomId);
+            let remoteState: any = null;
+            try {
+                const res = await fetch(`${API_URL}/rooms/${encodeURIComponent(roomId)}/state`);
+                if (res.ok) {
+                    const data = await res.json();
+                    remoteState = data?.state ?? null;
+                }
+            } catch {}
+            if (existing.locked) {
+                alert('此房間上一場比賽已結束並鎖定，無法再次從此房間開始新賽事。請在 Admin 介面建立新房間，或先清除本地暫存後改用新房間。');
+                return;
+            }
+            const hasExisting =
+                (existing.events && existing.events.length > 0) ||
+                !!existing.state ||
+                (Array.isArray(existing.foulTotals) &&
+                    (existing.foulTotals[0] > 0 || existing.foulTotals[1] > 0));
+            const hasRemote = !!remoteState;
+            if (hasExisting || hasRemote) {
+                alert('此房間已有賽事記錄，將直接開啟現有賽事畫面。如需開新賽事，請在管理介面建立新房間或先清除本地暫存。');
+                const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+                navigate(`/room/${roomId}${qs}`);
+                return;
+            }
+            const { namePart, codePart } = parseMatchName(matchName);
+            const matchKeyNormalized = normalizeKey(namePart);
+            const slug = roomId || '';
+            const pattern = /^[A-Z]{5}\d{4}$/;
+            const fromMap = slug ? getCodeForRoom(slug) || null : null;
+            const codeValue = pattern.test(slug) ? slug : fromMap;
+            const codePrefix = codeValue ? `[${codeValue}] ` : '';
+            const settings = {
+                matchName: `${codePrefix}${matchName}`,
+                redBalls,
+                framesRequired,
+                matchNamePart: namePart,
+                matchKeyNormalized,
+                matchCode: codeValue ?? codePart ?? null,
+                handicaps: [p1Handicap || 0, p2Handicap || 0],
+            };
+            const playersInfo = [
+                { name: p1Name, memberId: p1MemberId },
+                { name: p2Name, memberId: p2MemberId },
+            ];
+            onStartMatch({
+                playersInfo,
+                settings,
+                startingPlayerIndex,
+            });
+            try {
+                const initialState = new State({
+                    playersInfo,
+                    settings,
+                    startingPlayerIndex,
+                });
+                RoomStorage.setState(storageRoomId, initialState.toJSON());
+            } catch {}
+            const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+            navigate(`/room/${roomId}${qs}`);
+            return;
+        }
         const { namePart, codePart } = parseMatchName(matchName);
         const matchKeyNormalized = normalizeKey(namePart);
-        const codeValue = getCodeForRoom(roomId || '') || null;
+        const slug = roomId || '';
+        const pattern = /^[A-Z]{5}\d{4}$/;
+        const fromMap = slug ? getCodeForRoom(slug) || null : null;
+        const codeValue = pattern.test(slug) ? slug : fromMap;
         const codePrefix = codeValue ? `[${codeValue}] ` : '';
         onStartMatch({
             playersInfo: [
@@ -44,27 +120,20 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             },
             startingPlayerIndex,
         });
-        if (roomId) {
-            try { RoomStorage.clearRoom(roomId); } catch {}
-            // 保留目前頁面的查詢參數（如 enableSocket、socketUrl、apiUrl、socketPath）
-            // 以確保從 Setup 進入 Scoreboard 時不會丟失 socket 設定
-            const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
-            navigate(`/room/${roomId}${qs}`);
-        }
     };
 
     return (
         <div className="min-h-screen bg-green-900 p-4 flex flex-col items-center justify-center">
-            {roomId && (
+            {matchId && (
                 <div
-                    className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                    className="fixed left-3 bottom-3 z-50 pointer-events-none"
                     style={{ opacity: 0.65 }}
                 >
                     <span
                         className="text-white font-bold tracking-widest"
                         style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
                     >
-                        {roomId}
+                        {matchId}
                     </span>
                 </div>
             )}
@@ -176,6 +245,19 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     </button>
                 </div>
             </div>
+            {roomId && (
+                <div
+                    className="fixed left-3 bottom-3 z-50 pointer-events-none"
+                    style={{ opacity: 0.65 }}
+                >
+                    <span
+                        className="text-white font-bold tracking-widest"
+                        style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                    >
+                        {getCodeForRoom(roomId) || roomId}
+                    </span>
+                </div>
+            )}
         </div>
     );
 };
