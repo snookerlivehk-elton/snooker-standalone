@@ -4,5 +4,5 @@ NIXPACKS_NODE_VERSION = "20"
 [phases.build]
 cmds = ["npm install && npm run build"]
 
-[phases.start]
-cmds = ["npm run start:migrate"]
+[start]
+cmd = "npm run start:migrate"
