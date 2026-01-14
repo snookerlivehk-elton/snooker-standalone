@@ -274,6 +274,8 @@ export async function updateMember(
     birthDate?: string;
     member_code?: string;
     role?: string;
+    membershipExpiresAt?: string | null;
+    membership_expires_at?: string | null;
   },
 ) {
   const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {

@@ -540,7 +540,7 @@ app.get('/api/member/districts', async (req, res) => {
     const regionCodeRaw = (req.query.regionCode as string) || '';
     const regionCode = regionCodeRaw.trim().toUpperCase();
     const where: any = { active: true };
-    // if (regionCode) where.region_code = regionCode;
+    if (regionCode) where.region_code = regionCode;
     const districts = await prisma.memberDistrict.findMany({
       where,
       orderBy: { code3: 'asc' },
@@ -1339,23 +1339,23 @@ app.post('/api/members/:id/renew', async (req, res) => {
     }
     const yearsRaw = (req.body as any)?.years;
     const years = Number.isFinite(Number(yearsRaw)) && Number(yearsRaw) > 0 ? Number(yearsRaw) : 3;
-    const now = new Date();
     const member = await findMemberByIdOrEmail(idOrEmail);
     if (!member) {
       return res.status(404).json({ error: '會員不存在' });
     }
-    // const base = member.membership_expires_at && member.membership_expires_at > now ? member.membership_expires_at : now;
-    const base = now;
+    const now = new Date();
+    const base =
+      // @ts-ignore membership_expires_at is mapped in Prisma schema
+      (member as any).membership_expires_at && (member as any).membership_expires_at > now
+        ? (member as any).membership_expires_at
+        : now;
     const next = new Date(base.getTime());
     next.setFullYear(next.getFullYear() + years);
-    /*
     const updated = await prisma.member.update({
       where: { id: member.id },
       data: { membership_expires_at: next }
     });
     res.json({ member: updated });
-    */
-    res.json({ member });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -1593,7 +1593,6 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         data.birth_date = d;
       }
     }
-    /*
     if (body.role !== undefined) {
       const roleRaw = String(body.role || '').trim();
       if (!roleRaw) {
@@ -1618,7 +1617,6 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         data.membership_expires_at = d;
       }
     }
-    */
     const member = await prisma.member.update({
       where: { id },
       data,
