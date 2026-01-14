@@ -8,9 +8,9 @@
     "schema": "./prisma/schema.prisma"
   },
   "scripts": {
-    "prestart": "prisma db push && prisma generate",
+    "prestart": "prisma generate",
     "start": "node dist/index.js",
-    "start:migrate": "prisma migrate deploy && node dist/index.js",
+    "start:migrate": "prisma migrate deploy && prisma db push && node dist/index.js",
     "build": "tsc",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "db:migrate": "prisma migrate dev",
