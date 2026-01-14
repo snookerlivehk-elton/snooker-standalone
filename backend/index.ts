@@ -12,7 +12,61 @@ import { randomUUID, randomBytes } from 'crypto';
 export interface Room {
   id: string;
   name: string;
-  gameState?: any; // Or a more specific type for your game state
+  code?: string;
+  scores: [number, number];
+  gameState?: any;
+}
+
+function incrementLetters(letters: string): string {
+  const arr = letters.split('');
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const ch = arr[i];
+    if (!ch) continue;
+    const code = ch.charCodeAt(0);
+    if (code < 90) {
+      arr[i] = String.fromCharCode(code + 1);
+      for (let j = i + 1; j < arr.length; j++) arr[j] = 'A';
+      return arr.join('');
+    }
+  }
+  return 'A'.repeat(letters.length || 5);
+}
+
+let lastRoomCode: string | null = null;
+
+function nextRoomCodeServer(): string {
+  const patternNew = /^[A-Z]{5}\d{4}$/;
+  if (!lastRoomCode || !patternNew.test(lastRoomCode)) {
+    const existing = rooms
+      .map(r => r.code)
+      .filter((c): c is string => !!c && patternNew.test(c))
+      .sort();
+    const lastExisting = existing.length > 0 ? existing[existing.length - 1]! : 'AAAAA0000';
+    lastRoomCode = lastExisting;
+  }
+  let base: string = lastRoomCode || 'AAAAA0000';
+  if (!patternNew.test(base)) {
+    base = 'AAAAA0000';
+  }
+  const letters = base.slice(0, 5);
+  const digits = base.slice(5);
+  let num = parseInt(digits, 10);
+  if (isNaN(num)) {
+    lastRoomCode = 'AAAAA0000';
+    return lastRoomCode;
+  }
+  while (true) {
+    num += 1;
+    if (num > 9999) {
+      const inc = incrementLetters(letters);
+      lastRoomCode = `${inc}0000`;
+    } else {
+      lastRoomCode = `${letters}${String(num).padStart(4, '0')}`;
+    }
+    if (!rooms.find(r => r.code === lastRoomCode)) {
+      return lastRoomCode;
+    }
+  }
 }
 
 const app = express();
@@ -183,7 +237,8 @@ app.post('/api/rooms', (req, res) => {
   if (!name) {
     return res.status(400).json({ message: 'Room name is required' });
   }
-  const newRoom = { id: (rooms.length + 1).toString(), name, scores: [0, 0] };
+  const code = nextRoomCodeServer();
+  const newRoom: Room = { id: (rooms.length + 1).toString(), name, code, scores: [0, 0] };
   rooms.push(newRoom);
   io.emit('rooms', rooms);
   res.status(201).json(newRoom);
@@ -853,15 +908,17 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
 });
 
 // Create room via simple GET for convenience, return shareable links
+
 app.get('/rooms/new', (req, res) => {
   const name = (req.query.name as string) || 'Room';
-  const newRoom: any = { id: (rooms.length + 1).toString(), name };
+  const code = nextRoomCodeServer();
+  const newRoom: any = { id: (rooms.length + 1).toString(), name, code };
   rooms.push(newRoom);
   io.emit('rooms', rooms);
   const origin = (req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol) + '://' + req.get('host');
-  const viewerLink = origin + '/room/' + newRoom.id;
+  const viewerLink = origin + '/room/' + code;
   const hostLink = viewerLink + '?host=1';
-  res.json({ id: newRoom.id, name: newRoom.name, viewerLink, hostLink });
+  res.json({ id: newRoom.id, name: newRoom.name, code, viewerLink, hostLink });
 });
 
 // Same-origin room page with simple scoreboard and shareable links
