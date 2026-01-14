@@ -46,8 +46,8 @@ model Member {
   district_code String?
   phone        String?
   birth_date   DateTime?
-  // is_guest     Boolean      @default(false)
-  // role         MemberRole   @default(MEMBER)
+  is_guest     Boolean      @default(false)
+  role         MemberRole   @default(MEMBER)
   membership_expires_at DateTime?
   // Authentication
   password_hash String?

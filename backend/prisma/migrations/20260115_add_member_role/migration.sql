@@ -1,0 +1,15 @@
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'MemberRole'
+  ) THEN
+    CREATE TYPE "MemberRole" AS ENUM ('MEMBER', 'ADMIN');
+  END IF;
+END $$;
+
+ALTER TABLE "Member"
+  ADD COLUMN IF NOT EXISTS "role" "MemberRole" DEFAULT 'MEMBER';
+
+ALTER TABLE "Member"
+  ADD COLUMN IF NOT EXISTS "is_guest" BOOLEAN DEFAULT FALSE;
+
