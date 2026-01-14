@@ -1337,25 +1337,8 @@ app.post('/api/members/:id/renew', async (req, res) => {
     if (!idOrEmail) {
       return res.status(400).json({ error: '缺少會員 ID' });
     }
-    const yearsRaw = (req.body as any)?.years;
-    const years = Number.isFinite(Number(yearsRaw)) && Number(yearsRaw) > 0 ? Number(yearsRaw) : 3;
-    const member = await findMemberByIdOrEmail(idOrEmail);
-    if (!member) {
-      return res.status(404).json({ error: '會員不存在' });
-    }
-    const now = new Date();
-    const base =
-      // @ts-ignore membership_expires_at is mapped in Prisma schema
-      (member as any).membership_expires_at && (member as any).membership_expires_at > now
-        ? (member as any).membership_expires_at
-        : now;
-    const next = new Date(base.getTime());
-    next.setFullYear(next.getFullYear() + years);
-    const updated = await prisma.member.update({
-      where: { id: member.id },
-      data: { membership_expires_at: next }
-    });
-    res.json({ member: updated });
+    // 資料庫目前尚未建立 membership_expires_at 欄位，暫不支援後端續期寫入
+    return res.status(501).json({ error: '會員續期功能暫未啟用（資料庫尚未建立對應欄位）' });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -1582,41 +1565,17 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
     if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
 
     const bdRaw = body.birthDate ?? body.birth_date;
-    if (bdRaw !== undefined) {
-      if (!bdRaw) {
-        data.birth_date = null;
-      } else {
-        const d = new Date(bdRaw);
-        if (Number.isNaN(d.getTime())) {
-          return res.status(400).json({ error: '出生日期格式不正確' });
+      if (bdRaw !== undefined) {
+        if (!bdRaw) {
+          data.birth_date = null;
+        } else {
+          const d = new Date(bdRaw);
+          if (Number.isNaN(d.getTime())) {
+            return res.status(400).json({ error: '出生日期格式不正確' });
+          }
+          data.birth_date = d;
         }
-        data.birth_date = d;
       }
-    }
-    if (body.role !== undefined) {
-      const roleRaw = String(body.role || '').trim();
-      if (!roleRaw) {
-        data.role = 'MEMBER';
-      } else if (roleRaw === 'MEMBER' || roleRaw === 'ADMIN') {
-        data.role = roleRaw;
-      } else {
-        return res.status(400).json({ error: '會員等級無效' });
-      }
-    }
-
-    const membershipRaw = body.membershipExpiresAt ?? body.membership_expires_at;
-    if (membershipRaw !== undefined) {
-      const s = String(membershipRaw || '').trim();
-      if (!s) {
-        data.membership_expires_at = null;
-      } else {
-        const d = new Date(s);
-        if (Number.isNaN(d.getTime())) {
-          return res.status(400).json({ error: '會員有效期格式不正確' });
-        }
-        data.membership_expires_at = d;
-      }
-    }
     const member = await prisma.member.update({
       where: { id },
       data,
