@@ -1,5 +1,5 @@
-[phases.setup]
-nixPkgs = ["nodejs-20_x", "npm-9_x"]
+[variables]
+NIXPACKS_NODE_VERSION = "20"
 
 [phases.build]
 cmds = ["npm install && npm run build"]
