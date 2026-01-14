@@ -1505,12 +1505,9 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       phone?: string | null;
       birthDate?: string | null;
       birth_date?: string | null;
-<<<<<<< HEAD
-=======
       role?: string | null;
       membershipExpiresAt?: string | null;
       membership_expires_at?: string | null;
->>>>>>> fbd8271 (feat: member validity and email-based renew API)
     };
 
     const data: any = {};
@@ -1532,8 +1529,6 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         data.birth_date = d;
       }
     }
-<<<<<<< HEAD
-=======
     if (body.role !== undefined) {
       const roleRaw = String(body.role || '').trim();
       if (!roleRaw) {
@@ -1558,7 +1553,6 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         data.membership_expires_at = d;
       }
     }
->>>>>>> fbd8271 (feat: member validity and email-based renew API)
 
     const member = await prisma.member.update({
       where: { id },
@@ -1596,10 +1590,6 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
-<<<<<<< HEAD
-=======
-
->>>>>>> fbd8271 (feat: member validity and email-based renew API)
 // Admin: list matches (requires admin token, optional filter by memberId)
 app.get('/api/admin/matches', adminAuth, async (req, res) => {
   try {
