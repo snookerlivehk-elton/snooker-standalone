@@ -82,6 +82,16 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
+              const url = `${window.location.origin}/admin/matches?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=matches`;
+              window.location.href = url;
+            }}
+            className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded transition-colors"
+          >
+            Matches
+          </button>
+          <button
+            onClick={() => {
+              const tok = localStorage.getItem('adminToken') || '';
               const url = `${window.location.origin}/admin/regions?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=regions`;
               window.location.href = url;
             }}

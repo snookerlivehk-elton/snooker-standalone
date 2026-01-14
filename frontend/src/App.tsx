@@ -10,6 +10,7 @@ import Overlay from './Overlay';
 import MemberRegister from './MemberRegister';
 import MemberProfile from './MemberProfile';
 import AdminMembers from './AdminMembers';
+import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import MemberLogin from './MemberLogin';
 
@@ -35,6 +36,7 @@ function App() {
         <Route path="/members/login" element={<MemberLogin />} />
         <Route path="/member/:id" element={<MemberProfile />} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
+        <Route path="/admin/matches" element={<AdminAuth><AdminMatches /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/room/:roomId" element={<Scoreboard gameState={gameState} setGameState={setGameState} />} />
         <Route path="/room/:roomId/setup" element={<Setup onStartMatch={handleStartMatch} />} />

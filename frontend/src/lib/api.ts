@@ -320,3 +320,30 @@ export async function resendVerificationEmail(
   if (!res.ok) throw new Error(`重寄驗證信失敗 (${res.status})`);
   return res.json(); // { ok: true }
 }
+
+export async function listAdminMatches(
+  apiUrl: string,
+  adminToken: string,
+  opts?: {
+    memberId?: string;
+    page?: number;
+    pageSize?: number;
+  },
+) {
+  const params = new URLSearchParams();
+  if (opts?.memberId) params.set('memberId', opts.memberId);
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize));
+  const qs = params.toString();
+  const base = `${apiUrl}/api/admin/matches${qs ? `?${qs}` : ''}`;
+  try {
+    const res = await fetch(base, {
+      headers: { 'x-admin-token': adminToken },
+    });
+    if (res.ok) return res.json();
+  } catch {}
+  const url = `${base}${qs ? '&' : '?'}token=${encodeURIComponent(adminToken)}`;
+  const res2 = await fetch(url, { method: 'GET' });
+  if (!res2.ok) throw new Error(`取得比賽列表失敗 (${res2.status})`);
+  return res2.json();
+}

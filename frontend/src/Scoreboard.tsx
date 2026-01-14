@@ -392,6 +392,19 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     if (!gameState) {
         return (
             <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center justify-center">
+                {slugId && (
+                    <div
+                        className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                        style={{ opacity: 0.65 }}
+                    >
+                        <span
+                            className="text-white font-bold tracking-widest"
+                            style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                        >
+                            {slugId}
+                        </span>
+                    </div>
+                )}
                 <div className="bg-yellow-800 p-6 rounded-lg shadow-xl text-center max-w-md w-full">
                     <h2 className="text-2xl font-bold mb-2">尚未有比賽狀態</h2>
                     <p className="mb-4 text-sm text-gray-200">請先於 Setup 建立比賽，或等待同步來源提供狀態。</p>
@@ -434,6 +447,19 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     if (isCompactMobile) {
         return (
             <div className="min-h-screen bg-green-900 text-white p-3 flex flex-col">
+                {slugId && (
+                    <div
+                        className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                        style={{ opacity: 0.65 }}
+                    >
+                        <span
+                            className="text-white font-bold tracking-widest"
+                            style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                        >
+                            {slugId}
+                        </span>
+                    </div>
+                )}
                 {gameState.isFreeBall && (
                     <div className="fixed top-2 right-2 z-50 pointer-events-none">
                         <div className="bg-purple-600 text-white text-sm font-extrabold px-3 py-1.5 rounded-full shadow-lg ring-2 ring-purple-300 animate-pulse">
@@ -568,6 +594,19 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
     return (
         <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
+            {slugId && (
+                <div
+                    className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                    style={{ opacity: 0.65 }}
+                >
+                    <span
+                        className="text-white font-bold tracking-widest"
+                        style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                    >
+                        {slugId}
+                    </span>
+                </div>
+            )}
             {!SIMPLE_MODE && gameState.isMatchOver && !endModalDismissed && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
                     <div className="bg-yellow-800 p-8 rounded-lg shadow-xl text-center">
@@ -599,6 +638,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
                                     try {
                                         const record = StatsEngine.buildMatchRecord(roomId!, gameState);
+                                        const uploadRoomId = slugId || roomId!;
 
                                         const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
                                         const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
@@ -618,7 +658,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                         const writeToken = getWriteToken();
                                         const { matchId, acceptedMemberIds } = await createMatchPartial(
                                             API_URL,
-                                            roomId!,
+                                            uploadRoomId,
                                             record.match,
                                             playersPayload,
                                             { start: record.timestamps.start },

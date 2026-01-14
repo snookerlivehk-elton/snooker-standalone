@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail, registerMember } from './lib/api';
 import { DISTRICT_TABLE } from './districts';
@@ -221,16 +222,24 @@ const AdminMembers: React.FC = () => {
     <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <h2>管理員：會員列表</h2>
-        <button
-          onClick={() => {
-            const tok = localStorage.getItem('adminToken') || '';
-            const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
-            window.location.href = url;
-          }}
-          style={{ padding: '6px 10px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}
-        >
-          Admin Panel
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link
+            to="/members/register"
+            style={{ padding: '6px 10px', borderRadius: 6, background: '#6b7280', color: '#fff', textDecoration: 'none' }}
+          >
+            會員註冊
+          </Link>
+          <button
+            onClick={() => {
+              const tok = localStorage.getItem('adminToken') || '';
+              const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
+              window.location.href = url;
+            }}
+            style={{ padding: '6px 10px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}
+          >
+            Admin Panel
+          </button>
+        </div>
       </div>
       {loading && <div>載入中...</div>}
       {error && <div style={{ color: 'red' }}>{error}</div>}

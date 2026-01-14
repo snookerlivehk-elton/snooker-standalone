@@ -55,6 +55,19 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
 
     return (
         <div className="min-h-screen bg-green-900 p-4 flex flex-col items-center justify-center">
+            {roomId && (
+                <div
+                    className="fixed left-3 bottom-3 z-40 pointer-events-none"
+                    style={{ opacity: 0.65 }}
+                >
+                    <span
+                        className="text-white font-bold tracking-widest"
+                        style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
+                    >
+                        {roomId}
+                    </span>
+                </div>
+            )}
             <div className="max-w-md w-full bg-yellow-800 rounded-xl shadow-md p-6">
                 <h1 className="text-4xl font-bold text-center text-white mb-2 font-serif italic">{APP_NAME}</h1>
                 <p className="text-base text-center text-gray-300 mb-6 -mt-2">Scoreboard System</p>

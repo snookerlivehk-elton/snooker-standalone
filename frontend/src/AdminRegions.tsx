@@ -173,19 +173,34 @@ const AdminRegions: React.FC = () => {
     <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>管理員：地方 / 分區管理</h2>
-        <Link
-          to={`/admin/members${adminToken ? `?token=${adminToken}` : ''}`}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: '#4b5563',
-            color: 'white',
-            borderRadius: '4px',
-            textDecoration: 'none',
-            fontSize: '14px'
-          }}
-        >
-          返回會員管理
-        </Link>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link
+            to="/members/register"
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#6b7280',
+              color: 'white',
+              borderRadius: '4px',
+              textDecoration: 'none',
+              fontSize: '14px'
+            }}
+          >
+            會員註冊
+          </Link>
+          <Link
+            to={`/admin/members${adminToken ? `?token=${adminToken}` : ''}`}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#4b5563',
+              color: 'white',
+              borderRadius: '4px',
+              textDecoration: 'none',
+              fontSize: '14px'
+            }}
+          >
+            管理員：會員列表
+          </Link>
+        </div>
       </div>
       {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
       {loading && <div>載入中...</div>}
@@ -200,6 +215,7 @@ const AdminRegions: React.FC = () => {
                   value={regionCode}
                   onChange={(e) => setRegionCode(e.target.value)}
                   style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', width: 80 }}
+                  disabled={!!editingRegionKey}
                   placeholder="NTW"
                 />
               </label>
@@ -218,9 +234,27 @@ const AdminRegions: React.FC = () => {
                   checked={regionActive}
                   onChange={(e) => setRegionActive(e.target.checked)}
                   style={{ marginRight: 4 }}
+                  disabled={!!editingRegionKey}
                 />
                 啟用
               </label>
+              {editingRegionKey && (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>編輯中：僅可修改名稱</span>
+              )}
+              {editingRegionKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingRegionKey(null);
+                    setRegionCode('');
+                    setRegionName('');
+                    setRegionActive(true);
+                  }}
+                  style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', color: '#374151' }}
+                >
+                  取消編輯
+                </button>
+              )}
               <button type="submit" style={{ padding: '6px 12px', borderRadius: 4, border: 'none', background: '#2563eb', color: '#fff' }}>
                 儲存地方
               </button>
@@ -243,6 +277,7 @@ const AdminRegions: React.FC = () => {
                           setRegionCode(r.code3 || '');
                           setRegionName(r.name || '');
                           setRegionActive(typeof r.active === 'boolean' ? r.active : true);
+                          setEditingRegionKey(String(r.code3 || '').toUpperCase());
                         }}
                         style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
                       >
@@ -270,6 +305,7 @@ const AdminRegions: React.FC = () => {
                   value={districtRegionCode}
                   onChange={(e) => setDistrictRegionCode(e.target.value)}
                   style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 100 }}
+                  disabled={!!editingDistrictKey}
                 >
                   <option value="">選擇地方</option>
                   {regions.map((r) => (
@@ -285,6 +321,7 @@ const AdminRegions: React.FC = () => {
                   value={districtCode}
                   onChange={(e) => setDistrictCode(e.target.value)}
                   style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', width: 80 }}
+                  disabled={!!editingDistrictKey}
                   placeholder="YK"
                 />
               </label>
@@ -303,9 +340,28 @@ const AdminRegions: React.FC = () => {
                   checked={districtActive}
                   onChange={(e) => setDistrictActive(e.target.checked)}
                   style={{ marginRight: 4 }}
+                  disabled={!!editingDistrictKey}
                 />
                 啟用
               </label>
+              {editingDistrictKey && (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>編輯中：僅可修改名稱</span>
+              )}
+              {editingDistrictKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingDistrictKey(null);
+                    setDistrictRegionCode('');
+                    setDistrictCode('');
+                    setDistrictName('');
+                    setDistrictActive(true);
+                  }}
+                  style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', color: '#374151' }}
+                >
+                  取消編輯
+                </button>
+              )}
               <button type="submit" style={{ padding: '6px 12px', borderRadius: 4, border: 'none', background: '#16a34a', color: '#fff' }}>
                 儲存分區
               </button>

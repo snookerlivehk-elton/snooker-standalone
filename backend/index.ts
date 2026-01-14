@@ -1387,3 +1387,45 @@ app.get('/api/admin/members', adminAuth, async (req, res) => {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+// Admin: list matches (requires admin token, optional filter by memberId)
+app.get('/api/admin/matches', adminAuth, async (req, res) => {
+  try {
+    const page = Number((req.query.page as string) || '1');
+    const pageSize = Number((req.query.pageSize as string) || '20');
+    const take = Math.max(1, Math.min(pageSize, 100));
+    const skip = Math.max(0, (page - 1) * take);
+    const memberId = String((req.query.memberId as string) || '').trim();
+
+    const where: any = {};
+    if (memberId) {
+      where.players = { some: { member_id: memberId } };
+    }
+
+    const [total, matches] = await prisma.$transaction([
+      prisma.match.count({ where }),
+      prisma.match.findMany({
+        where,
+        orderBy: { started_at: 'desc' },
+        skip,
+        take,
+        include: {
+          players: {
+            include: {
+              member: {
+                select: { id: true, name: true, member_code: true },
+              },
+            },
+          },
+          winner_member: {
+            select: { id: true, name: true, member_code: true },
+          },
+        },
+      }),
+    ]);
+
+    res.json({ total, page, pageSize: take, matches });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});

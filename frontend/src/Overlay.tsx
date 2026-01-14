@@ -177,6 +177,22 @@ const Overlay: React.FC = () => {
             'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif',
         }}
       >
+        {slugId && (
+          <div
+            style={{
+              position: 'fixed',
+              left: 24,
+              bottom: 24,
+              color: '#ffffff',
+              opacity: 0.65,
+              fontSize: 'clamp(18px, 2.2vw, 28px)',
+              fontWeight: 700,
+              letterSpacing: 2,
+            }}
+          >
+            {slugId}
+          </div>
+        )}
         <div
           style={{
             background: 'rgba(0,0,0,0.6)',
@@ -429,10 +445,10 @@ const Overlay: React.FC = () => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-end',
-          fontFamily:
-            'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif',
-        }}
-      >
+        fontFamily:
+          'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif',
+      }}
+    >
         {/* Match name (yellow) above unified black bar */}
         <div style={matchNameBox}>
           <span style={{ fontWeight: 800 }}>{gameState.settings.matchName}</span>
@@ -523,7 +539,23 @@ const Overlay: React.FC = () => {
           </div>
         </div>
       </div>
-      </div>
+      {slugId && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 24,
+            bottom: 24,
+            color: '#ffffff',
+            opacity: 0.65,
+            fontSize: 'clamp(18px, 2.2vw, 28px)',
+            fontWeight: 700,
+            letterSpacing: 2,
+          }}
+        >
+          {slugId}
+        </div>
+      )}
+    </div>
   );
 }
 

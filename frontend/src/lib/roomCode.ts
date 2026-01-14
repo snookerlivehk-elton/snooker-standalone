@@ -19,7 +19,7 @@ function loadState(): { last: string } {
     const raw = localStorage.getItem(LS_STATE_KEY) || '';
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { last: 'AAAA00000' };
+  return { last: 'AAAAA0000' };
 }
 function saveState(state: { last: string }) {
   try {
@@ -37,26 +37,30 @@ function incrementLetters(letters: string): string {
       return arr.join('');
     }
   }
-  return 'AAAA';
+  return 'A'.repeat(letters.length || 5);
 }
 
 export function nextRoomCode(): string {
   const st = loadState();
-  const last = st.last || 'AAAA00000';
-  const letters = last.slice(0, 4);
-  const digits = last.slice(4);
+  const patternNew = /^[A-Z]{5}\d{4}$/;
+  let last = st.last || 'AAAAA0000';
+  if (!patternNew.test(last)) {
+    last = 'AAAAA0000';
+  }
+  const letters = last.slice(0, 5);
+  const digits = last.slice(5);
   let num = parseInt(digits, 10);
   if (isNaN(num)) {
-    st.last = 'AAAA00000';
+    st.last = 'AAAAA0000';
     saveState(st);
     return st.last;
   }
   num += 1;
-  if (num > 99999) {
+  if (num > 9999) {
     const inc = incrementLetters(letters);
-    st.last = `${inc}00000`;
+    st.last = `${inc}0000`;
   } else {
-    st.last = `${letters}${String(num).padStart(5, '0')}`;
+    st.last = `${letters}${String(num).padStart(4, '0')}`;
   }
   saveState(st);
   return st.last;
