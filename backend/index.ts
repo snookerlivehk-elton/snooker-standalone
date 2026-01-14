@@ -34,6 +34,9 @@ function incrementLetters(letters: string): string {
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let lastRoomCode: string | null = null;
 const ROOM_CODE_FILE = path.join(__dirname, 'room-code-state.json');
@@ -954,7 +957,8 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
 app.get('/rooms/new', (req, res) => {
   const name = (req.query.name as string) || 'Room';
   const code = nextRoomCodeServer();
-  const newRoom: any = { id: (rooms.length + 1).toString(), name, code };
+  const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  const newRoom: any = { id: newId, name, code };
   rooms.push(newRoom);
   io.emit('rooms', rooms);
   const origin = (req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol) + '://' + req.get('host');
