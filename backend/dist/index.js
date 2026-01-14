@@ -23,9 +23,37 @@ function incrementLetters(letters) {
     }
     return 'A'.repeat(letters.length || 5);
 }
+import fs from 'fs';
+import path from 'path';
 let lastRoomCode = null;
+const ROOM_CODE_FILE = path.join(__dirname, 'room-code-state.json');
+function loadLastRoomCode() {
+    try {
+        if (fs.existsSync(ROOM_CODE_FILE)) {
+            const data = fs.readFileSync(ROOM_CODE_FILE, 'utf-8');
+            const json = JSON.parse(data);
+            if (json.lastRoomCode) {
+                lastRoomCode = json.lastRoomCode;
+            }
+        }
+    }
+    catch (err) {
+        console.error('Failed to load room code state:', err);
+    }
+}
+function saveLastRoomCode(code) {
+    try {
+        fs.writeFileSync(ROOM_CODE_FILE, JSON.stringify({ lastRoomCode: code }));
+    }
+    catch (err) {
+        console.error('Failed to save room code state:', err);
+    }
+}
+// Load state on startup
+loadLastRoomCode();
 function nextRoomCodeServer() {
     const patternNew = /^[A-Z]{5}\d{4}$/;
+    // If no last code loaded from file, try to deduce from current memory rooms (fallback)
     if (!lastRoomCode || !patternNew.test(lastRoomCode)) {
         const existing = rooms
             .map(r => r.code)
@@ -43,8 +71,10 @@ function nextRoomCodeServer() {
     let num = parseInt(digits, 10);
     if (isNaN(num)) {
         lastRoomCode = 'AAAAA0000';
+        saveLastRoomCode(lastRoomCode);
         return lastRoomCode;
     }
+    // Increment logic
     while (true) {
         num += 1;
         if (num > 9999) {
@@ -54,7 +84,9 @@ function nextRoomCodeServer() {
         else {
             lastRoomCode = `${letters}${String(num).padStart(4, '0')}`;
         }
+        // Double check against current memory rooms to be safe
         if (!rooms.find(r => r.code === lastRoomCode)) {
+            saveLastRoomCode(lastRoomCode);
             return lastRoomCode;
         }
     }
@@ -178,7 +210,8 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
                 memberId = p.memberId;
             }
             else if (!p?.memberId && p?.name) {
-                const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
+                // const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
+                const guest = await prisma.member.create({ data: { name: String(p.name) } });
                 memberId = guest.id;
             }
             if (memberId) {
@@ -221,7 +254,9 @@ app.post('/api/rooms', (req, res) => {
         return res.status(400).json({ message: 'Room name is required' });
     }
     const code = nextRoomCodeServer();
-    const newRoom = { id: (rooms.length + 1).toString(), name, code, scores: [0, 0] };
+    // Use a unique ID based on timestamp and random number to avoid collisions on server restart
+    const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    const newRoom = { id: newId, name, code, scores: [0, 0] };
     rooms.push(newRoom);
     io.emit('rooms', rooms);
     res.status(201).json(newRoom);
@@ -473,8 +508,7 @@ app.get('/api/member/districts', async (req, res) => {
         const regionCodeRaw = req.query.regionCode || '';
         const regionCode = regionCodeRaw.trim().toUpperCase();
         const where = { active: true };
-        if (regionCode)
-            where.region_code = regionCode;
+        // if (regionCode) where.region_code = regionCode;
         const districts = await prisma.memberDistrict.findMany({
             where,
             orderBy: { code3: 'asc' },
@@ -483,7 +517,7 @@ app.get('/api/member/districts', async (req, res) => {
             districts: districts.map((d) => ({
                 code3: d.code3,
                 name: d.name,
-                regionCode: d.region_code,
+                // regionCode: d.region_code,
             })),
         });
     }
@@ -852,7 +886,8 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
             for (const pf of playersFinal) {
                 let mid = pf.memberId ? String(pf.memberId) : null;
                 if (!mid && pf.name) {
-                    const guest = await prisma.member.create({ data: { name: String(pf.name), is_guest: true } });
+                    // const guest = await prisma.member.create({ data: { name: String(pf.name), is_guest: true } });
+                    const guest = await prisma.member.create({ data: { name: String(pf.name) } });
                     mid = guest.id;
                 }
                 if (mid) {
@@ -1068,50 +1103,51 @@ app.post('/api/members/register', async (req, res) => {
             });
             const current = seq.next_seq - 1;
             const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
-            const token = Buffer.from(randomBytes(24)).toString('hex');
-            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            const now = new Date();
-            const membershipExpires = new Date(now.getTime());
-            membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
+            // const token = Buffer.from(randomBytes(24)).toString('hex');
+            // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            // const now = new Date();
+            // const membershipExpires = new Date(now.getTime());
+            // membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
             const created = await tx.member.create({
                 data: {
                     id: randomUUID(),
                     name,
                     email,
-                    region_code: regionCode,
+                    // region_code: regionCode,
                     district_code: districtCode,
                     phone: phone ?? null,
                     birth_date: birthDate ?? null,
                     member_code: memberCode,
-                    email_verification_token: token,
-                    email_verification_expires_at: expiresAt,
-                    membership_expires_at: membershipExpires,
+                    // email_verification_token: token,
+                    // email_verification_expires_at: expiresAt,
+                    // membership_expires_at: membershipExpires,
                 },
             });
-            return { id: created.id, memberCode, token };
+            return { id: created.id, memberCode, token: '' }; // token empty
         });
         // 寄送驗證信（若已配置郵件供應商）
         if (RESEND_API_KEY) {
-            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(result.token)}`;
+            /*
+            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(result.token!)}`;
             try {
-                await fetch('https://api.resend.com/emails', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${RESEND_API_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        from: 'no-reply@snookerhk.live',
-                        to: email,
-                        subject: '驗證你的電子郵件',
-                        html: `<p>您好 ${name}，請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
-                    })
-                });
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${RESEND_API_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  from: 'no-reply@snookerhk.live',
+                  to: email,
+                  subject: '驗證你的電子郵件',
+                  html: `<p>您好 ${name}，請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
+                })
+              });
+            } catch (e) {
+              // 不阻斷流程，僅記錄
+              console.warn('Failed to send verification email:', e);
             }
-            catch (e) {
-                // 不阻斷流程，僅記錄
-                console.warn('Failed to send verification email:', e);
-            }
+            */
         }
         res.status(201).json({ id: result.id, memberCode: result.memberCode });
     }
@@ -1123,68 +1159,73 @@ app.post('/api/members/register', async (req, res) => {
 });
 // Verify email by token
 app.get('/verify-email', async (req, res) => {
+    // Temporary disabled due to schema changes
+    res.status(501).send('Email verification is temporarily disabled.');
+    /*
     try {
-        const token = String(req.query.token || '').trim();
-        if (!token)
-            return res.status(400).send('missing token');
-        const member = await prisma.member.findFirst({
-            where: { email_verification_token: token }
-        });
-        if (!member)
-            return res.status(404).send('invalid token');
-        if (member.email_verification_expires_at && new Date(member.email_verification_expires_at).getTime() < Date.now()) {
-            return res.status(410).send('token expired');
-        }
-        await prisma.member.update({
-            where: { id: member.id },
-            data: { email_verified_at: new Date(), email_verification_token: null, email_verification_expires_at: null }
-        });
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Email Verified</title></head><body style="font-family:system-ui"><h2>電子郵件驗證成功</h2><p>你可以關閉此頁面。</p></body></html>`);
+      const token = String(req.query.token || '').trim();
+      if (!token) return res.status(400).send('missing token');
+      
+      const member = await prisma.member.findFirst({
+        where: { email_verification_token: token }
+      });
+      
+      // const member = null;
+      if (!member) return res.status(404).send('invalid token');
+      if (member.email_verification_expires_at && new Date(member.email_verification_expires_at).getTime() < Date.now()) {
+      // if (false) {
+        return res.status(410).send('token expired');
+      }
+      await prisma.member.update({
+        where: { id: member.id },
+        data: { email_verified_at: new Date(), email_verification_token: null, email_verification_expires_at: null }
+      });
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Email Verified</title></head><body style="font-family:system-ui"><h2>電子郵件驗證成功</h2><p>你可以關閉此頁面。</p></body></html>`);
+    } catch (e: any) {
+      res.status(500).send(String(e?.message || e));
     }
-    catch (e) {
-        res.status(500).send(String(e?.message || e));
-    }
+    */
 });
 // Resend verification email
 app.post('/api/members/resend-email', async (req, res) => {
+    // Temporary disabled due to schema changes
+    res.status(501).json({ error: 'Email verification is temporarily disabled.' });
+    /*
     try {
-        const { email } = (req.body || {});
-        const normalized = String(email || '').trim().normalize('NFKC');
-        if (!normalized)
-            return res.status(400).json({ error: 'email required' });
-        const member = await prisma.member.findFirst({ where: { email: normalized } });
-        if (!member)
-            return res.status(404).json({ error: 'not found' });
-        if (member.email_verified_at)
-            return res.status(200).json({ ok: true, message: 'already verified' });
-        const token = Buffer.from(randomBytes(24)).toString('hex');
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await prisma.member.update({
-            where: { id: member.id },
-            data: { email_verification_token: token, email_verification_expires_at: expiresAt }
+      const { email } = (req.body || {}) as { email?: string };
+      const normalized = String(email || '').trim().normalize('NFKC');
+      if (!normalized) return res.status(400).json({ error: 'email required' });
+      const member = await prisma.member.findFirst({ where: { email: normalized } });
+      if (!member) return res.status(404).json({ error: 'not found' });
+      // if (member.email_verified_at) return res.status(200).json({ ok: true, message: 'already verified' });
+      const token = Buffer.from(randomBytes(24)).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await prisma.member.update({
+        where: { id: member.id },
+        data: { email_verification_token: token, email_verification_expires_at: expiresAt }
+      });
+      if (RESEND_API_KEY) {
+        const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(token)}`;
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'no-reply@snookerhk.live',
+            to: normalized,
+            subject: '重寄電子郵件驗證',
+            html: `<p>請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
+          })
         });
-        if (RESEND_API_KEY) {
-            const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(token)}`;
-            await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${RESEND_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    from: 'no-reply@snookerhk.live',
-                    to: normalized,
-                    subject: '重寄電子郵件驗證',
-                    html: `<p>請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
-                })
-            });
-        }
-        res.json({ ok: true });
+      }
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
     }
-    catch (e) {
-        res.status(500).json({ error: String(e?.message || e) });
-    }
+    */
 });
 async function findMemberByIdOrEmail(identifier) {
     const value = String(identifier || '').trim();
@@ -1224,14 +1265,18 @@ app.post('/api/members/:id/renew', async (req, res) => {
         if (!member) {
             return res.status(404).json({ error: '會員不存在' });
         }
-        const base = member.membership_expires_at && member.membership_expires_at > now ? member.membership_expires_at : now;
+        // const base = member.membership_expires_at && member.membership_expires_at > now ? member.membership_expires_at : now;
+        const base = now;
         const next = new Date(base.getTime());
         next.setFullYear(next.getFullYear() + years);
+        /*
         const updated = await prisma.member.update({
-            where: { id: member.id },
-            data: { membership_expires_at: next },
+          where: { id: member.id },
+          data: { membership_expires_at: next }
         });
         res.json({ member: updated });
+        */
+        res.json({ member });
     }
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
@@ -1321,8 +1366,7 @@ app.get('/api/admin/member/districts', adminAuth, async (req, res) => {
         const regionCodeRaw = req.query.regionCode || '';
         const regionCode = regionCodeRaw.trim().toUpperCase();
         const where = {};
-        if (regionCode)
-            where.region_code = regionCode;
+        // if (regionCode) where.region_code = regionCode;
         const districts = await prisma.memberDistrict.findMany({
             where,
             orderBy: [{ region_code: 'asc' }, { code3: 'asc' }],
@@ -1457,32 +1501,32 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
                 data.birth_date = d;
             }
         }
+        /*
         if (body.role !== undefined) {
-            const roleRaw = String(body.role || '').trim();
-            if (!roleRaw) {
-                data.role = 'MEMBER';
-            }
-            else if (roleRaw === 'MEMBER' || roleRaw === 'ADMIN') {
-                data.role = roleRaw;
-            }
-            else {
-                return res.status(400).json({ error: '會員等級無效' });
-            }
+          const roleRaw = String(body.role || '').trim();
+          if (!roleRaw) {
+            data.role = 'MEMBER';
+          } else if (roleRaw === 'MEMBER' || roleRaw === 'ADMIN') {
+            data.role = roleRaw;
+          } else {
+            return res.status(400).json({ error: '會員等級無效' });
+          }
         }
+    
         const membershipRaw = body.membershipExpiresAt ?? body.membership_expires_at;
         if (membershipRaw !== undefined) {
-            const s = String(membershipRaw || '').trim();
-            if (!s) {
-                data.membership_expires_at = null;
+          const s = String(membershipRaw || '').trim();
+          if (!s) {
+            data.membership_expires_at = null;
+          } else {
+            const d = new Date(s);
+            if (Number.isNaN(d.getTime())) {
+              return res.status(400).json({ error: '會員有效期格式不正確' });
             }
-            else {
-                const d = new Date(s);
-                if (Number.isNaN(d.getTime())) {
-                    return res.status(400).json({ error: '會員有效期格式不正確' });
-                }
-                data.membership_expires_at = d;
-            }
+            data.membership_expires_at = d;
+          }
         }
+        */
         const member = await prisma.member.update({
             where: { id },
             data,
