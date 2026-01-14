@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL } from './config';
 import { listAdminMemberRegions, listAdminMemberDistricts, upsertAdminMemberRegion, upsertAdminMemberDistrict, listMemberRegions, listMemberDistricts } from './lib/api';
 
@@ -170,7 +171,22 @@ const AdminRegions: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
-      <h2 style={{ marginBottom: 12 }}>管理員：地方 / 分區管理</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>管理員：地方 / 分區管理</h2>
+        <Link
+          to={`/admin/members${adminToken ? `?token=${adminToken}` : ''}`}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: '#4b5563',
+            color: 'white',
+            borderRadius: '4px',
+            textDecoration: 'none',
+            fontSize: '14px'
+          }}
+        >
+          返回會員管理
+        </Link>
+      </div>
       {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
       {loading && <div>載入中...</div>}
       {!loading && (
