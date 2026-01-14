@@ -1427,6 +1427,7 @@ app.get('/api/members/validate', async (req, res) => {
 });
 
 // Admin: list members (requires admin token)
+// Admin: list members (requires admin token)
 app.get('/api/admin/members', adminAuth, async (req, res) => {
   try {
     const page = Number((req.query.page as string) || '1');
@@ -1445,6 +1446,79 @@ app.get('/api/admin/members', adminAuth, async (req, res) => {
   }
 });
 
+// Admin: update member (requires admin token)
+app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({ error: '缺少會員 ID' });
+    }
+    const body = (req.body || {}) as {
+      name?: string;
+      email?: string | null;
+      district_code?: string | null;
+      member_code?: string | null;
+      phone?: string | null;
+      birthDate?: string | null;
+      birth_date?: string | null;
+    };
+
+    const data: any = {};
+    if (body.name !== undefined) data.name = String(body.name ?? '').trim();
+    if (body.email !== undefined) data.email = body.email ? String(body.email).trim() : null;
+    if (body.district_code !== undefined) data.district_code = body.district_code ? String(body.district_code).trim() : null;
+    if (body.member_code !== undefined) data.member_code = body.member_code ? String(body.member_code).trim() : null;
+    if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+
+    const bdRaw = body.birthDate ?? body.birth_date;
+    if (bdRaw !== undefined) {
+      if (!bdRaw) {
+        data.birth_date = null;
+      } else {
+        const d = new Date(bdRaw);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ error: '出生日期格式不正確' });
+        }
+        data.birth_date = d;
+      }
+    }
+
+    const member = await prisma.member.update({
+      where: { id },
+      data,
+    });
+    res.json({ member });
+  } catch (err: any) {
+    if ((err as any)?.code === 'P2025') {
+      return res.status(404).json({ error: '會員不存在' });
+    }
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Admin: delete member (requires admin token)
+app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({ error: '缺少會員 ID' });
+    }
+    try {
+      await prisma.member.delete({ where: { id } });
+    } catch (err: any) {
+      if ((err as any)?.code === 'P2025') {
+        return res.status(404).json({ error: '會員不存在' });
+      }
+      if ((err as any)?.code === 'P2003') {
+        return res.status(400).json({ error: '會員已有比賽紀錄，無法刪除' });
+      }
+      throw err;
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
 // Admin: list matches (requires admin token, optional filter by memberId)
 app.get('/api/admin/matches', adminAuth, async (req, res) => {
   try {
