@@ -410,7 +410,6 @@ app.get('/admin/login', (_req, res) => {
   </html>`);
 });
 
-// District codes API for registration dropdown (public)
 app.get('/api/district-codes', (_req, res) => {
   const items = Object.entries(DISTRICT_CODE_MAP).map(([name, code]) => ({ name, code }));
   const byCode: Record<string, { code: string; name: string }> = {};
@@ -418,6 +417,45 @@ app.get('/api/district-codes', (_req, res) => {
     if (!byCode[it.code]) byCode[it.code] = it;
   }
   res.json({ districts: Object.values(byCode) });
+});
+
+app.get('/api/member/regions', async (_req, res) => {
+  try {
+    const regions = await prisma.memberRegion.findMany({
+      where: { active: true },
+      orderBy: { code3: 'asc' },
+    });
+    res.json({
+      regions: regions.map((r) => ({
+        code3: r.code3,
+        name: r.name,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/member/districts', async (req, res) => {
+  try {
+    const regionCodeRaw = (req.query.regionCode as string) || '';
+    const regionCode = regionCodeRaw.trim().toUpperCase();
+    const where: any = { active: true };
+    if (regionCode) where.region_code = regionCode;
+    const districts = await prisma.memberDistrict.findMany({
+      where,
+      orderBy: { code3: 'asc' },
+    });
+    res.json({
+      districts: districts.map((d) => ({
+        code3: d.code3,
+        name: d.name,
+        regionCode: d.region_code,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 // Same-origin Member Registration page (mobile-friendly)
@@ -970,10 +1008,11 @@ app.post('/api/members/register', async (req, res) => {
     const payload = (req.body || {}) as {
       email?: string;
       name?: string;
-      districtCode?: string; // 3-4位英文代碼（推薦）
-      districtName?: string; // 或者以名稱提供，將映射為代碼
+      regionCode?: string;
+      districtCode?: string;
+      districtName?: string;
       phone?: string;
-      birthDate?: string; // ISO 字串，如 1990-01-31
+      birthDate?: string;
     };
 
     const email = String(payload.email || '').trim().normalize('NFKC');
@@ -989,36 +1028,52 @@ app.post('/api/members/register', async (req, res) => {
       return res.status(400).json({ error: 'email 格式不正確' });
     }
 
-    const resolvedDistrict = resolveDistrictCode(payload.districtCode || payload.districtName || '');
-    if (!resolvedDistrict) {
-      return res.status(400).json({ error: '地區代碼/名稱無效，需為 3-4 位英文代碼或已知名稱' });
-    }
+    const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
+    const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
 
     const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
     if (birthDateStr && Number.isNaN(birthDate!.getTime())) {
       return res.status(400).json({ error: '出生日期格式無效，請使用 ISO 格式，如 1990-01-31' });
     }
 
-    const district = resolvedDistrict;
-
     const result = await prisma.$transaction(async (tx) => {
-      // 確保 email 不重覆
       const existsEmail = await tx.member.findFirst({ where: { email } });
       if (existsEmail) {
         throw new Error('email 已存在');
       }
 
-      // 以遞增的序列產生會員號（3-4位代碼 + 5位數字）
-      const seq = await tx.memberSequence.upsert({
-        where: { district_code: district },
+      let regionCode = regionRaw;
+      let districtCode = districtRaw;
+
+      if (!regionCode && districtCode) {
+        regionCode = 'HKG';
+      }
+
+      if (!regionCode || !districtCode) {
+        throw new Error('regionCode 與 districtCode 為必填');
+      }
+
+      const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
+      if (!region || region.active === false) {
+        throw new Error('無效的地方編號');
+      }
+
+      const district = await tx.memberDistrict.findFirst({
+        where: { region_code: regionCode, code3: districtCode, active: true },
+      });
+      if (!district) {
+        throw new Error('無效的分區編號');
+      }
+
+      const seq = await tx.memberCodeSequence.upsert({
+        where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
         update: { next_seq: { increment: 1 } },
-        create: { district_code: district, next_seq: 2 },
+        create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
         select: { next_seq: true },
       });
-      const current = seq.next_seq - 1; // 使用更新前的序號
-      const memberCode = `${district}${String(current).padStart(5, '0')}`;
+      const current = seq.next_seq - 1;
+      const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
 
-      // 生成驗證 token（一次性），24h 有效
       const token = Buffer.from(randomBytes(24)).toString('hex');
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -1027,7 +1082,8 @@ app.post('/api/members/register', async (req, res) => {
           id: randomUUID(),
           name,
           email,
-          district_code: district,
+          region_code: regionCode,
+          district_code: districtCode,
           phone: phone ?? null,
           birth_date: birthDate ?? null,
           member_code: memberCode,
@@ -1135,6 +1191,158 @@ app.get('/api/members/:id', async (req, res) => {
     const m = await prisma.member.findUnique({ where: { id } });
     if (!m) return res.status(404).json({ error: 'not found' });
     res.json(m);
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/wipe-test-data', adminAuth, async (_req, res) => {
+  try {
+    await prisma.$transaction([
+      prisma.event.deleteMany({}),
+      prisma.foulTotals.deleteMany({}),
+      prisma.matchStats.deleteMany({}),
+      prisma.matchPlayer.deleteMany({}),
+      prisma.match.deleteMany({}),
+      prisma.memberCodeSequence.deleteMany({}),
+      prisma.memberSequence.deleteMany({}),
+      prisma.member.deleteMany({}),
+    ]);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/admin/member/regions', adminAuth, async (_req, res) => {
+  try {
+    const regions = await prisma.memberRegion.findMany({
+      orderBy: { code3: 'asc' },
+    });
+    res.json({ regions });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/member/regions', adminAuth, async (req, res) => {
+  try {
+    const { code3, name, active } = (req.body || {}) as { code3?: string; name?: string; active?: boolean };
+    const code = String(code3 || '').trim().toUpperCase();
+    const nm = String(name || '').trim();
+    if (!code || !nm) {
+      return res.status(400).json({ error: 'code3 與 name 為必填' });
+    }
+    const existing = await prisma.memberRegion.findUnique({
+      where: { code3: code },
+    });
+    if (existing) {
+      return res.status(409).json({ error: '地方代碼已存在' });
+    }
+    const region = await prisma.memberRegion.create({
+      data: { code3: code, name: nm, active: typeof active === 'boolean' ? active : true },
+    });
+    res.json({ region });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.put('/api/admin/member/regions/:code3', adminAuth, async (req, res) => {
+  try {
+    const codeParam = String(req.params.code3 || '').trim().toUpperCase();
+    const { name, active } = (req.body || {}) as { name?: string; active?: boolean };
+    const nm = String(name || '').trim();
+    if (!codeParam || !nm) {
+      return res.status(400).json({ error: 'code3 與 name 為必填' });
+    }
+    const existing = await prisma.memberRegion.findUnique({
+      where: { code3: codeParam },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: '地方不存在' });
+    }
+    const region = await prisma.memberRegion.update({
+      where: { code3: codeParam },
+      data: {
+        name: nm,
+        ...(typeof active === 'boolean' ? { active } : {}),
+      },
+    });
+    res.json({ region });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/admin/member/districts', adminAuth, async (req, res) => {
+  try {
+    const regionCodeRaw = (req.query.regionCode as string) || '';
+    const regionCode = regionCodeRaw.trim().toUpperCase();
+    const where: any = {};
+    if (regionCode) where.region_code = regionCode;
+    const districts = await prisma.memberDistrict.findMany({
+      where,
+      orderBy: [{ region_code: 'asc' }, { code3: 'asc' }],
+    });
+    res.json({ districts });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/member/districts', adminAuth, async (req, res) => {
+  try {
+    const { regionCode, code3, name, active } = (req.body || {}) as {
+      regionCode?: string;
+      code3?: string;
+      name?: string;
+      active?: boolean;
+    };
+    const region = String(regionCode || '').trim().toUpperCase();
+    const code = String(code3 || '').trim().toUpperCase();
+    const nm = String(name || '').trim();
+    if (!region || !code || !nm) {
+      return res.status(400).json({ error: 'regionCode、code3 與 name 為必填' });
+    }
+    const existing = await prisma.memberDistrict.findUnique({
+      where: { region_code_code3: { region_code: region, code3: code } },
+    });
+    if (existing) {
+      return res.status(409).json({ error: '分區代碼已存在' });
+    }
+    const district = await prisma.memberDistrict.create({
+      data: { region_code: region, code3: code, name: nm, active: typeof active === 'boolean' ? active : true },
+    });
+    res.json({ district });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.put('/api/admin/member/districts/:regionCode/:code3', adminAuth, async (req, res) => {
+  try {
+    const regionParam = String(req.params.regionCode || '').trim().toUpperCase();
+    const codeParam = String(req.params.code3 || '').trim().toUpperCase();
+    const { name, active } = (req.body || {}) as { name?: string; active?: boolean };
+    const nm = String(name || '').trim();
+    if (!regionParam || !codeParam || !nm) {
+      return res.status(400).json({ error: 'regionCode、code3 與 name 為必填' });
+    }
+    const existing = await prisma.memberDistrict.findUnique({
+      where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: '分區不存在' });
+    }
+    const district = await prisma.memberDistrict.update({
+      where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
+      data: {
+        name: nm,
+        ...(typeof active === 'boolean' ? { active } : {}),
+      },
+    });
+    res.json({ district });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }

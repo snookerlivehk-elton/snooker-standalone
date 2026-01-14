@@ -37,6 +37,7 @@ model Member {
   name         String
   // Registration fields
   email        String?      @unique
+  region_code  String?
   district_code String?
   phone        String?
   birth_date   DateTime?
@@ -53,12 +54,41 @@ model Member {
   matchesWon   Match[]      @relation("winner_member")
 }
 
-// Sequence table for district-based member code generation (no country prefix for now)
+// Sequence table for district-based member code generation (legacy, kept for compatibility)
 model MemberSequence {
   district_code String   @id
   next_seq      Int      @default(1)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
+}
+
+model MemberRegion {
+  code3   String           @id
+  name    String
+  active  Boolean          @default(true)
+  districts MemberDistrict[]
+}
+
+model MemberDistrict {
+  id          String        @id @default(uuid())
+  region_code String
+  code3       String
+  name        String
+  active      Boolean       @default(true)
+
+  region      MemberRegion  @relation(fields: [region_code], references: [code3])
+
+  @@unique([region_code, code3], name: "region_code_code3")
+}
+
+model MemberCodeSequence {
+  region_code   String
+  district_code String
+  next_seq      Int      @default(1)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@id([region_code, district_code])
 }
 
 model Match {

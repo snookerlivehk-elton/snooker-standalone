@@ -101,6 +101,7 @@ export async function registerMember(
   payload: {
     email: string;
     name: string;
+    regionCode?: string;
     districtCode?: string;
     districtName?: string;
     phone?: string;
@@ -114,6 +115,110 @@ export async function registerMember(
   });
   if (!res.ok) throw new Error(`會員註冊失敗 (${res.status})`);
   return res.json(); // { id, memberCode }
+}
+
+export async function listMemberRegions(
+  apiUrl: string,
+) {
+  const res = await fetch(`${apiUrl}/api/member/regions`);
+  if (!res.ok) throw new Error(`取得地方清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listMemberDistricts(
+  apiUrl: string,
+  regionCode?: string,
+) {
+  const qs = regionCode ? `?regionCode=${encodeURIComponent(regionCode)}` : '';
+  const res = await fetch(`${apiUrl}/api/member/districts${qs}`);
+  if (!res.ok) throw new Error(`取得分區清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listAdminMemberRegions(
+  apiUrl: string,
+  adminToken: string,
+) {
+  try {
+    const res = await fetch(`${apiUrl}/api/admin/member/regions`, {
+      headers: { 'x-admin-token': adminToken },
+    });
+    if (res.ok) return res.json();
+  } catch {}
+  const res2 = await fetch(`${apiUrl}/api/admin/member/regions?token=${encodeURIComponent(adminToken)}`, {
+    method: 'GET',
+  });
+  if (!res2.ok) throw new Error(`取得地方管理清單失敗 (${res2.status})`);
+  return res2.json();
+}
+
+export async function upsertAdminMemberRegion(
+  apiUrl: string,
+  adminToken: string,
+  payload: { code3: string; name: string; active?: boolean },
+) {
+  const code = payload.code3.trim().toUpperCase();
+  const createRes = await fetch(`${apiUrl}/api/admin/member/regions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ ...payload, code3: code }),
+  });
+  if (createRes.ok) return createRes.json();
+  if (createRes.status !== 409) {
+    throw new Error(`新增或更新地方失敗 (${createRes.status})`);
+  }
+  const updateRes = await fetch(`${apiUrl}/api/admin/member/regions/${encodeURIComponent(code)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ name: payload.name, active: payload.active }),
+  });
+  if (!updateRes.ok) throw new Error(`新增或更新地方失敗 (${updateRes.status})`);
+  return updateRes.json();
+}
+
+export async function listAdminMemberDistricts(
+  apiUrl: string,
+  adminToken: string,
+  regionCode?: string,
+) {
+  const qs = regionCode ? `?regionCode=${encodeURIComponent(regionCode)}` : '';
+  try {
+    const res = await fetch(`${apiUrl}/api/admin/member/districts${qs}`, {
+      headers: { 'x-admin-token': adminToken },
+    });
+    if (res.ok) return res.json();
+  } catch {}
+  const url = `${apiUrl}/api/admin/member/districts${qs || ''}${qs ? '&' : '?'}token=${encodeURIComponent(adminToken)}`;
+  const res2 = await fetch(url, {
+    method: 'GET',
+  });
+  if (!res2.ok) throw new Error(`取得分區管理清單失敗 (${res2.status})`);
+  return res2.json();
+}
+
+export async function upsertAdminMemberDistrict(
+  apiUrl: string,
+  adminToken: string,
+  payload: { regionCode: string; code3: string; name: string; active?: boolean },
+) {
+  const region = payload.regionCode.trim().toUpperCase();
+  const code = payload.code3.trim().toUpperCase();
+  const createRes = await fetch(`${apiUrl}/api/admin/member/districts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ ...payload, regionCode: region, code3: code }),
+  });
+  if (createRes.ok) return createRes.json();
+  if (createRes.status !== 409) {
+    throw new Error(`新增或更新分區失敗 (${createRes.status})`);
+  }
+  const updateRes = await fetch(`${apiUrl}/api/admin/member/districts/${encodeURIComponent(region)}/${encodeURIComponent(code)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ name: payload.name, active: payload.active }),
+  });
+  if (!updateRes.ok) throw new Error(`新增或更新分區失敗 (${updateRes.status})`);
+  return updateRes.json();
 }
 
 export async function getMember(

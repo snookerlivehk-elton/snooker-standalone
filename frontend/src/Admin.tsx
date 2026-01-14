@@ -68,7 +68,7 @@ const Admin: React.FC = () => {
     <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center">
       <div className="w-full max-w-2xl">
         <h1 className="text-4xl font-bold mb-6 text-center">Admin Panel</h1>
-        <div className="w-full flex justify-end mb-4">
+        <div className="w-full flex justify-end mb-4 gap-2">
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
@@ -78,6 +78,16 @@ const Admin: React.FC = () => {
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded transition-colors"
           >
             Members
+          </button>
+          <button
+            onClick={() => {
+              const tok = localStorage.getItem('adminToken') || '';
+              const url = `${window.location.origin}/admin/regions?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=regions`;
+              window.location.href = url;
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded transition-colors"
+          >
+            Regions
           </button>
         </div>
         {/* Simple Mode: one scoreboard + one overlay, no room creation */}

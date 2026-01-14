@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
-import { registerMember, resendVerificationEmail } from './lib/api';
-import { DISTRICT_TABLE } from './districts';
+import { listMemberDistricts, listMemberRegions, registerMember, resendVerificationEmail } from './lib/api';
 
 const MemberRegister: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,13 +19,8 @@ const MemberRegister: React.FC = () => {
   const navigate = useNavigate();
 
   const [region, setRegion] = useState<string>('');
-  const regionOptions = [
-    { key: 'H', label: '香港島 (H)' },
-    { key: 'K', label: '九龍 (K)' },
-    { key: 'N', label: '新界 (N)' },
-    { key: 'I', label: '離島 (I)' },
-  ];
-  const regionDistricts = region ? (DISTRICT_TABLE as any)[region] || [] : [];
+  const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
+  const [regionDistricts, setRegionDistricts] = useState<Array<{ code3: string; name: string }>>([]);
   const [usedBackend, setUsedBackend] = useState<string>(API_URL);
   const preferFallback = typeof window !== 'undefined'
     ? (new URLSearchParams(window.location.search).get('preferFallback') === '1')
@@ -45,6 +39,75 @@ const MemberRegister: React.FC = () => {
     };
   })();
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRegions() {
+      try {
+        const primaryApi = API_URL;
+        const fallbackApi = 'https://snooker-standalone-backend-production.up.railway.app';
+        let data: any;
+        if (preferFallback) {
+          data = await listMemberRegions(fallbackApi);
+        } else {
+          try {
+            data = await listMemberRegions(primaryApi);
+          } catch {
+            data = await listMemberRegions(fallbackApi);
+          }
+        }
+        if (!cancelled) {
+          setRegions(Array.isArray(data.regions) ? data.regions : []);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message || '載入地區清單失敗');
+        }
+      }
+    }
+    loadRegions();
+    return () => {
+      cancelled = true;
+    };
+  }, [preferFallback]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!region) {
+      setRegionDistricts([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    async function loadDistricts() {
+      try {
+        const primaryApi = API_URL;
+        const fallbackApi = 'https://snooker-standalone-backend-production.up.railway.app';
+        let data: any;
+        if (preferFallback) {
+          data = await listMemberDistricts(fallbackApi, region);
+        } else {
+          try {
+            data = await listMemberDistricts(primaryApi, region);
+          } catch {
+            data = await listMemberDistricts(fallbackApi, region);
+          }
+        }
+        if (!cancelled) {
+          const items = Array.isArray(data.districts) ? data.districts : [];
+          setRegionDistricts(items.map((d: any) => ({ code3: d.code3, name: d.name })));
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message || '載入分區清單失敗');
+        }
+      }
+    }
+    loadDistricts();
+    return () => {
+      cancelled = true;
+    };
+  }, [region, preferFallback]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -56,6 +119,7 @@ const MemberRegister: React.FC = () => {
       const payload = {
         email: email.trim(),
         name: name.trim(),
+        regionCode: region.trim(),
         districtCode: district.trim(),
         phone: phone.trim() || undefined,
         birthDate: birthDate.trim() || undefined,
@@ -186,7 +250,11 @@ const MemberRegister: React.FC = () => {
               className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
             >
               <option value="">請選擇</option>
-              {regionOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {regions.map(r => (
+                <option key={r.code3} value={r.code3}>
+                  {r.code3} — {r.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -200,12 +268,12 @@ const MemberRegister: React.FC = () => {
             >
               <option value="">{region ? '請選擇分區' : '請先選擇地區'}</option>
               {regionDistricts.map((d: any) => (
-                <option key={d.code} value={d.code}>{d.code} — {d.name}</option>
+                <option key={d.code3} value={d.code3}>{d.code3} — {d.name}</option>
               ))}
             </select>
             {district && region && (
               <div className="text-xs text-gray-400 mt-1">
-                已選分區：{district} — {regionDistricts.find((d: any) => d.code === district)?.name}
+                已選分區：{district} — {regionDistricts.find((d: any) => d.code3 === district)?.name}
               </div>
             )}
           </div>
