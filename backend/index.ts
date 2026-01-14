@@ -7,7 +7,7 @@ import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 export interface Room {
   id: string;
@@ -1232,6 +1232,66 @@ app.post('/api/members/register', async (req, res) => {
     const msg = String(err?.message || err);
     const status = msg.includes('email 已存在') ? 409 : 500;
     res.status(status).json({ error: msg });
+  }
+});
+
+// Simple password hashing helpers (SHA-256 with per-user salt)
+function makeSalt(): string {
+  return randomBytes(16).toString('hex');
+}
+
+// Member login (email + password), returns member basic info
+app.post('/api/members/login', async (req, res) => {
+  try {
+    const { email, password } = (req.body || {}) as { email?: string; password?: string };
+    const em = String(email || '').trim();
+    const pw = String(password || '');
+    if (!em || !pw) {
+      return res.status(400).json({ error: '缺少 email 或 password' });
+    }
+    const m = await prisma.member.findUnique({ where: { email: em } });
+    if (!m) return res.status(404).json({ error: '會員不存在' });
+    const mh = (m as any).password_hash as string | undefined;
+    const ms = (m as any).password_salt as string | undefined;
+    if (!mh || !ms) {
+      return res.status(400).json({ error: '尚未設定密碼' });
+    }
+    const h = createHash('sha256');
+    h.update(String(ms) + pw);
+    const digest = h.digest('hex');
+    if (digest !== mh) {
+      return res.status(401).json({ error: '帳號或密碼不正確' });
+    }
+    return res.json({ ok: true, id: m.id, member: { id: m.id, name: m.name, email: m.email, member_code: m.member_code } });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Admin: reset member password (requires admin token)
+app.post('/api/admin/members/:id/password', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const { newPassword } = (req.body || {}) as { newPassword?: string };
+    const pw = String(newPassword || '');
+    if (!id || !pw) {
+      return res.status(400).json({ error: '缺少會員 ID 或新密碼' });
+    }
+    const salt = randomBytes(16).toString('hex');
+    const h = createHash('sha256');
+    h.update(salt + pw);
+    const digest = h.digest('hex');
+    const updated = await prisma.member.update({
+      where: { id },
+      data: { password_salt: salt, password_hash: digest, password_updated_at: new Date() },
+      select: { id: true },
+    });
+    res.json({ ok: true, id: updated.id });
+  } catch (err: any) {
+    if ((err as any)?.code === 'P2025') {
+      return res.status(404).json({ error: '會員不存在' });
+    }
+    res.status(500).json({ error: String(err?.message || err) });
   }
 });
 

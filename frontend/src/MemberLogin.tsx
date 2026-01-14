@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember } from './lib/api';
+import { getMember, loginMember } from './lib/api';
 
-async function hashText(t: string): Promise<string> {
-  const enc = new TextEncoder().encode(t);
-  const digest = await crypto.subtle.digest('SHA-256', enc);
-  const arr = Array.from(new Uint8Array(digest));
-  return arr.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// 後端驗證登入，移除本地雜湊密碼邏輯
 
 const MemberLogin: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -22,21 +17,11 @@ const MemberLogin: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const storeRaw = localStorage.getItem('memberPasswords');
-      const store = storeRaw ? JSON.parse(storeRaw) : {};
-      const h = await hashText(password);
-      const ok = store[email] && store[email] === h;
-      if (!ok) throw new Error('帳號或密碼不正確');
-      localStorage.setItem('memberSession', JSON.stringify({ email }));
-      try {
-        const data = await getMember(API_URL, email);
-        if (data?.member?.id) {
-          localStorage.setItem('memberSession', JSON.stringify({ email, id: data.member.id }));
-          navigate(`/member/${data.member.id}`);
-          return;
-        }
-      } catch {}
-      navigate(`/member/${encodeURIComponent(email)}`);
+      const result = await loginMember(API_URL, { email, password });
+      const id = result?.id || result?.member?.id;
+      if (!id) throw new Error('登入失敗');
+      localStorage.setItem('memberSession', JSON.stringify({ email, id }));
+      navigate(`/member/${id}`);
     } catch (err: any) {
       setError(err.message || '登入失敗');
     } finally {
@@ -78,26 +63,7 @@ const MemberLogin: React.FC = () => {
           </button>
         </form>
         {error && <div className="text-red-400 mt-3 text-center">{error}</div>}
-        <div className="text-xs text-gray-400 mt-3 text-center">
-          忘記密碼？稍後可於會員頁面重設。
-        </div>
-        <div className="mt-4 text-center">
-          <button
-            onClick={async () => {
-              try {
-                const h = await hashText(password);
-                const storeRaw = localStorage.getItem('memberPasswords');
-                const store = storeRaw ? JSON.parse(storeRaw) : {};
-                store[email] = h;
-                localStorage.setItem('memberPasswords', JSON.stringify(store));
-                alert('已重設本地密碼，請再嘗試登入');
-              } catch {}
-            }}
-            className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700"
-          >
-            重設本地密碼
-          </button>
-        </div>
+        <div className="text-xs text-gray-400 mt-3 text-center">忘記密碼？請聯絡管理員協助重設。</div>
       </div>
     </div>
   );

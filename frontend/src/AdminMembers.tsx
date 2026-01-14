@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail, registerMember } from './lib/api';
+import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail } from './lib/api';
 import { DISTRICT_TABLE } from './districts';
 
 const AdminMembers: React.FC = () => {
@@ -33,54 +33,12 @@ const AdminMembers: React.FC = () => {
         if (mounted) setLoading(false);
       }
     })();
-    // Build local fallback dataset
-    try {
-      const dirRaw = localStorage.getItem('memberDirectory') || '{}';
-      const dir = JSON.parse(dirRaw);
-      const pendRaw = localStorage.getItem('pendingRegistrations') || '[]';
-      const pend = JSON.parse(pendRaw);
-      const optRaw = localStorage.getItem('memberOptional') || '{}';
-      const opt = JSON.parse(optRaw);
-      const byEmail: Record<string, any> = {};
-      // from directory
-      Object.keys(dir || {}).forEach((email) => {
-        const rec = (dir as any)[email] || {};
-        byEmail[email] = {
-          id: email,
-          email,
-          name: rec.name || '',
-          district_code: rec.districtCode || '',
-          member_code: rec.memberCode || '',
-          phone: opt[email]?.phone || '',
-          birthDate: opt[email]?.birthDate || '',
-          role: 'MEMBER',
-          created_at: Date.now(),
-        };
-      });
-      // merge pending registrations
-      (pend as any[]).forEach((p) => {
-        const email = String(p.email || '').trim();
-        if (!email) return;
-        byEmail[email] = {
-          ...(byEmail[email] || {}),
-          id: byEmail[email]?.id || p.id || email,
-          email,
-          name: p.name || byEmail[email]?.name || '',
-          district_code: p.districtCode || byEmail[email]?.district_code || '',
-          member_code: p.memberCode || byEmail[email]?.member_code || '',
-          phone: byEmail[email]?.phone || '',
-          birthDate: byEmail[email]?.birthDate || '',
-          created_at: p.createdAt || byEmail[email]?.created_at || Date.now(),
-        };
-      });
-      setLocalMembers(Object.values(byEmail));
-    } catch {}
     return () => { mounted = false; };
   }, []);
 
   const districtIndex = useMemo(() => {
     const map: Record<string, Set<string>> = {};
-    const source = (error ? localMembers : members) || [];
+    const source = members || [];
     for (const m of source) {
       const dist = String((m.district_code ?? m.partition ?? '') || '').trim();
       const code = String(m.member_code ?? '').trim();
@@ -120,30 +78,11 @@ const AdminMembers: React.FC = () => {
       role: e.role,
       membershipExpiresAt: e.membership_expires_at || e.membershipExpiresAt,
     };
-    if (!error && adminToken) {
-      await updateMember(API_URL, adminToken, id, payload);
-      setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...payload } : m)));
-      cancelEdit(id);
-      return;
-    }
-    setLocalMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...payload } : m)));
+    if (!adminToken) { setError('缺少管理員密鑰'); return; }
+    await updateMember(API_URL, adminToken, id, payload);
     try {
-      const emailKey = String(e.email || e.id || '');
-      if (emailKey.includes('@')) {
-        const dirRaw = localStorage.getItem('memberDirectory') || '{}';
-        const dir = JSON.parse(dirRaw);
-        dir[emailKey] = {
-          ...(dir[emailKey] || {}),
-          name: payload.name,
-          districtCode: payload.district_code,
-          memberCode: payload.member_code,
-        };
-        localStorage.setItem('memberDirectory', JSON.stringify(dir));
-        const optRaw = localStorage.getItem('memberOptional') || '{}';
-        const opt = JSON.parse(optRaw);
-        opt[emailKey] = { phone: payload.phone, birthDate: payload.birthDate, updatedAt: Date.now() };
-        localStorage.setItem('memberOptional', JSON.stringify(opt));
-      }
+      const res = await listMembers(API_URL, adminToken);
+      setMembers(res.members || []);
     } catch {}
     cancelEdit(id);
   }
@@ -153,12 +92,14 @@ const AdminMembers: React.FC = () => {
     const tokenSaved = localStorage.getItem('adminToken') || '';
     const adminToken = tokenFromUrl || tokenSaved;
     try {
-      if (!error && adminToken) {
-        await deleteMember(API_URL, adminToken, id);
-        setMembers((prev) => prev.filter((m) => m.id !== id));
-        return;
-      }
-      setLocalMembers((prev) => prev.filter((m) => m.id !== id));
+      if (!adminToken) { setError('缺少管理員密鑰'); return; }
+      const ok = window.confirm('確定要刪除此會員？此操作不可復原。');
+      if (!ok) return;
+      await deleteMember(API_URL, adminToken, id);
+      try {
+        const res = await listMembers(API_URL, adminToken);
+        setMembers(res.members || []);
+      } catch {}
     } catch (err: any) {
       console.error('Failed to delete member', err);
       setError(err?.message || '刪除會員失敗');
@@ -186,45 +127,6 @@ const AdminMembers: React.FC = () => {
   async function resendEmail(m: any) {
     if (!m.email) return;
     try { await resendVerificationEmail(API_URL, String(m.email)); } catch {}
-  }
-  async function syncAllLocalToBackend() {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get('token') || '';
-    const tokenSaved = localStorage.getItem('adminToken') || '';
-    const adminToken = tokenFromUrl || tokenSaved;
-    if (!adminToken) { alert('缺少管理員密鑰'); return; }
-    const toSync = [...localMembers];
-    let ok = 0;
-    for (const m of toSync) {
-      try {
-        if (String(m.id).startsWith('local-') || String(m.id).includes('@')) {
-          await registerMember(API_URL, {
-            email: String(m.email || ''),
-            name: String(m.name || ''),
-            districtCode: String(m.district_code || ''),
-            phone: m.phone || undefined,
-            birthDate: m.birthDate || undefined,
-          });
-        } else {
-          await updateMember(API_URL, adminToken, m.id, {
-            name: m.name,
-            email: m.email,
-            district_code: m.district_code,
-            member_code: m.member_code,
-            phone: m.phone,
-            birthDate: m.birthDate,
-            role: m.role,
-          });
-        }
-        ok++;
-      } catch {}
-    }
-    alert(`已同步 ${ok} 筆到後端`);
-    try {
-      const res = await listMembers(API_URL, adminToken);
-      setMembers(res.members || []);
-      setError(null);
-    } catch {}
   }
 
   return (
@@ -256,12 +158,7 @@ const AdminMembers: React.FC = () => {
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ fontSize: 13, color: '#666' }}>
-              {error ? '後端不可用，顯示本地資料' : '後端連線正常'}
-            </div>
-            <div>
-              <button onClick={syncAllLocalToBackend} style={{ padding: '6px 10px', borderRadius: 6, background: '#16a34a', color: '#fff', border: 'none' }}>
-                同步全部本地到後端
-              </button>
+              {error ? '後端連線異常' : '後端連線正常'}
             </div>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -280,7 +177,7 @@ const AdminMembers: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {(error ? localMembers : members).map((m) => (
+              {members.map((m) => (
                 <>
                   <tr>
                     <td colSpan={10} style={{ borderBottom: '1px solid #eee', padding: 6 }}>

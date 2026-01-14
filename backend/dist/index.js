@@ -6,7 +6,7 @@ import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 function incrementLetters(letters) {
     const arr = letters.split('');
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -511,7 +511,8 @@ app.get('/api/member/districts', async (req, res) => {
         const regionCodeRaw = req.query.regionCode || '';
         const regionCode = regionCodeRaw.trim().toUpperCase();
         const where = { active: true };
-        // if (regionCode) where.region_code = regionCode;
+        if (regionCode)
+            where.region_code = regionCode;
         const districts = await prisma.memberDistrict.findMany({
             where,
             orderBy: { code3: 'asc' },
@@ -1109,9 +1110,9 @@ app.post('/api/members/register', async (req, res) => {
             const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
             // const token = Buffer.from(randomBytes(24)).toString('hex');
             // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            // const now = new Date();
-            // const membershipExpires = new Date(now.getTime());
-            // membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
+            const now = new Date();
+            const membershipExpires = new Date(now.getTime());
+            membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
             const created = await tx.member.create({
                 data: {
                     id: randomUUID(),
@@ -1124,7 +1125,7 @@ app.post('/api/members/register', async (req, res) => {
                     member_code: memberCode,
                     // email_verification_token: token,
                     // email_verification_expires_at: expiresAt,
-                    // membership_expires_at: membershipExpires,
+                    membership_expires_at: membershipExpires,
                 },
             });
             return { id: created.id, memberCode, token: '' }; // token empty
@@ -1159,6 +1160,66 @@ app.post('/api/members/register', async (req, res) => {
         const msg = String(err?.message || err);
         const status = msg.includes('email 已存在') ? 409 : 500;
         res.status(status).json({ error: msg });
+    }
+});
+// Simple password hashing helpers (SHA-256 with per-user salt)
+function makeSalt() {
+    return randomBytes(16).toString('hex');
+}
+// Member login (email + password), returns member basic info
+app.post('/api/members/login', async (req, res) => {
+    try {
+        const { email, password } = (req.body || {});
+        const em = String(email || '').trim();
+        const pw = String(password || '');
+        if (!em || !pw) {
+            return res.status(400).json({ error: '缺少 email 或 password' });
+        }
+        const m = await prisma.member.findUnique({ where: { email: em } });
+        if (!m)
+            return res.status(404).json({ error: '會員不存在' });
+        const mh = m.password_hash;
+        const ms = m.password_salt;
+        if (!mh || !ms) {
+            return res.status(400).json({ error: '尚未設定密碼' });
+        }
+        const h = createHash('sha256');
+        h.update(String(ms) + pw);
+        const digest = h.digest('hex');
+        if (digest !== mh) {
+            return res.status(401).json({ error: '帳號或密碼不正確' });
+        }
+        return res.json({ ok: true, id: m.id, member: { id: m.id, name: m.name, email: m.email, member_code: m.member_code } });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Admin: reset member password (requires admin token)
+app.post('/api/admin/members/:id/password', adminAuth, async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        const { newPassword } = (req.body || {});
+        const pw = String(newPassword || '');
+        if (!id || !pw) {
+            return res.status(400).json({ error: '缺少會員 ID 或新密碼' });
+        }
+        const salt = randomBytes(16).toString('hex');
+        const h = createHash('sha256');
+        h.update(salt + pw);
+        const digest = h.digest('hex');
+        const updated = await prisma.member.update({
+            where: { id },
+            data: { password_salt: salt, password_hash: digest, password_updated_at: new Date() },
+            select: { id: true },
+        });
+        res.json({ ok: true, id: updated.id });
+    }
+    catch (err) {
+        if (err?.code === 'P2025') {
+            return res.status(404).json({ error: '會員不存在' });
+        }
+        res.status(500).json({ error: String(err?.message || err) });
     }
 });
 // Verify email by token
@@ -1264,23 +1325,21 @@ app.post('/api/members/:id/renew', async (req, res) => {
         }
         const yearsRaw = req.body?.years;
         const years = Number.isFinite(Number(yearsRaw)) && Number(yearsRaw) > 0 ? Number(yearsRaw) : 3;
-        const now = new Date();
         const member = await findMemberByIdOrEmail(idOrEmail);
         if (!member) {
             return res.status(404).json({ error: '會員不存在' });
         }
-        // const base = member.membership_expires_at && member.membership_expires_at > now ? member.membership_expires_at : now;
-        const base = now;
+        const now = new Date();
+        const base = member.membership_expires_at && member.membership_expires_at > now
+            ? member.membership_expires_at
+            : now;
         const next = new Date(base.getTime());
         next.setFullYear(next.getFullYear() + years);
-        /*
         const updated = await prisma.member.update({
-          where: { id: member.id },
-          data: { membership_expires_at: next }
+            where: { id: member.id },
+            data: { membership_expires_at: next }
         });
         res.json({ member: updated });
-        */
-        res.json({ member });
     }
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
@@ -1505,32 +1564,20 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
                 data.birth_date = d;
             }
         }
-        /*
-        if (body.role !== undefined) {
-          const roleRaw = String(body.role || '').trim();
-          if (!roleRaw) {
-            data.role = 'MEMBER';
-          } else if (roleRaw === 'MEMBER' || roleRaw === 'ADMIN') {
-            data.role = roleRaw;
-          } else {
-            return res.status(400).json({ error: '會員等級無效' });
-          }
-        }
-    
         const membershipRaw = body.membershipExpiresAt ?? body.membership_expires_at;
         if (membershipRaw !== undefined) {
-          const s = String(membershipRaw || '').trim();
-          if (!s) {
-            data.membership_expires_at = null;
-          } else {
-            const d = new Date(s);
-            if (Number.isNaN(d.getTime())) {
-              return res.status(400).json({ error: '會員有效期格式不正確' });
+            const s = String(membershipRaw || '').trim();
+            if (!s) {
+                data.membership_expires_at = null;
             }
-            data.membership_expires_at = d;
-          }
+            else {
+                const d = new Date(s);
+                if (Number.isNaN(d.getTime())) {
+                    return res.status(400).json({ error: '會員有效期格式不正確' });
+                }
+                data.membership_expires_at = d;
+            }
         }
-        */
         const member = await prisma.member.update({
             where: { id },
             data,

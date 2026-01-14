@@ -155,16 +155,6 @@ const MemberRegister: React.FC = () => {
         setTimeout(() => setInfoToast(null), 4000);
       } catch {}
       try {
-        const dirRaw = localStorage.getItem('memberDirectory');
-        const dir = dirRaw ? JSON.parse(dirRaw) : {};
-        dir[email.trim()] = {
-          name: name.trim(),
-          memberCode: result?.memberCode || null,
-          districtCode: district.trim(),
-        };
-        localStorage.setItem('memberDirectory', JSON.stringify(dir));
-      } catch {}
-      try {
         const storeRaw = localStorage.getItem('memberPasswords');
         const store = storeRaw ? JSON.parse(storeRaw) : {};
         const enc = new TextEncoder().encode(password);
@@ -175,40 +165,7 @@ const MemberRegister: React.FC = () => {
         localStorage.setItem('memberPasswords', JSON.stringify(store));
       } catch {}
     } catch (err: any) {
-      try {
-        const tmpId = (crypto && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : String(Date.now());
-        const tmpCode = `${district.trim() || 'TMP'}${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
-        const entry = { id: `local-${tmpId}`, email: email.trim(), name: name.trim(), districtCode: district.trim(), phone: phone.trim() || undefined, birthDate: birthDate.trim() || undefined, memberCode: tmpCode, createdAt: Date.now() };
-        const prevRaw = localStorage.getItem('pendingRegistrations');
-        const prev = prevRaw ? JSON.parse(prevRaw) : [];
-        prev.push(entry);
-        localStorage.setItem('pendingRegistrations', JSON.stringify(prev));
-        try {
-          const dirRaw2 = localStorage.getItem('memberDirectory');
-          const dir2 = dirRaw2 ? JSON.parse(dirRaw2) : {};
-          dir2[email.trim()] = {
-            name: name.trim(),
-            memberCode: tmpCode,
-            districtCode: district.trim(),
-          };
-          localStorage.setItem('memberDirectory', JSON.stringify(dir2));
-        } catch {}
-        setMemberId(entry.id);
-        setMemberCode(entry.memberCode);
-        setError('目前後端不可用，已暫存本地等待同步');
-        try {
-          const storeRaw = localStorage.getItem('memberPasswords');
-          const store = storeRaw ? JSON.parse(storeRaw) : {};
-          const enc = new TextEncoder().encode(password);
-          const digest = await crypto.subtle.digest('SHA-256', enc);
-          const arr = Array.from(new Uint8Array(digest));
-          const h = arr.map(b => b.toString(16).padStart(2, '0')).join('');
-          store[email.trim()] = h;
-          localStorage.setItem('memberPasswords', JSON.stringify(store));
-        } catch {}
-      } catch {
-        setError(err.message || '註冊失敗');
-      }
+      setError(err.message || '註冊失敗');
     } finally {
       setLoading(false);
     }

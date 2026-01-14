@@ -117,6 +117,19 @@ export async function registerMember(
   return res.json(); // { id, memberCode }
 }
 
+export async function loginMember(
+  apiUrl: string,
+  payload: { email: string; password: string }
+) {
+  const res = await fetch(`${apiUrl}/api/members/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`登入失敗 (${res.status})`);
+  return res.json(); // { ok, id, member }
+}
+
 export async function listMemberRegions(
   apiUrl: string,
 ) {
