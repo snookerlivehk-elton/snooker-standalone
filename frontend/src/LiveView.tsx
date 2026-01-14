@@ -8,6 +8,7 @@ import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH, ENABLE_SUPABASE } from './confi
 import { findRoomIdByCode } from './lib/roomCode';
 import { RoomStorage } from './lib/RoomStorage';
 import { getRoomChannel } from './lib/supabase';
+import { parseMatchName } from './lib/matchName';
 
 const LiveView: React.FC = () => {
     const { roomId: routeRoomId } = useParams<{ roomId: string }>();
@@ -332,6 +333,21 @@ const LiveView: React.FC = () => {
     const leader = gameState.players[0].score > gameState.players[1].score ? gameState.players[0] : gameState.players[1];
     const lastShot = gameState.shotHistory[gameState.shotHistory.length - 1];
 
+    const nameRaw = gameState.settings.matchName || '';
+    const parsed = parseMatchName(nameRaw);
+    const codeFromState = gameState.settings.matchCode || parsed.codePart || null;
+    const displayCode = (() => {
+        if (!slugId) return codeFromState;
+        const pattern = /^[A-Z]{5}\d{4}$/;
+        if (pattern.test(slugId)) return slugId;
+        return codeFromState || slugId;
+    })();
+    const displayTitle = (() => {
+        const namePart = parsed.namePart || nameRaw || 'Snooker Match';
+        if (displayCode) return `[${displayCode}] ${namePart}`;
+        return namePart;
+    })();
+
     return (
         <>
         <div className="live-stage-viewport bg-transparent text-white">
@@ -348,7 +364,7 @@ const LiveView: React.FC = () => {
                                 '1px 1px 0 #f5d000, -1px 1px 0 #f5d000, 1px -1px 0 #f5d000, -1px -1px 0 #f5d000',
                         }}
                     >
-                        {gameState.settings.matchName}
+                        {displayTitle}
                     </h1>
                 </div>
 
@@ -447,7 +463,7 @@ const LiveView: React.FC = () => {
                 </div>
             </div>
             </div>
-            {(gameState?.settings?.matchCode || slugId) && (
+            {displayCode && (
                 <div
                     className="fixed left-3 bottom-3 z-50 pointer-events-none"
                     style={{ opacity: 0.65 }}
@@ -456,7 +472,7 @@ const LiveView: React.FC = () => {
                         className="text-white font-bold tracking-widest"
                         style={{ fontSize: 'clamp(18px, 2.2vw, 28px)' }}
                     >
-                        {gameState?.settings?.matchCode || slugId}
+                        {displayCode}
                     </span>
                 </div>
             )}
