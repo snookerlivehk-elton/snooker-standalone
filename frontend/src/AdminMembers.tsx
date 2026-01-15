@@ -420,7 +420,7 @@ const AdminMembers: React.FC = () => {
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
                   </tr>
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
