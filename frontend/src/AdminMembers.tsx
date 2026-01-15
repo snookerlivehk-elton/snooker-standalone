@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail, listAdminMemberRegions, listAdminMemberDistricts } from './lib/api';
+import { listMembers, updateMember, deleteMember, listAdminMemberRegions, listAdminMemberDistricts } from './lib/api';
 
 const AdminMembers: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
@@ -11,8 +11,6 @@ const AdminMembers: React.FC = () => {
   // Dynamic regions/districts
   const [regions, setRegions] = useState<any[]>([]);
   const [allDistricts, setAllDistricts] = useState<any[]>([]);
-
-  const [localMembers, setLocalMembers] = useState<any[]>([]);
   const [editing, setEditing] = useState<Record<string, any>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -175,29 +173,6 @@ const AdminMembers: React.FC = () => {
       setConfirmDeleteId(null);
     }
   }
-  async function regenerateCodeFor(m: any) {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get('token') || '';
-    const tokenSaved = localStorage.getItem('adminToken') || '';
-    const adminToken = tokenFromUrl || tokenSaved;
-    const dist = String(editing[m.id]?.district_code ?? m.district_code ?? '').trim();
-    const localCode = `${dist || 'X'}${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
-    if (!error && adminToken) {
-      try {
-        const res = await regenerateMemberCode(API_URL, adminToken, m.id, dist);
-        const code = res?.member_code || localCode;
-        setEditing((prev) => ({ ...prev, [m.id]: { ...(prev[m.id] || m), member_code: code } }));
-        setMembers((prev) => prev.map((row) => (row.id === m.id ? { ...row, member_code: code } : row)));
-        return;
-      } catch {}
-    }
-    setEditing((prev) => ({ ...prev, [m.id]: { ...(prev[m.id] || m), member_code: localCode } }));
-    setLocalMembers((prev) => prev.map((row) => (row.id === m.id ? { ...row, member_code: localCode } : row)));
-  }
-  async function resendEmail(m: any) {
-    if (!m.email) return;
-    try { await resendVerificationEmail(API_URL, String(m.email)); } catch {}
-  }
 
   return (
     <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
@@ -333,8 +308,6 @@ const AdminMembers: React.FC = () => {
                           <button onClick={() => removeMember(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#dc2626', color: '#fff', border: 'none' }}>
                             {confirmDeleteId === m.id ? '再次確認刪除' : '刪除'}
                           </button>
-                          <button onClick={() => regenerateCodeFor(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#9333ea', color: '#fff', border: 'none' }}>重生編碼</button>
-                          <button onClick={() => resendEmail(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#10b981', color: '#fff', border: 'none' }} disabled={!m.email}>重寄驗證信</button>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 8 }}>
