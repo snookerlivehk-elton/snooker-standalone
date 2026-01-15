@@ -117,6 +117,42 @@ export async function registerMember(
   return res.json(); // { id, memberCode }
 }
 
+export async function requestRegisterEmailCode(
+  apiUrl: string,
+  email: string,
+) {
+  const res = await fetch(`${apiUrl}/api/members/request-register-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error(`發送驗證碼失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function registerMemberWithCode(
+  apiUrl: string,
+  payload: {
+    email: string;
+    code: string;
+    name: string;
+    password: string;
+    regionCode?: string;
+    districtCode?: string;
+    districtName?: string;
+    phone?: string;
+    birthDate?: string;
+  }
+) {
+  const res = await fetch(`${apiUrl}/api/members/register-with-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`會員註冊失敗 (${res.status})`);
+  return res.json();
+}
+
 export async function loginMember(
   apiUrl: string,
   payload: { email: string; password: string }

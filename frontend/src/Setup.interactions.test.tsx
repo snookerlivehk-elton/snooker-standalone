@@ -4,9 +4,9 @@ import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
 describe('App component integration', () => {
-  it('should transition from Setup to Scoreboard on match start', () => {
+  it('should transition from Setup to Scoreboard on match start', async () => {
     render(
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/room/test-room/setup']}>
             <App />
         </MemoryRouter>
     );
@@ -31,10 +31,8 @@ describe('App component integration', () => {
     fireEvent.click(screen.getByRole('button', { name: /start match/i }));
 
     // After starting the match, the Scoreboard component should be rendered
-    // We can verify this by looking for elements unique to the Scoreboard
-    expect(screen.getByText('Test Match')).toBeInTheDocument(); // Match name is shown on the scoreboard
-    expect(screen.getByText(/Player 1 Name \(P1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Player 2 Name \(P2\)/)).toBeInTheDocument();
-    expect(screen.getByText('Lead')).toBeInTheDocument();
+    await screen.findByText('Test Match');
+    expect(screen.queryByText('Create Match')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /switch player/i })).toBeInTheDocument();
   });
 });

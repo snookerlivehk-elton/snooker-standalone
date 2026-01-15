@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
-import { listMemberDistricts, listMemberRegions, registerMember, resendVerificationEmail } from './lib/api';
+import { listMemberDistricts, listMemberRegions, requestRegisterEmailCode, registerMemberWithCode } from './lib/api';
 
 const MemberRegister: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +11,10 @@ const MemberRegister: React.FC = () => {
   const [birthDate, setBirthDate] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [codeSending, setCodeSending] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
@@ -33,10 +37,8 @@ const MemberRegister: React.FC = () => {
     const hasNum = /\d/.test(v);
     const hasAlpha = /[A-Za-z]/.test(v);
     const match = v && v === confirmPassword;
-    return {
-      ok: okLen && hasNum && hasAlpha && match,
-      okLen, hasNum, hasAlpha, match,
-    };
+    const ok = okLen && hasNum && hasAlpha && match;
+    return { ok, okLen, hasNum, hasAlpha, match };
   })();
 
   useEffect(() => {
@@ -108,6 +110,34 @@ const MemberRegister: React.FC = () => {
     };
   }, [region, preferFallback]);
 
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [resendCooldown]);
+
+  const handleSendCode = async () => {
+    if (!email.trim()) {
+      setError('請先輸入 email');
+      return;
+    }
+    setError(null);
+    setCodeSending(true);
+    try {
+      await requestRegisterEmailCode(API_URL, email.trim());
+      setCodeSent(true);
+      setResendCooldown(60);
+      setInfoToast('已寄出驗證碼，請在 10 分鐘內輸入');
+      setTimeout(() => setInfoToast(null), 4000);
+    } catch (err: any) {
+      setError(err?.message || '發送驗證碼失敗');
+    } finally {
+      setCodeSending(false);
+    }
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -116,9 +146,14 @@ const MemberRegister: React.FC = () => {
       if (!passwordHint.ok) {
         throw new Error('密碼不符合規則（至少8字元，需含英文字母與數字，且兩次一致）');
       }
+      if (!emailCode.trim()) {
+        throw new Error('請先輸入 email 驗證碼');
+      }
       const payload = {
         email: email.trim(),
+        code: emailCode.trim(),
         name: name.trim(),
+        password: password,
         regionCode: region.trim(),
         districtCode: district.trim(),
         phone: phone.trim() || undefined,
@@ -129,17 +164,17 @@ const MemberRegister: React.FC = () => {
       const fallbackApi = 'https://snooker-standalone-backend-production.up.railway.app';
       if (preferFallback) {
         setAttemptLog(`使用後備端點提交：${fallbackApi}`);
-        result = await registerMember(fallbackApi, payload);
+        result = await registerMemberWithCode(fallbackApi, payload);
         setUsedBackend(fallbackApi);
       } else {
         try {
           setAttemptLog(`嘗試主要端點提交：${primaryApi}`);
-          result = await registerMember(primaryApi, payload);
+          result = await registerMemberWithCode(primaryApi, payload);
           setUsedBackend(primaryApi);
         } catch (primaryErr: any) {
           try {
             setAttemptLog((s) => (s ? s + '\n' : '') + `主要端點失敗（${primaryErr?.message || primaryErr}），改用後備端點：${fallbackApi}`);
-            result = await registerMember(fallbackApi, payload);
+            result = await registerMemberWithCode(fallbackApi, payload);
             setUsedBackend(fallbackApi);
           } catch (fallbackErr: any) {
             setAttemptLog((s) => (s ? s + '\n' : '') + `後備端點也失敗（${fallbackErr?.message || fallbackErr}）`);
@@ -149,11 +184,6 @@ const MemberRegister: React.FC = () => {
       }
       setMemberId(result.id);
       setMemberCode(result.memberCode || null);
-      try {
-        await resendVerificationEmail(usedBackend, email.trim());
-        setInfoToast('已寄出驗證／確認信至你的 Email');
-        setTimeout(() => setInfoToast(null), 4000);
-      } catch {}
       try {
         const storeRaw = localStorage.getItem('memberPasswords');
         const store = storeRaw ? JSON.parse(storeRaw) : {};
@@ -195,6 +225,32 @@ const MemberRegister: React.FC = () => {
               required
               className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
             />
+          </div>
+          <div className="md:col-span-2 flex gap-2 items-center">
+            <div className="flex-1">
+              <label className="block text-sm font-medium mb-1">Email 驗證碼</label>
+              <input
+                type="text"
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value)}
+                placeholder="請輸入收到的 6 位數驗證碼"
+                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSendCode}
+              disabled={codeSending || resendCooldown > 0}
+              className="mt-6 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {codeSending
+                ? '發送中...'
+                : resendCooldown > 0
+                  ? `重送 (${resendCooldown}s)`
+                  : codeSent
+                    ? '重新發送'
+                    : '發送驗證碼'}
+            </button>
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">姓名</label>

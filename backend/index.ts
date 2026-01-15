@@ -1235,11 +1235,209 @@ app.post('/api/members/register', async (req, res) => {
   }
 });
 
-// Simple password hashing helpers (SHA-256 with per-user salt)
 function makeSalt(): string {
   return randomBytes(16).toString('hex');
 }
 
+function generateEmailCode(): string {
+  const buf = randomBytes(3);
+  const num = buf.readUIntBE(0, 3) % 1000000;
+  return String(num).padStart(6, '0');
+}
+
+app.post('/api/members/request-register-code', async (req, res) => {
+  try {
+    const { email } = (req.body || {}) as { email?: string };
+    const em = String(email || '').trim().normalize('NFKC');
+    if (!em) {
+      return res.status(400).json({ error: 'email 為必填' });
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
+    if (!emailOk) {
+      return res.status(400).json({ error: 'email 格式不正確' });
+    }
+    const exists = await prisma.member.findFirst({ where: { email: em } });
+    if (exists) {
+      return res.status(409).json({ error: '此 email 已註冊' });
+    }
+    const recent = await prisma.emailVerification.findFirst({
+      where: {
+        email: em,
+        purpose: 'register',
+        created_at: { gt: new Date(Date.now() - 60_000) },
+        used_at: null,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    if (recent) {
+      return res.status(429).json({ error: '請稍後再試' });
+    }
+    const code = generateEmailCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const ipHeader = (req.headers['x-forwarded-for'] as string) || '';
+    const ip = (req.ip || ipHeader || '').toString().slice(0, 255) || null;
+    await prisma.emailVerification.create({
+      data: {
+        email: em,
+        code,
+        purpose: 'register',
+        expires_at: expiresAt,
+        ip: ip,
+      },
+    });
+    if (RESEND_API_KEY) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'no-reply@snookerhk.live',
+            to: em,
+            subject: '會員註冊驗證碼',
+            html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內於註冊頁面輸入此驗證碼以完成註冊。</p>`,
+          }),
+        });
+      } catch (e) {
+        console.warn('Failed to send register code email:', e);
+      }
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/members/register-with-code', async (req, res) => {
+  try {
+    const payload = (req.body || {}) as {
+      email?: string;
+      code?: string;
+      name?: string;
+      password?: string;
+      regionCode?: string;
+      districtCode?: string;
+      districtName?: string;
+      phone?: string;
+      birthDate?: string;
+    };
+    const email = String(payload.email || '').trim().normalize('NFKC');
+    const code = String(payload.code || '').trim();
+    const name = String(payload.name || '').trim();
+    const password = String(payload.password || '');
+    const phone = payload.phone ? String(payload.phone).trim() : undefined;
+    const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+    if (!email || !name || !code || !password) {
+      return res.status(400).json({ error: 'email、name、驗證碼與密碼為必填' });
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailOk) {
+      return res.status(400).json({ error: 'email 格式不正確' });
+    }
+    const pwLenOk = password.length >= 8;
+    const pwHasNum = /\d/.test(password);
+    const pwHasAlpha = /[A-Za-z]/.test(password);
+    if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+      return res.status(400).json({ error: '密碼不符合規則（至少8字元，需含英文字母與數字）' });
+    }
+    const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
+    if (birthDateStr && Number.isNaN(birthDate!.getTime())) {
+      return res.status(400).json({ error: '出生日期格式無效，請使用 ISO 格式，如 1990-01-31' });
+    }
+    const existing = await prisma.member.findFirst({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'email 已存在' });
+    }
+    const now = new Date();
+    const verification = await prisma.emailVerification.findFirst({
+      where: {
+        email,
+        purpose: 'register',
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    if (!verification || verification.used_at || verification.expires_at < now || verification.attempts >= 5) {
+      return res.status(400).json({ error: '驗證碼錯誤或已過期，請重新取得' });
+    }
+    if (verification.code !== code) {
+      await prisma.emailVerification.update({
+        where: { id: verification.id },
+        data: { attempts: { increment: 1 } },
+      });
+      return res.status(400).json({ error: '驗證碼不正確' });
+    }
+    await prisma.emailVerification.update({
+      where: { id: verification.id },
+      data: { used_at: now },
+    });
+    const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
+    const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
+    const result = await prisma.$transaction(async (tx) => {
+      const existsEmail = await tx.member.findFirst({ where: { email } });
+      if (existsEmail) {
+        throw new Error('email 已存在');
+      }
+      let regionCode = regionRaw;
+      let districtCode = districtRaw;
+      if (!regionCode && districtCode) {
+        regionCode = 'HKG';
+      }
+      if (!regionCode || !districtCode) {
+        throw new Error('regionCode 與 districtCode 為必填');
+      }
+      const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
+      if (!region || region.active === false) {
+        throw new Error('無效的地方編號');
+      }
+      const district = await tx.memberDistrict.findFirst({
+        where: { region_code: regionCode, code3: districtCode, active: true },
+      });
+      if (!district) {
+        throw new Error('無效的分區編號');
+      }
+      const seq = await tx.memberCodeSequence.upsert({
+        where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
+        update: { next_seq: { increment: 1 } },
+        create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
+        select: { next_seq: true },
+      });
+      const current = seq.next_seq - 1;
+      const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
+      const membershipExpires = new Date(now.getTime());
+      membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
+      const salt = makeSalt();
+      const h = createHash('sha256');
+      h.update(salt + password);
+      const digest = h.digest('hex');
+      const created = await tx.member.create({
+        data: {
+          id: randomUUID(),
+          name,
+          email,
+          district_code: districtCode,
+          phone: phone ?? null,
+          birth_date: birthDate ?? null,
+          member_code: memberCode,
+          membership_expires_at: membershipExpires,
+          password_salt: salt,
+          password_hash: digest,
+          password_updated_at: now,
+          email_verified_at: now,
+        },
+      });
+      return { id: created.id, memberCode };
+    });
+    res.status(201).json({ id: result.id, memberCode: result.memberCode });
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    const status = msg.includes('email 已存在') ? 409 : 500;
+    res.status(status).json({ error: msg });
+  }
+});
+
+// Simple password hashing helpers (SHA-256 with per-user salt)
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
   try {
