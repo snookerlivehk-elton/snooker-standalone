@@ -1,18 +1,76 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail } from './lib/api';
-import { DISTRICT_TABLE } from './districts';
+import { listMembers, updateMember, deleteMember, regenerateMemberCode, resendVerificationEmail, listAdminMemberRegions, listAdminMemberDistricts } from './lib/api';
 
 const AdminMembers: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
-  const [codeSearch, setCodeSearch] = useState<string>('');
+  
+  // Dynamic regions/districts
+  const [regions, setRegions] = useState<any[]>([]);
+  const [allDistricts, setAllDistricts] = useState<any[]>([]);
+
   const [localMembers, setLocalMembers] = useState<any[]>([]);
   const [editing, setEditing] = useState<Record<string, any>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Filters
+  const [filterName, setFilterName] = useState('');
+  const [filterEmail, setFilterEmail] = useState('');
+  const [filterRegion, setFilterRegion] = useState('');
+  const [filterDistrict, setFilterDistrict] = useState('');
+  const [filterCode, setFilterCode] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+
+  // Derived district options based on selected region
+  const availableDistricts = useMemo(() => {
+    if (!filterRegion) return [];
+    return allDistricts.filter(d => 
+      String(d.region_code || '').toUpperCase() === String(filterRegion).toUpperCase() ||
+      String(d.regionCode || '').toUpperCase() === String(filterRegion).toUpperCase()
+    ).sort((a, b) => String(a.code3 || '').localeCompare(String(b.code3 || '')));
+  }, [allDistricts, filterRegion]);
+
+  const filteredMembers = useMemo(() => {
+    return members.filter((m) => {
+      if (filterName && !String(m.name || '').toLowerCase().includes(filterName.toLowerCase())) return false;
+      if (filterEmail && !String(m.email || '').toLowerCase().includes(filterEmail.toLowerCase())) return false;
+      if (filterCode && !String(m.member_code || '').toLowerCase().includes(filterCode.toLowerCase())) return false;
+      if (filterRole && String(m.role || 'MEMBER') !== filterRole) return false;
+      
+      const dist = String(m.district_code || m.partition || '').trim();
+      
+      if (filterRegion) {
+        if (!dist) return false;
+        // Check if district belongs to the selected region using dynamic data
+        const regionDistList = allDistricts.filter(d => 
+          String(d.region_code || '').toUpperCase() === String(filterRegion).toUpperCase() ||
+          String(d.regionCode || '').toUpperCase() === String(filterRegion).toUpperCase()
+        );
+        
+        const found = regionDistList.find(d => 
+          String(d.code3 || '').toUpperCase() === dist.toUpperCase() || 
+          d.name === dist
+        );
+        
+        if (!found) {
+           // Fallback heuristic: district starts with region code?
+           if (!dist.toUpperCase().startsWith(filterRegion.toUpperCase())) return false;
+        }
+      }
+      
+      if (filterDistrict && dist !== filterDistrict) return false;
+
+      return true;
+    });
+  }, [members, filterName, filterEmail, filterRegion, filterDistrict, filterCode, filterRole, allDistricts]);
+
+  // Reset district filter when region changes
+  useEffect(() => {
+    setFilterDistrict('');
+  }, [filterRegion]);
 
   useEffect(() => {
     let mounted = true;
@@ -26,8 +84,19 @@ const AdminMembers: React.FC = () => {
         const token = tokenFromUrl || tokenSaved;
         if (tokenFromUrl) localStorage.setItem('adminToken', tokenFromUrl);
         if (!token) throw new Error('缺少管理員密鑰');
-        const data = await listMembers(API_URL, token);
-        if (mounted) setMembers(data.members || []);
+        
+        // Fetch members, regions, and districts in parallel
+        const [membersData, regionsData, districtsData] = await Promise.all([
+          listMembers(API_URL, token),
+          listAdminMemberRegions(API_URL, token).catch(() => ({ regions: [] })),
+          listAdminMemberDistricts(API_URL, token).catch(() => ({ districts: [] }))
+        ]);
+
+        if (mounted) {
+          setMembers(membersData.members || []);
+          setRegions(regionsData.regions || []);
+          setAllDistricts(districtsData.districts || []);
+        }
       } catch (err: any) {
         if (mounted) setError(err.message || '載入失敗');
       } finally {
@@ -38,19 +107,9 @@ const AdminMembers: React.FC = () => {
   }, []);
 
   const districtIndex = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
-    const source = members || [];
-    for (const m of source) {
-      const dist = String((m.district_code ?? m.partition ?? '') || '').trim();
-      const code = String(m.member_code ?? '').trim();
-      if (!dist || !code) continue;
-      if (!map[dist]) map[dist] = new Set<string>();
-      map[dist].add(code);
-    }
-    const obj: Record<string, string[]> = {};
-    Object.keys(map).forEach((d) => obj[d] = Array.from(map[d]).sort());
-    return obj;
-  }, [members, localMembers, error]);
+    // Legacy grouping logic removed as per new requirements
+    return {};
+  }, []);
 
   function startEdit(m: any) {
     setEditing((prev) => ({ ...prev, [m.id]: { ...m } }));
@@ -172,6 +231,82 @@ const AdminMembers: React.FC = () => {
               {error ? '後端連線異常' : '後端連線正常'}
             </div>
           </div>
+
+          {/* Filter Bar */}
+          <div style={{ background: '#f9fafb', padding: 12, borderRadius: 8, marginBottom: 16, border: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+              <input 
+                placeholder="姓名" 
+                value={filterName} 
+                onChange={e => setFilterName(e.target.value)} 
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
+              />
+              <input 
+                placeholder="Email" 
+                value={filterEmail} 
+                onChange={e => setFilterEmail(e.target.value)} 
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
+              />
+              
+              <select 
+                value={filterRegion} 
+                onChange={e => setFilterRegion(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14, minWidth: 120 }}
+              >
+                <option value="">全部大區</option>
+                {regions.map(r => (
+                  <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
+                ))}
+              </select>
+              
+              <select 
+                value={filterDistrict} 
+                onChange={e => setFilterDistrict(e.target.value)} 
+                disabled={!filterRegion}
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14, minWidth: 120, opacity: !filterRegion ? 0.6 : 1 }}
+              >
+                <option value="">全部地區</option>
+                {availableDistricts.map(d => (
+                  <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
+                ))}
+              </select>
+              
+              <input 
+                placeholder="會員編碼" 
+                value={filterCode} 
+                onChange={e => setFilterCode(e.target.value)} 
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
+              />
+              
+              <select 
+                value={filterRole} 
+                onChange={e => setFilterRole(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
+              >
+                <option value="">全部等級</option>
+                <option value="MEMBER">普通會員</option>
+                <option value="ADMIN">管理者</option>
+              </select>
+              
+              <button 
+                onClick={() => { 
+                  setFilterName(''); 
+                  setFilterEmail(''); 
+                  setFilterRegion(''); 
+                  setFilterDistrict(''); 
+                  setFilterCode(''); 
+                  setFilterRole(''); 
+                }}
+                style={{ padding: '6px 12px', borderRadius: 4, background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer', fontSize: 14 }}
+              >
+                清除
+              </button>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 13, color: '#4b5563' }}>
+              目前符合條件：<span style={{ fontWeight: 'bold', color: '#111827' }}>{filteredMembers.length}</span> / 總共：{members.length} 位
+            </div>
+          </div>
+
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -188,8 +323,8 @@ const AdminMembers: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
-                <>
+              {filteredMembers.map((m) => (
+                <React.Fragment key={m.id}>
                   <tr>
                     <td colSpan={10} style={{ borderBottom: '1px solid #eee', padding: 6 }}>
                       {!editing[m.id] ? (
@@ -289,39 +424,7 @@ const AdminMembers: React.FC = () => {
               ))}
             </tbody>
           </table>
-          <div style={{ marginTop: 20 }}>
-            <h3>區分編碼列表</h3>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
-              <select value={selectedDistrict} onChange={(e) => setSelectedDistrict(e.target.value)} style={{ padding: '6px 10px' }}>
-                <option value="">選擇大區域</option>
-                <option value="H">香港島 (H)</option>
-                <option value="K">九龍 (K)</option>
-                <option value="N">新界 (N)</option>
-                <option value="I">離島 (I)</option>
-              </select>
-              <input
-                value={codeSearch}
-                onChange={(e) => setCodeSearch(e.target.value)}
-                placeholder="搜尋編碼"
-                style={{ padding: '6px 10px', flex: 1 }}
-              />
-            </div>
-            {selectedDistrict && (
-              <div style={{ background: '#111827', color: '#e5e7eb', borderRadius: 8, padding: 12 }}>
-                <div style={{ marginBottom: 8 }}>大區域：{selectedDistrict}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
-                  {(Object.values(DISTRICT_TABLE).flat() as any[])
-                    .filter((d: any) => String(d.code || '').startsWith(String(selectedDistrict)))
-                    .filter((c) => !codeSearch || c.toLowerCase().includes(codeSearch.toLowerCase()))
-                    .map((d: any) => (
-                      <div key={d.code} style={{ background: '#1f2937', padding: '6px 8px', borderRadius: 6 }}>
-                        {d.code} — {d.name}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
+
         </>
       )}
     </div>
