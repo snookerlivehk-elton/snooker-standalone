@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from './config';
-import { listAdminMemberRegions, listAdminMemberDistricts, upsertAdminMemberRegion, upsertAdminMemberDistrict, listMemberRegions, listMemberDistricts } from './lib/api';
+import { listAdminMemberRegions, listAdminMemberDistricts, upsertAdminMemberRegion, upsertAdminMemberDistrict, listMemberRegions, listMemberDistricts, deleteAdminMemberDistrict } from './lib/api';
 
 const AdminRegions: React.FC = () => {
   const [adminToken, setAdminToken] = useState('');
@@ -21,6 +21,7 @@ const AdminRegions: React.FC = () => {
   const [districtFilterRegion, setDistrictFilterRegion] = useState('');
   const [editingRegionKey, setEditingRegionKey] = useState<string | null>(null);
   const [editingDistrictKey, setEditingDistrictKey] = useState<string | null>(null);
+  const [confirmDeleteDistrictKey, setConfirmDeleteDistrictKey] = useState<string | null>(null);
 
   function resolveAdminToken(): string {
     const params = new URLSearchParams(window.location.search);
@@ -168,6 +169,48 @@ const AdminRegions: React.FC = () => {
     if (!districtFilterRegion) return true;
     return String(d.region_code || '').toUpperCase() === districtFilterRegion.toUpperCase();
   });
+
+  const handleDeleteDistrict = async (d: any) => {
+    const region = String(d.region_code || '').trim().toUpperCase();
+    const code = String(d.code3 || '').trim().toUpperCase();
+    if (!region || !code) return;
+    const key = `${region}::${code}`;
+    const token = resolveAdminToken();
+    if (!token) {
+      setError('缺少管理員密鑰');
+      return;
+    }
+    if (confirmDeleteDistrictKey !== key) {
+      setConfirmDeleteDistrictKey(key);
+      return;
+    }
+    const label = `${region}-${code}`;
+    const ok = window.confirm(`再次確認：確定要永久刪除分區「${label}」？此操作不可復原。`);
+    if (!ok) {
+      setConfirmDeleteDistrictKey(null);
+      return;
+    }
+    try {
+      await deleteAdminMemberDistrict(API_URL, token, region, code);
+      setDistricts((prev) =>
+        prev.filter(
+          (x: any) =>
+            !(String(x.region_code || '').toUpperCase() === region && String(x.code3 || '').toUpperCase() === code),
+        ),
+      );
+      if (editingDistrictKey === key) {
+        setEditingDistrictKey(null);
+        setDistrictRegionCode('');
+        setDistrictCode('');
+        setDistrictName('');
+        setDistrictActive(true);
+      }
+      setConfirmDeleteDistrictKey(null);
+    } catch (err: any) {
+      setError(err?.message || '刪除分區失敗');
+      setConfirmDeleteDistrictKey(null);
+    }
+  };
 
   return (
     <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
@@ -388,6 +431,7 @@ const AdminRegions: React.FC = () => {
                   <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
                   <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
                   <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -413,11 +457,28 @@ const AdminRegions: React.FC = () => {
                     </td>
                     <td style={{ padding: 6 }}>{d.name}</td>
                     <td style={{ padding: 6 }}>{d.active ? '是' : '否'}</td>
+                    <td style={{ padding: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDistrict(d)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                          border: 'none',
+                          background: '#dc2626',
+                          color: '#fff',
+                          fontSize: 12,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {confirmDeleteDistrictKey === `${String(d.region_code || '').toUpperCase()}::${String(d.code3 || '').toUpperCase()}` ? '再次確認刪除' : '刪除'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {visibleDistricts.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: 6, color: '#666' }}>尚未有分區資料</td>
+                    <td colSpan={5} style={{ padding: 6, color: '#666' }}>尚未有分區資料</td>
                   </tr>
                 )}
               </tbody>

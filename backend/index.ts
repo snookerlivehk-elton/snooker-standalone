@@ -1572,6 +1572,28 @@ app.put('/api/admin/member/districts/:regionCode/:code3', adminAuth, async (req,
   }
 });
 
+app.delete('/api/admin/member/districts/:regionCode/:code3', adminAuth, async (req, res) => {
+  try {
+    const regionParam = String(req.params.regionCode || '').trim().toUpperCase();
+    const codeParam = String(req.params.code3 || '').trim().toUpperCase();
+    if (!regionParam || !codeParam) {
+      return res.status(400).json({ error: 'regionCode 與 code3 為必填' });
+    }
+    const existing = await prisma.memberDistrict.findUnique({
+      where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: '分區不存在' });
+    }
+    await prisma.memberDistrict.delete({
+      where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 // Validate a list of member IDs (existence check)
 app.get('/api/members/validate', async (req, res) => {
   try {

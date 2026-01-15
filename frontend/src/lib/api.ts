@@ -234,6 +234,32 @@ export async function upsertAdminMemberDistrict(
   return updateRes.json();
 }
 
+export async function deleteAdminMemberDistrict(
+  apiUrl: string,
+  adminToken: string,
+  regionCode: string,
+  code3: string,
+) {
+  const region = regionCode.trim().toUpperCase();
+  const code = code3.trim().toUpperCase();
+  if (!region || !code) {
+    throw new Error('regionCode 與 code3 為必填');
+  }
+  try {
+    const res = await fetch(`${apiUrl}/api/admin/member/districts/${encodeURIComponent(region)}/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-token': adminToken },
+    });
+    if (res.ok) return res.json();
+  } catch {}
+  const url = `${apiUrl}/api/admin/member/districts/${encodeURIComponent(region)}/${encodeURIComponent(code)}?token=${encodeURIComponent(adminToken)}`;
+  const res2 = await fetch(url, {
+    method: 'DELETE',
+  });
+  if (!res2.ok) throw new Error(`刪除分區失敗 (${res2.status})`);
+  return res2.json();
+}
+
 export async function getMember(
   apiUrl: string,
   id: string,
