@@ -1578,6 +1578,10 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
                 data.membership_expires_at = d;
             }
         }
+        if (body.role !== undefined) {
+            const r = String(body.role || 'MEMBER').toUpperCase();
+            data.role = r === 'ADMIN' ? 'ADMIN' : 'MEMBER';
+        }
         const member = await prisma.member.update({
             where: { id },
             data,

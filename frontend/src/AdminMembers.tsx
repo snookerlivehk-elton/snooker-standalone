@@ -12,6 +12,7 @@ const AdminMembers: React.FC = () => {
   const [codeSearch, setCodeSearch] = useState<string>('');
   const [localMembers, setLocalMembers] = useState<any[]>([]);
   const [editing, setEditing] = useState<Record<string, any>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -86,23 +87,33 @@ const AdminMembers: React.FC = () => {
     } catch {}
     cancelEdit(id);
   }
-  async function removeMember(id: any) {
+  async function removeMember(m: any) {
+    const id = m.id;
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get('token') || '';
     const tokenSaved = localStorage.getItem('adminToken') || '';
     const adminToken = tokenFromUrl || tokenSaved;
     try {
       if (!adminToken) { setError('缺少管理員密鑰'); return; }
-      const ok = window.confirm('確定要刪除此會員？此操作不可復原。');
+      if (confirmDeleteId !== id) {
+        setConfirmDeleteId(id);
+        return;
+      }
+      const label = String(m.member_code || '').trim();
+      const name = String(m.name || '').trim();
+      const display = name || label || id;
+      const ok = window.confirm(`再次確認：確定要永久刪除會員「${display}」？此操作不可復原。`);
       if (!ok) return;
       await deleteMember(API_URL, adminToken, id);
       try {
         const res = await listMembers(API_URL, adminToken);
         setMembers(res.members || []);
       } catch {}
+      setConfirmDeleteId(null);
     } catch (err: any) {
       console.error('Failed to delete member', err);
       setError(err?.message || '刪除會員失敗');
+      setConfirmDeleteId(null);
     }
   }
   async function regenerateCodeFor(m: any) {
@@ -184,7 +195,9 @@ const AdminMembers: React.FC = () => {
                       {!editing[m.id] ? (
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => startEdit(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}>編輯</button>
-                          <button onClick={() => removeMember(m.id)} style={{ padding: '4px 8px', borderRadius: 6, background: '#dc2626', color: '#fff', border: 'none' }}>刪除</button>
+                          <button onClick={() => removeMember(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#dc2626', color: '#fff', border: 'none' }}>
+                            {confirmDeleteId === m.id ? '再次確認刪除' : '刪除'}
+                          </button>
                           <button onClick={() => regenerateCodeFor(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#9333ea', color: '#fff', border: 'none' }}>重生編碼</button>
                           <button onClick={() => resendEmail(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#10b981', color: '#fff', border: 'none' }} disabled={!m.email}>重寄驗證信</button>
                         </div>
