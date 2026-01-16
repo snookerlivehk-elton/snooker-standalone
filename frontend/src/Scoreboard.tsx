@@ -133,7 +133,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         }
     }, [roomId, gameState, setGameState]);
 
-    // 每秒遞增計時（僅在 playing 狀態），並同步至其他視圖
     useEffect(() => {
         const id = setInterval(() => {
             setGameState((prev) => {
@@ -142,7 +141,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 const next = prev.clone();
                 next.timers.frameTime += 1;
                 next.timers.matchTime += 1;
-                if (next.breakScore > 0) next.breakTime += 1;
+                if (!next.isFrameOver && !next.isMatchOver) next.breakTime += 1;
                 // 廣播到房間（若啟用 socket）
                 if (socket) {
                     ignoreNextSocketUpdateRef.current = true;

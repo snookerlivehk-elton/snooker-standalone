@@ -438,6 +438,7 @@ const LiveView: React.FC = () => {
                         const rows: { label: string; left: string | number; right: string | number }[] = [
                             { label: '單杆最高', left: s0.maxBreakPoints, right: s1.maxBreakPoints },
                             { label: '總罰分', left: s0.foulPointsGiven, right: s1.foulPointsGiven },
+                            { label: '平均出杆時間', left: `${(s0.avgShotTimeMs / 1000).toFixed(2)}s`, right: `${(s1.avgShotTimeMs / 1000).toFixed(2)}s` },
                             { label: '連杆平均出杆時間', left: `${(s0.avgRoundShotTimeMs / 1000).toFixed(2)}s`, right: `${(s1.avgRoundShotTimeMs / 1000).toFixed(2)}s` },
                             { label: '進球成功率', left: `${(s0.potSuccessRate * 100).toFixed(1)}% (${s0.potCount}/${s0.potCount + s0.missCount})`, right: `${(s1.potSuccessRate * 100).toFixed(1)}% (${s1.potCount}/${s1.potCount + s1.missCount})` },
                             { label: 'Safe成功率', left: `${(s0.safeSuccessRate * 100).toFixed(1)}% (${s0.safeNumerator}/${s0.safeDenominator})`, right: `${(s1.safeSuccessRate * 100).toFixed(1)}% (${s1.safeNumerator}/${s1.safeDenominator})` },

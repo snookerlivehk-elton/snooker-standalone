@@ -925,8 +925,9 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
         data: matchUpdateData,
       }),
     ];
-    // Upsert per-player frames/points, ensure non-member opponent存在
+    // Upsert per-player frames/points and shot-time derived stats, ensure non-member opponent存在
     if (Array.isArray(playersFinal)) {
+      const perPlayerArray: any[] = Array.isArray(stats?.perPlayer) ? stats.perPlayer : [];
       for (const pf of playersFinal) {
         let mid = pf.memberId ? String(pf.memberId) : null;
         if (!mid && pf.name) {
@@ -936,10 +937,56 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
         }
         if (mid) {
           const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+          const perPlayerStats = perPlayerArray[pf.index ?? 0] || null;
+          const avgShotTimeMs = perPlayerStats && typeof perPlayerStats.avgShotTimeMs === 'number'
+            ? Math.round(perPlayerStats.avgShotTimeMs)
+            : 0;
           ops.push(prisma.matchPlayer.upsert({
             where: { match_id_member_id: { match_id: matchId, member_id: mid } },
-            update: { frames_won: Number(pf.framesWon || 0), total_points: Number(pf.score || 0) },
-            create: { match_id: matchId, member_id: mid, frames_won: Number(pf.framesWon || 0), total_points: Number(pf.score || 0), pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] },
+            update: {
+              frames_won: Number(pf.framesWon || 0),
+              total_points: Number(pf.score || 0),
+              avg_shot_time_ms: avgShotTimeMs,
+              max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
+                ? perPlayerStats.maxBreakPoints
+                : undefined,
+              foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
+                ? perPlayerStats.foulCount
+                : undefined,
+              quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
+                ? perPlayerStats.quickShotRate
+                : undefined,
+              safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
+                ? perPlayerStats.safeSuccessRate
+                : undefined,
+              pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
+              shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
+                ? perPlayerStats.shotTimeBuckets
+                : [0, 0, 0, 0],
+            },
+            create: {
+              match_id: matchId,
+              member_id: mid,
+              frames_won: Number(pf.framesWon || 0),
+              total_points: Number(pf.score || 0),
+              pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
+              shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
+                ? perPlayerStats.shotTimeBuckets
+                : [0, 0, 0, 0],
+              avg_shot_time_ms: avgShotTimeMs,
+              max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
+                ? perPlayerStats.maxBreakPoints
+                : 0,
+              foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
+                ? perPlayerStats.foulCount
+                : 0,
+              quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
+                ? perPlayerStats.quickShotRate
+                : 0,
+              safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
+                ? perPlayerStats.safeSuccessRate
+                : 0,
+            },
           } as any));
         }
       }
