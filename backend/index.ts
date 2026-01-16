@@ -1524,47 +1524,6 @@ app.get('/verify-email', async (req, res) => {
   */
 });
 
-// Resend verification email
-app.post('/api/members/resend-email', async (req, res) => {
-  // Temporary disabled due to schema changes
-  res.status(501).json({ error: 'Email verification is temporarily disabled.' });
-  /*
-  try {
-    const { email } = (req.body || {}) as { email?: string };
-    const normalized = String(email || '').trim().normalize('NFKC');
-    if (!normalized) return res.status(400).json({ error: 'email required' });
-    const member = await prisma.member.findFirst({ where: { email: normalized } });
-    if (!member) return res.status(404).json({ error: 'not found' });
-    // if (member.email_verified_at) return res.status(200).json({ ok: true, message: 'already verified' });
-    const token = Buffer.from(randomBytes(24)).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await prisma.member.update({
-      where: { id: member.id },
-      data: { email_verification_token: token, email_verification_expires_at: expiresAt }
-    });
-    if (RESEND_API_KEY) {
-      const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email?token=${encodeURIComponent(token)}`;
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'no-reply@snookerhk.live',
-          to: normalized,
-          subject: '重寄電子郵件驗證',
-          html: `<p>請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>連結 24 小時內有效。</p>`
-        })
-      });
-    }
-    res.json({ ok: true });
-  } catch (e: any) {
-    res.status(500).json({ error: String(e?.message || e) });
-  }
-  */
-});
-
 async function findMemberByIdOrEmail(identifier: string) {
   const value = String(identifier || '').trim();
   if (!value) return null;

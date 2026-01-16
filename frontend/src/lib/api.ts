@@ -375,21 +375,6 @@ export async function deleteMember(
   return res.json(); // { ok: true }
 }
 
-export async function regenerateMemberCode(
-  apiUrl: string,
-  adminToken: string,
-  id: string | number,
-  districtCode: string,
-) {
-  const res = await fetch(`${apiUrl}/api/admin/members/${id}/regenerate-code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
-    body: JSON.stringify({ districtCode }),
-  });
-  if (!res.ok) throw new Error(`重生會員編碼失敗 (${res.status})`);
-  return res.json(); // { member_code }
-}
-
 export async function validateMembers(
   apiUrl: string,
   ids: string[],
@@ -398,19 +383,6 @@ export async function validateMembers(
   const res = await fetch(`${apiUrl}/api/members/validate?ids=${qs}`);
   if (!res.ok) throw new Error(`驗證會員 ID 失敗 (${res.status})`);
   return res.json() as Promise<{ exists: Record<string, boolean> }>;
-}
-
-export async function resendVerificationEmail(
-  apiUrl: string,
-  email: string,
-) {
-  const res = await fetch(`${apiUrl}/api/members/resend-email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-  if (!res.ok) throw new Error(`重寄驗證信失敗 (${res.status})`);
-  return res.json(); // { ok: true }
 }
 
 export async function listAdminMatches(
