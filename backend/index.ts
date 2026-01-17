@@ -1605,6 +1605,51 @@ async function findMemberByIdOrEmail(identifier: string) {
   });
 }
 
+app.get('/api/members/validate', async (req, res) => {
+  try {
+    const idsParam = (req.query.ids as string) || '';
+    const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'ids is required (comma-separated)' });
+    }
+
+    const exists: Record<string, boolean> = {};
+    const names: Record<string, string | null> = {};
+
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    for (const rawId of ids) {
+      const id = rawId.trim();
+      if (!id) continue;
+
+      let member = null;
+      if (id.includes('@')) {
+        member = await prisma.member.findFirst({
+          where: { email: id },
+          select: { name: true },
+        });
+      } else if (uuidPattern.test(id)) {
+        member = await prisma.member.findUnique({
+          where: { id },
+          select: { name: true },
+        });
+      } else {
+        member = await prisma.member.findFirst({
+          where: { member_code: id },
+          select: { name: true },
+        });
+      }
+
+      exists[id] = !!member;
+      names[id] = member ? member.name : null;
+    }
+
+    res.json({ exists, names });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 app.get('/api/members/:id', async (req, res) => {
   try {
     const idOrEmail = String(req.params.id || '').trim();
@@ -1814,32 +1859,6 @@ app.delete('/api/admin/member/districts/:regionCode/:code3', adminAuth, async (r
       where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
     });
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: String(err?.message || err) });
-  }
-});
-
-// Validate a list of member IDs (existence check + basic profile)
-app.get('/api/members/validate', async (req, res) => {
-  try {
-    const idsParam = (req.query.ids as string) || '';
-    const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
-    if (ids.length === 0) {
-      return res.status(400).json({ error: 'ids is required (comma-separated)' });
-    }
-    const found = await prisma.member.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, name: true },
-    });
-    const set = new Set(found.map(f => f.id));
-    const exists: Record<string, boolean> = {};
-    const names: Record<string, string | null> = {};
-    for (const id of ids) {
-      const hit = found.find(f => f.id === id) || null;
-      exists[id] = !!hit;
-      names[id] = hit ? hit.name : null;
-    }
-    res.json({ exists, names });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
