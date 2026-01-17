@@ -137,6 +137,42 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
 
+async function resolveMemberIdentifiers(identifiers: string[]): Promise<Map<string, string>> {
+  const trimmed = Array.from(
+    new Set(
+      identifiers
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => v.length > 0),
+    ),
+  );
+  if (!trimmed.length) return new Map();
+
+  const members = await prisma.member.findMany({
+    where: {
+      OR: [
+        { id: { in: trimmed } },
+        { email: { in: trimmed } },
+        { member_code: { in: trimmed } },
+      ],
+    },
+    select: { id: true, email: true, member_code: true },
+  });
+
+  const map = new Map<string, string>();
+  for (const m of members) {
+    if (m.id && trimmed.includes(m.id)) {
+      map.set(m.id, m.id);
+    }
+    if (m.email && trimmed.includes(m.email)) {
+      map.set(m.email, m.id);
+    }
+    if (m.member_code && trimmed.includes(m.member_code)) {
+      map.set(m.member_code, m.id);
+    }
+  }
+  return map;
+}
+
 // Health check for cloud deployments
 app.get('/health', (_req, res) => {
   res.json({
@@ -168,9 +204,10 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
     if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
       return res.status(400).json({ error: 'memberId required for both players' });
     }
-    const found = await prisma.member.findMany({ where: { id: { in: [p0, p1] } }, select: { id: true } });
-    const ids = new Set(found.map(f => f.id));
-    if (!ids.has(p0) || !ids.has(p1)) {
+    const idMap = await resolveMemberIdentifiers([p0, p1]);
+    const p0Resolved = idMap.get(p0) || null;
+    const p1Resolved = idMap.get(p1) || null;
+    if (!p0Resolved || !p1Resolved) {
       return res.status(404).json({ error: 'memberId not found' });
     }
     const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
@@ -190,8 +227,8 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
     });
     const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
     await prisma.$transaction([
-      prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-      prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+      prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+      prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
     ]);
     res.status(201).json({ matchId: created.id });
   } catch (err: any) {
@@ -206,11 +243,8 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
       return res.status(400).json({ error: 'invalid payload' });
     }
     const candidateIds = [players[0]?.memberId, players[1]?.memberId].filter((x: any) => typeof x === 'string') as string[];
-    const found = candidateIds.length > 0
-      ? await prisma.member.findMany({ where: { id: { in: candidateIds } }, select: { id: true } })
-      : [];
-    const validSet = new Set(found.map(f => f.id));
-    const acceptedMemberIds = candidateIds.filter(id => validSet.has(id));
+    const idMap = await resolveMemberIdentifiers(candidateIds);
+    const acceptedMemberIds = candidateIds.filter(id => idMap.has(id));
     const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
     const created = await prisma.match.create({
       data: {
@@ -229,8 +263,11 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
     for (let i = 0; i < players.length; i++) {
       const p = players[i];
       let memberId: string | null = null;
-      if (p?.memberId && typeof p.memberId === 'string' && validSet.has(p.memberId)) {
-        memberId = p.memberId;
+      if (p?.memberId && typeof p.memberId === 'string') {
+        const resolved = idMap.get(p.memberId);
+        if (resolved) {
+          memberId = resolved;
+        }
       } else if (!p?.memberId && p?.name) {
         // const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
         const guest = await prisma.member.create({ data: { name: String(p.name) } });
@@ -900,9 +937,15 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
 
     const endedAt = timestamps?.end ? new Date(Number(timestamps.end)) : new Date();
 
+    let winnerMemberIdInternal: string | null = null;
+    if (winnerMemberId) {
+      const winnerMap = await resolveMemberIdentifiers([String(winnerMemberId)]);
+      winnerMemberIdInternal = winnerMap.get(String(winnerMemberId)) || null;
+    }
+
     const matchUpdateData: any = {
       ended_at: endedAt,
-      winner_member_id: winnerMemberId ? String(winnerMemberId) : null,
+      winner_member_id: winnerMemberIdInternal,
     };
     if (Array.isArray(matchMeta?.handicaps)) {
       matchUpdateData.handicap0 = Number(matchMeta.handicaps[0] || 0);
@@ -930,19 +973,13 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
       const candidateIds = playersFinal
         .map((pf: any) => (pf && pf.memberId ? String(pf.memberId) : null))
         .filter((id: any) => typeof id === 'string') as string[];
-      const validMemberSet = new Set<string>();
-      if (candidateIds.length > 0) {
-        const foundMembers = await prisma.member.findMany({
-          where: { id: { in: candidateIds } },
-          select: { id: true },
-        });
-        for (const m of foundMembers) validMemberSet.add(m.id);
-      }
+      const idMap = await resolveMemberIdentifiers(candidateIds);
       for (let i = 0; i < playersFinal.length; i++) {
         const pf: any = playersFinal[i];
         if (!pf) continue;
-        let mid = pf.memberId ? String(pf.memberId) : null;
-        if (!mid || !validMemberSet.has(mid)) continue;
+        const identifier = pf.memberId ? String(pf.memberId) : null;
+        const mid = identifier ? (idMap.get(identifier) || null) : null;
+        if (!mid) continue;
         const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
         const perPlayerStats = perPlayerArray[pf.index ?? i] || null;
         const avgShotTimeMs = perPlayerStats && typeof perPlayerStats.avgShotTimeMs === 'number'

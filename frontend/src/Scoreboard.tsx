@@ -317,14 +317,108 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         updateAndBroadcastState(newState);
     };
 
-    const handleNewFrame = () => {
-        const newState = gameState!.clone();
+    const uploadSegment = async (finalize: boolean) => {
+        if (!roomId || !gameState) return;
+        const p1Id = (gameState.players[0].memberId || '').trim();
+        const p2Id = (gameState.players[1].memberId || '').trim();
+        const hasP1 = !!p1Id;
+        const hasP2 = !!p2Id;
+        if (!hasP1 && !hasP2) {
+            return;
+        }
+        const record = StatsEngine.buildMatchRecord(roomId!, gameState);
+        const apiRoomId = slugId || roomId!;
+        const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
+        const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
+        const validIds = idsToCheck.filter(id => (check as any).exists[id]);
+        if (validIds.length === 0) {
+            return;
+        }
+        const playersPayload = record.players.map((p, i) => {
+            const originalId = i === 0 ? p1Id : p2Id;
+            const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
+            return {
+                name: normalizedId ? p.name : '',
+                memberId: normalizedId,
+            };
+        });
+        const writeToken = getWriteToken();
+        let matchId = RoomStorage.getMatchId(roomId!);
+        let acceptedMemberIds = RoomStorage.getAcceptedMemberIds(roomId!);
+        if (!matchId) {
+            const created = await createMatchPartial(
+                API_URL,
+                apiRoomId,
+                record.match,
+                playersPayload,
+                { start: record.timestamps.start },
+                writeToken,
+            );
+            matchId = created.matchId;
+            acceptedMemberIds = created.acceptedMemberIds || [];
+            RoomStorage.setMatchId(roomId!, matchId);
+            RoomStorage.setAcceptedMemberIds(roomId!, acceptedMemberIds);
+            RoomStorage.setUploadedEventsCount(roomId!, 0);
+        }
+        const prevCount = RoomStorage.getUploadedEventsCount(roomId!);
+        const eventsToUpload = record.events.slice(prevCount);
+        if (eventsToUpload.length > 0 && matchId) {
+            const filteredEvents = eventsToUpload.filter(e => acceptedMemberIds.includes(String(e.playerMemberId || '')));
+            if (filteredEvents.length > 0) {
+                await appendEvents(
+                    API_URL,
+                    matchId,
+                    filteredEvents.map(e => ({
+                        type: e.type,
+                        playerIndex: e.playerIndex,
+                        playerMemberId: e.playerMemberId,
+                        ballName: e.ballName,
+                        points: e.points,
+                        timestamp: e.timestamp,
+                        shotTimeMs: e.shotTimeMs,
+                    })),
+                    writeToken,
+                );
+            }
+            RoomStorage.setUploadedEventsCount(roomId!, prevCount + eventsToUpload.length);
+        }
+        if (finalize && matchId) {
+            const winnerMemberId = (record.winnerIndex !== null)
+                ? (acceptedMemberIds.includes(String(record.players[record.winnerIndex].memberId || '')) ? (record.players[record.winnerIndex].memberId || null) : null)
+                : null;
+            await finalizeMatch(
+                API_URL,
+                matchId,
+                {
+                    foulTotals: record.foulTotals,
+                    stats: record.stats,
+                    timestamps: { end: record.timestamps.end },
+                    winnerMemberId,
+                    playersFinal: record.players,
+                    match: record.match,
+                },
+                writeToken,
+            );
+            try {
+                RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
+            } catch {}
+        }
+    };
+
+    const handleNewFrame = async () => {
+        if (!gameState) return;
+        const newState = gameState.clone();
         if (roomId) {
             RoomStorage.appendEvent(roomId!, {
                 type: 'newFrame',
                 playerIndex: newState.currentPlayerIndex,
                 playerMemberId: newState.players[newState.currentPlayerIndex].memberId,
             });
+            if (!SIMPLE_MODE) {
+                try {
+                    await uploadSegment(false);
+                } catch {}
+            }
         }
         newState.newFrame();
         updateAndBroadcastState(newState);
@@ -619,100 +713,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                     const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
                                     if (!roomId) {
                                         alert('缺少房間 ID，無法上傳');
-                                        // 不上傳但仍導向 Live
                                         setEndModalDismissed(true);
                                         navigate(target);
                                         return;
                                     }
-                                    const p1Id = (gameState.players[0].memberId || '').trim();
-                                    const p2Id = (gameState.players[1].memberId || '').trim();
-                                    const hasP1 = !!p1Id;
-                                    const hasP2 = !!p2Id;
-                                    if (!hasP1 && !hasP2) {
-                                        alert('已跳過上傳：雙方皆無 MEMBER ID');
-                                        setEndModalDismissed(true);
-                                        navigate(target);
-                                        return;
-                                    }
-
                                     try {
-                                        const record = StatsEngine.buildMatchRecord(roomId!, gameState);
-                                        const uploadRoomId = slugId || roomId!;
-
-                                        const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
-                                        const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
-                                        const validIds = idsToCheck.filter(id => check.exists[id]);
-                                        if (validIds.length === 0) {
-                                            alert('已跳過上傳：無有效的 MEMBER ID');
-                                            setEndModalDismissed(true);
-                                            navigate(target);
-                                            return;
-                                        }
-
-                                        const playersPayload = record.players.map((p, i) => {
-                                            const originalId = i === 0 ? p1Id : p2Id;
-                                            const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
-                                            return {
-                                                name: normalizedId ? p.name : '',
-                                                memberId: normalizedId,
-                                            };
-                                        });
-
-                                        const writeToken = getWriteToken();
-                                        const { matchId, acceptedMemberIds } = await createMatchPartial(
-                                            API_URL,
-                                            uploadRoomId,
-                                            record.match,
-                                            playersPayload,
-                                            { start: record.timestamps.start },
-                                            writeToken,
-                                        );
-
-                                        // 追加事件
-                                        const filteredEvents = record.events.filter(e => acceptedMemberIds.includes(String(e.playerMemberId || '')));
-                                        await appendEvents(
-                                            API_URL,
-                                            matchId,
-                                            filteredEvents.map(e => ({
-                                                type: e.type,
-                                                playerIndex: e.playerIndex,
-                                                playerMemberId: e.playerMemberId,
-                                                ballName: e.ballName,
-                                                points: e.points,
-                                                timestamp: e.timestamp,
-                                                shotTimeMs: e.shotTimeMs,
-                                            })),
-                                            writeToken,
-                                        );
-
-                                        // 最終定案（包含統計、犯規總和、結束時間與勝方）
-                                        const winnerMemberId = (record.winnerIndex !== null)
-                                            ? (acceptedMemberIds.includes(String(record.players[record.winnerIndex].memberId || '')) ? (record.players[record.winnerIndex].memberId || null) : null)
-                                            : null;
-                                        await finalizeMatch(
-                                            API_URL,
-                                            matchId,
-                                            {
-                                                foulTotals: record.foulTotals,
-                                                stats: record.stats,
-                                                timestamps: { end: record.timestamps.end },
-                                                winnerMemberId,
-                                                playersFinal: record.players,
-                                                match: record.match,
-                                            },
-                                            writeToken,
-                                        );
-
-                                        try {
-                                            RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
-                                        } catch {}
+                                        await uploadSegment(true);
                                         alert('比賽資料已上傳完成');
                                         setEndModalDismissed(true);
                                         navigate(target);
                                     } catch (err: any) {
                                         console.error(err);
                                         alert(`上傳失敗：${String(err?.message || err)}`);
-                                        // 失敗仍導向 Live
                                         setEndModalDismissed(true);
                                         navigate(target);
                                     }

@@ -24,6 +24,9 @@ export interface RoomData {
   state?: any;
   locked?: boolean;
   lockedAt?: number | null;
+  matchId?: string | null;
+  uploadedEventsCount?: number;
+  acceptedMemberIds?: string[] | null;
 }
 
 const STORAGE_PREFIX = 'snooker_room_';
@@ -36,7 +39,15 @@ function read(roomId: string): RoomData {
   try {
     const raw = localStorage.getItem(getKey(roomId));
     if (!raw) {
-      return { events: [], foulTotals: [0, 0], locked: false, lockedAt: null };
+      return {
+        events: [],
+        foulTotals: [0, 0],
+        locked: false,
+        lockedAt: null,
+        matchId: null,
+        uploadedEventsCount: 0,
+        acceptedMemberIds: null,
+      };
     }
     const parsed = JSON.parse(raw);
     return {
@@ -47,9 +58,20 @@ function read(roomId: string): RoomData {
       state: parsed?.state,
       locked: Boolean(parsed?.locked),
       lockedAt: typeof parsed?.lockedAt === 'number' ? parsed.lockedAt : null,
+      matchId: typeof parsed?.matchId === 'string' ? parsed.matchId : null,
+      uploadedEventsCount: typeof parsed?.uploadedEventsCount === 'number' ? parsed.uploadedEventsCount : 0,
+      acceptedMemberIds: Array.isArray(parsed?.acceptedMemberIds) ? parsed.acceptedMemberIds : null,
     };
   } catch {
-    return { events: [], foulTotals: [0, 0], locked: false, lockedAt: null };
+    return {
+      events: [],
+      foulTotals: [0, 0],
+      locked: false,
+      lockedAt: null,
+      matchId: null,
+      uploadedEventsCount: 0,
+      acceptedMemberIds: null,
+    };
   }
 }
 
@@ -72,6 +94,39 @@ export const RoomStorage = {
 
   getFoulTotals(roomId: string): [number, number] {
     return read(roomId).foulTotals;
+  },
+
+  getMatchId(roomId: string): string | null {
+    const data = read(roomId);
+    return data.matchId ?? null;
+  },
+
+  setMatchId(roomId: string, matchId: string | null) {
+    const data = read(roomId);
+    data.matchId = matchId ?? null;
+    write(roomId, data);
+  },
+
+  getUploadedEventsCount(roomId: string): number {
+    const data = read(roomId);
+    return typeof data.uploadedEventsCount === 'number' ? data.uploadedEventsCount : 0;
+  },
+
+  setUploadedEventsCount(roomId: string, count: number) {
+    const data = read(roomId);
+    data.uploadedEventsCount = count >= 0 ? count : 0;
+    write(roomId, data);
+  },
+
+  getAcceptedMemberIds(roomId: string): string[] {
+    const data = read(roomId);
+    return Array.isArray(data.acceptedMemberIds) ? data.acceptedMemberIds : [];
+  },
+
+  setAcceptedMemberIds(roomId: string, ids: string[]) {
+    const data = read(roomId);
+    data.acceptedMemberIds = Array.isArray(ids) ? ids.slice() : [];
+    write(roomId, data);
   },
 
   // Serialized State helpers for no-backend mode
@@ -113,7 +168,16 @@ export const RoomStorage = {
   },
 
   clearRoom(roomId: string) {
-    write(roomId, { events: [], foulTotals: [0, 0], state: undefined, locked: false, lockedAt: null });
+    write(roomId, {
+      events: [],
+      foulTotals: [0, 0],
+      state: undefined,
+      locked: false,
+      lockedAt: null,
+      matchId: null,
+      uploadedEventsCount: 0,
+      acceptedMemberIds: null,
+    });
   },
 
   lockRoom(roomId: string, endedAt?: number | null) {
