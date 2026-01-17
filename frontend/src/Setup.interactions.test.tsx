@@ -1,10 +1,20 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
 describe('App component integration', () => {
   it('should transition from Setup to Scoreboard on match start', async () => {
+    const originalFetch = globalThis.fetch;
+    (globalThis as any).fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        exists: { P1: true, P2: true },
+        names: { P1: 'Player 1 Name', P2: 'Player 2 Name' },
+      }),
+    } as any);
+
     render(
         <MemoryRouter initialEntries={['/room/test-room/setup']}>
             <App />
@@ -34,5 +44,7 @@ describe('App component integration', () => {
     await screen.findByText('Test Match');
     expect(screen.queryByText('Create Match')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /switch player/i })).toBeInTheDocument();
+
+    globalThis.fetch = originalFetch;
   });
 });

@@ -649,10 +649,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                             return;
                                         }
 
-                                        const playersPayload = record.players.map((p, i) => ({
-                                            name: p.name,
-                                            memberId: i === 0 ? (validIds.includes(p1Id || '') ? p1Id! : null) : (validIds.includes(p2Id || '') ? p2Id! : null),
-                                        }));
+                                        const playersPayload = record.players.map((p, i) => {
+                                            const originalId = i === 0 ? p1Id : p2Id;
+                                            const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
+                                            return {
+                                                name: normalizedId ? p.name : '',
+                                                memberId: normalizedId,
+                                            };
+                                        });
 
                                         const writeToken = getWriteToken();
                                         const { matchId, acceptedMemberIds } = await createMatchPartial(

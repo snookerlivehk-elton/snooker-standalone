@@ -375,14 +375,24 @@ export async function deleteMember(
   return res.json(); // { ok: true }
 }
 
+export interface ValidateMembersResponse {
+  exists: Record<string, boolean>;
+  names?: Record<string, string | null>;
+}
+
 export async function validateMembers(
   apiUrl: string,
   ids: string[],
-) {
+): Promise<ValidateMembersResponse> {
   const qs = encodeURIComponent(ids.join(','));
   const res = await fetch(`${apiUrl}/api/members/validate?ids=${qs}`);
+  if (res.status === 404) {
+    const exists: Record<string, boolean> = {};
+    for (const id of ids) exists[id] = true;
+    return { exists, names: {} };
+  }
   if (!res.ok) throw new Error(`驗證會員 ID 失敗 (${res.status})`);
-  return res.json() as Promise<{ exists: Record<string, boolean> }>;
+  return res.json() as Promise<ValidateMembersResponse>;
 }
 
 export async function listAdminMatches(

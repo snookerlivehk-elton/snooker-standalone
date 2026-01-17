@@ -111,6 +111,10 @@ function computePerPlayerStatsFromEvents(
   let visitPotBallCount = 0; // reds may count >1 per event when using potMultipleReds
   let streak4PlusOnVisit = 0;
   let entryRedPotCount = 0;
+  // Visit Duration (Break Time in user terms)
+  let currentVisitDuration = 0;
+  const visitDurations: number[] = [];
+
   // 抗壓比率：需要動態比分
   let scoreA = 0;
   let scoreB = 0;
@@ -163,6 +167,10 @@ function computePerPlayerStatsFromEvents(
           if (visitHadColor) visitRedThenColor++;
           else visitSingleRedOnly++;
         }
+        if (currentVisitDuration > 0) {
+          visitDurations.push(currentVisitDuration);
+          currentVisitDuration = 0;
+        }
         inVisit = false; visitHadRed = false; visitHadColor = false;
         visitFirstEventProcessed = false; visitFirstWasRedPot = false; _visitFirstEntryCounted = false; _visitPotCount = 0; visitPotBallCount = 0;
       }
@@ -174,6 +182,7 @@ function computePerPlayerStatsFromEvents(
     const dt = typeof e.shotTimeMs === 'number' ? e.shotTimeMs : 0;
     if (dt > 0) {
       totalShotTime += dt;
+      currentVisitDuration += dt; // Accumulate visit duration
       if (dt <= 7000) quickShotCount++;
       const s = dt / 1000;
       if (s <= 5) shotTimeBuckets[0]++;
@@ -292,6 +301,10 @@ function computePerPlayerStatsFromEvents(
         if (visitHadColor) visitRedThenColor++;
         else visitSingleRedOnly++;
       }
+      if (currentVisitDuration > 0) {
+        visitDurations.push(currentVisitDuration);
+        currentVisitDuration = 0;
+      }
       inVisit = false; visitHadRed = false; visitHadColor = false;
       visitFirstEventProcessed = false; visitFirstWasRedPot = false; _visitFirstEntryCounted = false; _visitPotCount = 0; visitPotBallCount = 0;
       // 清除最後紅後的一次自由選彩機會
@@ -312,6 +325,10 @@ function computePerPlayerStatsFromEvents(
       if (inVisit && currentBreakTimeMs > 0) {
         breakTimesMs.push(currentBreakTimeMs);
         currentBreakTimeMs = 0;
+      }
+      if (currentVisitDuration > 0) {
+        visitDurations.push(currentVisitDuration);
+        currentVisitDuration = 0;
       }
       // 切換球手亦終止自由選彩機會
       if (redsRemaining === 0 && isClearingColours && clearingFreeChoicePending) {
@@ -378,12 +395,14 @@ function computePerPlayerStatsFromEvents(
   }
   let totalBreakTimeMs = 0;
   let maxBreakTimeMs = 0;
-  for (const t of breakTimesMs) {
+  // Use visitDurations for Break Time stats as per user definition (Switch-to-Switch)
+  for (const t of visitDurations) {
     totalBreakTimeMs += t;
     if (t > maxBreakTimeMs) maxBreakTimeMs = t;
   }
-  const breakCount = breakTimesMs.length;
-  const avgBreakTimeMs = breakCount ? (totalBreakTimeMs / breakCount) : 0;
+  const visitCount = visitDurations.length;
+  const avgBreakTimeMs = visitCount ? (totalBreakTimeMs / visitCount) : 0;
+  const breakCount = breakTimesMs.length; // Keep tracking scoring breaks for count
   const safeDenominatorFinal = potCount + missCount;
   const safeSuccessRate = safeDenominatorFinal ? (safeCount / safeDenominatorFinal) : (safeCount > 0 ? 1 : 0);
 

@@ -5,6 +5,7 @@ import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
+import { validateMembers, ValidateMembersResponse } from './lib/api';
 
 interface SetupProps {
     onStartMatch: (settings: any) => void;
@@ -60,6 +61,25 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                 navigate(`/room/${roomId}${qs}`);
                 return;
             }
+            const idsToCheck = [p1MemberId.trim(), p2MemberId.trim()].filter(Boolean) as string[];
+            let validation: ValidateMembersResponse | null = null;
+            if (idsToCheck.length > 0) {
+                validation = await validateMembers(API_URL, idsToCheck);
+            }
+            const existsMap = validation?.exists || {};
+            const namesMap = validation?.names || {};
+
+            const p1IdTrim = p1MemberId.trim();
+            const p2IdTrim = p2MemberId.trim();
+            const p1Valid = !!p1IdTrim && existsMap[p1IdTrim];
+            const p2Valid = !!p2IdTrim && existsMap[p2IdTrim];
+
+            const p1ResolvedName = p1Valid ? (namesMap[p1IdTrim] || p1Name || 'Player 1') : 'NON-MEMBER_1';
+            const p2ResolvedName = p2Valid ? (namesMap[p2IdTrim] || p2Name || 'Player 2') : 'NON-MEMBER_2';
+
+            setP1Name(p1ResolvedName);
+            setP2Name(p2ResolvedName);
+
             const { namePart, codePart } = parseMatchName(matchName);
             const matchKeyNormalized = normalizeKey(namePart);
             const slug = roomId || '';
@@ -77,8 +97,8 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                 handicaps: [p1Handicap || 0, p2Handicap || 0],
             };
             const playersInfo = [
-                { name: p1Name, memberId: p1MemberId },
-                { name: p2Name, memberId: p2MemberId },
+                { name: p1ResolvedName, memberId: p1Valid ? p1IdTrim : '' },
+                { name: p2ResolvedName, memberId: p2Valid ? p2IdTrim : '' },
             ];
             onStartMatch({
                 playersInfo,
@@ -97,6 +117,25 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             navigate(`/room/${roomId}${qs}`);
             return;
         }
+        const idsToCheck = [p1MemberId.trim(), p2MemberId.trim()].filter(Boolean) as string[];
+        let validation: ValidateMembersResponse | null = null;
+        if (idsToCheck.length > 0) {
+            validation = await validateMembers(API_URL, idsToCheck);
+        }
+        const existsMap = validation?.exists || {};
+        const namesMap = validation?.names || {};
+
+        const p1IdTrim = p1MemberId.trim();
+        const p2IdTrim = p2MemberId.trim();
+        const p1Valid = !!p1IdTrim && existsMap[p1IdTrim];
+        const p2Valid = !!p2IdTrim && existsMap[p2IdTrim];
+
+        const p1ResolvedName = p1Valid ? (namesMap[p1IdTrim] || p1Name || 'Player 1') : 'NON-MEMBER_1';
+        const p2ResolvedName = p2Valid ? (namesMap[p2IdTrim] || p2Name || 'Player 2') : 'NON-MEMBER_2';
+
+        setP1Name(p1ResolvedName);
+        setP2Name(p2ResolvedName);
+
         const { namePart, codePart } = parseMatchName(matchName);
         const matchKeyNormalized = normalizeKey(namePart);
         const slug = roomId || '';
@@ -106,8 +145,8 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
         const codePrefix = codeValue ? `[${codeValue}] ` : '';
         onStartMatch({
             playersInfo: [
-                { name: p1Name, memberId: p1MemberId },
-                { name: p2Name, memberId: p2MemberId },
+                { name: p1ResolvedName, memberId: p1Valid ? p1IdTrim : '' },
+                { name: p2ResolvedName, memberId: p2Valid ? p2IdTrim : '' },
             ],
             settings: {
                 matchName: `${codePrefix}${matchName}`,
@@ -157,7 +196,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             <h2 className="text-lg font-medium text-white">Player 1</h2>
                             <div className="input-group mt-2">
                                 <label htmlFor="p1Name" className="block text-sm font-medium text-white">Full Name:</label>
-                                <input type="text" id="p1Name" value={p1Name} onChange={(e) => setP1Name(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <input type="text" id="p1Name" value={p1Name} readOnly className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
                                 <label htmlFor="p1MemberId" className="block text-sm font-medium text-white">Member ID</label>
@@ -178,7 +217,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             <h2 className="text-lg font-medium text-white">Player 2</h2>
                             <div className="input-group mt-2">
                                 <label htmlFor="p2Name" className="block text-sm font-medium text-white">Full Name:</label>
-                                <input type="text" id="p2Name" value={p2Name} onChange={(e) => setP2Name(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <input type="text" id="p2Name" value={p2Name} readOnly className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
                                 <label htmlFor="p2MemberId" className="block text-sm font-medium text-white">Member ID</label>
