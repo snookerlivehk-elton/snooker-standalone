@@ -14,6 +14,10 @@ export interface PlayerStats {
   avgShotTimeMs: number;
   // 新增：同一球手連續事件的平均出杆時間（局內平均）
   avgRoundShotTimeMs: number;
+  // 新增：以每一次連杆（得分回合）為單位的平均用時
+  avgBreakTimeMs: number;
+  maxBreakTimeMs: number;
+  breakCount: number;
   quickShotCount: number; // shotTimeMs <= 7000
   quickShotRate: number; // quickShotCount / totalShots
   maxBreakPoints: number;
@@ -77,10 +81,11 @@ function computePerPlayerStatsFromEvents(
   let quickShotCount = 0;
   let maxBreakPoints = 0;
   let currentBreak = 0;
-  let currentBreakPotCount = 0;
+  let _currentBreakPotCount = 0;
   const breaks: number[] = [];
+  let currentBreakTimeMs = 0;
+  const breakTimesMs: number[] = [];
   let safeCount = 0;
-  let safeSuccess = 0;
   let foulCount = 0;
   let foulPointsGiven = 0;
   let missCount = 0;
@@ -101,8 +106,8 @@ function computePerPlayerStatsFromEvents(
   let visitHadColor = false;
   let visitFirstEventProcessed = false;
   let visitFirstWasRedPot = false;
-  let visitFirstEntryCounted = false;
-  let visitPotCount = 0;
+  let _visitFirstEntryCounted = false;
+  let _visitPotCount = 0;
   let visitPotBallCount = 0; // reds may count >1 per event when using potMultipleReds
   let streak4PlusOnVisit = 0;
   let entryRedPotCount = 0;
@@ -144,9 +149,13 @@ function computePerPlayerStatsFromEvents(
       }
       // Break resets when turn changes
       if (currentBreak > maxBreakPoints) maxBreakPoints = currentBreak;
-      if (currentBreak > 0) breaks.push(currentBreak);
+      if (currentBreak > 0) {
+        breaks.push(currentBreak);
+        breakTimesMs.push(currentBreakTimeMs);
+      }
       currentBreak = 0;
-      currentBreakPotCount = 0;
+      _currentBreakPotCount = 0;
+      currentBreakTimeMs = 0;
       // 訪問切換：若先前在本方訪問中，完成結算
       if (inVisit) {
         if (visitPotBallCount >= 4) streak4PlusOnVisit++;
@@ -155,24 +164,25 @@ function computePerPlayerStatsFromEvents(
           else visitSingleRedOnly++;
         }
         inVisit = false; visitHadRed = false; visitHadColor = false;
-        visitFirstEventProcessed = false; visitFirstWasRedPot = false; visitFirstEntryCounted = false; visitPotCount = 0; visitPotBallCount = 0;
+        visitFirstEventProcessed = false; visitFirstWasRedPot = false; _visitFirstEntryCounted = false; _visitPotCount = 0; visitPotBallCount = 0;
       }
       prevEventPlayerIndex = e.playerIndex;
       continue;
     }
     // Count as a shot for time-based metrics
     totalShots++;
-    if (typeof e.shotTimeMs === 'number') {
-      totalShotTime += e.shotTimeMs;
-      if (e.shotTimeMs <= 7000) quickShotCount++;
-      const s = e.shotTimeMs / 1000;
+    const dt = typeof e.shotTimeMs === 'number' ? e.shotTimeMs : 0;
+    if (dt > 0) {
+      totalShotTime += dt;
+      if (dt <= 7000) quickShotCount++;
+      const s = dt / 1000;
       if (s <= 5) shotTimeBuckets[0]++;
       else if (s <= 10) shotTimeBuckets[1]++;
       else if (s <= 20) shotTimeBuckets[2]++;
       else shotTimeBuckets[3]++;
       // 局內平均（同一球手連續事件）
       if (prevEventPlayerIndex === playerIndex) {
-        totalRoundShotTime += e.shotTimeMs;
+        totalRoundShotTime += dt;
         totalRoundShotSegments++;
       }
     }
@@ -182,8 +192,11 @@ function computePerPlayerStatsFromEvents(
       potCount++;
       totalPoints += e.points || 0;
       currentBreak += e.points || 0;
-      currentBreakPotCount++;
-      visitPotCount++;
+      _currentBreakPotCount++;
+      _visitPotCount++;
+      if (dt > 0) {
+        currentBreakTimeMs += dt;
+      }
       // Count balls potted in this event (multi-red support)
       const ballsPotted = e.ballName === 'red' ? Math.max(1, Math.floor(e.points || 1)) : 1;
       visitPotBallCount += ballsPotted;
@@ -224,19 +237,26 @@ function computePerPlayerStatsFromEvents(
         visitFirstEventProcessed = true;
         visitFirstWasRedPot = e.ballName === 'red';
         const isEntryPot = visitFirstWasRedPot || (wasFreeBallPot && !isClearingColours);
-        visitFirstEntryCounted = isEntryPot;
+        _visitFirstEntryCounted = isEntryPot;
         if (isEntryPot) entryRedPotCount++;
       }
     } else {
+      if (currentBreak > 0 && dt > 0) {
+        currentBreakTimeMs += dt;
+      }
       // Non-pot by same player ends break
       if (currentBreak > maxBreakPoints) maxBreakPoints = currentBreak;
-      if (currentBreak > 0) breaks.push(currentBreak);
+      if (currentBreak > 0) {
+        breaks.push(currentBreak);
+        breakTimesMs.push(currentBreakTimeMs);
+      }
       currentBreak = 0;
-      currentBreakPotCount = 0;
+      _currentBreakPotCount = 0;
+      currentBreakTimeMs = 0;
       if (!visitFirstEventProcessed) {
         visitFirstEventProcessed = true;
         visitFirstWasRedPot = false;
-        visitFirstEntryCounted = false;
+        _visitFirstEntryCounted = false;
       }
     }
 
@@ -273,7 +293,7 @@ function computePerPlayerStatsFromEvents(
         else visitSingleRedOnly++;
       }
       inVisit = false; visitHadRed = false; visitHadColor = false;
-      visitFirstEventProcessed = false; visitFirstWasRedPot = false; visitFirstEntryCounted = false; visitPotCount = 0; visitPotBallCount = 0;
+      visitFirstEventProcessed = false; visitFirstWasRedPot = false; _visitFirstEntryCounted = false; _visitPotCount = 0; visitPotBallCount = 0;
       // 清除最後紅後的一次自由選彩機會
       if (redsRemaining === 0 && isClearingColours && clearingFreeChoicePending) {
         clearingFreeChoicePending = false;
@@ -289,12 +309,16 @@ function computePerPlayerStatsFromEvents(
         if (visitHadColor) visitRedThenColor++;
         else visitSingleRedOnly++;
       }
+      if (inVisit && currentBreakTimeMs > 0) {
+        breakTimesMs.push(currentBreakTimeMs);
+        currentBreakTimeMs = 0;
+      }
       // 切換球手亦終止自由選彩機會
       if (redsRemaining === 0 && isClearingColours && clearingFreeChoicePending) {
         clearingFreeChoicePending = false;
       }
       inVisit = false; visitHadRed = false; visitHadColor = false;
-      visitFirstEventProcessed = false; visitFirstWasRedPot = false; visitFirstEntryCounted = false; visitPotCount = 0; visitPotBallCount = 0;
+      visitFirstEventProcessed = false; visitFirstWasRedPot = false; _visitFirstEntryCounted = false; _visitPotCount = 0; visitPotBallCount = 0;
       // 抗壓減分
       if (isPressure()) pressureMinus++;
     }
@@ -309,14 +333,17 @@ function computePerPlayerStatsFromEvents(
       visitHadColor = false;
       visitFirstEventProcessed = false;
       visitFirstWasRedPot = false;
-      visitFirstEntryCounted = false;
-      visitPotCount = 0;
+      _visitFirstEntryCounted = false;
+      _visitPotCount = 0;
       visitPotBallCount = 0;
     }
     prevEventPlayerIndex = playerIndex;
   }
   if (currentBreak > maxBreakPoints) maxBreakPoints = currentBreak;
-  if (currentBreak > 0) breaks.push(currentBreak);
+  if (currentBreak > 0) {
+    breaks.push(currentBreak);
+    breakTimesMs.push(currentBreakTimeMs);
+  }
   // 訪問掃描結尾結算
   if (inVisit && visitHadRed) {
     if (visitHadColor) visitRedThenColor++;
@@ -349,6 +376,14 @@ function computePerPlayerStatsFromEvents(
     else if (b >= 100 && b <= 146) break100_146++;
     else if (b === 147) break147++;
   }
+  let totalBreakTimeMs = 0;
+  let maxBreakTimeMs = 0;
+  for (const t of breakTimesMs) {
+    totalBreakTimeMs += t;
+    if (t > maxBreakTimeMs) maxBreakTimeMs = t;
+  }
+  const breakCount = breakTimesMs.length;
+  const avgBreakTimeMs = breakCount ? (totalBreakTimeMs / breakCount) : 0;
   const safeDenominatorFinal = potCount + missCount;
   const safeSuccessRate = safeDenominatorFinal ? (safeCount / safeDenominatorFinal) : (safeCount > 0 ? 1 : 0);
 
@@ -362,6 +397,9 @@ function computePerPlayerStatsFromEvents(
     potOverMissRate,
     avgShotTimeMs,
     avgRoundShotTimeMs,
+    avgBreakTimeMs,
+    maxBreakTimeMs,
+    breakCount,
     quickShotCount,
     quickShotRate,
     maxBreakPoints,
@@ -399,8 +437,10 @@ export const StatsEngine = {
   // Fallback-aware compute: prefer RoomStorage events; if empty and state provided, derive from state
   compute(roomId: string, gameState?: State | null): MatchStats {
     let events: RoomEvent[] = [];
-    if (gameState) {
-      // Prefer deriving from live gameState to avoid stale local storage across clients
+    const stored = RoomStorage.getEvents(roomId) || [];
+    if (stored.length > 0) {
+      events = stored;
+    } else if (gameState) {
       const shots = gameState.shotHistory || [];
       const derived: RoomEvent[] = [];
       let lastTs = shots.length ? (shots[0].timestamp || Date.now()) : Date.now();
@@ -430,17 +470,10 @@ export const StatsEngine = {
           derived.push(sw);
         }
       }
-      // Merge with stored events to recover legacy misses/safe/switch if any
-      const stored = RoomStorage.getEvents(roomId) || [];
-      const key = (x: RoomEvent) => `${x.type}|${x.playerIndex}|${x.timestamp ?? 0}`;
-      const seen = new Set(derived.map(key));
-      for (const ev of stored) {
-        if (!seen.has(key(ev))) derived.push(ev);
-      }
       derived.sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
       events = derived;
     } else {
-      events = RoomStorage.getEvents(roomId);
+      events = [];
     }
     const redBalls = gameState?.settings.redBalls;
     const p0 = computePerPlayerStatsFromEvents(events, 0, redBalls);
