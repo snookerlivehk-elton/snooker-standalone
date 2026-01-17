@@ -118,6 +118,36 @@ app.use((err, _req, res, next) => {
 });
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
+async function resolveMemberIdentifiers(identifiers) {
+    const trimmed = Array.from(new Set(identifiers
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => v.length > 0)));
+    if (!trimmed.length)
+        return new Map();
+    const members = await prisma.member.findMany({
+        where: {
+            OR: [
+                { id: { in: trimmed } },
+                { email: { in: trimmed } },
+                { member_code: { in: trimmed } },
+            ],
+        },
+        select: { id: true, email: true, member_code: true },
+    });
+    const map = new Map();
+    for (const m of members) {
+        if (m.id && trimmed.includes(m.id)) {
+            map.set(m.id, m.id);
+        }
+        if (m.email && trimmed.includes(m.email)) {
+            map.set(m.email, m.id);
+        }
+        if (m.member_code && trimmed.includes(m.member_code)) {
+            map.set(m.member_code, m.id);
+        }
+    }
+    return map;
+}
 // Health check for cloud deployments
 app.get('/health', (_req, res) => {
     res.json({
@@ -148,9 +178,10 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
         if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
             return res.status(400).json({ error: 'memberId required for both players' });
         }
-        const found = await prisma.member.findMany({ where: { id: { in: [p0, p1] } }, select: { id: true } });
-        const ids = new Set(found.map(f => f.id));
-        if (!ids.has(p0) || !ids.has(p1)) {
+        const idMap = await resolveMemberIdentifiers([p0, p1]);
+        const p0Resolved = idMap.get(p0) || null;
+        const p1Resolved = idMap.get(p1) || null;
+        if (!p0Resolved || !p1Resolved) {
             return res.status(404).json({ error: 'memberId not found' });
         }
         const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
@@ -170,8 +201,8 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
         });
         const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
         await prisma.$transaction([
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
+            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
         ]);
         res.status(201).json({ matchId: created.id });
     }
@@ -186,11 +217,8 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
             return res.status(400).json({ error: 'invalid payload' });
         }
         const candidateIds = [players[0]?.memberId, players[1]?.memberId].filter((x) => typeof x === 'string');
-        const found = candidateIds.length > 0
-            ? await prisma.member.findMany({ where: { id: { in: candidateIds } }, select: { id: true } })
-            : [];
-        const validSet = new Set(found.map(f => f.id));
-        const acceptedMemberIds = candidateIds.filter(id => validSet.has(id));
+        const idMap = await resolveMemberIdentifiers(candidateIds);
+        const acceptedMemberIds = candidateIds.filter(id => idMap.has(id));
         const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
         const created = await prisma.match.create({
             data: {
@@ -209,8 +237,11 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
         for (let i = 0; i < players.length; i++) {
             const p = players[i];
             let memberId = null;
-            if (p?.memberId && typeof p.memberId === 'string' && validSet.has(p.memberId)) {
-                memberId = p.memberId;
+            if (p?.memberId && typeof p.memberId === 'string') {
+                const resolved = idMap.get(p.memberId);
+                if (resolved) {
+                    memberId = resolved;
+                }
             }
             else if (!p?.memberId && p?.name) {
                 // const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
@@ -861,9 +892,14 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
             return res.status(400).json({ error: 'invalid payload' });
         }
         const endedAt = timestamps?.end ? new Date(Number(timestamps.end)) : new Date();
+        let winnerMemberIdInternal = null;
+        if (winnerMemberId) {
+            const winnerMap = await resolveMemberIdentifiers([String(winnerMemberId)]);
+            winnerMemberIdInternal = winnerMap.get(String(winnerMemberId)) || null;
+        }
         const matchUpdateData = {
             ended_at: endedAt,
-            winner_member_id: winnerMemberId ? String(winnerMemberId) : null,
+            winner_member_id: winnerMemberIdInternal,
         };
         if (Array.isArray(matchMeta?.handicaps)) {
             matchUpdateData.handicap0 = Number(matchMeta.handicaps[0] || 0);
@@ -885,85 +921,87 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
                 data: matchUpdateData,
             }),
         ];
-        // Upsert per-player frames/points and shot-time derived stats, ensure non-member opponent存在
         if (Array.isArray(playersFinal)) {
             const perPlayerArray = Array.isArray(stats?.perPlayer) ? stats.perPlayer : [];
-            for (const pf of playersFinal) {
-                let mid = pf.memberId ? String(pf.memberId) : null;
-                if (!mid && pf.name) {
-                    // const guest = await prisma.member.create({ data: { name: String(pf.name), is_guest: true } });
-                    const guest = await prisma.member.create({ data: { name: String(pf.name) } });
-                    mid = guest.id;
-                }
-                if (mid) {
-                    const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-                    const perPlayerStats = perPlayerArray[pf.index ?? 0] || null;
-                    const avgShotTimeMs = perPlayerStats && typeof perPlayerStats.avgShotTimeMs === 'number'
-                        ? Math.round(perPlayerStats.avgShotTimeMs)
-                        : 0;
-                    const avgBreakTimeMs = perPlayerStats && typeof perPlayerStats.avgBreakTimeMs === 'number'
-                        ? Math.round(perPlayerStats.avgBreakTimeMs)
-                        : 0;
-                    const maxBreakTimeMs = perPlayerStats && typeof perPlayerStats.maxBreakTimeMs === 'number'
-                        ? Math.round(perPlayerStats.maxBreakTimeMs)
-                        : 0;
-                    const breakCount = perPlayerStats && typeof perPlayerStats.breakCount === 'number'
-                        ? perPlayerStats.breakCount
-                        : 0;
-                    ops.push(prisma.matchPlayer.upsert({
-                        where: { match_id_member_id: { match_id: matchId, member_id: mid } },
-                        update: {
-                            frames_won: Number(pf.framesWon || 0),
-                            total_points: Number(pf.score || 0),
-                            avg_shot_time_ms: avgShotTimeMs,
-                            avg_break_time_ms: avgBreakTimeMs,
-                            max_break_time_ms: maxBreakTimeMs,
-                            break_count: breakCount,
-                            max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
-                                ? perPlayerStats.maxBreakPoints
-                                : undefined,
-                            foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
-                                ? perPlayerStats.foulCount
-                                : undefined,
-                            quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
-                                ? perPlayerStats.quickShotRate
-                                : undefined,
-                            safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
-                                ? perPlayerStats.safeSuccessRate
-                                : undefined,
-                            pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
-                            shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
-                                ? perPlayerStats.shotTimeBuckets
-                                : [0, 0, 0, 0],
-                        },
-                        create: {
-                            match_id: matchId,
-                            member_id: mid,
-                            frames_won: Number(pf.framesWon || 0),
-                            total_points: Number(pf.score || 0),
-                            pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
-                            shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
-                                ? perPlayerStats.shotTimeBuckets
-                                : [0, 0, 0, 0],
-                            avg_shot_time_ms: avgShotTimeMs,
-                            avg_break_time_ms: avgBreakTimeMs,
-                            max_break_time_ms: maxBreakTimeMs,
-                            break_count: breakCount,
-                            max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
-                                ? perPlayerStats.maxBreakPoints
-                                : 0,
-                            foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
-                                ? perPlayerStats.foulCount
-                                : 0,
-                            quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
-                                ? perPlayerStats.quickShotRate
-                                : 0,
-                            safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
-                                ? perPlayerStats.safeSuccessRate
-                                : 0,
-                        },
-                    }));
-                }
+            const candidateIds = playersFinal
+                .map((pf) => (pf && pf.memberId ? String(pf.memberId) : null))
+                .filter((id) => typeof id === 'string');
+            const idMap = await resolveMemberIdentifiers(candidateIds);
+            for (let i = 0; i < playersFinal.length; i++) {
+                const pf = playersFinal[i];
+                if (!pf)
+                    continue;
+                const identifier = pf.memberId ? String(pf.memberId) : null;
+                const mid = identifier ? (idMap.get(identifier) || null) : null;
+                if (!mid)
+                    continue;
+                const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+                const perPlayerStats = perPlayerArray[pf.index ?? i] || null;
+                const avgShotTimeMs = perPlayerStats && typeof perPlayerStats.avgShotTimeMs === 'number'
+                    ? Math.round(perPlayerStats.avgShotTimeMs)
+                    : 0;
+                const avgBreakTimeMs = perPlayerStats && typeof perPlayerStats.avgBreakTimeMs === 'number'
+                    ? Math.round(perPlayerStats.avgBreakTimeMs)
+                    : 0;
+                const maxBreakTimeMs = perPlayerStats && typeof perPlayerStats.maxBreakTimeMs === 'number'
+                    ? Math.round(perPlayerStats.maxBreakTimeMs)
+                    : 0;
+                const breakCount = perPlayerStats && typeof perPlayerStats.breakCount === 'number'
+                    ? perPlayerStats.breakCount
+                    : 0;
+                ops.push(prisma.matchPlayer.upsert({
+                    where: { match_id_member_id: { match_id: matchId, member_id: mid } },
+                    update: {
+                        frames_won: Number(pf.framesWon || 0),
+                        total_points: Number(pf.score || 0),
+                        avg_shot_time_ms: avgShotTimeMs,
+                        avg_break_time_ms: avgBreakTimeMs,
+                        max_break_time_ms: maxBreakTimeMs,
+                        break_count: breakCount,
+                        max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
+                            ? perPlayerStats.maxBreakPoints
+                            : undefined,
+                        foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
+                            ? perPlayerStats.foulCount
+                            : undefined,
+                        quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
+                            ? perPlayerStats.quickShotRate
+                            : undefined,
+                        safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
+                            ? perPlayerStats.safeSuccessRate
+                            : undefined,
+                        pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
+                        shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
+                            ? perPlayerStats.shotTimeBuckets
+                            : [0, 0, 0, 0],
+                    },
+                    create: {
+                        match_id: matchId,
+                        member_id: mid,
+                        frames_won: Number(pf.framesWon || 0),
+                        total_points: Number(pf.score || 0),
+                        pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
+                        shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
+                            ? perPlayerStats.shotTimeBuckets
+                            : [0, 0, 0, 0],
+                        avg_shot_time_ms: avgShotTimeMs,
+                        avg_break_time_ms: avgBreakTimeMs,
+                        max_break_time_ms: maxBreakTimeMs,
+                        break_count: breakCount,
+                        max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
+                            ? perPlayerStats.maxBreakPoints
+                            : 0,
+                        foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
+                            ? perPlayerStats.foulCount
+                            : 0,
+                        quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
+                            ? perPlayerStats.quickShotRate
+                            : 0,
+                        safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
+                            ? perPlayerStats.safeSuccessRate
+                            : 0,
+                    },
+                }));
             }
         }
         await prisma.$transaction(ops);
@@ -1515,6 +1553,48 @@ async function findMemberByIdOrEmail(identifier) {
         },
     });
 }
+app.get('/api/members/validate', async (req, res) => {
+    try {
+        const idsParam = req.query.ids || '';
+        const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+        if (ids.length === 0) {
+            return res.status(400).json({ error: 'ids is required (comma-separated)' });
+        }
+        const exists = {};
+        const names = {};
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        for (const rawId of ids) {
+            const id = rawId.trim();
+            if (!id)
+                continue;
+            let member = null;
+            if (id.includes('@')) {
+                member = await prisma.member.findFirst({
+                    where: { email: id },
+                    select: { name: true },
+                });
+            }
+            else if (uuidPattern.test(id)) {
+                member = await prisma.member.findUnique({
+                    where: { id },
+                    select: { name: true },
+                });
+            }
+            else {
+                member = await prisma.member.findFirst({
+                    where: { member_code: id },
+                    select: { name: true },
+                });
+            }
+            exists[id] = !!member;
+            names[id] = member ? member.name : null;
+        }
+        res.json({ exists, names });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
 app.get('/api/members/:id', async (req, res) => {
     try {
         const idOrEmail = String(req.params.id || '').trim();
@@ -1719,28 +1799,6 @@ app.delete('/api/admin/member/districts/:regionCode/:code3', adminAuth, async (r
             where: { region_code_code3: { region_code: regionParam, code3: codeParam } },
         });
         res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Validate a list of member IDs (existence check)
-app.get('/api/members/validate', async (req, res) => {
-    try {
-        const idsParam = req.query.ids || '';
-        const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
-        if (ids.length === 0) {
-            return res.status(400).json({ error: 'ids is required (comma-separated)' });
-        }
-        const found = await prisma.member.findMany({
-            where: { id: { in: ids } },
-            select: { id: true },
-        });
-        const set = new Set(found.map(f => f.id));
-        const exists = {};
-        for (const id of ids)
-            exists[id] = set.has(id);
-        res.json({ exists });
     }
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });

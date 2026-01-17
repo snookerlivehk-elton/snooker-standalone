@@ -64,6 +64,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     setP2Name('Player 2');
                 }
             } catch {
+                void 0;
             }
         }, 400);
         return () => {
@@ -83,7 +84,9 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     const data = await res.json();
                     remoteState = data?.state ?? null;
                 }
-            } catch {}
+            } catch {
+                void 0;
+            }
             if (existing.locked) {
                 alert('此房間上一場比賽已結束並鎖定，無法再次從此房間開始新賽事。請在 Admin 介面建立新房間，或先清除本地暫存後改用新房間。');
                 return;
@@ -151,7 +154,9 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     startingPlayerIndex,
                 });
                 RoomStorage.setState(storageRoomId, initialState.toJSON());
-            } catch {}
+            } catch {
+                void 0;
+            }
             const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
             navigate(`/room/${roomId}${qs}`);
             return;

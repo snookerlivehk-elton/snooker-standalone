@@ -45,7 +45,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     startingPlayerIndex: 0,
                 });
                 setGameState(initial);
-            } catch {}
+            } catch {
+                void 0;
+            }
         }
     }, [SIMPLE_MODE, gameState, setGameState]);
 
@@ -79,7 +81,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     useEffect(() => {
         if (!roomId || !ENABLE_SUPABASE) {
             if (supabaseChannelRef.current) {
-                try { supabaseChannelRef.current.unsubscribe(); } catch {}
+                try { supabaseChannelRef.current.unsubscribe(); } catch {
+                    void 0;
+                }
             }
             supabaseChannelRef.current = null;
             return;
@@ -91,17 +95,23 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             if (status === 'SUBSCRIBED') {
                 // 初次訂閱時，若有現有狀態，廣播一次供其他視圖初始化
                 if (gameState) {
-                    try { ch.send({ type: 'broadcast', event: 'state', payload: gameState.toJSON() }); } catch {}
+                    try { ch.send({ type: 'broadcast', event: 'state', payload: gameState.toJSON() }); } catch {
+                        void 0;
+                    }
                 }
             }
         }).on('broadcast', { event: 'state' }, (payload: any) => {
             try {
                 const deserialized = State.fromJSON(payload?.payload ?? payload);
                 setGameState(deserialized);
-            } catch {}
+            } catch {
+                void 0;
+            }
         });
         return () => {
-            try { ch.unsubscribe(); } catch {}
+            try { ch.unsubscribe(); } catch {
+                void 0;
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId, ENABLE_SUPABASE]);
@@ -129,7 +139,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     const restored = State.fromJSON(raw);
                     setGameState(restored);
                 }
-            } catch {}
+            } catch {
+                void 0;
+            }
         }
     }, [roomId, gameState, setGameState]);
 
@@ -151,7 +163,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 if (roomId) {
                     try {
                         RoomStorage.setState(roomId!, next.toJSON());
-                    } catch {}
+                    } catch {
+                        void 0;
+                    }
                 }
                 return next;
             });
@@ -166,14 +180,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             socket.emit('update gameState', { roomId: socketRoom, newState });
         }
         if (ENABLE_SUPABASE && supabaseChannelRef.current) {
-            try { supabaseChannelRef.current.send({ type: 'broadcast', event: 'state', payload: newState.toJSON() }); } catch {}
+            try { supabaseChannelRef.current.send({ type: 'broadcast', event: 'state', payload: newState.toJSON() }); } catch {
+                void 0;
+            }
         }
         setGameState(newState);
         if (roomId) {
             // 持久化序列化狀態以供 Overlay/LiveView 在無後端模式下讀取
             try {
                 RoomStorage.setState(roomId!, newState.toJSON());
-            } catch {}
+            } catch {
+                void 0;
+            }
         }
     };
 
@@ -401,23 +419,27 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             );
             try {
                 RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
-            } catch {}
+            } catch {
+                void 0;
+            }
         }
     };
 
     const handleNewFrame = async () => {
         if (!gameState) return;
         const newState = gameState.clone();
-        if (roomId) {
-            RoomStorage.appendEvent(roomId!, {
-                type: 'newFrame',
-                playerIndex: newState.currentPlayerIndex,
-                playerMemberId: newState.players[newState.currentPlayerIndex].memberId,
-            });
+            if (roomId) {
+                RoomStorage.appendEvent(roomId!, {
+                    type: 'newFrame',
+                    playerIndex: newState.currentPlayerIndex,
+                    playerMemberId: newState.players[newState.currentPlayerIndex].memberId,
+                });
             if (!SIMPLE_MODE) {
                 try {
                     await uploadSegment(false);
-                } catch {}
+                } catch {
+                    void 0;
+                }
             }
         }
         newState.newFrame();
@@ -517,11 +539,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         );
     }
 
-    const remainingPoints = gameState.getRemainingPoints();
-    const lead = Math.abs(gameState.players[0].score - gameState.players[1].score);
-    const leader = gameState.players[0].score > gameState.players[1].score ? gameState.players[0] : gameState.players[1];
-    const lastShot = gameState.shotHistory[gameState.shotHistory.length - 1];
-
     const ballColors: { [key: number]: string } = {
         1: 'bg-red-600',
         2: 'bg-yellow-400',
@@ -535,7 +552,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     // Compact mobile layout toggle via ?style=compact/mobile
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search || '') : null;
     const styleParam = params?.get('style') || undefined;
-    const isCompactMobile = false;
+    const isCompactMobile = styleParam === 'compact' || styleParam === 'mobile';
     
     if (isCompactMobile) {
         return (

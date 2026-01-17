@@ -664,7 +664,7 @@ export class State {
     }
 
     public toJSON() {
-        const { history, ...rest } = this;
+        const { history: _history, ...rest } = this;
         return rest;
     }
 

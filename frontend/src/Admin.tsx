@@ -11,6 +11,15 @@ interface Room {
 }
 
 const Admin: React.FC = () => {
+  const rawBase = (import.meta.env.BASE_URL || '/');
+  let base = rawBase.replace(/\/+$/, '');
+  if (typeof window !== 'undefined') {
+    const p = window.location.pathname;
+    const m = p.match(/^(.*)\/admin(?:\/.*)?$/);
+    if (m && m[1] !== '') {
+      base = m[1];
+    }
+  }
   const [rooms, setRooms] = useState<Room[]>([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +95,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/members${tok ? `?token=${encodeURIComponent(tok)}&v=members` : '?v=members'}`;
+              const url = `${window.location.origin}${base}/admin/members${tok ? `?token=${encodeURIComponent(tok)}&v=members` : '?v=members'}`;
               window.location.href = url;
             }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -96,7 +105,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/matches${tok ? `?token=${encodeURIComponent(tok)}&v=matches` : '?v=matches'}`;
+              const url = `${window.location.origin}${base}/admin/matches${tok ? `?token=${encodeURIComponent(tok)}&v=matches` : '?v=matches'}`;
               window.location.href = url;
             }}
             className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -106,7 +115,7 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin/regions${tok ? `?token=${encodeURIComponent(tok)}&v=regions` : '?v=regions'}`;
+              const url = `${window.location.origin}${base}/admin/regions${tok ? `?token=${encodeURIComponent(tok)}&v=regions` : '?v=regions'}`;
               window.location.href = url;
             }}
             className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded transition-colors"
@@ -121,7 +130,7 @@ const Admin: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => {
-                const url = `${window.location.origin}/room/default?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                const url = `${window.location.origin}${base}/room/default?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
                 navigator.clipboard.writeText(url).then(() => {
                   alert(`已複製簡化模式 Scoreboard 連結：\n${url}`);
                 });
@@ -132,7 +141,7 @@ const Admin: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                const url = `${window.location.origin}/room/default/overlay?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
+                const url = `${window.location.origin}${base}/room/default/overlay?simple=true&enableSocket=true&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}`;
                 navigator.clipboard.writeText(url).then(() => {
                   alert(`已複製簡化模式 Overlay 連結：\n${url}`);
                 });
@@ -160,7 +169,7 @@ const Admin: React.FC = () => {
                   <button
                     onClick={() => {
                       const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
-                      const url = `${window.location.origin}/room/${displayId}/setup${params}`;
+                      const url = `${window.location.origin}${base}/room/${displayId}/setup${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製房間 Setup 連結：\n${url}`);
                       });
@@ -182,7 +191,7 @@ const Admin: React.FC = () => {
                   <button
                     onClick={() => {
                       const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
-                      const url = `${window.location.origin}/room/${displayId}/live${params}`;
+                      const url = `${window.location.origin}${base}/room/${displayId}/live${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Live 連結：\n${url}`);
                       });
@@ -194,7 +203,7 @@ const Admin: React.FC = () => {
                   <button
                     onClick={() => {
                       const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
-                      const url = `${window.location.origin}/room/${displayId}/overlay${params}`;
+                      const url = `${window.location.origin}${base}/room/${displayId}/overlay${params}`;
                       navigator.clipboard.writeText(url).then(() => {
                         alert(`已複製 Overlay 連結：\n${url}`);
                       });
