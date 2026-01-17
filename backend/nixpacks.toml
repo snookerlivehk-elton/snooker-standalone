@@ -1,8 +1,0 @@
-[variables]
-NIXPACKS_NODE_VERSION = "20"
-
-[phases.build]
-cmds = ["npm install && npm run build"]
-
-[start]
-cmd = "npm run start:migrate"
