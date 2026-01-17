@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { APP_NAME, API_URL } from './config';
 import { useNavigate, useParams } from 'react-router-dom';
 import { parseMatchName, normalizeKey } from './lib/matchName';
@@ -32,6 +32,45 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
         const fromMap = getCodeForRoom(slug);
         return fromMap || slug;
     })();
+
+    useEffect(() => {
+        const p1IdTrim = p1MemberId.trim();
+        const p2IdTrim = p2MemberId.trim();
+        const idsToCheck = [p1IdTrim, p2IdTrim].filter(Boolean) as string[];
+        if (idsToCheck.length === 0) {
+            setP1Name('Player 1');
+            setP2Name('Player 2');
+            return;
+        }
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            try {
+                const validation = await validateMembers(API_URL, idsToCheck);
+                if (cancelled) return;
+                const existsMap = validation?.exists || {};
+                const namesMap = validation?.names || {};
+                if (p1IdTrim) {
+                    const p1Valid = !!existsMap[p1IdTrim];
+                    const displayName = p1Valid ? (namesMap[p1IdTrim] || 'Player 1') : 'NON-MEMBER_1';
+                    setP1Name(displayName);
+                } else {
+                    setP1Name('Player 1');
+                }
+                if (p2IdTrim) {
+                    const p2Valid = !!existsMap[p2IdTrim];
+                    const displayName = p2Valid ? (namesMap[p2IdTrim] || 'Player 2') : 'NON-MEMBER_2';
+                    setP2Name(displayName);
+                } else {
+                    setP2Name('Player 2');
+                }
+            } catch {
+            }
+        }, 400);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [p1MemberId, p2MemberId]);
 
     const handleStartMatch = async () => {
         if (roomId) {
@@ -196,7 +235,13 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             <h2 className="text-lg font-medium text-white">Player 1</h2>
                             <div className="input-group mt-2">
                                 <label htmlFor="p1Name" className="block text-sm font-medium text-white">Full Name:</label>
-                                <input type="text" id="p1Name" value={p1Name} readOnly className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <input
+                                    type="text"
+                                    id="p1Name"
+                                    value={p1Name}
+                                    readOnly
+                                    className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm text-gray-300 cursor-not-allowed"
+                                />
                             </div>
                             <div className="input-group mt-2">
                                 <label htmlFor="p1MemberId" className="block text-sm font-medium text-white">Member ID</label>
@@ -217,7 +262,13 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             <h2 className="text-lg font-medium text-white">Player 2</h2>
                             <div className="input-group mt-2">
                                 <label htmlFor="p2Name" className="block text-sm font-medium text-white">Full Name:</label>
-                                <input type="text" id="p2Name" value={p2Name} readOnly className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <input
+                                    type="text"
+                                    id="p2Name"
+                                    value={p2Name}
+                                    readOnly
+                                    className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm text-gray-300 cursor-not-allowed"
+                                />
                             </div>
                             <div className="input-group mt-2">
                                 <label htmlFor="p2MemberId" className="block text-sm font-medium text-white">Member ID</label>
