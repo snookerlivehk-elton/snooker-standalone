@@ -132,16 +132,28 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
         };
     }, [p1Email, p2Email]);
 
-    const handleSendCode = async (email: string) => {
+    const [loadingP1Code, setLoadingP1Code] = useState(false);
+    const [loadingP2Code, setLoadingP2Code] = useState(false);
+
+    const handleSendCode = async (email: string, playerIndex: 1 | 2) => {
         if (!email || !email.includes('@')) {
             alert('Please enter a valid email address');
             return;
         }
+        const setLoading = playerIndex === 1 ? setLoadingP1Code : setLoadingP2Code;
+        setLoading(true);
         try {
             await sendMatchVerificationCode(API_URL, email);
-            alert(`Verification code sent to ${email}`);
+            alert(`驗證碼已發送到 ${email} (請檢查垃圾郵件箱)`);
         } catch (e: any) {
-            alert(e.message || 'Failed to send code');
+            console.error('Send code error:', e);
+            if (e.message.includes('404') || e.message.includes('not registered')) {
+                alert('此 Email 尚未註冊會員，無法發送驗證碼。');
+            } else {
+                alert(`發送失敗: ${e.message}`);
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -379,7 +391,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <label className="block text-sm font-medium text-white">Email</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p2Email} onChange={(e) => setP2Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p2Email)} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded">Code</button>
+                                    <button onClick={() => handleSendCode(p2Email, 2)} disabled={loadingP2Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP2Code ? '...' : 'Code'}</button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">

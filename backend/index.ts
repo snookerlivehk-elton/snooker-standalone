@@ -455,6 +455,8 @@ app.post('/api/match-verification-code', async (req, res) => {
 app.post('/api/matches/start', async (req, res) => {
     const { p1_email, p1_code, p2_email, p2_code, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
     
+    console.log(`[StartMatch] P1: ${p1_email} (code: ${p1_code}), P2: ${p2_email} (code: ${p2_code}), Room: ${room_id}`);
+
     let p1_member_id: string | null = null;
     let p2_member_id: string | null = null;
     
