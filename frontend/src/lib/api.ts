@@ -338,9 +338,9 @@ export async function getMember(
   apiUrl: string,
   id: string,
 ) {
-  const res = await fetch(`${apiUrl}/api/members`);
-  if (!res.ok) throw new Error(`取得會員列表失敗 (${res.status})`);
-  return res.json(); // { members }
+  const res = await fetch(`${apiUrl}/api/members/${id}`);
+  if (!res.ok) throw new Error(`取得會員資料失敗 (${res.status})`);
+  return res.json(); // { ...member }
 }
 
 export async function getMemberMatches(
