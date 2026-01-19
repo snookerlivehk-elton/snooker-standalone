@@ -5,7 +5,7 @@ import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
-import { validateMembers, ValidateMembersResponse, sendMatchVerificationCode, startMatchV2 } from './lib/api';
+import { validateMembers, ValidateMembersResponse, sendMatchVerificationCode, startMatchV2 as startMatch } from './lib/api';
 
 interface SetupProps {
     onStartMatch: (settings: any) => void;

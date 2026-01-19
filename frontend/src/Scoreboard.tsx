@@ -53,7 +53,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     }, [roomId]);
 
     const hasTriedInitialUpload = useRef(false);
-    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'skipped' | 'error'>('idle');
     const hasAppendedFrameEvent = useRef(false);
 
     // Reset upload status when a new frame starts
@@ -376,14 +376,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         updateAndBroadcastState(newState);
     };
 
-    const uploadSegment = async (finalize: boolean) => {
-        if (!roomId || !gameState) return;
+    const uploadSegment = async (finalize: boolean): Promise<'uploaded' | 'skipped'> => {
+        if (!roomId || !gameState) return 'skipped';
         const p1Id = (gameState.players[0].memberId || '').trim();
         const p2Id = (gameState.players[1].memberId || '').trim();
         const hasP1 = !!p1Id;
         const hasP2 = !!p2Id;
         if (!hasP1 && !hasP2) {
-            return;
+            return 'skipped';
         }
         const record = StatsEngine.buildMatchRecord(roomId!, gameState);
         console.log('[uploadSegment] record:', record);
@@ -392,7 +392,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
         const validIds = idsToCheck.filter(id => (check as any).exists[id]);
         if (validIds.length === 0) {
-            return;
+            return 'skipped';
         }
         const playersPayload = record.players.map((p, i) => {
             const originalId = i === 0 ? p1Id : p2Id;
@@ -466,6 +466,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 void 0;
             }
         }
+        return 'uploaded';
     };
 
     const proceedToNewFrameState = () => {
@@ -490,14 +491,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         if (!gameState) return;
         setUploadStatus('uploading');
         try {
-            await uploadSegment(true);
-            setUploadStatus('success');
-            // Navigate to Live Stats after a short delay to show success message
+            const result = await uploadSegment(true);
+            if (result === 'skipped') {
+                setUploadStatus('skipped');
+            } else {
+                setUploadStatus('success');
+            }
+            // Navigate to Live Stats after a short delay to show success/skipped message
             setTimeout(() => {
                 const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
                 const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
                 navigate(target);
-            }, 1000);
+            }, 2500);
         } catch (e) {
             console.error(e);
             setUploadStatus('error');
@@ -521,8 +526,12 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
             setUploadStatus('uploading');
             try {
-                await uploadSegment(false);
-                setUploadStatus('success');
+                const result = await uploadSegment(false);
+                if (result === 'skipped') {
+                    setUploadStatus('skipped');
+                } else {
+                    setUploadStatus('success');
+                }
             } catch (e) {
                 console.error(e);
                 setUploadStatus('error');
@@ -984,6 +993,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                     <div className="text-xl font-bold text-green-400 mb-4">
                                         Data Uploaded Successfully!
                                     </div>
+                                    <div className="text-sm text-gray-400 mb-4">
+                                        Match stats saved to database.
+                                    </div>
                                     {!gameState.isMatchOver && (
                                         <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
                                             Start Next Frame
@@ -991,6 +1003,25 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                     )}
                                     {gameState.isMatchOver && (
                                          <div className="text-lg text-gray-300">Redirecting to stats...</div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {uploadStatus === 'skipped' && (
+                                <div>
+                                    <div className="text-xl font-bold text-gray-400 mb-4">
+                                        Data Not Uploaded
+                                    </div>
+                                    <div className="text-sm text-gray-500 mb-4">
+                                        Guest match or invalid members. No data saved to database.
+                                    </div>
+                                    {!gameState.isMatchOver && (
+                                        <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
+                                            Continue to Next Frame
+                                        </button>
+                                    )}
+                                    {gameState.isMatchOver && (
+                                         <div className="text-lg text-gray-300">Redirecting...</div>
                                     )}
                                 </div>
                             )}
