@@ -78,6 +78,7 @@ async function nextRoomCodeServer(): Promise<string> {
 }
 
 const app = express();
+console.log(`Starting Snooker Backend v1.0.1...`);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
