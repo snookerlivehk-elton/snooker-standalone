@@ -359,7 +359,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <label className="block text-sm font-medium text-white">Email</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p1Email} onChange={(e) => setP1Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p1Email)} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded">Code</button>
+                                    <button onClick={() => handleSendCode(p1Email, 1)} disabled={loadingP1Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP1Code ? '...' : 'Code'}</button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">
