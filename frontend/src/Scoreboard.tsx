@@ -34,7 +34,24 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const session = useMemo(() => {
         try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
     }, []);
-    const operatorId = session.id;
+    const localOperatorId = session.id;
+    const [fetchedOperatorId, setFetchedOperatorId] = useState<string | undefined>(undefined);
+    const operatorId = localOperatorId || fetchedOperatorId;
+
+    useEffect(() => {
+        if (roomId) {
+            fetch(`${API_URL}/rooms/${encodeURIComponent(roomId)}/state`)
+                .then(res => res.json())
+                .then(data => {
+                    // Check top-level operator object or state.operatorId
+                    if (data.operator?.id) {
+                        setFetchedOperatorId(data.operator.id);
+                    }
+                })
+                .catch(console.error);
+        }
+    }, [roomId]);
+
     const hasTriedInitialUpload = useRef(false);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const hasAppendedFrameEvent = useRef(false);
@@ -380,7 +397,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             const originalId = i === 0 ? p1Id : p2Id;
             const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
             return {
-                name: normalizedId ? p.name : '',
+                name: p.name,
                 memberId: normalizedId,
             };
         });

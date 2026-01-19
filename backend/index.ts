@@ -429,19 +429,20 @@ app.post('/api/match-verification-code', async (req, res) => {
         try {
             const resend = new Resend(process.env.RESEND_API_KEY);
             await resend.emails.send({
-                from: 'no-reply@snookerhk.live',
+                from: process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live',
                 to: email,
                 subject: '比賽驗證碼',
                 html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼。</p>`
             });
-        } catch (e) {
+            res.json({ message: 'Code sent' });
+        } catch (e: any) {
             console.error('Email failed:', e);
+            res.status(500).json({ error: 'Failed to send verification email. Please check server logs.' });
         }
     } else {
         console.log(`[DEV] Verification code for ${email}: ${code}`);
+        res.json({ message: 'Code sent (Dev mode)' });
     }
-    
-    res.json({ message: 'Code sent' });
 });
 
 app.post('/api/matches/start', async (req, res) => {
