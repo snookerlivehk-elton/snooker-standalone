@@ -210,6 +210,15 @@ export async function createOperatorRoom(apiUrl: string, operatorId: string) {
   return res.json(); // { roomCode }
 }
 
+export async function getOperatorActiveRooms(apiUrl: string, operatorId: string) {
+  const res = await fetch(`${apiUrl}/api/operators/${operatorId}/active-rooms`);
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || `取得活躍房間失敗 (${res.status})`);
+  }
+  return res.json(); // { rooms: [] }
+}
+
 export async function getOperatorMatches(apiUrl: string, operatorId: string) {
   const res = await fetch(`${apiUrl}/api/operators/${operatorId}/matches`);
   if (!res.ok) {

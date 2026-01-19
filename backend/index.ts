@@ -17,6 +17,7 @@ export interface Room {
   code?: string;
   scores: [number, number];
   gameState?: any;
+  operatorId?: string;
 }
 
 function incrementLetters(letters: string): string {
@@ -1812,22 +1813,48 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
       opId = m.id;
     }
 
-    // Check active matches (matches started by this operator that haven't ended)
-    // Note: If an operator creates a room code but doesn't start a match, we can't easily track it unless we persist rooms.
-    // Given the current architecture, we'll count matches where operator_id matches and ended_at is null.
-    const activeCount = await prisma.match.count({
-      where: {
-        operator_id: opId,
-        ended_at: null
-      }
-    });
+    // Check active in-memory rooms for this operator
+    // We count the rooms currently in the system associated with this operator
+    const activeCount = rooms.filter(r => r.operatorId === opId).length;
 
     if (activeCount >= 5) {
       return res.status(403).json({ error: '已達到房間數量上限 (5)' });
     }
 
     const code = await nextRoomCodeServer();
-    res.json({ roomCode: code });
+    // Create in-memory room immediately so it appears in the active list
+    const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    const newRoom: Room = { 
+      id: newId, 
+      name: `Room ${code}`, 
+      code, 
+      scores: [0, 0],
+      operatorId: opId 
+    };
+    rooms.push(newRoom);
+    io.emit('rooms', rooms);
+
+    res.json({ roomCode: code, roomId: newId });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/operators/:id/active-rooms', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'Missing operator ID' });
+    
+    // Resolve ID if email
+    let opId = id;
+    if (id.includes('@')) {
+      const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+      if (!m) return res.status(404).json({ error: 'Operator not found' });
+      opId = m.id;
+    }
+
+    const active = rooms.filter(r => r.operatorId === opId);
+    res.json({ rooms: active });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
