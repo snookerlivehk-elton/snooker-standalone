@@ -15,10 +15,10 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
 export interface Room {
   id: string;
   name: string;
-  code?: string;
+  code?: string | undefined;
   scores: [number, number];
   gameState?: any;
-  operatorId?: string;
+  operatorId?: string | undefined;
 }
 
 function incrementLetters(letters: string): string {
