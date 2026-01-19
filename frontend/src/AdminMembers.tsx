@@ -81,7 +81,7 @@ const AdminMembers: React.FC = () => {
         const tokenSaved = localStorage.getItem('adminToken') || '';
         const token = tokenFromUrl || tokenSaved;
         if (tokenFromUrl) localStorage.setItem('adminToken', tokenFromUrl);
-        if (!token) throw new Error('缺少管理員密鑰');
+        if (!token) throw new Error('缺少操作員密鑰');
         
         // Fetch members, regions, and districts in parallel
         const [membersData, regionsData, districtsData] = await Promise.all([

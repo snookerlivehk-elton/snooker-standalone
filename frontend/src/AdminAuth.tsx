@@ -66,7 +66,7 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setError('');
     try {
       const ok = await tryAuthenticate(token);
-      if (!ok) throw new Error('驗證失敗：請確認管理員密鑰或網路設定');
+      if (!ok) throw new Error('驗證失敗：請確認操作員密鑰或網路設定');
       localStorage.setItem('adminToken', token);
       setIsAuthenticated(true);
     } catch (err: any) {
@@ -94,7 +94,7 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             />
           </div>
           <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">
-            Enter
+            進入
           </button>
           {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
           <p className="text-gray-400 text-xs mt-4 text-center">提示：後端需設定環境變數 ADMIN_TOKEN；本地未設定時可直接通過。</p>
