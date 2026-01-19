@@ -109,7 +109,12 @@ export async function startMatchV2(
     const err = await res.json();
     throw new Error(err.error || `建立比賽失敗 (${res.status})`);
   }
-  return res.json() as Promise<{ mode: 'ranked' | 'guest'; matchId: string }>;
+  return res.json() as Promise<{ 
+    mode: 'ranked' | 'guest'; 
+    matchId: string;
+    p1MemberId: string | null;
+    p2MemberId: string | null;
+  }>;
 }
 
 export async function appendEvents(

@@ -186,19 +186,18 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             let p2MemberId: string | null = null;
 
             try {
-                const res = await startMatch(
-                    API_URL, 
-                    p1Email.trim(), 
-                    p1Code.trim(),
-                    p2Email.trim(), 
-                    p2Code.trim(),
-                    roomId,
-                    operatorInfo?.id || null, // Pass resolved operator ID
-                    framesRequired,
-                    redBalls,
-                    p1Handicap,
-                    p2Handicap
-                );
+                const res = await startMatch(API_URL, {
+                    room_id: roomId || '',
+                    p1_email: p1Email.trim(),
+                    p1_code: p1Code.trim(),
+                    p2_email: p2Email.trim(),
+                    p2_code: p2Code.trim(),
+                    frames_required: framesRequired,
+                    red_balls: redBalls,
+                    handicap0: p1Handicap,
+                    handicap1: p2Handicap,
+                    operator_id: operatorInfo?.id || undefined
+                });
                 matchIdResult = res.matchId;
                 mode = res.mode;
                 p1MemberId = res.p1MemberId;
