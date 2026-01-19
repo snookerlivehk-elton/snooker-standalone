@@ -87,6 +87,7 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
 const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
   ? '*'
@@ -428,7 +429,7 @@ app.post('/api/match-verification-code', async (req, res) => {
     if (process.env.RESEND_API_KEY) {
         try {
             const resend = new Resend(process.env.RESEND_API_KEY);
-            const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+            const fromEmail = RESEND_FROM_EMAIL;
             console.log(`[Email] Sending verification code to ${email} from ${fromEmail}`);
             await resend.emails.send({
                 from: fromEmail,
@@ -1492,7 +1493,7 @@ app.post('/api/members/request-password-reset-code', async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'no-reply@snookerhk.live',
+            from: RESEND_FROM_EMAIL,
             to: em,
             subject: '重設密碼驗證碼',
             html: `<p>你的重設密碼驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼以重設密碼。</p>`,
@@ -1851,7 +1852,7 @@ app.post('/api/members/request-register-code', async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'no-reply@snookerhk.live',
+            from: RESEND_FROM_EMAIL,
             to: em,
             subject: '會員註冊驗證碼',
             html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內於註冊頁面輸入此驗證碼以完成註冊。</p>`,
