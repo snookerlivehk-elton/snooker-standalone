@@ -485,6 +485,24 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         updateAndBroadcastState(newState);
     };
 
+    const handleMatchOverAction = async () => {
+        if (!gameState) return;
+        setUploadStatus('uploading');
+        try {
+            await uploadSegment(true);
+            setUploadStatus('success');
+            // Navigate to Live Stats after a short delay to show success message
+            setTimeout(() => {
+                const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+                const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
+                navigate(target);
+            }, 1000);
+        } catch (e) {
+            console.error(e);
+            setUploadStatus('error');
+        }
+    };
+
     const handleNextFrameAction = async () => {
         if (!gameState) return;
         
@@ -785,53 +803,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     </span>
                 </div>
             )}
-            {!SIMPLE_MODE && gameState.isMatchOver && !endModalDismissed && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                    <div className="bg-yellow-800 p-8 rounded-lg shadow-xl text-center">
-                        <h2 className="text-2xl font-bold mb-4">比賽結束</h2>
-                        <p className="mb-6">是否上傳本房間的所有比賽結果與記錄到資料庫？</p>
-                        <div className="flex justify-center space-x-4">
-                            <button 
-                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                                onClick={async () => {
-                                    const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
-                                    const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
-                                    if (!roomId) {
-                                        alert('缺少房間 ID，無法上傳');
-                                        setEndModalDismissed(true);
-                                        navigate(target);
-                                        return;
-                                    }
-                                    try {
-                                        await uploadSegment(true);
-                                        alert('比賽資料已上傳完成');
-                                        setEndModalDismissed(true);
-                                        navigate(target);
-                                    } catch (err: any) {
-                                        console.error(err);
-                                        alert(`上傳失敗：${String(err?.message || err)}`);
-                                        setEndModalDismissed(true);
-                                        navigate(target);
-                                    }
-                                }}
-                            >
-                                是
-                            </button>
-                            <button 
-                                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-                                onClick={() => {
-                                    const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
-                                    const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
-                                    setEndModalDismissed(true);
-                                    navigate(target);
-                                }}
-                            >
-                                否
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Match Over overlay removed: Functionality integrated into Frame Over modal */}
             <div className="w-full max-w-5xl mx-auto">
                 <div className="text-center mb-4">
                     <h1 className="text-3xl font-bold tracking-wider">{gameState.settings.matchName}</h1>
@@ -981,18 +953,28 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 {gameState.isFrameOver && (
                     <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50">
                         <div className="bg-gray-800 p-8 rounded-lg text-center max-w-lg w-full">
-                            <h2 className="text-4xl font-bold mb-4">Frame Over</h2>
-                            <p className="text-2xl mb-6">{gameState.players[0].score > gameState.players[1].score ? gameState.players[0].name : gameState.players[1].name} wins the frame!</p>
+                            <h2 className="text-4xl font-bold mb-4">
+                                {gameState.isMatchOver ? 'Match Over' : 'Frame Over'}
+                            </h2>
+                            <p className="text-2xl mb-6">
+                                {gameState.isMatchOver 
+                                    ? `${gameState.players[0].framesWon > gameState.players[1].framesWon ? gameState.players[0].name : gameState.players[1].name} wins the match!`
+                                    : `${gameState.players[0].score > gameState.players[1].score ? gameState.players[0].name : gameState.players[1].name} wins the frame!`
+                                }
+                            </p>
                             
                             {uploadStatus === 'idle' && (
-                                <button onClick={handleNextFrameAction} className="p-4 rounded-lg bg-green-600 hover:bg-green-700 font-bold text-xl border border-white w-full">
-                                    Next Frame
+                                <button 
+                                    onClick={gameState.isMatchOver ? handleMatchOverAction : handleNextFrameAction} 
+                                    className="p-4 rounded-lg bg-green-600 hover:bg-green-700 font-bold text-xl border border-white w-full"
+                                >
+                                    {gameState.isMatchOver ? 'End Match & View Stats' : 'Next Frame'}
                                 </button>
                             )}
                             
                             {uploadStatus === 'uploading' && (
                                 <div className="text-xl font-bold text-yellow-400 animate-pulse">
-                                    Uploading Frame Data...
+                                    {gameState.isMatchOver ? 'Finalizing Match Data...' : 'Uploading Frame Data...'}
                                 </div>
                             )}
                             
@@ -1001,9 +983,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                     <div className="text-xl font-bold text-green-400 mb-4">
                                         Data Uploaded Successfully!
                                     </div>
-                                    <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
-                                        Start Next Frame
-                                    </button>
+                                    {!gameState.isMatchOver && (
+                                        <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
+                                            Start Next Frame
+                                        </button>
+                                    )}
+                                    {gameState.isMatchOver && (
+                                         <div className="text-lg text-gray-300">Redirecting to stats...</div>
+                                    )}
                                 </div>
                             )}
                             
@@ -1013,12 +1000,29 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                         Upload Failed!
                                     </div>
                                     <div className="flex gap-4">
-                                        <button onClick={handleNextFrameAction} className="flex-1 p-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 font-bold text-lg border border-white">
+                                        <button 
+                                            onClick={gameState.isMatchOver ? handleMatchOverAction : handleNextFrameAction} 
+                                            className="flex-1 p-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 font-bold text-lg border border-white"
+                                        >
                                             Retry Upload
                                         </button>
-                                        <button onClick={proceedToNewFrameState} className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white">
-                                            Force Start (Skip)
-                                        </button>
+                                        {!gameState.isMatchOver && (
+                                            <button onClick={proceedToNewFrameState} className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white">
+                                                Force Start (Skip)
+                                            </button>
+                                        )}
+                                        {gameState.isMatchOver && (
+                                            <button 
+                                                onClick={() => {
+                                                    const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+                                                    const target = roomId ? `/room/${roomId}/live${qs}` : `/room/preview/live${qs}`;
+                                                    navigate(target);
+                                                }} 
+                                                className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white"
+                                            >
+                                                Skip & Exit
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             )}
