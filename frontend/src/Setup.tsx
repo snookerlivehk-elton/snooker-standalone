@@ -24,7 +24,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const [redBalls, setRedBalls] = useState(15);
     const [framesRequired, setFramesRequired] = useState(1);
     const [startingPlayerIndex, setStartingPlayerIndex] = useState(0);
-    const [operatorInfo, setOperatorInfo] = useState<{ name?: string; email?: string } | null>(null);
+    const [operatorInfo, setOperatorInfo] = useState<{ id?: string; name?: string; email?: string } | null>(null);
     const navigate = useNavigate();
     const { roomId } = useParams();
     
@@ -166,14 +166,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     red_balls: redBalls,
                     handicap0: p1Handicap,
                     handicap1: p2Handicap,
-                    operator_id: operatorInfo?.email // or ID if available, but operatorInfo might just be name/email. We don't strictly need operator ID here if backend handles it via room lookup, but backend expects operator_id.
-                    // Actually backend startMatch takes operator_id. We should probably pass it if we have it.
-                    // But wait, the backend Room object already has operator_id. 
-                    // However, startMatch creates a NEW match.
-                    // If we are in Setup, we might not know the operator ID unless we fetched it.
-                    // The backend `startMatch` endpoint uses `operator_id` from body.
-                    // Let's see if we can get operator ID. 
-                    // The endpoint `/rooms/:id/state` returns `operator` object. I should ensure it returns ID too.
+                    operator_id: operatorInfo?.id || operatorInfo?.email
                 });
                 matchIdResult = res.matchId;
                 mode = res.mode;

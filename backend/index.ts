@@ -319,7 +319,7 @@ app.get('/rooms/:roomId/state', async (req, res) => {
   let operator: any = null;
   if (room?.operatorId) {
       try {
-          const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { name: true, email: true } });
+          const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { id: true, name: true, email: true } });
           if (op) operator = op;
       } catch (e) {
           // ignore
@@ -459,6 +459,21 @@ app.post('/api/matches/start', async (req, res) => {
         return res.json({ mode: 'guest', message: 'Both players are guests' });
     }
     
+    // Resolve operator_id (support ID or Email) and ensure existence
+    let opResolved: string | null = null;
+    if (operator_id) {
+        const opMember = await prisma.member.findFirst({
+            where: {
+                OR: [
+                    { id: operator_id },
+                    { email: operator_id }
+                ]
+            },
+            select: { id: true }
+        });
+        opResolved = opMember ? opMember.id : null;
+    }
+
     try {
         const match = await prisma.match.create({
             data: {
@@ -469,7 +484,7 @@ app.post('/api/matches/start', async (req, res) => {
                 handicap0: Number(handicap0 || 0),
                 handicap1: Number(handicap1 || 0),
                 started_at: new Date(),
-                operator_id: operator_id || null
+                operator_id: opResolved || null
             }
         });
         
