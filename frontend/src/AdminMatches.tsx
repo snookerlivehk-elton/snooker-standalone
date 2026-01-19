@@ -53,7 +53,7 @@ const AdminMatches: React.FC = () => {
     setLoading(true);
     try {
       const token = resolveAdminToken();
-      if (!token) throw new Error('缺少操作員密鑰');
+      if (!token) throw new Error('缺少系統管理員密鑰');
       const data = await listAdminMatches(API_URL, token, {
         memberId: memberId ? memberId.trim() || undefined : undefined,
         page: pageToLoad,

@@ -90,7 +90,7 @@ const Admin: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center">
       <div className="w-full max-w-2xl">
-        <h1 className="text-4xl font-bold mb-6 text-center">操作員後台</h1>
+        <h1 className="text-4xl font-bold mb-6 text-center">系統管理員後台</h1>
         <div className="w-full flex justify-end mb-4 gap-2">
           <button
             onClick={() => {

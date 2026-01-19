@@ -39,7 +39,7 @@ const AdminRegions: React.FC = () => {
       setLoading(true);
       try {
         const token = resolveAdminToken();
-        if (!token) throw new Error('缺少管理員密鑰');
+        if (!token) throw new Error('缺少系統管理員密鑰');
         let regionData;
         let districtData;
         try {
@@ -81,7 +81,7 @@ const AdminRegions: React.FC = () => {
     const code = regionCode.trim().toUpperCase();
     const name = regionName.trim();
     if (!token) {
-      setError('缺少操作員密鑰');
+      setError('缺少系統管理員密鑰');
       return;
     }
     if (!code || !name) {

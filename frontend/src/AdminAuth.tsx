@@ -66,7 +66,7 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setError('');
     try {
       const ok = await tryAuthenticate(token);
-      if (!ok) throw new Error('驗證失敗：請確認操作員密鑰或網路設定');
+      if (!ok) throw new Error('驗證失敗：請確認系統管理員密鑰或網路設定');
       localStorage.setItem('adminToken', token);
       setIsAuthenticated(true);
     } catch (err: any) {
@@ -81,10 +81,10 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center justify-center">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold mb-6 text-center">Admin Login</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">系統管理員登入</h1>
         <form onSubmit={handleSubmit} className="bg-gray-800 rounded-lg shadow-lg p-8">
           <div className="mb-4">
-            <label htmlFor="token" className="block text-sm font-medium text-gray-300 mb-2">Admin Token</label>
+            <label htmlFor="token" className="block text-sm font-medium text-gray-300 mb-2">系統管理員密鑰</label>
             <input
               type="password"
               id="token"
