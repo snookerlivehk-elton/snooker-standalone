@@ -468,8 +468,21 @@ app.post('/api/matches/start', async (req, res) => {
             if (m) {
                 p1_member_id = m.id;
                 await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
+            } else {
+                return res.status(400).json({ error: `Email ${p1_email} is not registered.` });
             }
+        } else {
+            return res.status(400).json({ error: `Invalid or expired verification code for ${p1_email}.` });
         }
+    } else if (p1_email && !p1_code) {
+        // Email provided but no code - if we want to enforce verification for provided emails
+        // return res.status(400).json({ error: `Verification code required for ${p1_email}.` });
+        // Assuming current requirement allows implicit guest if no code provided? 
+        // User said: "只有在滿足上傳條件...才建立 Match"
+        // Let's enforce code if email is non-empty to prevent accidental guest mode when user intended to log in.
+        // Actually, user said: "可否輸入Email後發比賽驗證碼並在setup頁填寫, 防止他人盜用"
+        // This implies if email is entered, it MUST be verified.
+        return res.status(400).json({ error: `Verification code required for Player 1 (${p1_email}).` });
     }
     
     // Verify P2
@@ -482,8 +495,14 @@ app.post('/api/matches/start', async (req, res) => {
              if (m) {
                  p2_member_id = m.id;
                  await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
+             } else {
+                 return res.status(400).json({ error: `Email ${p2_email} is not registered.` });
              }
+        } else {
+             return res.status(400).json({ error: `Invalid or expired verification code for ${p2_email}.` });
         }
+    } else if (p2_email && !p2_code) {
+        return res.status(400).json({ error: `Verification code required for Player 2 (${p2_email}).` });
     }
     
     if (!p1_member_id && !p2_member_id) {
