@@ -25,8 +25,38 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const [framesRequired, setFramesRequired] = useState(1);
     const [startingPlayerIndex, setStartingPlayerIndex] = useState(0);
     const [operatorInfo, setOperatorInfo] = useState<{ id?: string; name?: string; email?: string } | null>(null);
+    const [showExistingMatchModal, setShowExistingMatchModal] = useState(false);
     const navigate = useNavigate();
     const { roomId } = useParams();
+
+    const handleResume = async () => {
+        if (roomId) {
+             const storageRoomId = findRoomIdByCode(roomId) || roomId;
+             try {
+                const res = await fetch(`${API_URL}/rooms/${encodeURIComponent(roomId)}/state`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.state) {
+                        RoomStorage.setState(storageRoomId, data.state);
+                    }
+                }
+             } catch {}
+        }
+        const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
+        navigate(`/room/${roomId}${qs}`);
+    };
+
+    const handleOverwriteAndStart = async () => {
+        if (!roomId) return;
+        const storageRoomId = findRoomIdByCode(roomId) || roomId;
+        RoomStorage.clearRoom(storageRoomId);
+        try {
+            await fetch(`${API_URL}/rooms/${encodeURIComponent(roomId)}/reset`, { method: 'POST' });
+        } catch (e) { console.error(e); }
+        
+        setShowExistingMatchModal(false);
+        setTimeout(() => handleStartMatch(), 200);
+    };
     
     const matchId = (() => {
         const slug = roomId || '';
@@ -142,12 +172,10 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                 !!existing.state ||
                 (Array.isArray(existing.foulTotals) &&
                     (existing.foulTotals[0] > 0 || existing.foulTotals[1] > 0));
-            const hasRemote = !!remoteState;
+            const hasRemote = !!remoteState && Object.keys(remoteState).length > 0;
 
             if (hasExisting || hasRemote) {
-                alert('此房間已有賽事記錄，將直接開啟現有賽事畫面。如需開新賽事，請在管理介面建立新房間或先清除本地暫存。');
-                const qs = typeof window !== 'undefined' ? (window.location.search || '') : '';
-                navigate(`/room/${roomId}${qs}`);
+                setShowExistingMatchModal(true);
                 return;
             }
 
@@ -424,6 +452,35 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     >
                         {getCodeForRoom(roomId) || roomId}
                     </span>
+                </div>
+            )}
+
+            {showExistingMatchModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
+                    <div className="bg-gray-800 p-8 rounded-lg shadow-xl text-center max-w-md w-full border border-gray-700">
+                        <h2 className="text-2xl font-bold mb-4 text-white">發現現有賽事</h2>
+                        <p className="mb-6 text-gray-300">此房間已有正在進行或未清除的賽事記錄。</p>
+                        <div className="flex flex-col space-y-3">
+                            <button 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition duration-200"
+                                onClick={handleResume}
+                            >
+                                繼續現有賽事 (Resume)
+                            </button>
+                            <button 
+                                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200"
+                                onClick={handleOverwriteAndStart}
+                            >
+                                開始新賽事並覆蓋 (Overwrite)
+                            </button>
+                            <button 
+                                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition duration-200 mt-2"
+                                onClick={() => setShowExistingMatchModal(false)}
+                            >
+                                取消
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

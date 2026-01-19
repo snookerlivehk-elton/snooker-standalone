@@ -328,6 +328,29 @@ app.get('/rooms/:roomId/state', async (req, res) => {
   res.json({ roomId, state: room?.gameState ?? null, operator });
 });
 
+app.post('/rooms/:roomId/reset', async (req, res) => {
+  const { roomId } = req.params;
+  const room = rooms.find(r => r.id === roomId || r.code === roomId);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  
+  // Reset memory
+  room.gameState = undefined;
+  room.scores = [0, 0];
+  
+  // Reset DB
+  try {
+      await prisma.room.update({
+          where: { id: room.id },
+          data: { gameState: {}, scores: [0, 0] }
+      });
+  } catch (e) {
+      console.error('Failed to reset room in DB:', e);
+  }
+  
+  io.emit('rooms', rooms);
+  res.json({ message: 'Room reset' });
+});
+
 app.post('/api/rooms', async (req, res) => {
   const { name, operatorId } = req.body;
   if (!name) {
