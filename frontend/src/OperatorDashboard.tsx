@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf } from './lib/api';
 
 const OperatorDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +14,13 @@ const OperatorDashboard: React.FC = () => {
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
+
+  const [phone, setPhone] = useState(session.phone || '');
+  const [birthDate, setBirthDate] = useState(session.birthDate || session.birth_date ? new Date(session.birthDate || session.birth_date).toISOString().split('T')[0] : '');
+  const [clubName, setClubName] = useState(session.clubName || session.club_name || '');
+  const [resetPwd, setResetPwd] = useState('');
+  const [resetPwd2, setResetPwd2] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
 
   const operatorId = session.id;
   const operatorName = session.name || session.email;
