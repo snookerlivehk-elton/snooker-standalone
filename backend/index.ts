@@ -1645,6 +1645,11 @@ app.get('/api/members/:id/matches', async (req, res) => {
         operatorClub: m.operator?.club_name || '-',
         // Return raw players and handicaps, frontend will try to display
         players: m.players.map(p => ({
+          id: p.member_id, // Add member_id for identification
+          member: {
+            id: p.member.id,
+            name: p.member.name
+          },
           name: p.member.name,
           framesWon: p.frames_won,
           maxBreak: p.max_break_points,

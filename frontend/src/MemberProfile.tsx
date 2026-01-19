@@ -318,9 +318,10 @@ const MemberProfile: React.FC = () => {
                 </thead>
                 <tbody>
                   {matches.map((m) => {
-                    const myPlayer = m.players.find((p: any) => p.member.id === member.id || p.member.name === member.name) || m.players[0];
+                    const myPlayer = m.players.find((p: any) => p.member?.id === member.id || p.member?.name === member.name) || m.players[0];
+                    if (!myPlayer) return null;
                     const opponent = m.players.find((p: any) => p.id !== myPlayer.id);
-                    const isWinner = m.winner_member_id === myPlayer.member.id;
+                    const isWinner = m.winner_member_id === myPlayer.member?.id;
                     const duration = m.started_at && m.ended_at ? Math.round((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 60000) + ' 分鐘' : '-';
                     
                     return (

@@ -74,6 +74,7 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
 const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
     ? '*'
@@ -292,7 +293,7 @@ app.get('/rooms/:roomId/state', async (req, res) => {
     let operator = null;
     if (room?.operatorId) {
         try {
-            const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { name: true, email: true } });
+            const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { id: true, name: true, email: true } });
             if (op)
                 operator = op;
         }
@@ -301,6 +302,27 @@ app.get('/rooms/:roomId/state', async (req, res) => {
         }
     }
     res.json({ roomId, state: room?.gameState ?? null, operator });
+});
+app.post('/rooms/:roomId/reset', async (req, res) => {
+    const { roomId } = req.params;
+    const room = rooms.find(r => r.id === roomId || r.code === roomId);
+    if (!room)
+        return res.status(404).json({ error: 'Room not found' });
+    // Reset memory
+    room.gameState = undefined;
+    room.scores = [0, 0];
+    // Reset DB
+    try {
+        await prisma.room.update({
+            where: { id: room.id },
+            data: { gameState: {}, scores: [0, 0] }
+        });
+    }
+    catch (e) {
+        console.error('Failed to reset room in DB:', e);
+    }
+    io.emit('rooms', rooms);
+    res.json({ message: 'Room reset' });
 });
 app.post('/api/rooms', async (req, res) => {
     const { name, operatorId } = req.body;
@@ -375,24 +397,34 @@ app.post('/api/match-verification-code', async (req, res) => {
     if (process.env.RESEND_API_KEY) {
         try {
             const resend = new Resend(process.env.RESEND_API_KEY);
+            const fromEmail = RESEND_FROM_EMAIL;
+            console.log(`[Email] Sending verification code to ${email} from ${fromEmail}`);
             await resend.emails.send({
-                from: 'Snooker <onboarding@resend.dev>', // Should use verified domain
+                from: fromEmail,
                 to: email,
-                subject: 'Match Verification Code',
-                html: `<p>Your verification code is: <strong>${code}</strong></p>`
+                subject: '比賽驗證碼',
+                html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼。</p>`
             });
+            res.json({ message: 'Code sent' });
         }
         catch (e) {
             console.error('Email failed:', e);
+            const isDomainError = e?.message?.includes('domain') || e?.message?.includes('verified');
+            res.status(500).json({
+                error: isDomainError
+                    ? 'Failed to send email: Domain not verified. Please configure RESEND_FROM_EMAIL with a verified domain or use the registered email for testing.'
+                    : 'Failed to send verification email. Please check server logs.'
+            });
         }
     }
     else {
         console.log(`[DEV] Verification code for ${email}: ${code}`);
+        res.json({ message: 'Code sent (Dev mode)' });
     }
-    res.json({ message: 'Code sent' });
 });
 app.post('/api/matches/start', async (req, res) => {
     const { p1_email, p1_code, p2_email, p2_code, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
+    console.log(`[StartMatch] P1: ${p1_email} (code: ${p1_code}), P2: ${p2_email} (code: ${p2_code}), Room: ${room_id}`);
     let p1_member_id = null;
     let p2_member_id = null;
     // Verify P1
@@ -406,7 +438,23 @@ app.post('/api/matches/start', async (req, res) => {
                 p1_member_id = m.id;
                 await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
             }
+            else {
+                return res.status(400).json({ error: `Email ${p1_email} is not registered.` });
+            }
         }
+        else {
+            return res.status(400).json({ error: `Invalid or expired verification code for ${p1_email}.` });
+        }
+    }
+    else if (p1_email && !p1_code) {
+        // Email provided but no code - if we want to enforce verification for provided emails
+        // return res.status(400).json({ error: `Verification code required for ${p1_email}.` });
+        // Assuming current requirement allows implicit guest if no code provided? 
+        // User said: "只有在滿足上傳條件...才建立 Match"
+        // Let's enforce code if email is non-empty to prevent accidental guest mode when user intended to log in.
+        // Actually, user said: "可否輸入Email後發比賽驗證碼並在setup頁填寫, 防止他人盜用"
+        // This implies if email is entered, it MUST be verified.
+        return res.status(400).json({ error: `Verification code required for Player 1 (${p1_email}).` });
     }
     // Verify P2
     if (p2_email && p2_code) {
@@ -419,10 +467,33 @@ app.post('/api/matches/start', async (req, res) => {
                 p2_member_id = m.id;
                 await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
             }
+            else {
+                return res.status(400).json({ error: `Email ${p2_email} is not registered.` });
+            }
         }
+        else {
+            return res.status(400).json({ error: `Invalid or expired verification code for ${p2_email}.` });
+        }
+    }
+    else if (p2_email && !p2_code) {
+        return res.status(400).json({ error: `Verification code required for Player 2 (${p2_email}).` });
     }
     if (!p1_member_id && !p2_member_id) {
         return res.json({ mode: 'guest', message: 'Both players are guests' });
+    }
+    // Resolve operator_id (support ID or Email) and ensure existence
+    let opResolved = null;
+    if (operator_id) {
+        const opMember = await prisma.member.findFirst({
+            where: {
+                OR: [
+                    { id: operator_id },
+                    { email: operator_id }
+                ]
+            },
+            select: { id: true }
+        });
+        opResolved = opMember ? opMember.id : null;
     }
     try {
         const match = await prisma.match.create({
@@ -434,7 +505,7 @@ app.post('/api/matches/start', async (req, res) => {
                 handicap0: Number(handicap0 || 0),
                 handicap1: Number(handicap1 || 0),
                 started_at: new Date(),
-                operator_id: operator_id || null
+                operator_id: opResolved || null
             }
         });
         const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
@@ -449,7 +520,12 @@ app.post('/api/matches/start', async (req, res) => {
                 data: { match_id: match.id, member_id: p2_member_id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] }
             });
         }
-        res.json({ mode: 'ranked', matchId: match.id });
+        res.json({
+            mode: 'ranked',
+            matchId: match.id,
+            p1MemberId: p1_member_id,
+            p2MemberId: p2_member_id
+        });
     }
     catch (e) {
         res.status(500).json({ error: String(e) });
@@ -1037,6 +1113,10 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
     try {
         const matchId = req.params.matchId;
         const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
+        console.log(`[finalizeMatch] matchId=${matchId}`);
+        if (stats && stats.perPlayer) {
+            console.log('[finalizeMatch] perPlayer stats sample:', JSON.stringify(stats.perPlayer[0]));
+        }
         if (!matchId || !foulTotals || !Array.isArray(foulTotals) || foulTotals.length !== 2 || !stats) {
             return res.status(400).json({ error: 'invalid payload' });
         }
@@ -1102,7 +1182,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
                     where: { match_id_member_id: { match_id: matchId, member_id: mid } },
                     update: {
                         frames_won: Number(pf.framesWon || 0),
-                        total_points: Number(pf.score || 0),
+                        total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
                         avg_shot_time_ms: avgShotTimeMs,
                         avg_break_time_ms: avgBreakTimeMs,
                         max_break_time_ms: maxBreakTimeMs,
@@ -1128,7 +1208,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
                         match_id: matchId,
                         member_id: mid,
                         frames_won: Number(pf.framesWon || 0),
-                        total_points: Number(pf.score || 0),
+                        total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
                         pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
                         shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
                             ? perPlayerStats.shotTimeBuckets
@@ -1354,7 +1434,7 @@ app.post('/api/members/request-password-reset-code', async (req, res) => {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        from: 'no-reply@snookerhk.live',
+                        from: RESEND_FROM_EMAIL,
                         to: em,
                         subject: '重設密碼驗證碼',
                         html: `<p>你的重設密碼驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼以重設密碼。</p>`,
@@ -1674,7 +1754,7 @@ app.post('/api/members/request-register-code', async (req, res) => {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        from: 'no-reply@snookerhk.live',
+                        from: RESEND_FROM_EMAIL,
                         to: em,
                         subject: '會員註冊驗證碼',
                         html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內於註冊頁面輸入此驗證碼以完成註冊。</p>`,
@@ -1894,6 +1974,22 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
             operatorId: opId
         };
         rooms.push(newRoom);
+        // Persist to DB
+        try {
+            await prisma.room.create({
+                data: {
+                    id: newId,
+                    name: `Room ${code}`,
+                    code,
+                    operator_id: opId,
+                    scores: [0, 0],
+                    gameState: {}
+                }
+            });
+        }
+        catch (e) {
+            console.error('Failed to persist operator room:', e);
+        }
         io.emit('rooms', rooms);
         res.json({ roomCode: code, roomId: newId });
     }
