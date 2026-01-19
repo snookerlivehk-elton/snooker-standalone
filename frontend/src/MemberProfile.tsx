@@ -306,7 +306,10 @@ const MemberProfile: React.FC = () => {
                         </td>
                         <td className="py-2 px-2">
                           <div className="font-medium">{m.name}</div>
-                          <div className="text-xs text-gray-400">局數: {m.frames_required}</div>
+                          <div className="text-xs text-gray-400">
+                            局數: {m.frames_required}
+                            {(m.handicap0 > 0 || m.handicap1 > 0) && ` | 讓分: ${m.handicap0}/${m.handicap1}`}
+                          </div>
                         </td>
                         <td className="py-2 px-2">
                            {m.operator?.name || '-'}<br/>
