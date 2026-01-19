@@ -1759,9 +1759,9 @@ app.get('/api/operators/:id/matches', async (req, res) => {
       where: { operator_id: opId },
       orderBy: { started_at: 'desc' },
       include: {
-        match_players: {
+        players: {
           include: {
-            member: { select: { name: true, handicap: true } }
+            member: { select: { name: true } }
           }
         },
         operator: { select: { name: true, club_name: true } }
@@ -1769,12 +1769,12 @@ app.get('/api/operators/:id/matches', async (req, res) => {
     });
 
     const result = matches.map(m => {
-      const p0 = m.match_players[0];
-      const p1 = m.match_players[1];
+      const p0 = m.players[0];
+      const p1 = m.players[1];
       const p0Name = p0?.member?.name || 'Unknown';
       const p1Name = p1?.member?.name || 'Unknown';
-      const p0Score = m.score0;
-      const p1Score = m.score1;
+      const p0Score = p0?.frames_won || 0;
+      const p1Score = p1?.frames_won || 0;
       
       return {
         id: m.id,
@@ -1786,7 +1786,7 @@ app.get('/api/operators/:id/matches', async (req, res) => {
         framesRequired: m.frames_required,
         p0: { name: p0Name, score: p0Score, handicap: m.handicap0, maxBreak: p0?.max_break_points },
         p1: { name: p1Name, score: p1Score, handicap: m.handicap1, maxBreak: p1?.max_break_points },
-        result: m.winner_id ? (m.winner_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
+        result: m.winner_member_id ? (m.winner_member_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
         durationSeconds: m.started_at && m.ended_at ? Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000) : null,
       };
     });

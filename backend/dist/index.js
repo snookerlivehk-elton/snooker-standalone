@@ -1,4 +1,6 @@
 import 'dotenv/config';
+// Backend API for Snooker Standalone
+// Force backend redeploy
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -138,7 +140,7 @@ app.get('/health/db', async (_req, res) => {
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
 app.post('/api/matches/strict', writeAuth, async (req, res) => {
     try {
-        const { roomId, match, players, timestamps } = req.body || {};
+        const { roomId, match, players, timestamps, operatorId } = req.body || {};
         if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
             return res.status(400).json({ error: 'invalid payload' });
         }
@@ -147,9 +149,10 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
         if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
             return res.status(400).json({ error: 'memberId required for both players' });
         }
-        const idMap = await resolveMemberIdentifiers([p0, p1]);
+        const idMap = await resolveMemberIdentifiers([p0, p1, operatorId].filter(Boolean));
         const p0Resolved = idMap.get(p0) || null;
         const p1Resolved = idMap.get(p1) || null;
+        const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
         if (!p0Resolved || !p1Resolved) {
             return res.status(404).json({ error: 'memberId not found' });
         }
@@ -166,6 +169,7 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
                 handicap0: Array.isArray(match.handicaps) ? Number(match.handicaps[0] || 0) : 0,
                 handicap1: Array.isArray(match.handicaps) ? Number(match.handicaps[1] || 0) : 0,
                 started_at: startedAt,
+                operator_id: opResolved,
             },
         });
         const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
@@ -181,14 +185,15 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
 });
 app.post('/api/matches/partial', writeAuth, async (req, res) => {
     try {
-        const { roomId, match, players, timestamps } = req.body || {};
+        const { roomId, match, players, timestamps, operatorId } = req.body || {};
         if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
             return res.status(400).json({ error: 'invalid payload' });
         }
-        const candidateIds = [players[0]?.memberId, players[1]?.memberId].filter((x) => typeof x === 'string');
+        const candidateIds = [players[0]?.memberId, players[1]?.memberId, operatorId].filter((x) => typeof x === 'string');
         const idMap = await resolveMemberIdentifiers(candidateIds);
         const acceptedMemberIds = candidateIds.filter(id => idMap.has(id));
         const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
+        const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
         const created = await prisma.match.create({
             data: {
                 room_id: String(roomId),
@@ -199,6 +204,7 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
                 frames_required: Number(match.framesRequired || 1),
                 red_balls: Number(match.redBalls || 15),
                 started_at: startedAt,
+                operator_id: opResolved,
             },
         });
         const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
@@ -1125,6 +1131,212 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 // Members: registration and admin list
+// Request password reset code
+app.post('/api/members/request-password-reset-code', async (req, res) => {
+    try {
+        const { email } = (req.body || {});
+        const em = String(email || '').trim().normalize('NFKC');
+        if (!em) {
+            return res.status(400).json({ error: 'email 為必填' });
+        }
+        const member = await prisma.member.findFirst({ where: { email: em } });
+        if (!member) {
+            // For security, do not reveal if email exists, just return success or generic message
+            // But for better UX in this app context, we might return error if not found?
+            // User requested "Forgot Password", usually implies they expect to know if they typed wrong email.
+            return res.status(404).json({ error: '找不到此 Email 的會員帳號' });
+        }
+        const recent = await prisma.emailVerification.findFirst({
+            where: {
+                email: em,
+                purpose: 'reset-password',
+                created_at: { gt: new Date(Date.now() - 60_000) },
+                used_at: null,
+            },
+            orderBy: { created_at: 'desc' },
+        });
+        if (recent) {
+            return res.status(429).json({ error: '請稍後再試' });
+        }
+        const code = generateEmailCode();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        const ipHeader = req.headers['x-forwarded-for'] || '';
+        const ip = (req.ip || ipHeader || '').toString().slice(0, 255) || null;
+        await prisma.emailVerification.create({
+            data: {
+                email: em,
+                code,
+                purpose: 'reset-password',
+                expires_at: expiresAt,
+                ip: ip,
+            },
+        });
+        if (RESEND_API_KEY) {
+            try {
+                await fetch('https://api.resend.com/emails', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${RESEND_API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from: 'no-reply@snookerhk.live',
+                        to: em,
+                        subject: '重設密碼驗證碼',
+                        html: `<p>你的重設密碼驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼以重設密碼。</p>`,
+                    }),
+                });
+            }
+            catch (e) {
+                console.warn('Failed to send reset code email:', e);
+            }
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Reset password with code
+app.post('/api/members/reset-password-with-code', async (req, res) => {
+    try {
+        const { email, code, newPassword } = (req.body || {});
+        const em = String(email || '').trim().normalize('NFKC');
+        const c = String(code || '').trim();
+        const pw = String(newPassword || '');
+        if (!em || !c || !pw) {
+            return res.status(400).json({ error: '缺少必要欄位' });
+        }
+        const member = await prisma.member.findFirst({ where: { email: em } });
+        if (!member) {
+            return res.status(404).json({ error: '會員不存在' });
+        }
+        const now = new Date();
+        const verification = await prisma.emailVerification.findFirst({
+            where: {
+                email: em,
+                purpose: 'reset-password',
+            },
+            orderBy: { created_at: 'desc' },
+        });
+        if (!verification || verification.used_at || verification.expires_at < now || verification.attempts >= 5) {
+            return res.status(400).json({ error: '驗證碼錯誤或已過期，請重新取得' });
+        }
+        if (verification.code !== c) {
+            await prisma.emailVerification.update({
+                where: { id: verification.id },
+                data: { attempts: { increment: 1 } },
+            });
+            return res.status(400).json({ error: '驗證碼不正確' });
+        }
+        // Password complexity check
+        const pwLenOk = pw.length >= 8;
+        const pwHasNum = /\d/.test(pw);
+        const pwHasAlpha = /[A-Za-z]/.test(pw);
+        if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+            return res.status(400).json({ error: '密碼不符合規則（至少8字元，需含英文字母與數字）' });
+        }
+        await prisma.emailVerification.update({
+            where: { id: verification.id },
+            data: { used_at: now },
+        });
+        const salt = makeSalt();
+        const h = createHash('sha256');
+        h.update(salt + pw);
+        const digest = h.digest('hex');
+        await prisma.member.update({
+            where: { id: member.id },
+            data: {
+                password_salt: salt,
+                password_hash: digest,
+                password_updated_at: now,
+            },
+        });
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Get member's match history
+app.get('/api/members/:id/matches', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id)
+            return res.status(400).json({ error: 'id required' });
+        // Resolve member ID if it's an email
+        let targetId = id;
+        if (id.includes('@')) {
+            const m = await prisma.member.findFirst({ where: { email: id } });
+            if (m)
+                targetId = m.id;
+        }
+        const matches = await prisma.match.findMany({
+            where: {
+                players: {
+                    some: {
+                        member_id: targetId
+                    }
+                }
+            },
+            include: {
+                operator: {
+                    select: { name: true, club_name: true }
+                },
+                winner_member: {
+                    select: { id: true, name: true }
+                },
+                players: {
+                    include: {
+                        member: {
+                            select: { id: true, name: true }
+                        }
+                    }
+                },
+                stats: true,
+            },
+            orderBy: {
+                started_at: 'desc'
+            }
+        });
+        const result = matches.map(m => {
+            const p0 = m.players[0]; // Note: Order is not guaranteed to match handicap0/1 without player_index
+            const p1 = m.players[1];
+            const playerUser = m.players.find(p => p.member_id === targetId);
+            // Calculate duration
+            let durationSeconds = 0;
+            if (m.started_at && m.ended_at) {
+                durationSeconds = Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000);
+            }
+            return {
+                id: m.id,
+                date: m.started_at,
+                matchName: m.name,
+                matchLevel: m.name_part || '一般', // Assuming name_part stores level or just use default
+                operatorName: m.operator?.name || '-',
+                operatorClub: m.operator?.club_name || '-',
+                // Return raw players and handicaps, frontend will try to display
+                players: m.players.map(p => ({
+                    name: p.member.name,
+                    framesWon: p.frames_won,
+                    maxBreak: p.max_break_points,
+                })),
+                handicaps: [m.handicap0, m.handicap1],
+                framesRequired: m.frames_required,
+                totalFrames: (p0?.frames_won || 0) + (p1?.frames_won || 0),
+                finalScore: `${p0?.frames_won || 0}-${p1?.frames_won || 0}`, // Order might be mixed
+                winnerName: m.winner_member?.name,
+                isWinner: m.winner_member_id === targetId,
+                userMaxBreak: playerUser?.max_break_points || 0,
+                durationSeconds,
+            };
+        });
+        res.json({ matches: result });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
 // Register a new member with district-based sequential member_code (no country prefix for now)
 app.post('/api/members/register', async (req, res) => {
     try {
@@ -1313,6 +1525,7 @@ app.post('/api/members/register-with-code', async (req, res) => {
         const name = String(payload.name || '').trim();
         const password = String(payload.password || '');
         const phone = payload.phone ? String(payload.phone).trim() : undefined;
+        const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
         const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
         if (!email || !name || !code || !password) {
             return res.status(400).json({ error: 'email、name、驗證碼與密碼為必填' });
@@ -1403,6 +1616,7 @@ app.post('/api/members/register-with-code', async (req, res) => {
                     email,
                     district_code: districtCode,
                     phone: phone ?? null,
+                    club_name: clubName ?? null,
                     birth_date: birthDate ?? null,
                     member_code: memberCode,
                     membership_expires_at: membershipExpires,
@@ -1420,6 +1634,92 @@ app.post('/api/members/register-with-code', async (req, res) => {
         const msg = String(err?.message || err);
         const status = msg.includes('email 已存在') ? 409 : 500;
         res.status(status).json({ error: msg });
+    }
+});
+// Operator: Get match history
+app.get('/api/operators/:id/matches', async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: 'Missing operator ID' });
+        // Resolve ID if email
+        let opId = id;
+        if (id.includes('@')) {
+            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+            if (!m)
+                return res.status(404).json({ error: 'Operator not found' });
+            opId = m.id;
+        }
+        const matches = await prisma.match.findMany({
+            where: { operator_id: opId },
+            orderBy: { started_at: 'desc' },
+            include: {
+                players: {
+                    include: {
+                        member: { select: { name: true } }
+                    }
+                },
+                operator: { select: { name: true, club_name: true } }
+            }
+        });
+        const result = matches.map(m => {
+            const p0 = m.players[0];
+            const p1 = m.players[1];
+            const p0Name = p0?.member?.name || 'Unknown';
+            const p1Name = p1?.member?.name || 'Unknown';
+            const p0Score = p0?.frames_won || 0;
+            const p1Score = p1?.frames_won || 0;
+            return {
+                id: m.id,
+                startedAt: m.started_at,
+                endedAt: m.ended_at,
+                operator: m.operator ? { name: m.operator.name, clubName: m.operator.club_name } : null,
+                matchName: m.name,
+                matchCode: m.match_code,
+                framesRequired: m.frames_required,
+                p0: { name: p0Name, score: p0Score, handicap: m.handicap0, maxBreak: p0?.max_break_points },
+                p1: { name: p1Name, score: p1Score, handicap: m.handicap1, maxBreak: p1?.max_break_points },
+                result: m.winner_member_id ? (m.winner_member_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
+                durationSeconds: m.started_at && m.ended_at ? Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000) : null,
+            };
+        });
+        res.json({ matches: result });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Operator: Create Room (Limit 5 active rooms)
+app.post('/api/operators/:id/rooms', async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: 'Missing operator ID' });
+        // Resolve ID if email
+        let opId = id;
+        if (id.includes('@')) {
+            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+            if (!m)
+                return res.status(404).json({ error: 'Operator not found' });
+            opId = m.id;
+        }
+        // Check active matches (matches started by this operator that haven't ended)
+        // Note: If an operator creates a room code but doesn't start a match, we can't easily track it unless we persist rooms.
+        // Given the current architecture, we'll count matches where operator_id matches and ended_at is null.
+        const activeCount = await prisma.match.count({
+            where: {
+                operator_id: opId,
+                ended_at: null
+            }
+        });
+        if (activeCount >= 5) {
+            return res.status(403).json({ error: '已達到房間數量上限 (5)' });
+        }
+        const code = await nextRoomCodeServer();
+        res.json({ roomCode: code });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
     }
 });
 // Simple password hashing helpers (SHA-256 with per-user salt)
@@ -1446,7 +1746,17 @@ app.post('/api/members/login', async (req, res) => {
         if (digest !== mh) {
             return res.status(401).json({ error: '帳號或密碼不正確' });
         }
-        return res.json({ ok: true, id: m.id, member: { id: m.id, name: m.name, email: m.email, member_code: m.member_code } });
+        return res.json({
+            ok: true,
+            id: m.id,
+            member: {
+                id: m.id,
+                name: m.name,
+                email: m.email,
+                member_code: m.member_code,
+                role: m.role
+            }
+        });
     }
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
