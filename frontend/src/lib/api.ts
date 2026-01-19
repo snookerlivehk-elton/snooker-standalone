@@ -74,6 +74,17 @@ export async function sendMatchVerificationCode(apiUrl: string, email: string) {
   return res.json();
 }
 
+export async function deleteOperatorRoom(apiUrl: string, roomId: string) {
+  const res = await fetch(`${apiUrl}/api/rooms/${roomId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 204) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `刪除房間失敗 (${res.status})`);
+  }
+  return true;
+}
+
 export async function startMatchV2(
   apiUrl: string,
   payload: {

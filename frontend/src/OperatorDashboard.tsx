@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom } from './lib/api';
 
 const OperatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
@@ -66,6 +67,26 @@ const OperatorDashboard: React.FC = () => {
       setError(err.message || '建立房間失敗');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteRoom = async (roomId: string) => {
+    if (deletingId) return;
+    if (!window.confirm('確定要刪除此房間嗎？刪除後無法復原。')) return;
+    
+    setDeletingId(roomId);
+    try {
+      await deleteOperatorRoom(API_URL, roomId);
+      setToast('房間已刪除');
+      setTimeout(() => setToast(null), 2000);
+      
+      // Refresh active rooms
+      const roomsRes = await getOperatorActiveRooms(API_URL, operatorId);
+      setActiveRooms(roomsRes.rooms || []);
+    } catch (err: any) {
+      setError(err.message || '刪除房間失敗');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -270,6 +291,17 @@ const OperatorDashboard: React.FC = () => {
                       className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors"
                     >
                       Copy Overlay
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRoom(room.id)}
+                      disabled={deletingId === room.id}
+                      className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                        deletingId === room.id
+                          ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                    >
+                      {deletingId === room.id ? '...' : '刪除'}
                     </button>
                   </div>
                 </div>
