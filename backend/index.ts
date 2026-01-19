@@ -2013,6 +2013,23 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
       operatorId: opId 
     };
     rooms.push(newRoom);
+    
+    // Persist to DB
+    try {
+        await prisma.room.create({
+            data: {
+                id: newId,
+                name: `Room ${code}`,
+                code,
+                operator_id: opId,
+                scores: [0, 0],
+                gameState: {}
+            }
+        });
+    } catch(e) {
+        console.error('Failed to persist operator room:', e);
+    }
+
     io.emit('rooms', rooms);
 
     res.json({ roomCode: code, roomId: newId });
