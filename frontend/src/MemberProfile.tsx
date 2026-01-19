@@ -12,6 +12,7 @@ const MemberProfile: React.FC = () => {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [clubName, setClubName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
@@ -142,6 +143,7 @@ const MemberProfile: React.FC = () => {
             <div><span className="font-semibold">電話：</span>{phoneDisplay}</div>
             <div><span className="font-semibold">出生日期：</span>{birthDisplay}</div>
             <div><span className="font-semibold">會員有效期：</span>{membershipExpiryDisplay}</div>
+            <div><span className="font-semibold">所屬球會：</span>{String(member.club_name || member.clubName || '未設定')}</div>
           </div>
           <div className="text-xs text-gray-400 mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
@@ -187,6 +189,10 @@ const MemberProfile: React.FC = () => {
               <label className="block text-sm mb-1">出生日期</label>
               <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
             </div>
+            <div>
+              <label className="block text-sm mb-1">所屬球會</label>
+              <input value={clubName} onChange={(e) => setClubName(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
           </div>
           <div className="mt-3">
             <button
@@ -197,6 +203,8 @@ const MemberProfile: React.FC = () => {
                     const tokenFromUrl = params.get('token') || '';
                     const tokenSaved = localStorage.getItem('adminToken') || '';
                     const adminToken = tokenFromUrl || tokenSaved;
+                    
+                    // Priority 1: Admin Token (if admin is editing)
                     if (adminToken) {
                       let targetId: any = member.id;
                       const idStr = String(targetId || '');
@@ -208,18 +216,35 @@ const MemberProfile: React.FC = () => {
                         } catch {}
                       }
                       if (targetId && !String(targetId).includes('@')) {
-                        await updateMember(API_URL, adminToken, targetId, { phone, birthDate });
-                        setToast('已同步到後端');
+                        await updateMember(API_URL, adminToken, targetId, { phone, birthDate, clubName });
+                        setToast('已同步到後端 (Admin)');
                         setTimeout(() => setToast(null), 3000);
+                        // Update local state to reflect changes
+                        setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate, club_name: clubName }));
                         return;
                       }
                     }
+
+                    // Priority 2: Self Update (if member/operator is editing themselves)
+                    if (member.id && !String(member.id).includes('@')) {
+                         try {
+                             await import('./lib/api').then(m => m.updateMemberSelf(API_URL, member.id, { phone, birthDate, clubName }));
+                             setToast('已同步到後端');
+                             setTimeout(() => setToast(null), 3000);
+                             setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate, club_name: clubName }));
+                             return;
+                         } catch (e) {
+                             console.warn('Self update failed, falling back to local storage', e);
+                         }
+                    }
+
                   } catch {}
                   try {
+                    // Fallback: Local Storage (for pure frontend mode or guests)
                     const storeRaw = localStorage.getItem('memberOptional');
                     const store = storeRaw ? JSON.parse(storeRaw) : {};
                     const key = String(member.email || member.id);
-                    store[key] = { phone, birthDate, updatedAt: Date.now() };
+                    store[key] = { phone, birthDate, clubName, updatedAt: Date.now() };
                     localStorage.setItem('memberOptional', JSON.stringify(store));
                     setToast('已更新（本地）');
                     setTimeout(() => setToast(null), 3000);

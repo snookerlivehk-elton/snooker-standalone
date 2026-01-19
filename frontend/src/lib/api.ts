@@ -237,13 +237,32 @@ export async function listMembers(apiUrl: string, adminToken: string) {
   return res.json();
 }
 
-export async function updateMember(apiUrl: string, adminToken: string, id: string | number, data: any) {
+export async function updateMember(
+  apiUrl: string,
+  adminToken: string,
+  id: string,
+  data: { phone?: string; birthDate?: string; role?: string; membershipExpiresAt?: string; clubName?: string }
+) {
   const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(`更新會員失敗 (${res.status})`);
+  if (!res.ok) throw new Error(`更新會員資料失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function updateMemberSelf(
+  apiUrl: string,
+  id: string,
+  data: { phone?: string; birthDate?: string; clubName?: string; password?: string }
+) {
+  const res = await fetch(`${apiUrl}/api/members/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`更新個人資料失敗 (${res.status})`);
   return res.json();
 }
 

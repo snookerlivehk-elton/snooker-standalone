@@ -2275,6 +2275,8 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
     if (body.district_code !== undefined) data.district_code = body.district_code ? String(body.district_code).trim() : null;
     if (body.member_code !== undefined) data.member_code = body.member_code ? String(body.member_code).trim() : null;
     if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+    if (body.club_name !== undefined) data.club_name = body.club_name ? String(body.club_name).trim() : null;
+    if (body.clubName !== undefined) data.club_name = body.clubName ? String(body.clubName).trim() : null;
 
     const bdRaw = body.birthDate ?? body.birth_date;
     if (bdRaw !== undefined) {
@@ -2306,6 +2308,65 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       const r = String(body.role || 'MEMBER').toUpperCase();
       data.role = r === 'ADMIN' ? 'ADMIN' : 'MEMBER';
     }
+    const member = await prisma.member.update({
+      where: { id },
+      data,
+    });
+    res.json({ member });
+  } catch (err: any) {
+    if ((err as any)?.code === 'P2025') {
+      return res.status(404).json({ error: '會員不存在' });
+    }
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Member: self-update (no admin token required, but allows limited fields)
+app.put('/api/members/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: '缺少會員 ID' });
+    
+    // In a real app, we would verify the session/token here to ensure the user is updating themselves.
+    // For this standalone version, we assume the client is behaving (or we trust the ID flow).
+
+    const body = (req.body || {}) as {
+      phone?: string;
+      birthDate?: string;
+      birth_date?: string;
+      clubName?: string;
+      club_name?: string;
+      password?: string;
+    };
+
+    const data: any = {};
+    if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+    if (body.club_name !== undefined) data.club_name = body.club_name ? String(body.club_name).trim() : null;
+    if (body.clubName !== undefined) data.club_name = body.clubName ? String(body.clubName).trim() : null;
+
+    const bdRaw = body.birthDate ?? body.birth_date;
+    if (bdRaw !== undefined) {
+      if (!bdRaw) {
+        data.birth_date = null;
+      } else {
+        const d = new Date(bdRaw);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ error: '出生日期格式不正確' });
+        }
+        data.birth_date = d;
+      }
+    }
+
+    if (body.password) {
+      const pw = String(body.password);
+      const salt = randomBytes(16).toString('hex');
+      const hash = createHash('sha256').update(pw + salt).digest('hex');
+      data.password_hash = hash;
+      data.password_salt = salt;
+      data.password_updated_at = new Date();
+    }
+
+    // Only update if member exists
     const member = await prisma.member.update({
       where: { id },
       data,

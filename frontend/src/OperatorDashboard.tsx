@@ -96,14 +96,116 @@ const OperatorDashboard: React.FC = () => {
           </div>
         )}
 
+        {toast && (
+          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
+            {toast}
+          </div>
+        )}
+
         {/* Operator Info */}
         <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
           <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">操作員資料</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div><span className="text-gray-400">名稱：</span>{operatorName}</div>
             <div><span className="text-gray-400">Email：</span>{session.email}</div>
-            {/* Club name might be in session or fetched matches, using session if available */}
-            {session.clubName && <div><span className="text-gray-400">所屬球會：</span>{session.clubName}</div>}
+            <div><span className="text-gray-400">所屬球會：</span>{clubName || '未設定'}</div>
+            <div><span className="text-gray-400">電話：</span>{phone || '-'}</div>
+          </div>
+        </div>
+
+        {/* Edit Profile */}
+        <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
+          <h3 className="text-lg font-semibold mb-3">更新資料</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm mb-1 text-gray-400">電話</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1 text-gray-400">出生日期</label>
+              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1 text-gray-400">所屬球會</label>
+              <input value={clubName} onChange={(e) => setClubName(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={async () => {
+                try {
+                   if (!operatorId) return;
+                   const res = await updateMemberSelf(API_URL, operatorId, { phone, birthDate, clubName });
+                   const updated = res.member;
+                   // Update local session
+                   const newSession = { ...session, ...updated, clubName: updated.club_name, birthDate: updated.birth_date };
+                   localStorage.setItem('memberSession', JSON.stringify(newSession));
+                   setToast('資料已更新');
+                   setTimeout(() => setToast(null), 3000);
+                } catch (err: any) {
+                   setToast(err.message || '更新失敗');
+                   setTimeout(() => setToast(null), 3000);
+                }
+              }}
+              className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 transition-colors"
+            >
+              儲存資料
+            </button>
+          </div>
+        </div>
+
+        {/* Reset Password */}
+        <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
+          <h3 className="text-lg font-semibold mb-3">重設密碼</h3>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm mb-1 text-gray-400">新密碼</label>
+              <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1 text-gray-400">確認新密碼</label>
+              <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <button
+              onClick={async () => {
+                if (!resetPwd || resetPwd !== resetPwd2) {
+                    setToast('密碼不一致');
+                    setTimeout(() => setToast(null), 2000);
+                    return;
+                }
+                try {
+                   if (!operatorId) return;
+                   // Update backend password
+                   await updateMemberSelf(API_URL, operatorId, { password: resetPwd });
+                   
+                   // Also update local legacy storage if needed (for consistency with MemberProfile)
+                   try {
+                      const enc = new TextEncoder().encode(resetPwd);
+                      const digest = await crypto.subtle.digest('SHA-256', enc);
+                      const arr = Array.from(new Uint8Array(digest));
+                      const h = arr.map(b => b.toString(16).padStart(2, '0')).join('');
+                      const storeRaw = localStorage.getItem('memberPasswords');
+                      const store = storeRaw ? JSON.parse(storeRaw) : {};
+                      const key = String(session.email || session.id);
+                      store[key] = h;
+                      localStorage.setItem('memberPasswords', JSON.stringify(store));
+                   } catch {}
+
+                   setToast('密碼已重設');
+                   setResetPwd('');
+                   setResetPwd2('');
+                   setTimeout(() => setToast(null), 3000);
+                } catch (err: any) {
+                   setToast(err.message || '重設失敗');
+                   setTimeout(() => setToast(null), 3000);
+                }
+              }}
+              className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            >
+              重設密碼
+            </button>
           </div>
         </div>
 
