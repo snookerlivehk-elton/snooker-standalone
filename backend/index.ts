@@ -406,10 +406,10 @@ app.post('/api/match-verification-code', async (req, res) => {
         try {
             const resend = new Resend(process.env.RESEND_API_KEY);
             await resend.emails.send({
-                from: 'Snooker <onboarding@resend.dev>', // Should use verified domain
+                from: 'no-reply@snookerhk.live',
                 to: email,
-                subject: 'Match Verification Code',
-                html: `<p>Your verification code is: <strong>${code}</strong></p>`
+                subject: '比賽驗證碼',
+                html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼。</p>`
             });
         } catch (e) {
             console.error('Email failed:', e);
