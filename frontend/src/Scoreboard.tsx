@@ -386,6 +386,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             return;
         }
         const record = StatsEngine.buildMatchRecord(roomId!, gameState);
+        console.log('[uploadSegment] record:', record);
         const apiRoomId = slugId || roomId!;
         const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
         const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };

@@ -130,7 +130,7 @@ function computePerPlayerStatsFromEvents(
     blue: 0,
     pink: 0,
     black: 0,
-  } as const;
+  };
   const shotTimeBuckets = [0, 0, 0, 0];
   let prevEventPlayerIndex: number | null = null;
 
@@ -211,7 +211,7 @@ function computePerPlayerStatsFromEvents(
       visitPotBallCount += ballsPotted;
       if (e.ballName && potByBall[e.ballName] !== undefined) {
         // TypeScript treats potByBall as readonly via const assertion; copy and increment
-        (potByBall as any)[e.ballName]++;
+        potByBall[e.ballName]++;
       }
       // 狀態機更新：紅/彩
       if (isFreeBall) {
@@ -374,10 +374,10 @@ function computePerPlayerStatsFromEvents(
   const potSuccessRate = (potCount + missCount) ? (potCount / (potCount + missCount)) : 0;
   const potOverMissRate = missCount ? (potCount / missCount) : (potCount > 0 ? 1 : 0);
   const avgRoundShotTimeMs = totalRoundShotSegments ? (totalRoundShotTime / totalRoundShotSegments) : 0;
-  const redPotTotal = (potByBall as any).red;
+  const redPotTotal = potByBall.red;
   const redDenominatorFinal = redPotTotal + redRequiredMisses;
   const redSuccessRate = redDenominatorFinal ? (redPotTotal / redDenominatorFinal) : 0;
-  const colorPotTotal = (potByBall as any).yellow + (potByBall as any).green + (potByBall as any).brown + (potByBall as any).blue + (potByBall as any).pink + (potByBall as any).black;
+  const colorPotTotal = potByBall.yellow + potByBall.green + potByBall.brown + potByBall.blue + potByBall.pink + potByBall.black;
   const colorDenominatorFinal = colorPotTotal + colorRequiredMisses;
   const colorSuccessRate = colorDenominatorFinal ? (colorPotTotal / colorDenominatorFinal) : 0;
   const entryRate = visitSingleRedOnly ? (visitRedThenColor / visitSingleRedOnly) : 0;
@@ -441,7 +441,7 @@ function computePerPlayerStatsFromEvents(
     entryNumerator: streak4PlusOnVisit,
     entryDenominator: entryAttemptsFinal,
     pressureRatio,
-    potByBall: potByBall as any,
+    potByBall: potByBall,
     shotTimeBuckets,
     break20_29,
     break30_49,

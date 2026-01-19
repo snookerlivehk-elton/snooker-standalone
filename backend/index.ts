@@ -428,8 +428,10 @@ app.post('/api/match-verification-code', async (req, res) => {
     if (process.env.RESEND_API_KEY) {
         try {
             const resend = new Resend(process.env.RESEND_API_KEY);
+            const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+            console.log(`[Email] Sending verification code to ${email} from ${fromEmail}`);
             await resend.emails.send({
-                from: process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live',
+                from: fromEmail,
                 to: email,
                 subject: '比賽驗證碼',
                 html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼。</p>`
@@ -437,7 +439,12 @@ app.post('/api/match-verification-code', async (req, res) => {
             res.json({ message: 'Code sent' });
         } catch (e: any) {
             console.error('Email failed:', e);
-            res.status(500).json({ error: 'Failed to send verification email. Please check server logs.' });
+            const isDomainError = e?.message?.includes('domain') || e?.message?.includes('verified');
+            res.status(500).json({ 
+                error: isDomainError 
+                    ? 'Failed to send email: Domain not verified. Please configure RESEND_FROM_EMAIL with a verified domain or use the registered email for testing.' 
+                    : 'Failed to send verification email. Please check server logs.' 
+            });
         }
     } else {
         console.log(`[DEV] Verification code for ${email}: ${code}`);
@@ -1126,6 +1133,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
   try {
     const matchId = req.params.matchId;
     const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
+    console.log(`[finalizeMatch] matchId=${matchId}, stats=`, JSON.stringify(stats));
     if (!matchId || !foulTotals || !Array.isArray(foulTotals) || foulTotals.length !== 2 || !stats) {
       return res.status(400).json({ error: 'invalid payload' });
     }
