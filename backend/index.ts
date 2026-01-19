@@ -1160,7 +1160,10 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
   try {
     const matchId = req.params.matchId;
     const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
-    console.log(`[finalizeMatch] matchId=${matchId}, stats=`, JSON.stringify(stats));
+    console.log(`[finalizeMatch] matchId=${matchId}`);
+    if (stats && stats.perPlayer) {
+        console.log('[finalizeMatch] perPlayer stats sample:', JSON.stringify(stats.perPlayer[0]));
+    }
     if (!matchId || !foulTotals || !Array.isArray(foulTotals) || foulTotals.length !== 2 || !stats) {
       return res.status(400).json({ error: 'invalid payload' });
     }
@@ -1228,7 +1231,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
           where: { match_id_member_id: { match_id: matchId, member_id: mid } },
           update: {
             frames_won: Number(pf.framesWon || 0),
-            total_points: Number(pf.score || 0),
+            total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
             avg_shot_time_ms: avgShotTimeMs,
             avg_break_time_ms: avgBreakTimeMs,
             max_break_time_ms: maxBreakTimeMs,
@@ -1254,7 +1257,7 @@ app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
             match_id: matchId,
             member_id: mid,
             frames_won: Number(pf.framesWon || 0),
-            total_points: Number(pf.score || 0),
+            total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
             pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
             shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
               ? perPlayerStats.shotTimeBuckets
