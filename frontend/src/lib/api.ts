@@ -105,6 +105,7 @@ export async function registerMember(
     districtCode?: string;
     districtName?: string;
     phone?: string;
+    clubName?: string;
     birthDate?: string;
   }
 ) {
@@ -141,6 +142,7 @@ export async function registerMemberWithCode(
     districtCode?: string;
     districtName?: string;
     phone?: string;
+    clubName?: string;
     birthDate?: string;
   }
 ) {

@@ -8,9 +8,11 @@ const MemberRegister: React.FC = () => {
   const [name, setName] = useState('');
   const [district, setDistrict] = useState('');
   const [phone, setPhone] = useState('');
+  const [clubName, setClubName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [emailCode, setEmailCode] = useState('');
   const [codeSending, setCodeSending] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
@@ -149,6 +151,9 @@ const MemberRegister: React.FC = () => {
       if (!emailCode.trim()) {
         throw new Error('請先輸入 email 驗證碼');
       }
+      if (!agreed) {
+        throw new Error('請先同意條款及細則');
+      }
       const payload = {
         email: email.trim(),
         code: emailCode.trim(),
@@ -157,6 +162,7 @@ const MemberRegister: React.FC = () => {
         regionCode: region.trim(),
         districtCode: district.trim(),
         phone: phone.trim() || undefined,
+        clubName: clubName.trim() || undefined,
         birthDate: birthDate.trim() || undefined,
       };
       let result: any;
@@ -205,7 +211,10 @@ const MemberRegister: React.FC = () => {
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">會員註冊</h2>
+          <div>
+            <div className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Snooker Live HK</div>
+            <h2 className="text-2xl font-bold">會員註冊</h2>
+          </div>
           <button
             type="button"
             onClick={() => navigate('/members/login')}
@@ -220,10 +229,10 @@ const MemberRegister: React.FC = () => {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value.toLowerCase())}
               placeholder="example@domain.com"
               required
-              className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+              className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 lowercase"
             />
           </div>
           <div className="md:col-span-2 flex gap-2 items-center">
@@ -310,6 +319,16 @@ const MemberRegister: React.FC = () => {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium mb-1">所屬球會（選填）</label>
+            <input
+              type="text"
+              value={clubName}
+              onChange={(e) => setClubName(e.target.value)}
+              placeholder="例如：ABC Club"
+              className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+            />
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-1">出生日期（選填）</label>
             <input
               type="date"
@@ -346,6 +365,18 @@ const MemberRegister: React.FC = () => {
             <div className={`text-xs mt-1 ${passwordHint.match ? 'text-green-400' : 'text-red-400'}`}>
               {passwordHint.match ? '兩次一致' : '兩次不一致'}
             </div>
+          </div>
+          <div className="md:col-span-2 flex items-center mt-2">
+            <input
+              type="checkbox"
+              id="terms"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            />
+            <label htmlFor="terms" className="ml-2 text-sm font-medium text-gray-300">
+              我同意<span className="text-blue-400 mx-1 cursor-pointer hover:underline">條款及細則</span>
+            </label>
           </div>
           <div className="md:col-span-2 flex justify-end mt-2">
             <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50">

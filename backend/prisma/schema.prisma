@@ -45,6 +45,7 @@ model Member {
   // region_code  String?
   district_code String?
   phone        String?
+  club_name    String?
   birth_date   DateTime?
   is_guest     Boolean      @default(false)
   role         MemberRole   @default(MEMBER)

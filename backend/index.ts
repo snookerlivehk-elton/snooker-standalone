@@ -1392,12 +1392,14 @@ app.post('/api/members/register-with-code', async (req, res) => {
       districtName?: string;
       phone?: string;
       birthDate?: string;
+      clubName?: string;
     };
     const email = String(payload.email || '').trim().normalize('NFKC');
     const code = String(payload.code || '').trim();
     const name = String(payload.name || '').trim();
     const password = String(payload.password || '');
     const phone = payload.phone ? String(payload.phone).trim() : undefined;
+    const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
     if (!email || !name || !code || !password) {
       return res.status(400).json({ error: 'email、name、驗證碼與密碼為必填' });
@@ -1488,6 +1490,7 @@ app.post('/api/members/register-with-code', async (req, res) => {
           email,
           district_code: districtCode,
           phone: phone ?? null,
+          club_name: clubName ?? null,
           birth_date: birthDate ?? null,
           member_code: memberCode,
           membership_expires_at: membershipExpires,
