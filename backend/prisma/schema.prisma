@@ -101,6 +101,12 @@ model MemberCodeSequence {
   @@id([region_code, district_code])
 }
 
+model RoomCodeSequence {
+  id         Int      @id @default(1)
+  last_code  String   @default("AAAAA0000")
+  updated_at DateTime @updatedAt
+}
+
 model Match {
   id               String       @id @default(uuid())
   room_id          String

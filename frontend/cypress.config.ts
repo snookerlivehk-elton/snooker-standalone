@@ -1,4 +1,5 @@
 import { defineConfig } from "cypress";
+import cypressMochawesomeReporter from "cypress-mochawesome-reporter/plugin";
 
 export default defineConfig({
   e2e: {
@@ -11,7 +12,7 @@ export default defineConfig({
       saveAllAttempts: false,
     },
     setupNodeEvents(on, config) {
-      require('cypress-mochawesome-reporter/plugin')(on);
+      cypressMochawesomeReporter(on);
     },
   },
 });

@@ -1,7 +1,7 @@
 param(
   [string]$FrontendPath = "snooker-standalone/frontend",
   [string]$PagesRepoPath = "deploy-pages",
-  [string]$AdminUrl = "https://snookerlivehk-elton.github.io/admin?apiUrl=https://snooker-standalone-backend-production.up.railway.app&socketUrl=https://snooker-standalone-backend-production.up.railway.app&socketPath=/socket.io&token=wwww5678",
+  [string]$AdminUrl = "https://snookerlivehk-elton.github.io/admin?apiUrl=https://snooker-backend-production.up.railway.app&socketUrl=https://snooker-backend-production.up.railway.app&socketPath=/socket.io&token=wwww5678",
   [switch]$SkipBuild
 )
 

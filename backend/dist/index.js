@@ -28,70 +28,39 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-let lastRoomCode = null;
-const ROOM_CODE_FILE = path.join(__dirname, 'room-code-state.json');
-function loadLastRoomCode() {
+async function nextRoomCodeServer() {
     try {
-        if (fs.existsSync(ROOM_CODE_FILE)) {
-            const data = fs.readFileSync(ROOM_CODE_FILE, 'utf-8');
-            const json = JSON.parse(data);
-            if (json.lastRoomCode) {
-                lastRoomCode = json.lastRoomCode;
-            }
+        const seq = await prisma.roomCodeSequence.findUnique({ where: { id: 1 } });
+        let last = seq?.last_code || 'AAAAA0000';
+        const patternNew = /^[A-Z]{5}\d{4}$/;
+        if (!patternNew.test(last)) {
+            last = 'AAAAA0000';
         }
-    }
-    catch (err) {
-        console.error('Failed to load room code state:', err);
-    }
-}
-function saveLastRoomCode(code) {
-    try {
-        fs.writeFileSync(ROOM_CODE_FILE, JSON.stringify({ lastRoomCode: code }));
-    }
-    catch (err) {
-        console.error('Failed to save room code state:', err);
-    }
-}
-// Load state on startup
-loadLastRoomCode();
-function nextRoomCodeServer() {
-    const patternNew = /^[A-Z]{5}\d{4}$/;
-    // If no last code loaded from file, try to deduce from current memory rooms (fallback)
-    if (!lastRoomCode || !patternNew.test(lastRoomCode)) {
-        const existing = rooms
-            .map(r => r.code)
-            .filter((c) => !!c && patternNew.test(c))
-            .sort();
-        const lastExisting = existing.length > 0 ? existing[existing.length - 1] : 'AAAAA0000';
-        lastRoomCode = lastExisting;
-    }
-    let base = lastRoomCode || 'AAAAA0000';
-    if (!patternNew.test(base)) {
-        base = 'AAAAA0000';
-    }
-    const letters = base.slice(0, 5);
-    const digits = base.slice(5);
-    let num = parseInt(digits, 10);
-    if (isNaN(num)) {
-        lastRoomCode = 'AAAAA0000';
-        saveLastRoomCode(lastRoomCode);
-        return lastRoomCode;
-    }
-    // Increment logic
-    while (true) {
+        const letters = last.slice(0, 5);
+        const digits = last.slice(5);
+        let num = parseInt(digits, 10);
+        if (isNaN(num))
+            num = 0;
+        let nextCode = '';
         num += 1;
         if (num > 9999) {
             const inc = incrementLetters(letters);
-            lastRoomCode = `${inc}0000`;
+            nextCode = `${inc}0000`;
         }
         else {
-            lastRoomCode = `${letters}${String(num).padStart(4, '0')}`;
+            nextCode = `${letters}${String(num).padStart(4, '0')}`;
         }
-        // Double check against current memory rooms to be safe
-        if (!rooms.find(r => r.code === lastRoomCode)) {
-            saveLastRoomCode(lastRoomCode);
-            return lastRoomCode;
-        }
+        await prisma.roomCodeSequence.upsert({
+            where: { id: 1 },
+            update: { last_code: nextCode },
+            create: { id: 1, last_code: nextCode },
+        });
+        return nextCode;
+    }
+    catch (err) {
+        console.error('Failed to generate room code from DB:', err);
+        // Fallback to random if DB fails
+        return 'ERR' + Math.floor(Math.random() * 10000);
     }
 }
 const app = express();
@@ -282,12 +251,12 @@ app.get('/rooms/:roomId/state', (req, res) => {
     const room = rooms.find(r => r.id === roomId || r.code === roomId);
     res.json({ roomId, state: room?.gameState ?? null });
 });
-app.post('/api/rooms', (req, res) => {
+app.post('/api/rooms', async (req, res) => {
     const { name } = req.body;
     if (!name) {
         return res.status(400).json({ message: 'Room name is required' });
     }
-    const code = nextRoomCodeServer();
+    const code = await nextRoomCodeServer();
     // Use a unique ID based on timestamp and random number to avoid collisions on server restart
     const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     const newRoom = { id: newId, name, code, scores: [0, 0] };
