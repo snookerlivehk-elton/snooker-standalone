@@ -14,6 +14,7 @@ import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import MemberLogin from './MemberLogin';
 
+// Force frontend redeploy
 function App() {
   const [gameState, setGameState] = useState<State | null>(null);
 
