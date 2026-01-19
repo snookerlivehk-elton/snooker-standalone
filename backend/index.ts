@@ -1,5 +1,6 @@
 
 import 'dotenv/config';
+// Backend API for Snooker Standalone
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
