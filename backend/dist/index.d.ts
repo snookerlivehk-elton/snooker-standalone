@@ -5,5 +5,6 @@ export interface Room {
     code?: string;
     scores: [number, number];
     gameState?: any;
+    operatorId?: string;
 }
 //# sourceMappingURL=index.d.ts.map

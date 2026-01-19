@@ -926,11 +926,49 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 </div>
 
                 {gameState.isFrameOver && (
-                    <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center">
-                        <div className="bg-gray-800 p-8 rounded-lg text-center">
+                    <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50">
+                        <div className="bg-gray-800 p-8 rounded-lg text-center max-w-lg w-full">
                             <h2 className="text-4xl font-bold mb-4">Frame Over</h2>
                             <p className="text-2xl mb-6">{gameState.players[0].score > gameState.players[1].score ? gameState.players[0].name : gameState.players[1].name} wins the frame!</p>
-                            <button onClick={handleNewFrame} className="p-4 rounded-lg bg-green-600 hover:bg-green-700 font-bold text-xl border border-white">Next Frame</button>
+                            
+                            {uploadStatus === 'idle' && (
+                                <button onClick={handleNextFrameAction} className="p-4 rounded-lg bg-green-600 hover:bg-green-700 font-bold text-xl border border-white w-full">
+                                    Next Frame
+                                </button>
+                            )}
+                            
+                            {uploadStatus === 'uploading' && (
+                                <div className="text-xl font-bold text-yellow-400 animate-pulse">
+                                    Uploading Frame Data...
+                                </div>
+                            )}
+                            
+                            {uploadStatus === 'success' && (
+                                <div>
+                                    <div className="text-xl font-bold text-green-400 mb-4">
+                                        Data Uploaded Successfully!
+                                    </div>
+                                    <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
+                                        Start Next Frame
+                                    </button>
+                                </div>
+                            )}
+                            
+                            {uploadStatus === 'error' && (
+                                <div>
+                                    <div className="text-xl font-bold text-red-400 mb-4">
+                                        Upload Failed!
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={handleNextFrameAction} className="flex-1 p-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 font-bold text-lg border border-white">
+                                            Retry Upload
+                                        </button>
+                                        <button onClick={proceedToNewFrameState} className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white">
+                                            Force Start (Skip)
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

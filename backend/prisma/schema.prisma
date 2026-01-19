@@ -64,6 +64,7 @@ model Member {
   matchPlayers MatchPlayer[]
   matchesWon   Match[]      @relation("winner_member")
   matchesOperated Match[]   @relation("match_operator")
+  rooms        Room[]
 }
 
 // Sequence table for district-based member code generation (legacy, kept for compatibility)
@@ -87,7 +88,7 @@ model MemberDistrict {
   code3       String
   name        String
   active      Boolean       @default(true)
-
+  
   region      MemberRegion  @relation(fields: [region_code], references: [code3])
 
   @@unique([region_code, code3], name: "region_code_code3")
@@ -109,9 +110,25 @@ model RoomCodeSequence {
   updated_at DateTime @updatedAt
 }
 
+model Room {
+  id          String   @id // e.g. AAAAA0001
+  name        String?
+  code        String?
+  operator_id String?
+  operator    Member?  @relation(fields: [operator_id], references: [id])
+  created_at  DateTime @default(now())
+  // No expiration field, we will just query created_at for cleanup
+  gameState   Json?
+  scores      Json?
+  
+  matches     Match[]
+  @@index([operator_id])
+}
+
 model Match {
   id               String       @id @default(uuid())
   room_id          String
+  room             Room?        @relation(fields: [room_id], references: [id])
   name             String
   name_part        String?
   match_key_normalized String?

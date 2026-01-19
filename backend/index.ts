@@ -8,6 +8,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
+import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 
@@ -276,39 +277,219 @@ const io = new Server(server, {
 
 const rooms: Room[] = [];
 
+// Initialize rooms from DB (async)
+(async () => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Cleanup old rooms
+    try {
+      await prisma.room.deleteMany({ where: { created_at: { lt: sevenDaysAgo } } });
+      console.log('Cleaned up old rooms');
+    } catch (e) {
+      console.log('Cleanup skipped (table might not exist or permission denied)');
+    }
+    
+    // Load active
+    const active = await prisma.room.findMany({
+      where: { created_at: { gte: sevenDaysAgo } }
+    });
+    active.forEach(r => {
+      rooms.push({
+        id: r.id,
+        name: r.name || 'Unnamed',
+        code: r.code || r.id,
+        scores: (r.scores as any) || [0, 0],
+        gameState: r.gameState || undefined,
+        operatorId: r.operator_id || undefined
+      });
+    });
+    console.log(`Loaded ${rooms.length} active rooms from DB.`);
+  } catch (e) {
+    console.error('Failed to load rooms:', e);
+  }
+})();
+
 app.get('/api/rooms', (req, res) => {
   res.json(rooms);
 });
 
-app.get('/rooms/:roomId/state', (req, res) => {
+app.get('/rooms/:roomId/state', async (req, res) => {
   const roomId = String(req.params.roomId);
   const room = rooms.find(r => r.id === roomId || r.code === roomId);
-  res.json({ roomId, state: room?.gameState ?? null });
+  let operator: any = null;
+  if (room?.operatorId) {
+      try {
+          const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { name: true, email: true } });
+          if (op) operator = op;
+      } catch (e) {
+          // ignore
+      }
+  }
+  res.json({ roomId, state: room?.gameState ?? null, operator });
 });
 
 app.post('/api/rooms', async (req, res) => {
-  const { name } = req.body;
+  const { name, operatorId } = req.body;
   if (!name) {
     return res.status(400).json({ message: 'Room name is required' });
   }
   const code = await nextRoomCodeServer();
   // Use a unique ID based on timestamp and random number to avoid collisions on server restart
   const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-  const newRoom: Room = { id: newId, name, code, scores: [0, 0] };
+  const newRoom: Room = { id: newId, name, code, scores: [0, 0], operatorId };
+  
   rooms.push(newRoom);
+  
+  // Persist
+  try {
+      await prisma.room.create({
+          data: {
+              id: newId,
+              name,
+              code,
+              operator_id: operatorId || null,
+              scores: [0, 0],
+              gameState: {}
+          }
+      });
+  } catch(e) {
+      console.error('Failed to persist room:', e);
+  }
+
   io.emit('rooms', rooms);
   res.status(201).json(newRoom);
 });
 
-app.delete('/api/rooms/:roomId', (req, res) => {
+app.delete('/api/rooms/:roomId', async (req, res) => {
   const { roomId } = req.params;
   const index = rooms.findIndex(room => room.id === roomId);
   if (index !== -1) {
     rooms.splice(index, 1);
+    // Delete from DB
+    try {
+        await prisma.room.delete({ where: { id: roomId } });
+    } catch(e) {
+        console.error('Failed to delete room from DB:', e);
+    }
+    io.emit('rooms', rooms); // Notify clients
     res.status(204).send();
   } else {
     res.status(404).json({ error: 'Room not found' });
   }
+});
+
+// Verification endpoints
+app.post('/api/match-verification-code', async (req, res) => {
+    const { email, purpose } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    
+    // Check if member exists
+    const member = await prisma.member.findFirst({ where: { email } });
+    if (!member) return res.status(404).json({ error: 'Email not registered' });
+    
+    // Generate code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    
+    await prisma.emailVerification.create({
+        data: {
+            id: randomUUID(),
+            email,
+            code,
+            purpose: purpose || 'match',
+            expires_at: expiresAt
+        }
+    });
+    
+    // Send email
+    if (process.env.RESEND_API_KEY) {
+        try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            await resend.emails.send({
+                from: 'Snooker <onboarding@resend.dev>', // Should use verified domain
+                to: email,
+                subject: 'Match Verification Code',
+                html: `<p>Your verification code is: <strong>${code}</strong></p>`
+            });
+        } catch (e) {
+            console.error('Email failed:', e);
+        }
+    } else {
+        console.log(`[DEV] Verification code for ${email}: ${code}`);
+    }
+    
+    res.json({ message: 'Code sent' });
+});
+
+app.post('/api/matches/start', async (req, res) => {
+    const { p1_email, p1_code, p2_email, p2_code, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
+    
+    let p1_member_id: string | null = null;
+    let p2_member_id: string | null = null;
+    
+    // Verify P1
+    if (p1_email && p1_code) {
+        const ver = await prisma.emailVerification.findFirst({
+            where: { email: p1_email, code: p1_code, used_at: null, expires_at: { gt: new Date() } }
+        });
+        if (ver) {
+            const m = await prisma.member.findFirst({ where: { email: p1_email } });
+            if (m) {
+                p1_member_id = m.id;
+                await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
+            }
+        }
+    }
+    
+    // Verify P2
+    if (p2_email && p2_code) {
+        const ver = await prisma.emailVerification.findFirst({
+            where: { email: p2_email, code: p2_code, used_at: null, expires_at: { gt: new Date() } }
+        });
+        if (ver) {
+             const m = await prisma.member.findFirst({ where: { email: p2_email } });
+             if (m) {
+                 p2_member_id = m.id;
+                 await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
+             }
+        }
+    }
+    
+    if (!p1_member_id && !p2_member_id) {
+        return res.json({ mode: 'guest', message: 'Both players are guests' });
+    }
+    
+    try {
+        const match = await prisma.match.create({
+            data: {
+                room_id: String(room_id),
+                name: 'Match ' + new Date().toLocaleTimeString(),
+                frames_required: Number(frames_required || 1),
+                red_balls: Number(red_balls || 15),
+                handicap0: Number(handicap0 || 0),
+                handicap1: Number(handicap1 || 0),
+                started_at: new Date(),
+                operator_id: operator_id || null
+            }
+        });
+        
+        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
+        // Create MatchPlayers
+        if (p1_member_id) {
+             await prisma.matchPlayer.create({
+                 data: { match_id: match.id, member_id: p1_member_id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0,0,0,0] }
+             });
+        }
+        if (p2_member_id) {
+             await prisma.matchPlayer.create({
+                 data: { match_id: match.id, member_id: p2_member_id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0,0,0,0] }
+             });
+        }
+        
+        res.json({ mode: 'ranked', matchId: match.id });
+    } catch(e) {
+        res.status(500).json({ error: String(e) });
+    }
 });
 
 // Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)

@@ -66,6 +66,7 @@ async function nextRoomCodeServer() {
     }
 }
 const app = express();
+console.log(`Starting Snooker Backend v1.0.1...`);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
@@ -1703,20 +1704,45 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
                 return res.status(404).json({ error: 'Operator not found' });
             opId = m.id;
         }
-        // Check active matches (matches started by this operator that haven't ended)
-        // Note: If an operator creates a room code but doesn't start a match, we can't easily track it unless we persist rooms.
-        // Given the current architecture, we'll count matches where operator_id matches and ended_at is null.
-        const activeCount = await prisma.match.count({
-            where: {
-                operator_id: opId,
-                ended_at: null
-            }
-        });
+        // Check active in-memory rooms for this operator
+        // We count the rooms currently in the system associated with this operator
+        const activeCount = rooms.filter(r => r.operatorId === opId).length;
         if (activeCount >= 5) {
             return res.status(403).json({ error: '已達到房間數量上限 (5)' });
         }
         const code = await nextRoomCodeServer();
-        res.json({ roomCode: code });
+        // Create in-memory room immediately so it appears in the active list
+        const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        const newRoom = {
+            id: newId,
+            name: `Room ${code}`,
+            code,
+            scores: [0, 0],
+            operatorId: opId
+        };
+        rooms.push(newRoom);
+        io.emit('rooms', rooms);
+        res.json({ roomCode: code, roomId: newId });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.get('/api/operators/:id/active-rooms', async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: 'Missing operator ID' });
+        // Resolve ID if email
+        let opId = id;
+        if (id.includes('@')) {
+            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+            if (!m)
+                return res.status(404).json({ error: 'Operator not found' });
+            opId = m.id;
+        }
+        const active = rooms.filter(r => r.operatorId === opId);
+        res.json({ rooms: active });
     }
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
@@ -1832,12 +1858,12 @@ async function findMemberByIdOrEmail(identifier) {
         },
     });
 }
-app.get('/api/members/validate', async (req, res) => {
+app.post('/api/members/validate', async (req, res) => {
     try {
-        const idsParam = req.query.ids || '';
-        const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+        const { identifiers } = (req.body || {});
+        const ids = Array.isArray(identifiers) ? identifiers.map(s => String(s).trim()).filter(Boolean) : [];
         if (ids.length === 0) {
-            return res.status(400).json({ error: 'ids is required (comma-separated)' });
+            return res.status(400).json({ error: 'identifiers is required (array of strings)' });
         }
         const exists = {};
         const names = {};
@@ -2120,6 +2146,10 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
             data.member_code = body.member_code ? String(body.member_code).trim() : null;
         if (body.phone !== undefined)
             data.phone = body.phone ? String(body.phone).trim() : null;
+        if (body.club_name !== undefined)
+            data.club_name = body.club_name ? String(body.club_name).trim() : null;
+        if (body.clubName !== undefined)
+            data.club_name = body.clubName ? String(body.clubName).trim() : null;
         const bdRaw = body.birthDate ?? body.birth_date;
         if (bdRaw !== undefined) {
             if (!bdRaw) {
@@ -2151,6 +2181,57 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
             const r = String(body.role || 'MEMBER').toUpperCase();
             data.role = r === 'ADMIN' ? 'ADMIN' : 'MEMBER';
         }
+        const member = await prisma.member.update({
+            where: { id },
+            data,
+        });
+        res.json({ member });
+    }
+    catch (err) {
+        if (err?.code === 'P2025') {
+            return res.status(404).json({ error: '會員不存在' });
+        }
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Member: self-update (no admin token required, but allows limited fields)
+app.put('/api/members/:id', async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: '缺少會員 ID' });
+        // In a real app, we would verify the session/token here to ensure the user is updating themselves.
+        // For this standalone version, we assume the client is behaving (or we trust the ID flow).
+        const body = (req.body || {});
+        const data = {};
+        if (body.phone !== undefined)
+            data.phone = body.phone ? String(body.phone).trim() : null;
+        if (body.club_name !== undefined)
+            data.club_name = body.club_name ? String(body.club_name).trim() : null;
+        if (body.clubName !== undefined)
+            data.club_name = body.clubName ? String(body.clubName).trim() : null;
+        const bdRaw = body.birthDate ?? body.birth_date;
+        if (bdRaw !== undefined) {
+            if (!bdRaw) {
+                data.birth_date = null;
+            }
+            else {
+                const d = new Date(bdRaw);
+                if (Number.isNaN(d.getTime())) {
+                    return res.status(400).json({ error: '出生日期格式不正確' });
+                }
+                data.birth_date = d;
+            }
+        }
+        if (body.password) {
+            const pw = String(body.password);
+            const salt = randomBytes(16).toString('hex');
+            const hash = createHash('sha256').update(pw + salt).digest('hex');
+            data.password_hash = hash;
+            data.password_salt = salt;
+            data.password_updated_at = new Date();
+        }
+        // Only update if member exists
         const member = await prisma.member.update({
             where: { id },
             data,
