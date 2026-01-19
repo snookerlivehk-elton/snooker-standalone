@@ -218,3 +218,200 @@ export async function getOperatorMatches(apiUrl: string, operatorId: string) {
   }
   return res.json(); // { matches: [] }
 }
+
+// Admin / Lists
+export async function listMembers(apiUrl: string, adminToken: string) {
+  const res = await fetch(`${apiUrl}/api/admin/members`, {
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`取得會員列表失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function updateMember(apiUrl: string, adminToken: string, id: string | number, data: any) {
+  const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`更新會員失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function deleteMember(apiUrl: string, adminToken: string, id: string | number) {
+  const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`刪除會員失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listMemberRegions(apiUrl: string) {
+  const res = await fetch(`${apiUrl}/api/member/regions`);
+  if (!res.ok) throw new Error(`取得地方清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listMemberDistricts(apiUrl: string, regionCode?: string) {
+  const qs = regionCode ? `?regionCode=${encodeURIComponent(regionCode)}` : '';
+  const res = await fetch(`${apiUrl}/api/member/districts${qs}`);
+  if (!res.ok) throw new Error(`取得分區清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listAdminMemberRegions(apiUrl: string, adminToken: string) {
+  const res = await fetch(`${apiUrl}/api/admin/member/regions`, {
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`取得地方管理清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function listAdminMemberDistricts(apiUrl: string, adminToken: string, regionCode?: string) {
+  const qs = regionCode ? `?regionCode=${encodeURIComponent(regionCode)}` : '';
+  const res = await fetch(`${apiUrl}/api/admin/member/districts${qs}`, {
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`取得分區管理清單失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function upsertAdminMemberDistrict(
+  apiUrl: string,
+  adminToken: string,
+  payload: { regionCode: string; code3: string; name: string; active?: boolean },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/member/districts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) return res.json();
+  if (res.status === 409) {
+     const res2 = await fetch(`${apiUrl}/api/admin/member/districts/${payload.regionCode}/${payload.code3}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify({ name: payload.name, active: payload.active }),
+     });
+     if (!res2.ok) throw new Error(`更新分區失敗 (${res2.status})`);
+     return res2.json();
+  }
+  throw new Error(`新增分區失敗 (${res.status})`);
+}
+
+export async function deleteAdminMemberDistrict(
+  apiUrl: string,
+  adminToken: string,
+  regionCode: string,
+  code3: string,
+) {
+  const res = await fetch(`${apiUrl}/api/admin/member/districts/${regionCode}/${code3}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`刪除分區失敗 (${res.status})`);
+  return res.json();
+}
+
+export interface ValidateMembersResponse {
+  exists: Record<string, boolean>;
+  names?: Record<string, string | null>;
+}
+
+// Admin Matches
+export async function listAdminMatches(
+  apiUrl: string,
+  adminToken: string,
+  options?: { memberId?: string; page?: number; pageSize?: number }
+) {
+  const params = new URLSearchParams();
+  if (options?.memberId) params.append('memberId', options.memberId);
+  if (options?.page) params.append('page', String(options.page));
+  if (options?.pageSize) params.append('pageSize', String(options.pageSize));
+
+  const query = params.toString();
+  const url = `${apiUrl}/api/admin/matches${query ? `?${query}` : ''}`;
+
+  const res = await fetch(url, {
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`取得比賽列表失敗 (${res.status})`);
+  return res.json();
+}
+
+// Admin Regions
+export async function upsertAdminMemberRegion(
+  apiUrl: string,
+  adminToken: string,
+  payload: { code3: string; name: string; active?: boolean },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/member/regions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) return res.json();
+  if (res.status === 409) {
+     // Update
+     const res2 = await fetch(`${apiUrl}/api/admin/member/regions/${payload.code3}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+        body: JSON.stringify({ name: payload.name, active: payload.active }),
+     });
+     if (!res2.ok) throw new Error(`更新地方失敗 (${res2.status})`);
+     return res2.json();
+  }
+  throw new Error(`新增地方失敗 (${res.status})`);
+}
+
+// Member Membership
+export async function renewMembership(apiUrl: string, adminToken: string, id: string | number, years: number) {
+  const res = await fetch(`${apiUrl}/api/members/${id}/renew`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ years }),
+  });
+  if (!res.ok) throw new Error(`續期失敗 (${res.status})`);
+  return res.json();
+}
+
+// Member Register Email Code
+export async function requestRegisterEmailCode(apiUrl: string, email: string) {
+  const res = await fetch(`${apiUrl}/api/members/request-register-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+     const err = await res.json();
+     throw new Error(err.error || `發送驗證碼失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function registerMemberWithCode(
+  apiUrl: string,
+  data: {
+    name: string;
+    email: string;
+    password: string;
+    regionCode: string;
+    districtCode: string;
+    code: string;
+    phone?: string;
+    clubName?: string;
+    birthDate?: string;
+  },
+) {
+  const res = await fetch(`${apiUrl}/api/members/register-with-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || `註冊失敗 (${res.status})`);
+  }
+  return res.json();
+}

@@ -1776,10 +1776,6 @@ app.get('/api/operators/:id/matches', async (req, res) => {
       const p0Score = m.score0;
       const p1Score = m.score1;
       
-      // Calculate max break (simplified)
-      // Note: Real max break needs event analysis, but we can use stats if available.
-      // For now, we don't have stats joined here.
-      
       return {
         id: m.id,
         startedAt: m.started_at,
@@ -1788,8 +1784,8 @@ app.get('/api/operators/:id/matches', async (req, res) => {
         matchName: m.name,
         matchCode: m.match_code,
         framesRequired: m.frames_required,
-        p0: { name: p0Name, score: p0Score, handicap: m.handicap0 },
-        p1: { name: p1Name, score: p1Score, handicap: m.handicap1 },
+        p0: { name: p0Name, score: p0Score, handicap: m.handicap0, maxBreak: p0?.max_break_points },
+        p1: { name: p1Name, score: p1Score, handicap: m.handicap1, maxBreak: p1?.max_break_points },
         result: m.winner_id ? (m.winner_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
         durationSeconds: m.started_at && m.ended_at ? Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000) : null,
       };

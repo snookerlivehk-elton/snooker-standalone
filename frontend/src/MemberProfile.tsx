@@ -157,7 +157,8 @@ const MemberProfile: React.FC = () => {
               try {
                 setRenewLoading(true);
                 const targetId = String(member.id);
-                const res = await renewMembership(API_URL, targetId);
+                // Pass empty token as it's not required by this endpoint, and default 3 years
+                const res = await renewMembership(API_URL, '', targetId, 3);
                 const updated = res.member ?? res;
                 setMember((prev: any) => ({ ...(prev || member), ...updated }));
                 setToast('續期申請成功，已延長 3 年');

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL, API_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID, ENABLE_SUPABASE } from './config';
@@ -30,6 +30,12 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const ignoreNextSocketUpdateRef = useRef(false);
     const baseUrl = (import.meta.env.BASE_URL || '/');
     const liveViewUrl = roomId ? `${window.location.origin}${baseUrl}room/${roomId}/live` : `${window.location.origin}${baseUrl}`;
+    
+    const session = useMemo(() => {
+        try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
+    }, []);
+    const operatorId = session.id;
+    const hasTriedInitialUpload = useRef(false);
 
 
     useEffect(() => {

@@ -13,6 +13,7 @@ import AdminMembers from './AdminMembers';
 import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import MemberLogin from './MemberLogin';
+import OperatorDashboard from './OperatorDashboard';
 
 // Force frontend redeploy
 function App() {

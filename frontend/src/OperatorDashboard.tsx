@@ -151,9 +151,11 @@ const OperatorDashboard: React.FC = () => {
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ marginBottom: '4px' }}>
                           {m.p0.name} {m.p0.handicap ? `(${m.p0.handicap > 0 ? '+' : ''}${m.p0.handicap})` : ''}
+                          {m.p0.maxBreak > 0 && <span style={{ fontSize: '12px', color: '#fbbf24', marginLeft: '6px' }}>單杆: {m.p0.maxBreak}</span>}
                         </div>
                         <div>
                           {m.p1.name} {m.p1.handicap ? `(${m.p1.handicap > 0 ? '+' : ''}${m.p1.handicap})` : ''}
+                          {m.p1.maxBreak > 0 && <span style={{ fontSize: '12px', color: '#fbbf24', marginLeft: '6px' }}>單杆: {m.p1.maxBreak}</span>}
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>
