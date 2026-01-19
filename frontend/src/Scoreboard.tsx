@@ -36,6 +36,16 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     }, []);
     const operatorId = session.id;
     const hasTriedInitialUpload = useRef(false);
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+    const hasAppendedFrameEvent = useRef(false);
+
+    // Reset upload status when a new frame starts
+    useEffect(() => {
+        if (gameState && !gameState.isFrameOver) {
+            setUploadStatus('idle');
+            hasAppendedFrameEvent.current = false;
+        }
+    }, [gameState?.isFrameOver]);
 
 
     useEffect(() => {
@@ -440,25 +450,51 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         }
     };
 
-    const handleNewFrame = async () => {
+    const proceedToNewFrameState = () => {
         if (!gameState) return;
         const newState = gameState.clone();
-            if (roomId) {
+        
+        // Ensure event is appended for local/simple mode if skipped
+        if (roomId && SIMPLE_MODE && !hasAppendedFrameEvent.current) {
+                RoomStorage.appendEvent(roomId!, {
+                type: 'newFrame',
+                playerIndex: newState.currentPlayerIndex,
+                playerMemberId: newState.players[newState.currentPlayerIndex].memberId,
+            });
+            hasAppendedFrameEvent.current = true;
+        }
+
+        newState.newFrame();
+        updateAndBroadcastState(newState);
+    };
+
+    const handleNextFrameAction = async () => {
+        if (!gameState) return;
+        
+        if (roomId && !SIMPLE_MODE) {
+            // Append event only once
+            if (!hasAppendedFrameEvent.current) {
+                const newState = gameState.clone();
                 RoomStorage.appendEvent(roomId!, {
                     type: 'newFrame',
                     playerIndex: newState.currentPlayerIndex,
                     playerMemberId: newState.players[newState.currentPlayerIndex].memberId,
                 });
-            if (!SIMPLE_MODE) {
-                try {
-                    await uploadSegment(false);
-                } catch {
-                    void 0;
-                }
+                hasAppendedFrameEvent.current = true;
             }
+
+            setUploadStatus('uploading');
+            try {
+                await uploadSegment(false);
+                setUploadStatus('success');
+            } catch (e) {
+                console.error(e);
+                setUploadStatus('error');
+            }
+        } else {
+            // Local/Simple mode
+            proceedToNewFrameState();
         }
-        newState.newFrame();
-        updateAndBroadcastState(newState);
     };
 
     const handleConcede = () => {
