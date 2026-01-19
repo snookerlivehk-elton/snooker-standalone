@@ -2267,6 +2267,8 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       role?: string | null;
       membershipExpiresAt?: string | null;
       membership_expires_at?: string | null;
+      club_name?: string | null;
+      clubName?: string | null;
     };
 
     const data: any = {};
