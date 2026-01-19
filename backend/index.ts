@@ -551,7 +551,12 @@ app.post('/api/matches/start', async (req, res) => {
              });
         }
         
-        res.json({ mode: 'ranked', matchId: match.id });
+        res.json({ 
+            mode: 'ranked', 
+            matchId: match.id,
+            p1MemberId: p1_member_id,
+            p2MemberId: p2_member_id
+        });
     } catch(e) {
         res.status(500).json({ error: String(e) });
     }

@@ -180,25 +180,31 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             }
 
             // Create Match on Backend
-            let matchIdResult: string = '';
-            let mode: 'ranked' | 'guest' = 'guest';
+            let matchIdResult: string | null = null;
+            let mode = 'guest';
+            let p1MemberId: string | null = null;
+            let p2MemberId: string | null = null;
 
             try {
-                const res = await startMatchV2(API_URL, {
-                    room_id: storageRoomId,
-                    p1_email: p1Email.trim(),
-                    p1_code: p1Code.trim(),
-                    p2_email: p2Email.trim(),
-                    p2_code: p2Code.trim(),
-                    frames_required: framesRequired,
-                    red_balls: redBalls,
-                    handicap0: p1Handicap,
-                    handicap1: p2Handicap,
-                    operator_id: operatorInfo?.id || operatorInfo?.email
-                });
+                const res = await startMatch(
+                    API_URL, 
+                    p1Email.trim(), 
+                    p1Code.trim(),
+                    p2Email.trim(), 
+                    p2Code.trim(),
+                    roomId,
+                    operatorInfo?.id || null, // Pass resolved operator ID
+                    framesRequired,
+                    redBalls,
+                    p1Handicap,
+                    p2Handicap
+                );
                 matchIdResult = res.matchId;
                 mode = res.mode;
+                p1MemberId = res.p1MemberId;
+                p2MemberId = res.p2MemberId;
             } catch (e: any) {
+                // If 400 error (e.g. invalid code), alert and stop
                 alert(`Failed to start match: ${e.message}`);
                 return;
             }
@@ -238,8 +244,8 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             }
 
             const playersInfo = [
-                { name: p1Name, email: p1Email.trim() },
-                { name: p2Name, email: p2Email.trim() },
+                { name: p1Name, email: p1Email.trim(), memberId: p1MemberId || p1Email.trim() || undefined },
+                { name: p2Name, email: p2Email.trim(), memberId: p2MemberId || p2Email.trim() || undefined },
             ];
             
             onStartMatch({
