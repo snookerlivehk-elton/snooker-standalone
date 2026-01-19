@@ -160,7 +160,7 @@ app.get('/health/db', async (_req, res) => {
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
 app.post('/api/matches/strict', writeAuth, async (req, res) => {
   try {
-    const { roomId, match, players, timestamps } = req.body || {};
+    const { roomId, match, players, timestamps, operatorId } = req.body || {};
     if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
       return res.status(400).json({ error: 'invalid payload' });
     }
@@ -169,9 +169,11 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
     if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
       return res.status(400).json({ error: 'memberId required for both players' });
     }
-    const idMap = await resolveMemberIdentifiers([p0, p1]);
+    const idMap = await resolveMemberIdentifiers([p0, p1, operatorId].filter(Boolean));
     const p0Resolved = idMap.get(p0) || null;
     const p1Resolved = idMap.get(p1) || null;
+    const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
+    
     if (!p0Resolved || !p1Resolved) {
       return res.status(404).json({ error: 'memberId not found' });
     }
@@ -188,6 +190,7 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
         handicap0: Array.isArray(match.handicaps) ? Number(match.handicaps[0] || 0) : 0,
         handicap1: Array.isArray(match.handicaps) ? Number(match.handicaps[1] || 0) : 0,
         started_at: startedAt,
+        operator_id: opResolved,
       },
     });
     const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
@@ -203,14 +206,16 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
 
 app.post('/api/matches/partial', writeAuth, async (req, res) => {
   try {
-    const { roomId, match, players, timestamps } = req.body || {};
+    const { roomId, match, players, timestamps, operatorId } = req.body || {};
     if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
       return res.status(400).json({ error: 'invalid payload' });
     }
-    const candidateIds = [players[0]?.memberId, players[1]?.memberId].filter((x: any) => typeof x === 'string') as string[];
+    const candidateIds = [players[0]?.memberId, players[1]?.memberId, operatorId].filter((x: any) => typeof x === 'string') as string[];
     const idMap = await resolveMemberIdentifiers(candidateIds);
     const acceptedMemberIds = candidateIds.filter(id => idMap.has(id));
     const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
+    const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
+
     const created = await prisma.match.create({
       data: {
         room_id: String(roomId),
@@ -221,6 +226,7 @@ app.post('/api/matches/partial', writeAuth, async (req, res) => {
         frames_required: Number(match.framesRequired || 1),
         red_balls: Number(match.redBalls || 15),
         started_at: startedAt,
+        operator_id: opResolved,
       },
     });
     const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
@@ -1310,6 +1316,89 @@ app.post('/api/members/reset-password-with-code', async (req, res) => {
     });
 
     res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Get member's match history
+app.get('/api/members/:id/matches', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'id required' });
+
+    // Resolve member ID if it's an email
+    let targetId = id;
+    if (id.includes('@')) {
+      const m = await prisma.member.findFirst({ where: { email: id } });
+      if (m) targetId = m.id;
+    }
+
+    const matches = await prisma.match.findMany({
+      where: {
+        players: {
+          some: {
+            member_id: targetId
+          }
+        }
+      },
+      include: {
+        operator: {
+          select: { name: true, club_name: true }
+        },
+        winner_member: {
+          select: { id: true, name: true }
+        },
+        players: {
+          include: {
+            member: {
+              select: { id: true, name: true }
+            }
+          }
+        },
+        stats: true,
+      },
+      orderBy: {
+        started_at: 'desc'
+      }
+    });
+
+    const result = matches.map(m => {
+      const p0 = m.players[0]; // Note: Order is not guaranteed to match handicap0/1 without player_index
+      const p1 = m.players[1];
+      const playerUser = m.players.find(p => p.member_id === targetId);
+      
+      // Calculate duration
+      let durationSeconds = 0;
+      if (m.started_at && m.ended_at) {
+        durationSeconds = Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000);
+      }
+
+      return {
+        id: m.id,
+        date: m.started_at,
+        matchName: m.name,
+        matchLevel: m.name_part || '一般', // Assuming name_part stores level or just use default
+        operatorName: m.operator?.name || '-',
+        operatorClub: m.operator?.club_name || '-',
+        // Return raw players and handicaps, frontend will try to display
+        players: m.players.map(p => ({
+          name: p.member.name,
+          framesWon: p.frames_won,
+          maxBreak: p.max_break_points,
+        })),
+        handicaps: [m.handicap0, m.handicap1],
+        framesRequired: m.frames_required,
+        totalFrames: (p0?.frames_won || 0) + (p1?.frames_won || 0),
+        finalScore: `${p0?.frames_won || 0}-${p1?.frames_won || 0}`, // Order might be mixed
+        winnerName: m.winner_member?.name,
+        isWinner: m.winner_member_id === targetId,
+        userMaxBreak: playerUser?.max_break_points || 0,
+        durationSeconds,
+      };
+    });
+
+    res.json({ matches: result });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }

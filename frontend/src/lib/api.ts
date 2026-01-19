@@ -338,9 +338,18 @@ export async function getMember(
   apiUrl: string,
   id: string,
 ) {
-  const res = await fetch(`${apiUrl}/api/members/${id}`);
-  if (!res.ok) throw new Error(`取得會員失敗 (${res.status})`);
-  return res.json(); // { member }
+  const res = await fetch(`${apiUrl}/api/members`);
+  if (!res.ok) throw new Error(`取得會員列表失敗 (${res.status})`);
+  return res.json(); // { members }
+}
+
+export async function getMemberMatches(
+  apiUrl: string,
+  memberId: string,
+) {
+  const res = await fetch(`${apiUrl}/api/members/${memberId}/matches`);
+  if (!res.ok) throw new Error(`取得比賽歷史失敗 (${res.status})`);
+  return res.json(); // { matches: [...] }
 }
 
 export async function renewMembership(

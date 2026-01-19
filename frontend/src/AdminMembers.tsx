@@ -260,7 +260,7 @@ const AdminMembers: React.FC = () => {
               >
                 <option value="">全部等級</option>
                 <option value="MEMBER">普通會員</option>
-                <option value="ADMIN">管理者</option>
+                <option value="ADMIN">操作員</option>
               </select>
               
               <button 
@@ -347,10 +347,10 @@ const AdminMembers: React.FC = () => {
                           style={{ width: '100%' }}
                         >
                           <option value="MEMBER">普通會員</option>
-                          <option value="ADMIN">管理者</option>
+                          <option value="ADMIN">操作員</option>
                         </select>
                       ) : (
-                        (m.role === 'ADMIN' ? '管理者' : '普通會員')
+                        (m.role === 'ADMIN' ? '操作員' : '普通會員')
                       )}
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>

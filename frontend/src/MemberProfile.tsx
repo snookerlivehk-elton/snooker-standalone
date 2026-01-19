@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership } from './lib/api';
+import { getMember, listMembers, updateMember, renewMembership, getMemberMatches } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [member, setMember] = useState<any | null>(null);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -87,6 +89,21 @@ const MemberProfile: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, [id]);
+
+  useEffect(() => {
+    if (!member?.id) return;
+    (async () => {
+      setMatchesLoading(true);
+      try {
+        const res = await getMemberMatches(API_URL, String(member.id));
+        setMatches(res.matches || []);
+      } catch (e) {
+        console.error('Failed to load matches', e);
+      } finally {
+        setMatchesLoading(false);
+      }
+    })();
+  }, [member?.id]);
 
   if (loading) return <div style={{ padding: 16 }}>載入中...</div>;
   if (error) return <div style={{ padding: 16, color: 'red' }}>{error}</div>;
@@ -250,6 +267,72 @@ const MemberProfile: React.FC = () => {
               重設密碼
             </button>
           </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-4">
+          <h3 className="text-lg font-semibold mb-3">比賽歷史</h3>
+          {matchesLoading ? (
+            <div>載入中...</div>
+          ) : matches.length === 0 ? (
+            <div className="text-gray-400 text-sm">尚無比賽記錄</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left whitespace-nowrap">
+                <thead className="text-gray-400 border-b border-gray-700">
+                  <tr>
+                    <th className="py-2 px-2">日期</th>
+                    <th className="py-2 px-2">賽事</th>
+                    <th className="py-2 px-2">操作員</th>
+                    <th className="py-2 px-2">比分</th>
+                    <th className="py-2 px-2">對手</th>
+                    <th className="py-2 px-2">結果</th>
+                    <th className="py-2 px-2">最高單杆</th>
+                    <th className="py-2 px-2">用時</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matches.map((m) => {
+                    const myPlayer = m.players.find((p: any) => p.member.id === member.id || p.member.name === member.name) || m.players[0];
+                    const opponent = m.players.find((p: any) => p.id !== myPlayer.id);
+                    const isWinner = m.winner_member_id === myPlayer.member.id;
+                    const duration = m.started_at && m.ended_at ? Math.round((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 60000) + ' 分鐘' : '-';
+                    
+                    return (
+                      <tr key={m.id} className="border-b border-gray-700 hover:bg-gray-750">
+                        <td className="py-2 px-2">
+                          {new Date(m.started_at).toLocaleDateString()}
+                          <br/>
+                          <span className="text-xs text-gray-400">{new Date(m.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <div className="font-medium">{m.name}</div>
+                          <div className="text-xs text-gray-400">局數: {m.frames_required}</div>
+                        </td>
+                        <td className="py-2 px-2">
+                           {m.operator?.name || '-'}<br/>
+                           <span className="text-xs text-gray-400">{m.operator?.club_name || '-'}</span>
+                        </td>
+                        <td className="py-2 px-2 font-bold">
+                          {myPlayer.frames_won} - {opponent?.frames_won || 0}
+                        </td>
+                        <td className="py-2 px-2">
+                          {opponent?.member?.name || '-'}<br/>
+                          {/* <span className="text-xs text-gray-400">讓分: ?</span> */}
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className={isWinner ? 'text-green-400' : 'text-red-400'}>
+                            {isWinner ? '勝' : '負'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2">{myPlayer.max_break_points}</td>
+                        <td className="py-2 px-2">{duration}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {toast && <div className="text-green-400">{toast}</div>}

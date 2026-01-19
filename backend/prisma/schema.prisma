@@ -63,6 +63,7 @@ model Member {
 
   matchPlayers MatchPlayer[]
   matchesWon   Match[]      @relation("winner_member")
+  matchesOperated Match[]   @relation("match_operator")
 }
 
 // Sequence table for district-based member code generation (legacy, kept for compatibility)
@@ -131,6 +132,10 @@ model Match {
   events           Event[]
   foulTotals       FoulTotals?
   stats            MatchStats?
+
+  // Operator (who recorded the match)
+  operator_id      String?
+  operator         Member?      @relation(name: "match_operator", fields: [operator_id], references: [id])
 
   @@index([started_at])
   @@index([winner_member_id])
