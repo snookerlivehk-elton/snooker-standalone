@@ -26,9 +26,17 @@ const MemberLogin: React.FC = () => {
     try {
       const result = await loginMember(API_URL, { email: email.trim().toLowerCase(), password });
       const id = result?.id || result?.member?.id;
+      const role = result?.role || result?.member?.role;
+      
       if (!id) throw new Error('登入失敗');
-      localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id }));
-      navigate(`/member/${id}`);
+      
+      localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
+      
+      if (role === 'ADMIN') {
+        navigate('/operator/dashboard');
+      } else {
+        navigate(`/member/${id}`);
+      }
     } catch (err: any) {
       setError(err.message || '登入失敗');
     } finally {

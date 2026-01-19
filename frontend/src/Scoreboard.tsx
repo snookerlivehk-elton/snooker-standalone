@@ -77,6 +77,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         };
     }, [roomId]);
 
+    useEffect(() => {
+        if (gameState && roomId && !SIMPLE_MODE && !hasTriedInitialUpload.current) {
+            hasTriedInitialUpload.current = true;
+            // Attempt to create match record immediately so it appears in history
+            uploadSegment(false).catch(() => {});
+        }
+    }, [gameState, roomId, SIMPLE_MODE]);
+
     // Supabase Realtime channel（簡化版或無後端模式下的雲端同步）
     useEffect(() => {
         if (!roomId || !ENABLE_SUPABASE) {
@@ -371,6 +379,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 playersPayload,
                 { start: record.timestamps.start },
                 writeToken,
+                operatorId,
             );
             matchId = created.matchId;
             acceptedMemberIds = created.acceptedMemberIds || [];

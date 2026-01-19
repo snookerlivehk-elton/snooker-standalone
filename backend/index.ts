@@ -1741,6 +1741,101 @@ app.post('/api/members/register-with-code', async (req, res) => {
   }
 });
 
+// Operator: Get match history
+app.get('/api/operators/:id/matches', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'Missing operator ID' });
+    
+    // Resolve ID if email
+    let opId = id;
+    if (id.includes('@')) {
+      const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+      if (!m) return res.status(404).json({ error: 'Operator not found' });
+      opId = m.id;
+    }
+
+    const matches = await prisma.match.findMany({
+      where: { operator_id: opId },
+      orderBy: { started_at: 'desc' },
+      include: {
+        match_players: {
+          include: {
+            member: { select: { name: true, handicap: true } }
+          }
+        },
+        operator: { select: { name: true, club_name: true } }
+      }
+    });
+
+    const result = matches.map(m => {
+      const p0 = m.match_players[0];
+      const p1 = m.match_players[1];
+      const p0Name = p0?.member?.name || 'Unknown';
+      const p1Name = p1?.member?.name || 'Unknown';
+      const p0Score = m.score0;
+      const p1Score = m.score1;
+      
+      // Calculate max break (simplified)
+      // Note: Real max break needs event analysis, but we can use stats if available.
+      // For now, we don't have stats joined here.
+      
+      return {
+        id: m.id,
+        startedAt: m.started_at,
+        endedAt: m.ended_at,
+        operator: m.operator ? { name: m.operator.name, clubName: m.operator.club_name } : null,
+        matchName: m.name,
+        matchCode: m.match_code,
+        framesRequired: m.frames_required,
+        p0: { name: p0Name, score: p0Score, handicap: m.handicap0 },
+        p1: { name: p1Name, score: p1Score, handicap: m.handicap1 },
+        result: m.winner_id ? (m.winner_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
+        durationSeconds: m.started_at && m.ended_at ? Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000) : null,
+      };
+    });
+
+    res.json({ matches: result });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Operator: Create Room (Limit 5 active rooms)
+app.post('/api/operators/:id/rooms', async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'Missing operator ID' });
+
+    // Resolve ID if email
+    let opId = id;
+    if (id.includes('@')) {
+      const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
+      if (!m) return res.status(404).json({ error: 'Operator not found' });
+      opId = m.id;
+    }
+
+    // Check active matches (matches started by this operator that haven't ended)
+    // Note: If an operator creates a room code but doesn't start a match, we can't easily track it unless we persist rooms.
+    // Given the current architecture, we'll count matches where operator_id matches and ended_at is null.
+    const activeCount = await prisma.match.count({
+      where: {
+        operator_id: opId,
+        ended_at: null
+      }
+    });
+
+    if (activeCount >= 5) {
+      return res.status(403).json({ error: '已達到房間數量上限 (5)' });
+    }
+
+    const code = await nextRoomCodeServer();
+    res.json({ roomCode: code });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 // Simple password hashing helpers (SHA-256 with per-user salt)
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
@@ -1764,7 +1859,17 @@ app.post('/api/members/login', async (req, res) => {
     if (digest !== mh) {
       return res.status(401).json({ error: '帳號或密碼不正確' });
     }
-    return res.json({ ok: true, id: m.id, member: { id: m.id, name: m.name, email: m.email, member_code: m.member_code } });
+    return res.json({ 
+      ok: true, 
+      id: m.id, 
+      member: { 
+        id: m.id, 
+        name: m.name, 
+        email: m.email, 
+        member_code: m.member_code,
+        role: m.role 
+      } 
+    });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }

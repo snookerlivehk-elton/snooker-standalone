@@ -36,6 +36,7 @@ function App() {
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/login" element={<MemberLogin />} />
         <Route path="/member/:id" element={<MemberProfile />} />
+        <Route path="/operator/dashboard" element={<OperatorDashboard />} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/admin/matches" element={<AdminAuth><AdminMatches /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
