@@ -35,7 +35,8 @@ function App() {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
-        <Route path="/members/login" element={<MemberLogin />} />
+        <Route path="/members/login" element={<MemberLogin mode="member" />} />
+        <Route path="/operator/login" element={<MemberLogin mode="operator" />} />
         <Route path="/member/:id" element={<MemberProfile />} />
         <Route path="/operator/dashboard" element={<OperatorDashboard />} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />

@@ -31,7 +31,7 @@ const OperatorDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!operatorId) {
-      navigate('/members/login');
+      navigate('/operator/login');
       return;
     }
     

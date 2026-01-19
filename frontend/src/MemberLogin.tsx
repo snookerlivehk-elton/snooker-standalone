@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { loginMember, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
 
-const MemberLogin: React.FC = () => {
+interface MemberLoginProps {
+  mode?: 'member' | 'operator';
+}
+
+const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
   const [view, setView] = useState<'login' | 'forgot-request' | 'forgot-reset'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +36,7 @@ const MemberLogin: React.FC = () => {
       
       localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
       
-      if (role === 'ADMIN') {
+      if (mode === 'operator') {
         navigate('/operator/dashboard');
       } else {
         navigate(`/member/${id}`);
@@ -93,7 +97,7 @@ const MemberLogin: React.FC = () => {
         <div className="text-center mb-6">
           <div className="text-xl font-bold text-yellow-400 uppercase tracking-wider">Snooker Live HK</div>
           <h2 className="text-2xl font-bold mt-1">
-            {view === 'login' && '會員登入'}
+            {view === 'login' && (mode === 'operator' ? '操作員登入' : '會員登入')}
             {view === 'forgot-request' && '忘記密碼'}
             {view === 'forgot-reset' && '重設密碼'}
           </h2>
