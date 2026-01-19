@@ -1970,12 +1970,13 @@ async function findMemberByIdOrEmail(identifier: string) {
   });
 }
 
-app.get('/api/members/validate', async (req, res) => {
+app.post('/api/members/validate', async (req, res) => {
   try {
-    const idsParam = (req.query.ids as string) || '';
-    const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+    const { identifiers } = (req.body || {}) as { identifiers?: string[] };
+    const ids = Array.isArray(identifiers) ? identifiers.map(s => String(s).trim()).filter(Boolean) : [];
+    
     if (ids.length === 0) {
-      return res.status(400).json({ error: 'ids is required (comma-separated)' });
+      return res.status(400).json({ error: 'identifiers is required (array of strings)' });
     }
 
     const exists: Record<string, boolean> = {};
