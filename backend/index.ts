@@ -1175,6 +1175,146 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 // Members: registration and admin list
+// Request password reset code
+app.post('/api/members/request-password-reset-code', async (req, res) => {
+  try {
+    const { email } = (req.body || {}) as { email?: string };
+    const em = String(email || '').trim().normalize('NFKC');
+    if (!em) {
+      return res.status(400).json({ error: 'email 為必填' });
+    }
+    const member = await prisma.member.findFirst({ where: { email: em } });
+    if (!member) {
+      // For security, do not reveal if email exists, just return success or generic message
+      // But for better UX in this app context, we might return error if not found?
+      // User requested "Forgot Password", usually implies they expect to know if they typed wrong email.
+      return res.status(404).json({ error: '找不到此 Email 的會員帳號' });
+    }
+
+    const recent = await prisma.emailVerification.findFirst({
+      where: {
+        email: em,
+        purpose: 'reset-password',
+        created_at: { gt: new Date(Date.now() - 60_000) },
+        used_at: null,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    if (recent) {
+      return res.status(429).json({ error: '請稍後再試' });
+    }
+
+    const code = generateEmailCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const ipHeader = (req.headers['x-forwarded-for'] as string) || '';
+    const ip = (req.ip || ipHeader || '').toString().slice(0, 255) || null;
+
+    await prisma.emailVerification.create({
+      data: {
+        email: em,
+        code,
+        purpose: 'reset-password',
+        expires_at: expiresAt,
+        ip: ip,
+      },
+    });
+
+    if (RESEND_API_KEY) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'no-reply@snookerhk.live',
+            to: em,
+            subject: '重設密碼驗證碼',
+            html: `<p>你的重設密碼驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼以重設密碼。</p>`,
+          }),
+        });
+      } catch (e) {
+        console.warn('Failed to send reset code email:', e);
+      }
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Reset password with code
+app.post('/api/members/reset-password-with-code', async (req, res) => {
+  try {
+    const { email, code, newPassword } = (req.body || {}) as { email?: string; code?: string; newPassword?: string };
+    const em = String(email || '').trim().normalize('NFKC');
+    const c = String(code || '').trim();
+    const pw = String(newPassword || '');
+
+    if (!em || !c || !pw) {
+      return res.status(400).json({ error: '缺少必要欄位' });
+    }
+
+    const member = await prisma.member.findFirst({ where: { email: em } });
+    if (!member) {
+      return res.status(404).json({ error: '會員不存在' });
+    }
+
+    const now = new Date();
+    const verification = await prisma.emailVerification.findFirst({
+      where: {
+        email: em,
+        purpose: 'reset-password',
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    if (!verification || verification.used_at || verification.expires_at < now || verification.attempts >= 5) {
+      return res.status(400).json({ error: '驗證碼錯誤或已過期，請重新取得' });
+    }
+
+    if (verification.code !== c) {
+      await prisma.emailVerification.update({
+        where: { id: verification.id },
+        data: { attempts: { increment: 1 } },
+      });
+      return res.status(400).json({ error: '驗證碼不正確' });
+    }
+
+    // Password complexity check
+    const pwLenOk = pw.length >= 8;
+    const pwHasNum = /\d/.test(pw);
+    const pwHasAlpha = /[A-Za-z]/.test(pw);
+    if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+      return res.status(400).json({ error: '密碼不符合規則（至少8字元，需含英文字母與數字）' });
+    }
+
+    await prisma.emailVerification.update({
+      where: { id: verification.id },
+      data: { used_at: now },
+    });
+
+    const salt = makeSalt();
+    const h = createHash('sha256');
+    h.update(salt + pw);
+    const digest = h.digest('hex');
+
+    await prisma.member.update({
+      where: { id: member.id },
+      data: {
+        password_salt: salt,
+        password_hash: digest,
+        password_updated_at: now,
+      },
+    });
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 // Register a new member with district-based sequential member_code (no country prefix for now)
 app.post('/api/members/register', async (req, res) => {
   try {

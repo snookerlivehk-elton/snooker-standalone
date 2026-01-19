@@ -155,6 +155,42 @@ export async function registerMemberWithCode(
   return res.json();
 }
 
+export async function requestPasswordResetCode(
+  apiUrl: string,
+  email: string,
+) {
+  const res = await fetch(`${apiUrl}/api/members/request-password-reset-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `發送驗證碼失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function resetPasswordWithCode(
+  apiUrl: string,
+  payload: {
+    email: string;
+    code: string;
+    newPassword: string;
+  }
+) {
+  const res = await fetch(`${apiUrl}/api/members/reset-password-with-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `重設密碼失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function loginMember(
   apiUrl: string,
   payload: { email: string; password: string }
