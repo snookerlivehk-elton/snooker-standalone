@@ -318,6 +318,7 @@ const MemberProfile: React.FC = () => {
                 </thead>
                 <tbody>
                   {matches.map((m) => {
+                    if (!m.players || !Array.isArray(m.players)) return null;
                     const myPlayer = m.players.find((p: any) => p.member?.id === member.id || p.member?.name === member.name) || m.players[0];
                     if (!myPlayer) return null;
                     const opponent = m.players.find((p: any) => p.id !== myPlayer.id);
