@@ -920,7 +920,7 @@ app.get('/admin/register', (_req, res) => {
 
         async function register() {
           const emailEl = document.getElementById('email');
-          const email = emailEl.value.trim().normalize('NFKC');
+          const email = emailEl.value.trim().normalize('NFKC').toLowerCase();
           // 將規範化後的值回寫，避免 checkValidity() 基於未規範化的原值誤判
           if (emailEl && typeof emailEl.value === 'string') {
             emailEl.value = email;
