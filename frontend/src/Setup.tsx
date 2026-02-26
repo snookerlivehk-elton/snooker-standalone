@@ -306,7 +306,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     };
 
     return (
-        <div className="min-h-screen bg-green-900 p-4 flex flex-col items-center justify-center">
+        <div className="brand-page text-white p-4 flex flex-col items-center justify-center">
             {matchId && (
                 <div
                     className="fixed left-3 bottom-3 z-50 pointer-events-none"
@@ -320,13 +320,13 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     </span>
                 </div>
             )}
-            <div className="max-w-md w-full bg-yellow-800 rounded-xl shadow-md p-6">
-                <h1 className="text-4xl font-bold text-center text-white mb-2 font-serif italic">{APP_NAME}</h1>
-                <p className="text-base text-center text-gray-300 mb-6 -mt-2">Scoreboard System</p>
+            <div className="max-w-md w-full glass rounded-xl p-6">
+                <h1 className="text-4xl font-bold text-center accent-yellow mb-2">{APP_NAME}</h1>
+                <p className="text-base text-center text-gray-300/80 mb-6 -mt-2">Scoreboard System</p>
                 
                 {operatorInfo && (
-                    <div className="mb-4 p-3 bg-yellow-900 rounded-lg text-center border border-yellow-700">
-                        <p className="text-yellow-200 text-sm">Room Operator</p>
+                    <div className="mb-4 p-3 bg-black/40 border border-white/10 rounded-lg text-center">
+                        <p className="text-gray-300/80 text-sm">Room Operator</p>
                         <p className="text-white font-medium text-lg">{operatorInfo.name || operatorInfo.email || 'Unknown'}</p>
                     </div>
                 )}
@@ -451,7 +451,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                         </div>
                     </div>
                     <button
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        className="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium brand-button text-black"
                         onClick={handleStartMatch}
                     >
                         Start Match

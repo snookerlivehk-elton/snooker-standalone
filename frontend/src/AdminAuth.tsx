@@ -6,14 +6,9 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState('');
 
-  // Resolve backend base: prefer configured API_URL; if same-origin, use nginx proxy /api
+  // Resolve backend base: use centralized API_URL from config
   function getBackendBase(): string {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const host = typeof window !== 'undefined' ? window.location.hostname : '';
-    if (host.endsWith('github.io')) {
-      return 'https://api.snookerhk.live';
-    }
-    return origin.replace(/\/$/, '') + '/api';
+    return API_URL.replace(/\/$/, '');
   }
 
   // Try auth via query param first (avoids CORS preflight); then header
@@ -74,30 +69,28 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
-  if (isAuthenticated) {
-    return <>{children}</>;
-  }
+  if (isAuthenticated) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center justify-center">
+    <div className="brand-page p-8 flex flex-col items-center justify-center">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold mb-6 text-center">系統管理員登入</h1>
-        <form onSubmit={handleSubmit} className="bg-gray-800 rounded-lg shadow-lg p-8">
+        <h1 className="text-3xl font-bold mb-6 text-center accent-yellow">系統管理員登入</h1>
+        <form onSubmit={handleSubmit} className="glass rounded-xl p-8">
           <div className="mb-4">
-            <label htmlFor="token" className="block text-sm font-medium text-gray-300 mb-2">系統管理員密鑰</label>
+            <label htmlFor="token" className="block text-sm font-medium mb-2 accent-blue">系統管理員密鑰</label>
             <input
               type="password"
               id="token"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              className="w-full bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-black/40 border border-white/10 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)]"
             />
           </div>
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">
+          <button type="submit" className="w-full brand-button font-bold py-2 px-4 rounded transition-colors">
             進入
           </button>
           {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
-          <p className="text-gray-400 text-xs mt-4 text-center">提示：後端需設定環境變數 ADMIN_TOKEN；本地未設定時可直接通過。</p>
+          <p className="text-gray-300/80 text-xs mt-4 text-center">提示：後端需設定環境變數 ADMIN_TOKEN；本地未設定時可直接通過。</p>
         </form>
       </div>
     </div>

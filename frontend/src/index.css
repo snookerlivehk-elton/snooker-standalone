@@ -1,5 +1,100 @@
 @import "tailwindcss";
 
+@layer base {
+  :root {
+    --brand-bg: #0b0f17;
+    --brand-yellow: #facc15;
+    --brand-blue: #0ea5e9;
+    --glass-bg: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.08);
+    /* CueTrack Design System v1 */
+    --cue-primary-dark: #0033A0; /* 深藍 */
+    --cue-primary-light: #00B0F0; /* 淺藍 */
+    --cue-gradient: linear-gradient(90deg, var(--cue-primary-dark), var(--cue-primary-light));
+    --cue-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    --cue-radius: 12px;
+    --cue-text-zh: "Noto Sans TC", "PingFang HK", "Heiti TC", "Microsoft JhengHei", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --cue-text-en: "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .brand-page {
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(14,165,233,0.12), transparent 60%),
+                radial-gradient(800px 400px at 80% 20%, rgba(250,204,21,0.10), transparent 60%),
+                var(--brand-bg);
+    color: #fff;
+    min-height: 100vh;
+  }
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: saturate(180%) blur(10px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .brand-button {
+    background: linear-gradient(90deg, var(--brand-yellow), #eab308);
+    color: #111827;
+  }
+  .brand-button:hover {
+    filter: brightness(0.95);
+  }
+  .accent-blue {
+    color: var(--brand-blue);
+  }
+  .accent-yellow {
+    color: var(--brand-yellow);
+  }
+  /* CueTrack DS v1: 通用元件 */
+  .cue-gradient {
+    background: var(--cue-gradient);
+  }
+  .cue-button {
+    background: var(--cue-gradient);
+    color: #fff;
+    border-radius: var(--cue-radius);
+    box-shadow: var(--cue-shadow);
+  }
+  .cue-button:disabled {
+    opacity: 0.6;
+  }
+  .cue-card {
+    background: rgba(0, 51, 160, 0.2); /* 藍色半透明 */
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--cue-radius);
+    box-shadow: var(--cue-shadow);
+    backdrop-filter: blur(8px);
+  }
+  .cue-topbar {
+    height: 8vh; /* 固定 8% */
+    min-height: 56px;
+    background: rgba(0,0,0,0.5);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+  }
+  .cue-bottomnav {
+    height: 64px;
+    background: rgba(0,0,0,0.5);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+  }
+  .cue-active-tab {
+    border: 2px solid #ff3b30; /* 紅框高亮當前頁 */
+    border-radius: var(--cue-radius);
+  }
+  .cue-zh-title {
+    font-family: var(--cue-text-zh);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .cue-en-sub {
+    font-family: var(--cue-text-en);
+    font-weight: 500;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    opacity: 0.9;
+  }
+}
 
 @layer components {
     /* 1920x1080 舞台容器：置中並依視窗等比例縮放 */

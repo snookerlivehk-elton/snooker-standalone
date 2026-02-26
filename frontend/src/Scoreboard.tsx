@@ -603,9 +603,34 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         updateAndBroadcastState(newState);
     };
 
+    const [isPortrait, setIsPortrait] = useState(false);
+    useEffect(() => {
+        const check = () => {
+            try {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                setIsPortrait(h >= w);
+            } catch {}
+        };
+        check();
+        window.addEventListener('resize', check);
+        window.addEventListener('orientationchange', check as any);
+        return () => {
+            window.removeEventListener('resize', check);
+            window.removeEventListener('orientationchange', check as any);
+        };
+    }, []);
     if (!gameState) {
         return (
             <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center justify-center">
+                {isPortrait && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                        <div className="bg-gray-800 p-6 rounded-xl text-center max-w-sm w-full border border-gray-700">
+                            <div className="text-2xl font-extrabold mb-2">請橫屏使用</div>
+                            <div className="text-sm text-gray-300">直播控制介面需在橫屏下使用，以獲得最佳操作體驗。</div>
+                        </div>
+                    </div>
+                )}
                 {slugId && (
           <div
             className="fixed left-3 bottom-3 z-50 pointer-events-none"
@@ -656,6 +681,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     if (isCompactMobile) {
         return (
             <div className="min-h-screen bg-green-900 text-white p-3 flex flex-col">
+                {isPortrait && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                        <div className="bg-gray-800 p-6 rounded-xl text-center max-w-sm w-full border border-gray-700">
+                            <div className="text-2xl font-extrabold mb-2">請橫屏使用</div>
+                            <div className="text-sm text-gray-300">直播控制介面需在橫屏下使用，以獲得最佳操作體驗。</div>
+                        </div>
+                    </div>
+                )}
                 {slugId && (
                     <div
                         className="fixed left-3 bottom-3 z-40 pointer-events-none"
@@ -802,7 +835,15 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     }
 
     return (
-        <div className="min-h-screen bg-green-900 text-white p-4 flex flex-col items-center">
+        <div className="brand-page text-white p-4 flex flex-col items-center">
+            {isPortrait && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                    <div className="bg-gray-800 p-6 rounded-xl text-center max-w-sm w-full border border-gray-700">
+                        <div className="text-2xl font-extrabold mb-2">請橫屏使用</div>
+                        <div className="text-sm text-gray-300">直播控制介面需在橫屏下使用，以獲得最佳操作體驗。</div>
+                    </div>
+                </div>
+            )}
             {(gameState?.settings?.matchCode || slugId) && (
                 <div
                     className="fixed left-3 bottom-3 z-50 pointer-events-none"

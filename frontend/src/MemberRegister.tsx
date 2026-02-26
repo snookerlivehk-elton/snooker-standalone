@@ -208,17 +208,17 @@ const MemberRegister: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-3xl mx-auto bg-gray-800 rounded-xl shadow-lg p-6">
+    <div className="brand-page text-white p-6">
+      <div className="max-w-3xl mx-auto glass rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="text-xl font-bold text-yellow-400 uppercase tracking-wider">Snooker Live HK</div>
-            <h2 className="text-2xl font-bold">會員註冊</h2>
+            <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Snooker Live HK</div>
+            <h2 className="text-2xl font-bold accent-yellow">會員註冊</h2>
           </div>
           <button
             type="button"
             onClick={() => navigate('/members/login')}
-            className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-sm"
+            className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-sm"
           >
             已有帳號？前往登入
           </button>
@@ -379,7 +379,7 @@ const MemberRegister: React.FC = () => {
             </label>
           </div>
           <div className="md:col-span-2 flex justify-end mt-2">
-            <button type="submit" disabled={loading} className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="px-4 py-2 rounded brand-button text-black disabled:opacity-50">
               {loading ? '提交中...' : '註冊'}
             </button>
           </div>
@@ -388,17 +388,17 @@ const MemberRegister: React.FC = () => {
         {infoToast && <div className="text-green-400 mt-3">{infoToast}</div>}
         {attemptLog && <pre className="mt-3 text-xs text-gray-400 whitespace-pre-wrap">{attemptLog}</pre>}
         {memberId && (
-          <div className="mt-4 bg-gray-700 rounded p-3">
+          <div className="mt-4 bg-black/40 border border-white/10 rounded p-3">
             <div>註冊成功！會員ID：{memberId}</div>
             {memberCode && <div>會員編碼：{memberCode}</div>}
             <div className="text-xs text-gray-300 mt-1">使用後端：{usedBackend}</div>
             <div className="mt-2 flex gap-2">
-              <button onClick={() => navigate(`/member/${memberId}`)} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">
+              <button onClick={() => navigate(`/member/${memberId}`)} className="px-3 py-2 rounded brand-button text-black">
                 前往會員頁面
               </button>
               <a
                 href={`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('會員註冊確認')}&body=${encodeURIComponent(`親愛的 ${name}：\n\n已成功註冊。會員編碼：${memberCode || ''}\nEmail：${email}\n分區：${district}\n電話：${phone || '-'}\n生日：${birthDate || '-'}\n\n如資料有誤請回覆本郵件更正。`)}`}
-                className="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700"
+                className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700"
               >
                 以 Email 核對資料
               </a>

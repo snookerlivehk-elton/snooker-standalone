@@ -1,0 +1,17 @@
+{
+  "name": "SL18-APP",
+  "short_name": "SL18-APP",
+  "start_url": "/?redirect=admin",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Snooker Live HK Admin & Member portal",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

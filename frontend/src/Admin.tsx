@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_PATH, SOCKET_URL } from './config';
 import { RoomStorage } from './lib/RoomStorage';
 import { setCodeForRoom, getCodeForRoom } from './lib/roomCode';
+import NavBar from './components/NavBar';
 
 interface Room {
   id: string;
@@ -88,9 +89,11 @@ const Admin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8 flex flex-col items-center">
+    <div className="brand-page flex flex-col">
+      <NavBar />
+      <div className="p-8 flex flex-col items-center">
       <div className="w-full max-w-2xl">
-        <h1 className="text-4xl font-bold mb-6 text-center">系統管理員後台</h1>
+        <h1 className="text-4xl font-bold mb-6 text-center accent-yellow">系統管理員後台</h1>
         <div className="w-full flex justify-end mb-4 gap-2">
           <button
             onClick={() => {
@@ -124,9 +127,9 @@ const Admin: React.FC = () => {
           </button>
         </div>
         {/* Simple Mode: one scoreboard + one overlay, no room creation */}
-        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <div className="glass rounded-lg p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4">Simple Mode</h2>
-          <p className="text-sm text-gray-300 mb-4">單一計分版與 OBS 連結（不需建立房間）。</p>
+          <p className="text-sm text-gray-300/80 mb-4">單一計分版與 OBS 連結（不需建立房間）。</p>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => {
@@ -135,7 +138,7 @@ const Admin: React.FC = () => {
                   alert(`已複製簡化模式 Scoreboard 連結：\n${url}`);
                 });
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
+              className="brand-button text-black font-bold py-2 px-3 rounded transition-colors"
             >
               Copy Simple Scoreboard Link
             </button>
@@ -146,19 +149,19 @@ const Admin: React.FC = () => {
                   alert(`已複製簡化模式 Overlay 連結：\n${url}`);
                 });
               }}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
             >
               Copy Simple Overlay Link
             </button>
           </div>
         </div>
-        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <div className="glass rounded-lg p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4">Rooms</h2>
           <ul className="space-y-4">
             {rooms.map((room) => {
               const displayId = room.code || getCodeForRoom(room.id) || room.id;
               return (
-              <li key={room.id} className="flex justify-between items-center bg-gray-700 p-4 rounded-lg">
+              <li key={room.id} className="flex justify-between items-center bg-black/40 border border-white/10 p-4 rounded-lg">
                 <div className="flex items-center gap-3">
                   <Link to={`/room/${displayId}`} className="text-lg hover:text-blue-400 transition-colors">
                     {displayId !== room.name ? `[${displayId}] ${room.name}` : room.name}
@@ -174,7 +177,7 @@ const Admin: React.FC = () => {
                         alert(`已複製房間 Setup 連結：\n${url}`);
                       });
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
+                    className="brand-button text-black font-bold py-2 px-3 rounded transition-colors"
                   >
                     Copy Room Link
                   </button>
@@ -184,7 +187,7 @@ const Admin: React.FC = () => {
                         try { RoomStorage.clearRoom(room.id); alert('已清空本地暫存'); } catch {}
                       }
                     }}
-                    className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors"
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold py-2 px-3 rounded transition-colors"
                   >
                     Clear Local Cache
                   </button>
@@ -196,7 +199,7 @@ const Admin: React.FC = () => {
                         alert(`已複製 Live 連結：\n${url}`);
                       });
                     }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded transition-colors"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
                   >
                     Copy Live Link
                   </button>
@@ -208,7 +211,7 @@ const Admin: React.FC = () => {
                         alert(`已複製 Overlay 連結：\n${url}`);
                       });
                     }}
-                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded transition-colors"
                   >
                     Copy Overlay Link
                   </button>
@@ -218,7 +221,7 @@ const Admin: React.FC = () => {
             )})}
           </ul>
         </div>
-        <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+        <div className="glass rounded-lg p-6">
           <h2 className="text-2xl font-semibold mb-4">Create a new room</h2>
           <form onSubmit={handleCreateRoom} className="flex space-x-4">
             <input
@@ -228,13 +231,14 @@ const Admin: React.FC = () => {
                 setNewRoomName(e.target.value);
                 setError(null);
               }}
-              className="flex-grow bg-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-grow bg-black/40 border border-white/10 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)]"
               placeholder="Enter new room name"
             />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Create</button>
+            <button type="submit" className="brand-button text-black font-bold py-2 px-4 rounded transition-colors">Create</button>
           </form>
           {error && <p className="text-red-500 mt-4">{error}</p>}
         </div>
+      </div>
       </div>
     </div>
   );

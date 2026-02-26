@@ -129,9 +129,9 @@ const MemberProfile: React.FC = () => {
   })();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="brand-page text-white p-6">
       <div className="max-w-3xl mx-auto grid gap-6">
-        <div className="bg-gray-800 rounded-xl p-4">
+        <div className="glass rounded-xl p-4">
           <h2 className="text-xl font-bold mb-3">會員資料</h2>
           <div className="grid md:grid-cols-2 gap-3">
             <div><span className="font-semibold">ID：</span>{String(member.id || '-')}</div>
@@ -145,10 +145,10 @@ const MemberProfile: React.FC = () => {
             <div><span className="font-semibold">會員有效期：</span>{membershipExpiryDisplay}</div>
             <div><span className="font-semibold">所屬球會：</span>{String(member.club_name || member.clubName || '未設定')}</div>
           </div>
-          <div className="text-xs text-gray-400 mt-2">必填資料不可更改；選填資料可於下方更新</div>
+          <div className="text-xs text-gray-300/80 mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4">
+        <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">會員有效期與續期</h3>
           <div className="mb-3">
             <div><span className="font-semibold">目前有效期：</span>{membershipExpiryDisplay}</div>
@@ -172,13 +172,13 @@ const MemberProfile: React.FC = () => {
                 setRenewLoading(false);
               }
             }}
-            className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded brand-button text-black disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {renewLoading ? '申請中...' : '申請續期（+3 年）'}
           </button>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4">
+        <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">更新選填資料</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
@@ -251,14 +251,14 @@ const MemberProfile: React.FC = () => {
                   } catch {}
                 })();
               }}
-              className="px-4 py-2 rounded bg-green-600 hover:bg-green-700"
+              className="px-4 py-2 rounded brand-button text-black"
             >
               儲存
             </button>
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4">
+        <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">重設密碼</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
@@ -288,14 +288,14 @@ const MemberProfile: React.FC = () => {
                   setTimeout(() => setToast(null), 3000);
                 } catch {}
               }}
-              className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700"
+              className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700"
             >
               重設密碼
             </button>
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-xl p-4">
+        <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">比賽歷史</h3>
           {matchesLoading ? (
             <div>載入中...</div>

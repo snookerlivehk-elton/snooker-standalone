@@ -213,16 +213,16 @@ const AdminRegions: React.FC = () => {
   };
 
   return (
-    <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
+    <div className="brand-page text-white" style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>管理員：地方 / 分區管理</h2>
+        <h2 style={{ margin: 0 }} className="accent-yellow">管理員：地方 / 分區管理</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link
             to="/members/register"
             style={{
               padding: '6px 12px',
               backgroundColor: '#6b7280',
-              color: 'white',
+              color: '#fff',
               borderRadius: '4px',
               textDecoration: 'none',
               fontSize: '14px'
@@ -235,7 +235,7 @@ const AdminRegions: React.FC = () => {
             style={{
               padding: '6px 12px',
               backgroundColor: '#4b5563',
-              color: 'white',
+              color: '#fff',
               borderRadius: '4px',
               textDecoration: 'none',
               fontSize: '14px'

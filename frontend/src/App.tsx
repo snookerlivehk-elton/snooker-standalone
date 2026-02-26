@@ -14,6 +14,13 @@ import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import MemberLogin from './MemberLogin';
 import OperatorDashboard from './OperatorDashboard';
+import AdminOverview from './AdminOverview';
+import MemberRegisterSimple from './MemberRegisterSimple';
+import Join from './Join';
+import Rooms from './Rooms';
+import Me from './Me';
+import Onboarding from './Onboarding';
+import AndroidGuide from './AndroidGuide';
 
 // Force frontend redeploy
 function App() {
@@ -31,10 +38,17 @@ function App() {
 
   return (
       <Routes>
-        {/* Home route: redirect to Admin Login to avoid blank page */}
-        <Route path="/" element={<Navigate to="/admin" replace />} />
+        {/* Public routes for LIVE app */}
+        <Route path="/" element={<Navigate to="/join" replace />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/join" element={<Join />} />
+        <Route path="/rooms" element={<Rooms />} />
+        <Route path="/me" element={<Me />} />
+        <Route path="/android" element={<AndroidGuide />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
+        <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
+        <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
         <Route path="/members/login" element={<MemberLogin mode="member" />} />
         <Route path="/operator/login" element={<MemberLogin mode="operator" />} />
         <Route path="/member/:id" element={<MemberProfile />} />
@@ -47,7 +61,7 @@ function App() {
         <Route path="/room/:roomId/live" element={<LiveView />} />
         <Route path="/room/:roomId/overlay" element={<Overlay />} />
         {/* Fallback: any unknown route goes to Admin */}
-        <Route path="*" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/join" replace />} />
       </Routes>
   );
 }

@@ -175,9 +175,9 @@ const AdminMembers: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
+    <div className="brand-page text-white" style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <h2>管理員：會員列表</h2>
+        <h2 className="accent-yellow">管理員：會員列表</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <Link
             to="/members/register"

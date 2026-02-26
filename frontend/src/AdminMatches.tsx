@@ -108,9 +108,9 @@ const AdminMatches: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div style={{ maxWidth: 1000, margin: '40px auto', padding: 16 }}>
+    <div className="brand-page text-white" style={{ maxWidth: 1000, margin: '40px auto', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>管理員：比賽列表</h2>
+        <h2 style={{ margin: 0 }} className="accent-yellow">管理員：比賽列表</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => {

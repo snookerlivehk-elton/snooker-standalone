@@ -92,10 +92,10 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
-      <div className="w-full max-w-md bg-gray-800 rounded-xl p-6 shadow-lg">
+    <div className="brand-page text-white p-6 flex items-center justify-center">
+      <div className="w-full max-w-md glass rounded-xl p-6">
         <div className="text-center mb-6">
-          <div className="text-xl font-bold text-yellow-400 uppercase tracking-wider">Snooker Live HK</div>
+          <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Snooker Live HK</div>
           <h2 className="text-2xl font-bold mt-1">
             {view === 'login' && (mode === 'operator' ? '操作員登入' : '會員登入')}
             {view === 'forgot-request' && '忘記密碼'}
