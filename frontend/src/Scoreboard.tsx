@@ -10,6 +10,7 @@ import PlayerCard from './components/PlayerCard';
 import { StatsEngine } from './lib/StatsEngine';
 import { getRoomChannel } from './lib/supabase';
 import { findRoomIdByCode } from './lib/roomCode';
+import { t } from './lib/i18n';
 
 interface ScoreboardProps {
     gameState: State | null;
@@ -727,7 +728,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     onClick={() => setShowFoulMenu(v => !v)}
                     className="p-3 rounded-lg bg-white hover:bg-gray-200 text-gray-900 font-bold border-2 border-black"
                   >
-                    FOUL
+                    {t('common.foul')}
                   </button>
                   {/* Reds and colours */}
                   {[1,2,3,4,5,6,7].map(ball => {
@@ -794,8 +795,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 )}
                 {/* Info: Reds Left + Break */}
                 <div className="flex items-center justify-between mb-2">
-                    <div className="text-yellow-300 font-extrabold">Reds Left {gameState.redsRemaining}</div>
-                    <div className="text-yellow-300 font-extrabold">Break {gameState.breakScore}</div>
+                    <div className="text-yellow-300 font-extrabold">{t('common.redsLeft')} {gameState.redsRemaining}</div>
+                    <div className="text-yellow-300 font-extrabold">{t('common.break')} {gameState.breakScore}</div>
                 </div>
 
                 {/* Compact actions: Miss / Safety / Concede */}
@@ -882,7 +883,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 
                 {/* 移除 Frame Time / Match Time 區塊 */}
                 <div className="mb-6">
-                    <h2 className="text-xl font-semibold mb-2 text-center">Balling</h2>
+                    <h2 className="text-xl font-semibold mb-2 text-center">{t('common.hitting')}</h2>
                     <div className="grid grid-cols-7 gap-2">
                         {[1, 2, 3, 4, 5, 6, 7].map(ball => {
                             const isPottingColor = ball > 1;
@@ -936,17 +937,17 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                         })}
                     </div>
                     {gameState.isRespotBlack && (
-                        <p className="text-center text-yellow-400 font-bold mt-2">Re-spot Black</p>
+                        <p className="text-center text-yellow-400 font-bold mt-2">{t('common.respotBlack')}</p>
                     )}
                 </div>
 
 
 
                 <div className="mb-6">
-                    <h2 className="text-xl font-semibold mb-2 text-center">Fouls</h2>
+                    <h2 className="text-xl font-semibold mb-2 text-center">{t('common.foul')}</h2>
                     <div className="grid grid-cols-7 gap-2">
                         {[4, 5, 6, 7].map(penalty => (
-                            <button key={penalty} onClick={() => handleFoul(penalty)} className="p-4 rounded-lg bg-white hover:bg-gray-200 text-gray-800 font-bold border-2 border-black">Foul {penalty}</button>
+                            <button key={penalty} onClick={() => handleFoul(penalty)} className="p-4 rounded-lg bg-white hover:bg-gray-200 text-gray-800 font-bold border-2 border-black">{t('common.foul')} {penalty}</button>
                         ))}
                     </div>
                 </div>
@@ -954,14 +955,14 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 {/* Multi-Red（同桿）按鍵移至底部不常用區塊 */}
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button onClick={handleSwitchPlayer} className="p-4 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-black font-bold border border-white">Switch Player</button>
-                    <button onClick={handleMiss} className="p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold border border-white">Miss</button>
-                    <button onClick={handleSafe} className="p-4 rounded-lg bg-blue-500 hover:bg-blue-600 font-bold border border-white">Safe</button>
+                    <button onClick={handleSwitchPlayer} className="p-4 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-black font-bold border border-white">{t('common.switchPlayer')}</button>
+                    <button onClick={handleMiss} className="p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold border border-white">{t('common.miss')}</button>
+                    <button onClick={handleSafe} className="p-4 rounded-lg bg-blue-500 hover:bg-blue-600 font-bold border border-white">{t('common.safe')}</button>
                     {gameState.isFoulCommitted && (
-                        <button onClick={handleToggleFreeBall} className={`p-4 rounded-lg font-bold ${gameState.isFreeBall ? 'bg-yellow-400 hover:bg-yellow-500 border-4 border-white' : 'bg-yellow-700 hover:bg-yellow-800 border border-white'}`}>Free Ball</button>
+                        <button onClick={handleToggleFreeBall} className={`p-4 rounded-lg font-bold ${gameState.isFreeBall ? 'bg-yellow-400 hover:bg-yellow-500 border-4 border-white' : 'bg-yellow-700 hover:bg-yellow-800 border border-white'}`}>{t('common.freeBall')}</button>
                     )}
-                    <button onClick={handleUndo} className="p-4 rounded-lg bg-gray-500 hover:bg-gray-600 font-bold border border-white">Undo</button>
-                    <button onClick={handleConcede} className="p-4 rounded-lg bg-red-800 hover:bg-red-900 font-bold col-span-2 md:col-span-2 border border-white">Concede Frame</button>
+                    <button onClick={handleUndo} className="p-4 rounded-lg bg-gray-500 hover:bg-gray-600 font-bold border border-white">{t('common.undo')}</button>
+                    <button onClick={handleConcede} className="p-4 rounded-lg bg-red-800 hover:bg-red-900 font-bold col-span-2 md:col-span-2 border border-white">{t('common.concedeFrame')}</button>
                 </div>
 
                 {/* 將不常用的按鍵移至底部：Red ×2 / ×3；取消 Foul Red，改為手動調整紅球餘數 */}
@@ -1008,12 +1009,12 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     <div className="absolute inset-0 bg-black bg-opacity-75 flex flex-col items-center justify-center z-50">
                         <div className="bg-gray-800 p-8 rounded-lg text-center max-w-lg w-full">
                             <h2 className="text-4xl font-bold mb-4">
-                                {gameState.isMatchOver ? 'Match Over' : 'Frame Over'}
+                                {gameState.isMatchOver ? t('score.matchOver') : t('score.frameOver')}
                             </h2>
                             <p className="text-2xl mb-6">
                                 {gameState.isMatchOver 
-                                    ? `${gameState.players[0].framesWon > gameState.players[1].framesWon ? gameState.players[0].name : gameState.players[1].name} wins the match!`
-                                    : `${gameState.players[0].score > gameState.players[1].score ? gameState.players[0].name : gameState.players[1].name} wins the frame!`
+                                    ? `${gameState.players[0].framesWon > gameState.players[1].framesWon ? gameState.players[0].name : gameState.players[1].name} ${t('score.winMatch')}`
+                                    : `${gameState.players[0].score > gameState.players[1].score ? gameState.players[0].name : gameState.players[1].name} ${t('score.winFrame')}`
                                 }
                             </p>
                             
@@ -1022,31 +1023,31 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                     onClick={gameState.isMatchOver ? handleMatchOverAction : handleNextFrameAction} 
                                     className="p-4 rounded-lg bg-green-600 hover:bg-green-700 font-bold text-xl border border-white w-full"
                                 >
-                                    {gameState.isMatchOver ? 'End Match & View Stats' : 'Next Frame'}
+                                    {gameState.isMatchOver ? t('score.endMatchAndView') : t('score.nextFrame')}
                                 </button>
                             )}
                             
                             {uploadStatus === 'uploading' && (
                                 <div className="text-xl font-bold text-yellow-400 animate-pulse">
-                                    {gameState.isMatchOver ? 'Finalizing Match Data...' : 'Uploading Frame Data...'}
+                                    {gameState.isMatchOver ? t('score.finalizing') : t('score.uploadingFrame')}
                                 </div>
                             )}
                             
                             {uploadStatus === 'success' && (
                                 <div>
                                     <div className="text-xl font-bold text-green-400 mb-4">
-                                        Data Uploaded Successfully!
+                                        {t('score.uploadSuccess')}
                                     </div>
                                     <div className="text-sm text-gray-400 mb-4">
-                                        Match stats saved to database.
+                                        {t('score.uploadSaved')}
                                     </div>
                                     {!gameState.isMatchOver && (
                                         <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
-                                            Start Next Frame
+                                            {t('score.startNextFrame')}
                                         </button>
                                     )}
                                     {gameState.isMatchOver && (
-                                         <div className="text-lg text-gray-300">Redirecting to stats...</div>
+                                         <div className="text-lg text-gray-300">{t('score.redirecting')}</div>
                                     )}
                                 </div>
                             )}
@@ -1054,18 +1055,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                             {uploadStatus === 'skipped' && (
                                 <div>
                                     <div className="text-xl font-bold text-gray-400 mb-4">
-                                        Data Not Uploaded
+                                        {t('score.uploadSkipped')}
                                     </div>
                                     <div className="text-sm text-gray-500 mb-4">
-                                        Guest match or invalid members. No data saved to database.
+                                        {t('score.uploadSkippedReason')}
                                     </div>
                                     {!gameState.isMatchOver && (
                                         <button onClick={proceedToNewFrameState} className="p-4 rounded-lg bg-blue-600 hover:bg-blue-700 font-bold text-xl border border-white w-full">
-                                            Continue to Next Frame
+                                            {t('score.nextFrame')}
                                         </button>
                                     )}
                                     {gameState.isMatchOver && (
-                                         <div className="text-lg text-gray-300">Redirecting...</div>
+                                         <div className="text-lg text-gray-300">{t('score.redirecting')}</div>
                                     )}
                                 </div>
                             )}
@@ -1073,18 +1074,18 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                             {uploadStatus === 'error' && (
                                 <div>
                                     <div className="text-xl font-bold text-red-400 mb-4">
-                                        Upload Failed!
+                                        {t('score.uploadSkipped')}
                                     </div>
                                     <div className="flex gap-4">
                                         <button 
                                             onClick={gameState.isMatchOver ? handleMatchOverAction : handleNextFrameAction} 
                                             className="flex-1 p-4 rounded-lg bg-yellow-600 hover:bg-yellow-700 font-bold text-lg border border-white"
                                         >
-                                            Retry Upload
+                                            {t('score.retryUpload')}
                                         </button>
                                         {!gameState.isMatchOver && (
                                             <button onClick={proceedToNewFrameState} className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white">
-                                                Force Start (Skip)
+                                                {t('score.forceStart')}
                                             </button>
                                         )}
                                         {gameState.isMatchOver && (
@@ -1096,7 +1097,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                                                 }} 
                                                 className="flex-1 p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold text-lg border border-white"
                                             >
-                                                Skip & Exit
+                                                {t('score.skipExit')}
                                             </button>
                                         )}
                                     </div>

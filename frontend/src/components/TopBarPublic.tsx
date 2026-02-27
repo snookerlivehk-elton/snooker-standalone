@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getLang, setLang } from '../lib/i18n';
 
 interface TopBarPublicProps {
   title: string;
@@ -10,6 +11,13 @@ interface TopBarPublicProps {
 
 const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onToggleLang, lang = 'zh' }) => {
   const nav = useNavigate();
+  const current = useMemo(() => (lang || getLang()), [lang]);
+  const toggle = () => {
+    if (onToggleLang) return onToggleLang();
+    const next = (getLang() === 'zh' ? 'en' : 'zh') as 'zh' | 'en';
+    setLang(next);
+    try { window.location.reload(); } catch {}
+  };
   return (
     <header className="cue-topbar w-full flex items-center justify-between px-4">
       <div className="flex items-center gap-3">
@@ -25,11 +33,11 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
         <div className="cue-zh-title text-white text-lg">{title}</div>
       </div>
       <button
-        onClick={onToggleLang}
+        onClick={toggle}
         className="cue-button px-3 py-1 text-sm"
         aria-label="Language Toggle"
       >
-        {lang === 'zh' ? 'EN' : '中文'}
+        {current === 'zh' ? 'EN' : '中文'}
       </button>
     </header>
   );

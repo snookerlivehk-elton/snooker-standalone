@@ -6,6 +6,7 @@ import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import { getRoomChannel } from './lib/supabase';
 import { findRoomIdByCode } from './lib/roomCode';
+import { t } from './lib/i18n';
 // StatsEngine not required for overlay rendering; remove unused import
 
 const Overlay: React.FC = () => {
@@ -178,13 +179,12 @@ const Overlay: React.FC = () => {
         }}
       >
         {slugId && (
-          <div
+            <div style={{
             style={{
               position: 'fixed',
               left: 24,
               bottom: 24,
               color: '#ffffff',
-              opacity: 0.65,
               fontSize: 'clamp(18px, 2.2vw, 28px)',
               fontWeight: 700,
               letterSpacing: 2,
@@ -203,7 +203,7 @@ const Overlay: React.FC = () => {
             fontSize: 18,
           }}
         >
-          等待房間資料…（請在計分板操作一次）
+          {t('overlay.wait')}
         </div>
       </div>
     );
@@ -503,7 +503,7 @@ const Overlay: React.FC = () => {
           {/* Info row under header inside the same black container (pure text) */}
           <div style={infoRowStyle}>
             {gameState?.isFreeBall && (
-              <div style={{
+            <div style={{
                 background: '#7c3aed',
                 color: '#fff',
                 padding: '4px 10px',
@@ -513,7 +513,7 @@ const Overlay: React.FC = () => {
                 alignSelf: 'center',
                 border: '2px solid #e9d5ff'
               }}>
-                Free Ball
+                {t('common.freeBall')}
               </div>
             )}
           </div>
@@ -522,19 +522,19 @@ const Overlay: React.FC = () => {
         {/* Bottom independent info block (moved outside black container to avoid overlap) */}
         <div style={bottomInfoBlockStyle}>
           <div style={bottomInfoItemStyle}>
-            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Lead</span>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>{t('common.lead')}</span>
             <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{leader.name} +{lead}</span>
           </div>
           <div style={bottomInfoItemStyle}>
-            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Remaining</span>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>{t('common.remaining')}</span>
             <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{remainingPoints}</span>
           </div>
           <div style={bottomInfoItemStyle}>
-            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Break</span>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>{t('common.break')}</span>
             <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{gameState.breakScore}</span>
           </div>
           <div style={bottomInfoItemStyle}>
-            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>Break Time</span>
+            <span style={{ color: '#cfe3cf', whiteSpace: 'nowrap' }}>{t('common.breakTime')}</span>
             <span style={{ color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{formatTime(gameState.breakTime)}</span>
           </div>
         </div>

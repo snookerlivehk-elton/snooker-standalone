@@ -9,6 +9,7 @@ import { findRoomIdByCode } from './lib/roomCode';
 import { RoomStorage } from './lib/RoomStorage';
 import { getRoomChannel } from './lib/supabase';
 import { parseMatchName } from './lib/matchName';
+import { t } from './lib/i18n';
 
 const LiveView: React.FC = () => {
     const { roomId: routeRoomId } = useParams<{ roomId: string }>();
@@ -388,7 +389,7 @@ const LiveView: React.FC = () => {
                 <div className="bg-gray-800 rounded-lg p-3 mb-3">
                     <div className="flex items-center justify-between">
                         <div className="text-center w-1/3">
-                            <p className="text-gray-400">Frame Time</p>
+                            <p className="text-gray-400">{t('live.frameTime')}</p>
                             <p className="font-bold text-base">{formatTime(gameState.timers.frameTime)}</p>
                         </div>
                         <div className="text-center">
@@ -399,13 +400,13 @@ const LiveView: React.FC = () => {
                             </div>
                         </div>
                         <div className="text-center w-1/3">
-                            <p className="text-gray-400">Match Time</p>
+                            <p className="text-gray-400">{t('live.matchTime')}</p>
                             <p className="font-bold text-base">{formatTime(gameState.timers.matchTime)}</p>
                         </div>
                     </div>
                     {lastShot && (
                         <p className="text-sm font-semibold text-gray-300 mt-2 text-center">
-                            Last: {`${gameState.players[lastShot.player].memberId}: ${lastShot.type} ${lastShot.ball ? `(Ball ${lastShot.ball})` : ''} - ${lastShot.points} pts`}
+                            {t('live.last')}{`${gameState.players[lastShot.player].memberId}: ${lastShot.type} ${lastShot.ball ? `(Ball ${lastShot.ball})` : ''} - ${lastShot.points}`}
                         </p>
                     )}
                 </div>
@@ -416,7 +417,7 @@ const LiveView: React.FC = () => {
 
                 {/* Live Stats (carousel) */}
                 <div className="w-full max-w-[1920px] mx-auto mb-2 bg-gray-800/60 rounded-lg p-3">
-                    <h2 className="text-xl font-bold tracking-wider mb-3 text-center">Live Stats — {gameState.settings.matchName}</h2>
+                    <h2 className="text-xl font-bold tracking-wider mb-3 text-center">{t('live.stats')}{gameState.settings.matchName}</h2>
                     <div className="flex items-baseline justify-between mb-5">
                         <div className="flex-1 text-right text-lg font-bold tracking-wide">
                             {gameState.players[0].name}

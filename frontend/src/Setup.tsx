@@ -6,6 +6,7 @@ import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
 import { validateMembers, ValidateMembersResponse, sendMatchVerificationCode, startMatchV2 as startMatch } from './lib/api';
+import { t } from './lib/i18n';
 
 interface SetupProps {
     onStartMatch: (settings: any) => void;
@@ -322,19 +323,19 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             )}
             <div className="max-w-md w-full glass rounded-xl p-6">
                 <h1 className="text-4xl font-bold text-center accent-yellow mb-2">{APP_NAME}</h1>
-                <p className="text-base text-center text-gray-300/80 mb-6 -mt-2">Scoreboard System</p>
+                <p className="text-base text-center text-gray-300/80 mb-6 -mt-2">{t('setup.tagline')}</p>
                 
                 {operatorInfo && (
                     <div className="mb-4 p-3 bg-black/40 border border-white/10 rounded-lg text-center">
-                        <p className="text-gray-300/80 text-sm">Room Operator</p>
-                        <p className="text-white font-medium text-lg">{operatorInfo.name || operatorInfo.email || 'Unknown'}</p>
+                        <p className="text-gray-300/80 text-sm">{t('setup.roomOperator')}</p>
+                        <p className="text-white font-medium text-lg">{operatorInfo.name || operatorInfo.email || '未知'}</p>
                     </div>
                 )}
 
-                <h2 className="text-2xl font-bold text-center text-white mb-6">Create Match</h2>
+                <h2 className="text-2xl font-bold text-center text-white mb-6">{t('setup.create')}</h2>
                 <div className="space-y-4">
                     <div className="setting-item">
-                        <label htmlFor="matchName" className="block text-sm font-medium text-white">Match Name:</label>
+                        <label htmlFor="matchName" className="block text-sm font-medium text-white">{t('setup.matchName')}</label>
                         <input 
                             type="text" 
                             id="matchName"
@@ -345,9 +346,9 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                     </div>
                     <div className="player-setup grid grid-cols-2 gap-4">
                         <div>
-                            <h2 className="text-lg font-medium text-white">Player 1</h2>
+                            <h2 className="text-lg font-medium text-white">球員 1</h2>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Full Name:</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.fullName')}</label>
                                 <input
                                     type="text"
                                     value={p1Name}
@@ -356,18 +357,18 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 />
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Email</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.email')}</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p1Email} onChange={(e) => setP1Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p1Email, 1)} disabled={loadingP1Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP1Code ? '...' : 'Code'}</button>
+                                    <button onClick={() => handleSendCode(p1Email, 1)} disabled={loadingP1Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP1Code ? '...' : t('setup.sendCode')}</button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Verify Code</label>
-                                <input type="text" value={p1Code} onChange={(e) => setP1Code(e.target.value)} placeholder="6-digit" className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <label className="block text-sm font-medium text-white">{t('setup.verifyCode')}</label>
+                                <input type="text" value={p1Code} onChange={(e) => setP1Code(e.target.value)} placeholder={t('setup.verifyPlaceholder')} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Handicap</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.handicap')}</label>
                                 <input
                                     type="number"
                                     value={p1Handicap}
@@ -377,9 +378,9 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                             </div>
                         </div>
                         <div>
-                            <h2 className="text-lg font-medium text-white">Player 2</h2>
+                            <h2 className="text-lg font-medium text-white">球員 2</h2>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Full Name:</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.fullName')}</label>
                                 <input
                                     type="text"
                                     value={p2Name}
@@ -388,18 +389,18 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 />
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Email</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.email')}</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p2Email} onChange={(e) => setP2Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p2Email, 2)} disabled={loadingP2Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP2Code ? '...' : 'Code'}</button>
+                                    <button onClick={() => handleSendCode(p2Email, 2)} disabled={loadingP2Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP2Code ? '...' : t('setup.sendCode')}</button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Verify Code</label>
-                                <input type="text" value={p2Code} onChange={(e) => setP2Code(e.target.value)} placeholder="6-digit" className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
+                                <label className="block text-sm font-medium text-white">{t('setup.verifyCode')}</label>
+                                <input type="text" value={p2Code} onChange={(e) => setP2Code(e.target.value)} placeholder={t('setup.verifyPlaceholder')} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">Handicap</label>
+                                <label className="block text-sm font-medium text-white">{t('setup.handicap')}</label>
                                 <input
                                     type="number"
                                     value={p2Handicap}
@@ -410,7 +411,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                         </div>
                     </div>
                     <div className="setting-item">
-                        <label className="block text-sm font-medium text-white">Number of Reds:</label>
+                        <label className="block text-sm font-medium text-white">{t('setup.reds')}</label>
                         <div className="flex space-x-2 mt-1">
                             {[6, 10, 15].map(reds => (
                                 <button 
@@ -424,7 +425,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                         </div>
                     </div>
                     <div className="setting-item">
-                        <label htmlFor="framesRequired" className="block text-sm font-medium text-white">Number of Frames:</label>
+                        <label htmlFor="framesRequired" className="block text-sm font-medium text-white">{t('setup.frames')}</label>
                         <input 
                             type="number" 
                             id="framesRequired"
@@ -434,7 +435,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                         />
                     </div>
                     <div className="setting-item">
-                        <label className="block text-sm font-medium text-white">Starting Player:</label>
+                        <label className="block text-sm font-medium text-white">{t('setup.starting')}</label>
                         <div className="flex space-x-2 mt-1">
                             <button 
                                 className={`px-4 py-2 rounded-md text-sm font-medium ${startingPlayerIndex === 0 ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
@@ -454,7 +455,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                         className="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium brand-button text-black"
                         onClick={handleStartMatch}
                     >
-                        Start Match
+                        {t('setup.startMatch')}
                     </button>
                 </div>
             </div>
