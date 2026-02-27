@@ -16,7 +16,6 @@ const LiveView: React.FC = () => {
     const slugId = routeRoomId;
     const roomId = routeRoomId ? (findRoomIdByCode(routeRoomId) || routeRoomId) : routeRoomId; // 本機 RoomStorage 鍵
     const socketRoom = slugId; // 始終用房間號作為 socket 房間鍵
-    // LiveView 銝?閬?銋?摮?socket 撖虫?嚗?雿輻霈霅血?
     const [gameState, setGameState] = useState<State | null>(null);
     const defaultPlayerStats = (idx: number) => ({
         playerIndex: idx,
@@ -69,22 +68,18 @@ const LiveView: React.FC = () => {
     const [showEndModal, setShowEndModal] = useState(false);
     const [statsPage, setStatsPage] = useState(0);
     const totalPages = 1;
-    // 隤輯岫嚗＊蝷箸?唬?皞???????
     const [connStatus, setConnStatus] = useState<'init' | 'socket_connected' | 'socket_error' | 'socket_disconnected'>('init');
     const [updateSource, setUpdateSource] = useState<'none' | 'storage' | 'socket'>('none');
     const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
     const [eventsRevision, setEventsRevision] = useState(0);
-    // 憓?????蝡舫???剁?隞乩噶 LiveView 銋??銝血誨??
     const socketRef = useRef<any>(null);
     const supabaseChannelRef = useRef<any>(null);
-    // 蝘駁??摰儔嚗ormatTime 撌脣銝摰??
     const debug = useMemo(() => {
         try {
             const params = new URLSearchParams(window.location.search);
             return params.get('debug') === 'true';
         } catch { return false; }
     }, []);
-    // socket 憭望???頛芾岷?
     const pollRef = useRef<number | null>(null);
     const startPolling = () => {
         if (!roomId) return;
@@ -135,7 +130,6 @@ const LiveView: React.FC = () => {
                 window.removeEventListener('storage', onStorage);
             };
         }
-        // ?誑?祆??脣?????箏?憪＊蝷綽??喃蝙??socket 璅∪?嚗??踹??活??輸????翰??
         if (roomId) {
             const raw = RoomStorage.getState(roomId!);
             if (raw) {
@@ -148,9 +142,7 @@ const LiveView: React.FC = () => {
                 } catch {}
             }
         }
-        // ??socket 璅∪?銝???撣豢?頛芾岷嚗??storage 鈭辣?冽?鈭憓閫貊???湔瞍
         startPolling();
-        // ??socket 璅∪?銋??storage 鈭辣嚗Ⅱ靽 Scoreboard ?函敺垢璅∪??湔?砍?脣???LiveView 隞?芸??湔
         const onStorage = (e: StorageEvent) => {
             if (!e.key || !roomId) return;
             if (e.key.includes(`snooker_room_${roomId}`)) {
@@ -181,7 +173,7 @@ const LiveView: React.FC = () => {
         socketRef.current = newSocket;
 
         newSocket.on('gameState updated', (newGameState) => {
-            // 隞?State.fromJSON 甇?Ⅱ????嚗?遣瑽???賊??航炊???any
+            // 將伺服器回傳的序列化狀態還原為 State 實例
             const deserializedState = State.fromJSON(newGameState);
             setGameState(deserializedState);
             setUpdateSource('socket');
@@ -189,7 +181,6 @@ const LiveView: React.FC = () => {
                     try { setEventsRevision(RoomStorage.getEvents(roomId!).length); } catch {}
         });
 
-        // ????????銝??迫頛芾岷嚗?
         newSocket.on('connect', () => {
             setConnStatus('socket_connected');
         });
@@ -214,7 +205,6 @@ const LiveView: React.FC = () => {
         };
     }, [roomId]);
 
-    // Supabase Realtime嚗陛???敺垢璅∪?銝??脩垢?郊嚗?
     useEffect(() => {
         if (!roomId || !ENABLE_SUPABASE) {
             if (supabaseChannelRef.current) {
@@ -228,7 +218,6 @@ const LiveView: React.FC = () => {
         supabaseChannelRef.current = ch;
         ch.subscribe((status: string) => {
             if (status === 'SUBSCRIBED') {
-                // ?活閮???交??暹????撱?銝甈∩??嗡?閬?????
                 if (gameState) {
                     try { ch.send({ type: 'broadcast', event: 'state', payload: gameState.toJSON() }); } catch {}
                 }
@@ -237,7 +226,6 @@ const LiveView: React.FC = () => {
             try {
                 const deserialized = State.fromJSON(payload?.payload ?? payload);
                 setGameState(deserialized);
-                // 銝??updateSource ?嚗????蝔桐?皞?閮?
                 setLastUpdateTs(Date.now());
                     try { setEventsRevision(RoomStorage.getEvents(roomId!).length); } catch {}
             } catch {}
@@ -249,17 +237,15 @@ const LiveView: React.FC = () => {
     }, [roomId, ENABLE_SUPABASE]);
 
     const updateAndBroadcastState = (newState: State) => {
-        // Socket 撱?
+        // Socket broadcast
         if (socketRef.current) {
             try { socketRef.current.emit('update gameState', { roomId: socketRoom, newState }); } catch {}
         }
-        // Supabase 撱?嚗敺垢?陛?芋撘?
+        // Supabase broadcast (if enabled)
         if (ENABLE_SUPABASE && supabaseChannelRef.current) {
             try { supabaseChannelRef.current.send({ type: 'broadcast', event: 'state', payload: newState.toJSON() }); } catch {}
         }
-        // ?砍????
         setGameState(newState);
-        // ????砍靘?Overlay/LiveView 頛芾岷
         if (roomId) {
             try { RoomStorage.setState(roomId!, newState.toJSON()); } catch {}
         }
@@ -273,13 +259,10 @@ const LiveView: React.FC = () => {
         return `${mins}:${secs}`;
     };
 
-    // Hooks 敹??其遙雿?賜? return 銋??箏??澆??
-    // 雿輻??葉??isMatchOver嚗? State.checkMatchOver ??蝢拐???
     const isMatchOver = useMemo(() => gameState?.isMatchOver ?? false, [gameState?.isMatchOver]);
 
     useEffect(() => {
         if (!roomId) return;
-        // ?寧撣?state ??蝞??嚗Ⅱ靽?⊥璈?events ?郊???單??湔
         setStats(StatsEngine.compute(roomId, gameState));
     }, [
         roomId,
@@ -290,7 +273,6 @@ const LiveView: React.FC = () => {
         gameState?.players[1].score,
     ]);
 
-    // ?芸?頛芣蝯梯??嚗? 8 蝘?
     useEffect(() => {
         const timer = setInterval(() => {
             setStatsPage((p) => (p + 1) % totalPages);
@@ -412,8 +394,6 @@ const LiveView: React.FC = () => {
                 </div>
 
                 
-
-                {/* 撌脣? Frame Time ??Match Time 雿萄銝蝯梯?蝢斤? */}
 
                 {/* Live Stats (carousel) */}
                 <div className="w-full max-w-[1920px] mx-auto mb-2 bg-gray-800/60 rounded-lg p-3">
