@@ -799,10 +799,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                     <div className="text-yellow-300 font-extrabold">{t('common.break')} {gameState.breakScore}</div>
                 </div>
 
-                {/* Compact actions: Miss / Safety / Concede */}
-                <div className={`grid ${gameState.isFoulCommitted ? 'grid-cols-4' : 'grid-cols-3'} gap-2 mb-2`}>
-                    <button onClick={handleMiss} className="p-2 rounded-md bg-gray-600 hover:bg-gray-700 text-white font-bold border border-white">Miss</button>
-                    <button onClick={handleSafe} className="p-2 rounded-md bg-blue-500 hover:bg-blue-600 text-white font-bold border border-white">Safety</button>
+                {/* Compact actions: Concede (+ Free Ball when applicable) */}
+                <div className={`grid ${gameState.isFoulCommitted ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mb-2`}>
                     <button onClick={handleConcede} className="p-2 rounded-md bg-red-800 hover:bg-red-900 text-white font-bold border border-white">Concede</button>
                     {gameState.isFoulCommitted && (
                         <button
@@ -954,10 +952,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
 
                 {/* Multi-Red（同桿）按鍵移至底部不常用區塊 */}
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <button onClick={handleSwitchPlayer} className="p-4 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-black font-bold border border-white">{t('common.switchPlayer')}</button>
-                    <button onClick={handleMiss} className="p-4 rounded-lg bg-gray-600 hover:bg-gray-700 font-bold border border-white">{t('common.miss')}</button>
-                    <button onClick={handleSafe} className="p-4 rounded-lg bg-blue-500 hover:bg-blue-600 font-bold border border-white">{t('common.safe')}</button>
                     {gameState.isFoulCommitted && (
                         <button onClick={handleToggleFreeBall} className={`p-4 rounded-lg font-bold ${gameState.isFreeBall ? 'bg-yellow-400 hover:bg-yellow-500 border-4 border-white' : 'bg-yellow-700 hover:bg-yellow-800 border border-white'}`}>{t('common.freeBall')}</button>
                     )}
