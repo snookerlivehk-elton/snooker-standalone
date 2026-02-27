@@ -60,9 +60,8 @@ const OperatorDashboard: React.FC = () => {
     setError(null);
     try {
       await createOperatorRoom(API_URL, operatorId);
-      // Refresh active rooms list instead of navigating
-      const roomsRes = await getOperatorActiveRooms(API_URL, operatorId);
-      setActiveRooms(roomsRes.rooms || []);
+      // 立即重新載入所有資料（避免快取/延遲）
+      await loadData();
     } catch (err: any) {
       setError(err.message || '建立房間失敗');
     } finally {
@@ -80,9 +79,8 @@ const OperatorDashboard: React.FC = () => {
       setToast('房間已刪除');
       setTimeout(() => setToast(null), 2000);
       
-      // Refresh active rooms
-      const roomsRes = await getOperatorActiveRooms(API_URL, operatorId);
-      setActiveRooms(roomsRes.rooms || []);
+      // 刪除後同步重新載入（含歷史）
+      await loadData();
     } catch (err: any) {
       setError(err.message || '刪除房間失敗');
     } finally {

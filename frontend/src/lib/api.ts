@@ -267,7 +267,9 @@ export async function createOperatorRoom(apiUrl: string, operatorId: string) {
 }
 
 export async function getOperatorActiveRooms(apiUrl: string, operatorId: string) {
-  const res = await fetch(`${apiUrl}/api/operators/${operatorId}/active-rooms`);
+  const url = new URL(`${apiUrl}/api/operators/${operatorId}/active-rooms`);
+  url.searchParams.set('t', String(Date.now()));
+  const res = await fetch(url.toString(), { cache: 'no-store' });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || `取得活躍房間失敗 (${res.status})`);
@@ -276,7 +278,9 @@ export async function getOperatorActiveRooms(apiUrl: string, operatorId: string)
 }
 
 export async function getOperatorMatches(apiUrl: string, operatorId: string) {
-  const res = await fetch(`${apiUrl}/api/operators/${operatorId}/matches`);
+  const url = new URL(`${apiUrl}/api/operators/${operatorId}/matches`);
+  url.searchParams.set('t', String(Date.now()));
+  const res = await fetch(url.toString(), { cache: 'no-store' });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || `取得操作員歷史失敗 (${res.status})`);
