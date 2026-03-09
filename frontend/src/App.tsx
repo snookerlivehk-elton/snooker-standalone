@@ -38,7 +38,7 @@ function App() {
   };
 
   return (
-    <GoogleOAuthProvider clientId="216977203711-vts77mnt3r6ak3n8tpkaf7hnobg1mmth.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId="216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com">
       <Routes>
         {/* Public routes for LIVE app */}
         <Route path="/" element={<Navigate to="/join" replace />} />
