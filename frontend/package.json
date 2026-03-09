@@ -16,12 +16,14 @@
     "deploy:root": "gh-pages -d dist -r https://github.com/snookerlivehk-elton/snookerlivehk-elton.github.io.git -b main"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.4",
+    "@supabase/supabase-js": "^2.45.0",
+    "jwt-decode": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.9.3",
-    "socket.io-client": "^4.8.1",
-    "@supabase/supabase-js": "^2.45.0"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",

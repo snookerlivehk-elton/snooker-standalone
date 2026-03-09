@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import Admin from './Admin';
 import Scoreboard from './Scoreboard';
 import Setup from './Setup';
@@ -37,6 +38,7 @@ function App() {
   };
 
   return (
+    <GoogleOAuthProvider clientId="216977203711-vts77mnt3r6ak3n8tpkaf7hnobg1mmth.apps.googleusercontent.com">
       <Routes>
         {/* Public routes for LIVE app */}
         <Route path="/" element={<Navigate to="/join" replace />} />
@@ -63,6 +65,7 @@ function App() {
         {/* Fallback: any unknown route goes to Admin */}
         <Route path="*" element={<Navigate to="/join" replace />} />
       </Routes>
+    </GoogleOAuthProvider>
   );
 }
 

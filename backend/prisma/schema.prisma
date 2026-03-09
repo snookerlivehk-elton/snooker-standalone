@@ -54,6 +54,7 @@ model Member {
   password_hash String?
   password_salt String?
   password_updated_at DateTime?
+  google_id    String?      @unique
   // Member number (code prefix + digits). Using existing member_code for compatibility.
   member_code  String?      @unique
   email_verified_at DateTime?

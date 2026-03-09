@@ -2141,6 +2141,61 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
 });
 
 // Simple password hashing helpers (SHA-256 with per-user salt)
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '216977203711-vts77mnt3r6ak3n8tpkaf7hnobg1mmth.apps.googleusercontent.com');
+
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) return res.status(400).json({ error: 'Missing credential' });
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID || '216977203711-vts77mnt3r6ak3n8tpkaf7hnobg1mmth.apps.googleusercontent.com',
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) return res.status(400).json({ error: 'Invalid token' });
+
+    const email = payload.email.toLowerCase();
+    const googleId = payload.sub;
+
+    let member = await prisma.member.findUnique({ where: { email } });
+
+    if (member) {
+      // Update google_id if not set (try-catch for DB permission issues)
+      try {
+         if ((member as any).google_id !== googleId) {
+             member = await prisma.member.update({
+                 where: { id: member.id },
+                 data: { google_id: googleId } as any
+             });
+         }
+      } catch (e) {
+          console.error('Failed to update google_id (DB schema might be missing column):', e);
+      }
+      
+      return res.json({ 
+        ok: true, 
+        id: member.id, 
+        member: { 
+          id: member.id, 
+          name: member.name, 
+          email: member.email, 
+          member_code: member.member_code,
+          role: member.role 
+        } 
+      });
+    } else {
+       return res.status(404).json({ error: 'Google 帳號未連結或未註冊，請先註冊會員' });
+    }
+
+  } catch (err: any) {
+    console.error('Google login error:', err);
+    res.status(500).json({ error: 'Login failed: ' + err.message });
+  }
+});
+
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
   try {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
-import { loginMember, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
+import { GoogleLogin } from '@react-oauth/google';
+import { loginMember, loginGoogle, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
 
 interface MemberLoginProps {
   mode?: 'member' | 'operator';
@@ -36,6 +37,34 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
       
       localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
       
+      if (mode === 'operator') {
+        navigate('/operator/dashboard');
+      } else {
+        navigate(`/member/${id}`);
+      }
+    } catch (err: any) {
+      setError(err.message || '登入失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onGoogleSuccess = async (credentialResponse: any) => {
+    setError(null);
+    setLoading(true);
+    try {
+      const { credential } = credentialResponse;
+      if (!credential) throw new Error('Google Login Failed');
+      
+      const result = await loginGoogle(API_URL, credential);
+      const id = result?.id || result?.member?.id;
+      const role = result?.role || result?.member?.role;
+      const email = result?.member?.email;
+
+      if (!id) throw new Error('登入失敗');
+
+      localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
+
       if (mode === 'operator') {
         navigate('/operator/dashboard');
       } else {
@@ -132,6 +161,23 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
             >
               {loading ? '登入中...' : '登入'}
             </button>
+            
+            <div className="flex items-center my-2">
+              <div className="flex-grow border-t border-gray-600"></div>
+              <span className="mx-2 text-gray-400 text-sm">OR</span>
+              <div className="flex-grow border-t border-gray-600"></div>
+            </div>
+
+            <div className="flex justify-center">
+               <GoogleLogin
+                  onSuccess={onGoogleSuccess}
+                  onError={() => setError('Google Login Failed')}
+                  theme="filled_black"
+                  text="signin_with"
+                  shape="pill"
+               />
+            </div>
+
             <div className="flex justify-between mt-2 text-sm text-gray-400">
               <button type="button" onClick={() => {
                 setView('forgot-request');

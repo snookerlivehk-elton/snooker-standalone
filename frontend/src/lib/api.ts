@@ -196,6 +196,22 @@ export async function loginMember(
   return res.json(); // { ok, id, member: {...} }
 }
 
+export async function loginGoogle(
+  apiUrl: string,
+  credential: string,
+) {
+  const res = await fetch(`${apiUrl}/api/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || `登入失敗 (${res.status})`);
+  }
+  return res.json(); // { ok, id, member: {...} }
+}
+
 export async function getMember(
   apiUrl: string,
   id: string,
