@@ -17,7 +17,14 @@ const Overlay: React.FC = () => {
   const roomId = slugId ? (findRoomIdByCode(slugId) || slugId) : slugId; // 用於本機 RoomStorage
   const socketRoom = (overrideSocketRoom && overrideSocketRoom.trim()) || slugId || roomId; // 用於 socket 加入房間鍵
   const [gameState, setGameState] = useState<State | null>(null);
-  const [scale] = useState(1);
+  const [scale] = useState(() => {
+    const s = paramsRaw?.get('scale');
+    return s ? parseFloat(s) : 1;
+  });
+
+  // 樣式切換參數（預設 legacy）
+  const styleParam = paramsRaw?.get('style') || paramsRaw?.get('styleVersion') || 'legacy';
+  const isCompact = styleParam === 'compact';
 
   useEffect(() => {
     // Make the whole page transparent for OBS Browser Source
@@ -186,7 +193,7 @@ const Overlay: React.FC = () => {
               bottom: 24,
               color: '#ffffff',
               opacity: 0.65,
-              fontSize: 'clamp(18px, 2.2vw, 28px)',
+              fontSize: 28,
               fontWeight: 700,
               letterSpacing: 2,
             }}
@@ -226,18 +233,13 @@ const Overlay: React.FC = () => {
       <span style={getNameStyle(index)}>
         {name}
         {showH && (
-          <span style={{ marginLeft: 6, fontSize: 'clamp(14px, 1.6vw, 22px)', fontWeight: 600, color: '#cfe3cf' }}>
+          <span style={{ marginLeft: 6, fontSize: isCompact ? 18 : 22, fontWeight: 600, color: '#cfe3cf' }}>
             ({signed})
           </span>
         )}
       </span>
     );
   };
-
-  // 樣式切換參數（預設 legacy）
-  const paramsUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const styleParam = paramsUrl?.get('style') || paramsUrl?.get('styleVersion') || 'legacy';
-  const isCompact = styleParam === 'compact';
 
   // 工具：時間格式化（Break Time 等）
   const formatTime = (seconds: number) => {
@@ -276,8 +278,7 @@ const Overlay: React.FC = () => {
     flexDirection: "column",
     gap: isCompact ? 3 : 4,
     // 將上方黑色主分牌寬度與下方綠色區塊一致
-    width: isCompact ? '68vw' : '85vw',
-    maxWidth: isCompact ? 1400 : 1700,
+    width: isCompact ? 1300 : 1600,
   };
 
   // 第一行（姓名/星號/分數/局數）
@@ -355,8 +356,7 @@ const Overlay: React.FC = () => {
     gap: isCompact ? 16 : 20,
     flexWrap: 'wrap',
     overflow: 'hidden',
-    width: isCompact ? '68vw' : '85vw',
-    maxWidth: isCompact ? 1400 : 1700,
+    width: isCompact ? 1300 : 1600,
   };
 
   const bottomInfoItemStyle: React.CSSProperties = {
@@ -386,7 +386,7 @@ const Overlay: React.FC = () => {
   };
 
   const getNameStyle = (idx: number): React.CSSProperties => ({
-    fontSize: 'clamp(18px, 2.2vw, 28px)',
+    fontSize: isCompact ? 24 : 28,
     fontWeight: 700,
     color: '#fff',
     letterSpacing: 0.2,
