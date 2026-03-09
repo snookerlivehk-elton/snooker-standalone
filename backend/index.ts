@@ -2163,17 +2163,8 @@ app.post('/api/auth/google', async (req, res) => {
     let member = await prisma.member.findUnique({ where: { email } });
 
     if (member) {
-      // Update google_id if not set (try-catch for DB permission issues)
-      try {
-         if ((member as any).google_id !== googleId) {
-             member = await prisma.member.update({
-                 where: { id: member.id },
-                 data: { google_id: googleId } as any
-             });
-         }
-      } catch (e) {
-          console.error('Failed to update google_id (DB schema might be missing column):', e);
-      }
+      // Logic for google_id update removed due to DB permission issues.
+      // Matching by email only for now.
       
       return res.json({ 
         ok: true, 
