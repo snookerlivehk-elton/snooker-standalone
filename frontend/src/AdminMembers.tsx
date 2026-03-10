@@ -347,10 +347,10 @@ const AdminMembers: React.FC = () => {
                           style={{ width: '100%' }}
                         >
                           <option value="MEMBER">普通會員</option>
-                          <option value="ADMIN">操作員</option>
+                          <option value="ADMIN">場館/球會</option>
                         </select>
                       ) : (
-                        (m.role === 'ADMIN' ? '操作員' : '普通會員')
+                        (m.role === 'ADMIN' ? '場館/球會' : '普通會員')
                       )}
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>

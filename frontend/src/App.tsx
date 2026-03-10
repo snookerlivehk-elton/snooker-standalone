@@ -53,6 +53,8 @@ function App() {
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
         <Route path="/members/login" element={<MemberLogin mode="member" />} />
+        <Route path="/operator/login" element={<Navigate to="/venue/login" replace />} />
+        <Route path="/operator/dashboard" element={<Navigate to="/venue/dashboard" replace />} />
         <Route path="/venue/login" element={<MemberLogin mode="venue" />} />
         <Route path="/member/:id" element={<MemberProfile />} />
         <Route path="/venue/dashboard" element={<VenueDashboard />} />
