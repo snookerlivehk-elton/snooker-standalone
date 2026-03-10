@@ -22,8 +22,6 @@ const OperatorDashboard: React.FC = () => {
   }, []);
 
   const [phone, setPhone] = useState(session.phone || '');
-  const [birthDate, setBirthDate] = useState(session.birthDate || session.birth_date ? new Date(session.birthDate || session.birth_date).toISOString().split('T')[0] : '');
-  const [clubName, setClubName] = useState(session.clubName || session.club_name || '');
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -113,7 +111,7 @@ const OperatorDashboard: React.FC = () => {
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Snooker Live HK - 操作員介面 <span className="text-sm font-normal text-yellow-500 ml-2">v2.0 Club</span></h1>
+        <h1 className="text-3xl font-bold">Snooker Live HK - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.0 Club</span></h1>
         <button 
             onClick={() => {
               localStorage.removeItem('memberSession');
@@ -142,7 +140,7 @@ const OperatorDashboard: React.FC = () => {
           <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">場館資料管理</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">場館名稱</label>
+               <label className="block text-sm mb-1 text-gray-400">場館名稱 (Club Name)</label>
                <input 
                  value={clubProfile.name || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, name: e.target.value })} 
@@ -151,7 +149,7 @@ const OperatorDashboard: React.FC = () => {
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">場館簡介</label>
+               <label className="block text-sm mb-1 text-gray-400">場館簡介 (Intro)</label>
                <textarea 
                  value={clubProfile.intro || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, intro: e.target.value })} 
@@ -160,7 +158,7 @@ const OperatorDashboard: React.FC = () => {
                />
             </div>
             <div>
-               <label className="block text-sm mb-1 text-gray-400">電話</label>
+               <label className="block text-sm mb-1 text-gray-400">聯絡電話 (Phone)</label>
                <input 
                  value={clubProfile.phone || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, phone: e.target.value })} 
@@ -168,7 +166,7 @@ const OperatorDashboard: React.FC = () => {
                />
             </div>
             <div>
-               <label className="block text-sm mb-1 text-gray-400">Email</label>
+               <label className="block text-sm mb-1 text-gray-400">聯絡 Email</label>
                <input 
                  value={clubProfile.email || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, email: e.target.value })} 
@@ -176,7 +174,7 @@ const OperatorDashboard: React.FC = () => {
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">地址</label>
+               <label className="block text-sm mb-1 text-gray-400">地址 (Address)</label>
                <input 
                  value={clubProfile.address || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, address: e.target.value })} 
@@ -310,72 +308,27 @@ const OperatorDashboard: React.FC = () => {
            </div>
         </div>
 
-        {/* Operator Info */}
-        <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">操作員資料</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div><span className="text-gray-400">名稱：</span>{operatorName}</div>
-            <div><span className="text-gray-400">Email：</span>{session.email}</div>
-            <div><span className="text-gray-400">所屬球會：</span>{clubName || '未設定'}</div>
-            <div><span className="text-gray-400">電話：</span>{phone || '-'}</div>
-          </div>
-        </div>
-
         {/* Edit Profile */}
         <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-3">更新資料</h3>
+          <h3 className="text-lg font-semibold mb-3">帳戶設定</h3>
           <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm mb-1 text-gray-400">電話</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
-            </div>
-            <div>
-              <label className="block text-sm mb-1 text-gray-400">出生日期</label>
-              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
-            </div>
-            <div>
-              <label className="block text-sm mb-1 text-gray-400">所屬球會</label>
-              <input value={clubName} onChange={(e) => setClubName(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
-            </div>
+             <div className="md:col-span-2 text-gray-400 mb-2">
+                當前登入帳號：{operatorName} ({session.email})
+             </div>
           </div>
-          <div className="mt-4">
-            <button
-              onClick={async () => {
-                try {
-                   if (!operatorId) return;
-                   const res = await updateMemberSelf(API_URL, operatorId, { phone, birthDate, clubName });
-                   const updated = res.member;
-                   // Update local session
-                   const newSession = { ...session, ...updated, clubName: updated.club_name, birthDate: updated.birth_date };
-                   localStorage.setItem('memberSession', JSON.stringify(newSession));
-                   setToast('資料已更新');
-                   setTimeout(() => setToast(null), 3000);
-                } catch (err: any) {
-                   setToast(err.message || '更新失敗');
-                   setTimeout(() => setToast(null), 3000);
-                }
-              }}
-            className="px-4 py-2 rounded brand-button text-black transition-colors"
-            >
-              儲存資料
-            </button>
-          </div>
-        </div>
-
-        {/* Reset Password */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-3">重設密碼</h3>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm mb-1 text-gray-400">新密碼</label>
-              <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+          
+          <div className="mt-4 border-t border-gray-700 pt-4">
+            <h4 className="text-md font-semibold mb-2">重設密碼</h4>
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm mb-1 text-gray-400">新密碼</label>
+                <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              </div>
+              <div>
+                <label className="block text-sm mb-1 text-gray-400">確認新密碼</label>
+                <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm mb-1 text-gray-400">確認新密碼</label>
-              <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
-            </div>
-          </div>
-          <div className="mt-4">
             <button
               onClick={async () => {
                 if (!resetPwd || resetPwd !== resetPwd2) {
@@ -410,7 +363,7 @@ const OperatorDashboard: React.FC = () => {
                    setTimeout(() => setToast(null), 3000);
                 }
               }}
-              className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="mt-3 px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
             >
               重設密碼
             </button>
