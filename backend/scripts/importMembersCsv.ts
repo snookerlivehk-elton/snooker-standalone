@@ -6,13 +6,20 @@ type Row = Record<string, string>;
 function parseCsv(content: string): Row[] {
   const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lines.length === 0) return [];
-  const header = lines[0].split(',').map(h => h.trim());
+  const headerLine = lines[0];
+  if (!headerLine) return [];
+  const header = headerLine.split(',').map(h => h.trim());
   const rows: Row[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
+    const line = lines[i];
+    if (!line) continue;
+    const cols = line.split(',');
     const row: Row = {};
     for (let j = 0; j < header.length; j++) {
-      row[header[j]] = (cols[j] ?? '').trim();
+      const key = header[j];
+      if (key) {
+        row[key] = (cols[j] ?? '').trim();
+      }
     }
     rows.push(row);
   }
@@ -59,7 +66,6 @@ async function main() {
           where: { district_code: districtCode },
           create: { district_code: districtCode, next_seq: 2 },
           update: { next_seq: { increment: 1 } },
-          select: { next_seq: true }
         });
         const current = seq.next_seq - 1; // 使用遞增前的序號
         finalCode = `${districtCode}-${String(current).padStart(4, '0')}`;
@@ -76,10 +82,17 @@ async function main() {
         where: { id: finalCode || key }, // 如果有 member_code 用作主鍵策略，否則用規範化 key
         update: {
           name,
+          // email: `${key}@example.com`, // Required field fallback
         },
         create: {
           id: finalCode || key,
           name,
+          email: `${key}@example.com`, // Required field fallback
+          phone: '',
+          password_hash: '',
+          role: 'MEMBER',
+          member_code: finalCode || '',
+          // gender: 'M', // Default
         }
       });
     }
