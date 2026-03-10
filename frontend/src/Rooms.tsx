@@ -72,10 +72,10 @@ const Rooms: React.FC = () => {
         <div className="max-w-3xl mx-auto space-y-4">
           {!isOperator && (
             <div className="cue-card p-4">
-              <div className="font-bold mb-1">僅操作員可管理房間</div>
-              <div className="text-sm text-gray-300">請以操作員身份登入以建立/管理房間</div>
+              <div className="font-bold mb-1">僅場館/球會可管理房間</div>
+              <div className="text-sm text-gray-300">請以場館身份登入以建立/管理房間</div>
               <div className="mt-3 flex gap-2">
-                <a href="/operator/login" className="cue-button px-4 py-2 rounded">操作員登入</a>
+                <a href="/venue/login" className="cue-button px-4 py-2 rounded">場館登入</a>
                 <a href="/members/login" className="px-4 py-2 rounded bg-gray-700 text-white">會員登入</a>
               </div>
             </div>
@@ -93,6 +93,9 @@ const Rooms: React.FC = () => {
                   <button disabled={loading} onClick={onCreate} className="cue-button px-4 py-2 rounded">
                     建立房間
                   </button>
+                  <a href="/venue/dashboard" className="px-4 py-2 rounded bg-gray-600 text-white">
+                    回到管理後台
+                  </a>
                 </div>
               </div>
             </div>

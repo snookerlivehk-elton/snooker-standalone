@@ -4,7 +4,7 @@ import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage } from './lib/api';
 import { QRCodeSVG } from 'qrcode.react';
 
-const OperatorDashboard: React.FC = () => {
+const VenueDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -34,7 +34,7 @@ const OperatorDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!operatorId) {
-      navigate('/operator/login');
+      navigate('/venue/login');
       return;
     }
     
@@ -111,7 +111,7 @@ const OperatorDashboard: React.FC = () => {
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Snooker Live HK - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.0 Club</span></h1>
+        <h1 className="text-3xl font-bold">Snooker Live HK - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.1 Club</span></h1>
         <button 
             onClick={() => {
               localStorage.removeItem('memberSession');
@@ -556,4 +556,4 @@ const OperatorDashboard: React.FC = () => {
   );
 };
 
-export default OperatorDashboard;
+export default VenueDashboard;

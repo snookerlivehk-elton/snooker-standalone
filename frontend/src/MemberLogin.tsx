@@ -5,7 +5,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { loginMember, loginGoogle, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
 
 interface MemberLoginProps {
-  mode?: 'member' | 'operator';
+  mode?: 'member' | 'venue';
 }
 
 const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
@@ -37,8 +37,8 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
       
       localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
       
-      if (mode === 'operator') {
-        navigate('/operator/dashboard');
+      if (mode === 'venue') {
+        navigate('/venue/dashboard');
       } else {
         navigate(`/member/${id}`);
       }
@@ -65,8 +65,8 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
 
       localStorage.setItem('memberSession', JSON.stringify({ email: email.trim().toLowerCase(), id, role }));
 
-      if (mode === 'operator') {
-        navigate('/operator/dashboard');
+      if (mode === 'venue') {
+        navigate('/venue/dashboard');
       } else {
         navigate(`/member/${id}`);
       }
@@ -126,7 +126,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
         <div className="text-center mb-6">
           <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Snooker Live HK</div>
           <h2 className="text-2xl font-bold mt-1">
-            {view === 'login' && (mode === 'operator' ? '操作員登入' : '會員登入')}
+            {view === 'login' && (mode === 'venue' ? '場館/球會登入' : '會員登入')}
             {view === 'forgot-request' && '忘記密碼'}
             {view === 'forgot-reset' && '重設密碼'}
           </h2>
@@ -189,6 +189,18 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
               <button type="button" onClick={() => navigate('/members/register')} className="hover:text-white underline">
                 註冊新帳號
               </button>
+            </div>
+            
+            <div className="mt-4 text-center border-t border-gray-700 pt-3">
+              {mode === 'member' ? (
+                <button type="button" onClick={() => navigate('/venue/login')} className="text-sm text-yellow-500 hover:text-yellow-400">
+                  我是場館/球會管理員？在此登入
+                </button>
+              ) : (
+                <button type="button" onClick={() => navigate('/members/login')} className="text-sm text-yellow-500 hover:text-yellow-400">
+                  我是普通會員？在此登入
+                </button>
+              )}
             </div>
           </form>
         )}

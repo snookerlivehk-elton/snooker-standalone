@@ -5,7 +5,7 @@ import { API_URL } from './config';
 import { getPublicClubProfile, joinClub } from './lib/api';
 
 const ClubPublicPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { clubId } = useParams<{ clubId: string }>();
   const [club, setClub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,15 +16,15 @@ const ClubPublicPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (id) {
+    if (clubId) {
       loadClub();
     }
-  }, [id]);
+  }, [clubId]);
 
   const loadClub = async () => {
     try {
       setLoading(true);
-      const data = await getPublicClubProfile(API_URL, id!);
+      const data = await getPublicClubProfile(API_URL, clubId!);
       setClub(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load club');

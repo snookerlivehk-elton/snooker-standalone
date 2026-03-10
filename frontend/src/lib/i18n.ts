@@ -48,7 +48,7 @@ const dict: Record<Lang, Record<string, string>> = {
     'score.forceStart': '跳過並開始',
     'score.skipExit': '跳過並離開',
     'setup.tagline': '直播計分系統',
-    'setup.roomOperator': '房間主持',
+    'setup.roomOperator': '場館/球會',
     'setup.create': '建立賽事',
     'setup.matchName': '賽事名稱：',
     'setup.fullName': '姓名：',
