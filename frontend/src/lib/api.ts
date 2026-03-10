@@ -146,6 +146,76 @@ export async function getMyClubMessages(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function getClubMessage(apiUrl: string, memberId: string, messageId: string) {
+  const res = await fetch(`${apiUrl}/api/club/messages/${encodeURIComponent(messageId)}`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取訊息失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function markClubMessageRead(apiUrl: string, memberId: string, messageId: string) {
+  const res = await fetch(`${apiUrl}/api/club/messages/${encodeURIComponent(messageId)}/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `標記已讀失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+// Match Invite APIs
+export async function sendMatchInvites(apiUrl: string, roomId: string, operatorId: string | undefined, emails: string[]) {
+  const res = await fetch(`${apiUrl}/api/matches/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: roomId, operator_id: operatorId, emails })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `發送比賽通知失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ invited: Array<{ email: string; memberId: string; token: string }>; notFound: string[] }>;
+}
+
+export async function getMyInvites(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/matches/invites/my`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取邀請失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ invites: any[] }>;
+}
+
+export async function acceptInvite(apiUrl: string, token: string, memberId?: string) {
+  const res = await fetch(`${apiUrl}/api/matches/invites/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(memberId ? { 'x-member-id': memberId } : {}) },
+    body: JSON.stringify({ token })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `確認邀請失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ ok: true; roomId: string }>;
+}
+
+export async function getRoomInvites(apiUrl: string, roomId: string) {
+  const res = await fetch(`${apiUrl}/rooms/${encodeURIComponent(roomId)}/invites`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取房間邀請失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ invites: Array<{ id: string; memberId: string; status: string; member?: { id: string; name: string; email: string } }> }>;
+}
+
 export async function deleteOperatorRoom(apiUrl: string, roomId: string) {
   const res = await fetch(`${apiUrl}/api/rooms/${roomId}`, {
     method: 'DELETE',

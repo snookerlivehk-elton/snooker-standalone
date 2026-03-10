@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -180,7 +181,6 @@ router.get('/messages', async (req, res) => {
     if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
-        // Find clubs the member joined
         const memberships = await prisma.clubMember.findMany({
             where: { memberId },
             select: { clubId: true }
@@ -190,16 +190,69 @@ router.get('/messages', async (req, res) => {
         
         if (clubIds.length === 0) return res.json([]);
 
-        // Find messages from those clubs
         const messages = await prisma.clubMessage.findMany({
             where: { clubId: { in: clubIds } },
             orderBy: { createdAt: 'desc' },
             include: { club: { select: { name: true, logoUrl: true } } }
         });
-        
-        res.json(messages);
+        const msgIds = messages.map(m => m.id);
+        let readRows: any[] = [];
+        try {
+            readRows = await prisma.$queryRawUnsafe(`SELECT "messageId" FROM "ClubMessageRead" WHERE "memberId"=$1`, memberId);
+        } catch {}
+        const readSet = new Set(readRows.map(r => String(r.messageId)));
+        const withRead = messages.map(m => ({ ...m, read: readSet.has(m.id) }));
+        res.json(withRead);
     } catch (error) {
         res.status(500).json({ error: String(error) });
+    }
+});
+
+router.get('/messages/:id', async (req, res) => {
+    const memberId = req.headers['x-member-id'] as string | undefined;
+    const id = req.params.id;
+    try {
+        const message = await prisma.clubMessage.findUnique({
+            where: { id },
+            include: { club: { select: { name: true, logoUrl: true } } }
+        });
+        if (!message) return res.status(404).json({ error: 'Not found' });
+        let read = false;
+        if (memberId) {
+            try {
+                const rows: any[] = await prisma.$queryRawUnsafe(
+                    `SELECT 1 FROM "ClubMessageRead" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
+                    memberId, id
+                );
+                read = rows.length > 0;
+            } catch {}
+        }
+        res.json({ ...message, read });
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+router.post('/messages/:id/read', async (req, res) => {
+    const memberId = req.headers['x-member-id'] as string;
+    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const id = req.params.id;
+    try {
+        const mid = id;
+        const rows: any[] = await prisma.$queryRawUnsafe(
+            `SELECT 1 FROM "ClubMessageRead" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
+            memberId, mid
+        );
+        if (rows.length === 0) {
+            const rid = randomUUID();
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "ClubMessageRead"("id","memberId","messageId","readAt") VALUES ($1,$2,$3,CURRENT_TIMESTAMP)`,
+                rid, memberId, mid
+            );
+        }
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
     }
 });
 

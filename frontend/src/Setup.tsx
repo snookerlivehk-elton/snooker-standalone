@@ -5,7 +5,7 @@ import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
-import { validateMembers, sendMatchVerificationCode, startMatchV2 as startMatch } from './lib/api';
+import { validateMembers, sendMatchVerificationCode, startMatchV2 as startMatch, sendMatchInvites, getRoomInvites } from './lib/api';
 import { t } from './lib/i18n';
 
 interface SetupProps {
@@ -86,6 +86,33 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
         })();
     }, [roomId]);
 
+    // Poll accepted invites to auto-fill players
+    useEffect(() => {
+        if (!roomId) return;
+        let cancelled = false;
+        const tick = async () => {
+            try {
+                const data = await getRoomInvites(API_URL, roomId);
+                if (cancelled) return;
+                const accepted = (data.invites || []).filter((x: any) => String(x.status) === 'ACCEPTED');
+                for (const inv of accepted) {
+                    const mem = inv.member;
+                    if (!mem || !mem.email) continue;
+                    if (!p1Email.trim()) {
+                        setP1Email(mem.email);
+                        if (mem.name) setP1Name(mem.name);
+                    } else if (!p2Email.trim() && mem.email !== p1Email.trim()) {
+                        setP2Email(mem.email);
+                        if (mem.name) setP2Name(mem.name);
+                    }
+                }
+            } catch {}
+        };
+        const id = setInterval(tick, 1500);
+        tick();
+        return () => { cancelled = true; clearInterval(id); };
+    }, [roomId, p1Email, p2Email]);
+
     // Name resolution effect
     useEffect(() => {
         const p1IdTrim = p1Email.trim();
@@ -159,6 +186,22 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     };
 
     const handleStartMatch = async () => {
+        const p1EmailTrim = p1Email.trim();
+        const p2EmailTrim = p2Email.trim();
+        const p1CodeTrim = p1Code.trim();
+        const p2CodeTrim = p2Code.trim();
+        if (!p1EmailTrim && !p2EmailTrim) {
+            alert('請至少輸入一位球員的 Email 並取得驗證碼後再開始比賽。');
+            return;
+        }
+        if (p1EmailTrim && !p1CodeTrim) {
+            alert('球員 1 已輸入 Email，請先輸入驗證碼。');
+            return;
+        }
+        if (p2EmailTrim && !p2CodeTrim) {
+            alert('球員 2 已輸入 Email，請先輸入驗證碼。');
+            return;
+        }
         if (roomId) {
             const storageRoomId = findRoomIdByCode(roomId) || roomId;
             const existing = RoomStorage.getRoomData(storageRoomId);
@@ -352,6 +395,20 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <div className="flex gap-1">
                                     <input type="email" value={p1Email} onChange={(e) => setP1Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
                                     <button onClick={() => handleSendCode(p1Email, 1)} disabled={loadingP1Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP1Code ? '...' : t('setup.sendCode')}</button>
+                                    <button
+                                      onClick={async () => {
+                                        if (!roomId || !p1Email.trim()) { alert('請先輸入 Email'); return; }
+                                        try {
+                                          await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p1Email.trim()]);
+                                          alert('已發送比賽通知');
+                                        } catch (e: any) {
+                                          alert(e.message || '發送失敗');
+                                        }
+                                      }}
+                                      className="mt-1 px-2 py-1 bg-green-600 text-white text-xs rounded"
+                                    >
+                                      發送比賽通知
+                                    </button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">
@@ -384,6 +441,20 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <div className="flex gap-1">
                                     <input type="email" value={p2Email} onChange={(e) => setP2Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
                                     <button onClick={() => handleSendCode(p2Email, 2)} disabled={loadingP2Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP2Code ? '...' : t('setup.sendCode')}</button>
+                                    <button
+                                      onClick={async () => {
+                                        if (!roomId || !p2Email.trim()) { alert('請先輸入 Email'); return; }
+                                        try {
+                                          await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p2Email.trim()]);
+                                          alert('已發送比賽通知');
+                                        } catch (e: any) {
+                                          alert(e.message || '發送失敗');
+                                        }
+                                      }}
+                                      className="mt-1 px-2 py-1 bg-green-600 text-white text-xs rounded"
+                                    >
+                                      發送比賽通知
+                                    </button>
                                 </div>
                             </div>
                             <div className="input-group mt-2">

@@ -515,7 +515,7 @@ app.post('/api/matches/start', async (req, res) => {
     }
     
     if (!p1_member_id && !p2_member_id) {
-        return res.json({ mode: 'guest', message: 'Both players are guests' });
+        return res.status(400).json({ error: '必須至少有一位球員完成 Email 驗證（或提供有效會員ID）才可建立比賽。' });
     }
     
     // Resolve operator_id (support ID or Email) and ensure existence
@@ -569,6 +569,125 @@ app.post('/api/matches/start', async (req, res) => {
     } catch(e) {
         res.status(500).json({ error: String(e) });
     }
+});
+
+// Create match invites for specific member emails (operator triggers from Setup page)
+app.post('/api/matches/invite', async (req, res) => {
+  try {
+    const { room_id, operator_id, emails } = req.body || {};
+    if (!room_id || !Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ error: 'missing room_id or emails' });
+    }
+    // Resolve operator id (id or email acceptable)
+    let opResolved: string | null = null;
+    if (operator_id) {
+      const opMember = await prisma.member.findFirst({
+        where: { OR: [{ id: String(operator_id) }, { email: String(operator_id) }] },
+        select: { id: true, name: true, email: true }
+      });
+      opResolved = opMember?.id || null;
+    }
+    // Lookup members by email
+    const uniq = Array.from(new Set(emails.map((e: any) => String(e || '').trim()).filter(Boolean)));
+    if (uniq.length === 0) return res.status(400).json({ error: 'no valid emails' });
+    const foundMembers = await prisma.member.findMany({ where: { email: { in: uniq } }, select: { id: true, email: true, name: true } });
+    const foundByEmail = new Map(foundMembers.map(m => [m.email!, m]));
+    const invited: any[] = [];
+    const notFound: string[] = [];
+    for (const em of uniq) {
+      const m = foundByEmail.get(em);
+      if (!m) { notFound.push(em); continue; }
+      const token = randomBytes(16).toString('hex');
+      const id = randomUUID();
+      try {
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO "MatchInvite"("id","roomId","operatorId","memberId","token","status","createdAt") VALUES ($1,$2,$3,$4,$5,'PENDING',CURRENT_TIMESTAMP)`,
+          id, String(room_id), opResolved, m.id, token
+        );
+        invited.push({ email: em, memberId: m.id, token });
+      } catch (e: any) {
+        // Ignore duplicates by token; retry with another
+      }
+    }
+    res.json({ invited, notFound });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// List my invites (member inbox-style)
+app.get('/api/matches/invites/my', async (req, res) => {
+  const memberId = req.headers['x-member-id'] as string;
+  if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id","roomId","operatorId","memberId","token","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "memberId"=$1 ORDER BY "createdAt" DESC`,
+      memberId
+    );
+    // Enrich with operator and room info
+    const roomIds = Array.from(new Set(rows.map(r => String(r.roomId))));
+    const opIds = Array.from(new Set(rows.map(r => r.operatorId).filter(Boolean)));
+    const ops = opIds.length ? await prisma.member.findMany({ where: { id: { in: opIds as string[] } }, select: { id: true, name: true, email: true, club_name: true } }) : [];
+    const opMap = new Map(ops.map(o => [o.id, o]));
+    const enriched = rows.map(r => ({
+      ...r,
+      operator: r.operatorId ? opMap.get(r.operatorId) || null : null
+    }));
+    res.json({ invites: enriched });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Accept invite (member confirms to join match)
+app.post('/api/matches/invites/accept', async (req, res) => {
+  try {
+    const memberId = req.headers['x-member-id'] as string | undefined;
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'missing token' });
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id","roomId","operatorId","memberId","status" FROM "MatchInvite" WHERE "token"=$1 LIMIT 1`,
+      String(token)
+    );
+    if (!rows.length) return res.status(404).json({ error: 'invite not found' });
+    const inv = rows[0];
+    if (inv.status !== 'PENDING') return res.status(400).json({ error: 'invite already processed' });
+    if (memberId && String(inv.memberId) !== String(memberId)) {
+      return res.status(403).json({ error: 'member mismatch' });
+    }
+    await prisma.$executeRawUnsafe(
+      `UPDATE "MatchInvite" SET "status"='ACCEPTED',"acceptedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+      inv.id
+    );
+    res.json({ ok: true, roomId: inv.roomId });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+// Room-level: list invites (for Setup page to auto-fill accepted players)
+app.get('/rooms/:roomId/invites', async (req, res) => {
+  const roomId = String(req.params.roomId);
+  try {
+    const rows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id","memberId","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "roomId"=$1 ORDER BY "createdAt" DESC`,
+      roomId
+    );
+    const memberIds = Array.from(new Set(rows.map(r => r.memberId)));
+    const members = memberIds.length ? await prisma.member.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, name: true, email: true }
+    }) : [];
+    const mMap = new Map(members.map(m => [m.id, m]));
+    res.json({
+      invites: rows.map(r => ({
+        ...r,
+        member: mMap.get(r.memberId) || null
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 // Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)

@@ -1,6 +1,18 @@
 @import "tailwindcss";
 
 @layer base {
+  html, body {
+    height: 100%;
+    width: 100%;
+    background: var(--brand-bg);
+    overflow-x: hidden;
+  }
+  body {
+    margin: 0;
+  }
+  #root {
+    min-height: 100%;
+  }
   :root {
     --brand-bg: #0b0f17;
     --brand-yellow: #facc15;
@@ -25,6 +37,9 @@
                 var(--brand-bg);
     color: #fff;
     min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    overflow-x: hidden;
   }
   .glass {
     background: var(--glass-bg);
@@ -59,11 +74,11 @@
     opacity: 0.6;
   }
   .cue-card {
-    background: rgba(0, 51, 160, 0.2); /* 藍色半透明 */
-    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
     border-radius: var(--cue-radius);
     box-shadow: var(--cue-shadow);
-    backdrop-filter: blur(8px);
+    backdrop-filter: saturate(180%) blur(10px);
   }
   .cue-topbar {
     height: 8vh; /* 固定 8% */

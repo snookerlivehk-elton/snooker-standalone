@@ -93,6 +93,60 @@ export async function createClubTables(prisma: PrismaClient) {
     `);
     console.log('Created ClubMessage table');
 
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ClubMessageRead" (
+        "id" TEXT NOT NULL,
+        "memberId" TEXT NOT NULL,
+        "messageId" TEXT NOT NULL,
+        "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ClubMessageRead_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ClubMessageRead_memberId_messageId_key" ON "ClubMessageRead"("memberId","messageId");`);
+    try {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ClubMessageRead" ADD CONSTRAINT "ClubMessageRead_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      `);
+    } catch (e: any) {
+      if (e.message.includes('already exists')) { /* no-op */ } else console.warn('Error adding ClubMessageRead_memberId_fkey:', e.message);
+    }
+    try {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "ClubMessageRead" ADD CONSTRAINT "ClubMessageRead_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "ClubMessage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      `);
+    } catch (e: any) {
+      if (e.message.includes('already exists')) { /* no-op */ } else console.warn('Error adding ClubMessageRead_messageId_fkey:', e.message);
+    }
+
+    // 7. Create MatchInvite table (targeted invitations for members to join a room/match)
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MatchInvite" (
+        "id" TEXT NOT NULL,
+        "roomId" TEXT NOT NULL,
+        "operatorId" TEXT,
+        "memberId" TEXT NOT NULL,
+        "token" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "acceptedAt" TIMESTAMP(3),
+        CONSTRAINT "MatchInvite_pkey" PRIMARY KEY ("id")
+      );
+    `);
+    console.log('Created MatchInvite table');
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MatchInvite_token_key" ON "MatchInvite"("token");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MatchInvite_roomId_idx" ON "MatchInvite"("roomId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MatchInvite_memberId_idx" ON "MatchInvite"("memberId");`);
+    // Add FKs best-effort (may fail if already exists)
+    try {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "MatchInvite" ADD CONSTRAINT "MatchInvite_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      `);
+      console.log('Added MatchInvite_memberId_fkey');
+    } catch (e: any) {
+      if (e.message.includes('already exists')) console.log('MatchInvite_memberId_fkey already exists');
+      else console.warn('Error adding MatchInvite_memberId_fkey:', e.message);
+    }
+
   } catch (e) {
     console.error('Error creating tables:', e);
   }

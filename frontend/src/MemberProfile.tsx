@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs } from './lib/api';
+import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
@@ -12,6 +12,8 @@ const MemberProfile: React.FC = () => {
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [joinedClubs, setJoinedClubs] = useState<any[]>([]);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [openMessage, setOpenMessage] = useState<any | null>(null);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [clubName, setClubName] = useState('');
@@ -107,6 +109,7 @@ const MemberProfile: React.FC = () => {
         if (member.id === sessionId) {
            getMyClubMessages(API_URL, String(member.id)).then(setMessages).catch(() => {});
            getMyJoinedClubs(API_URL, String(member.id)).then(setJoinedClubs).catch(() => {});
+           getMyInvites(API_URL, String(member.id)).then(d => setInvites(d.invites || [])).catch(() => {});
         }
       } catch (e) {
         console.error('Failed to load data', e);
@@ -165,19 +168,97 @@ const MemberProfile: React.FC = () => {
               {messages.length === 0 ? (
                  <div className="text-gray-400 text-sm">暫無訊息</div>
               ) : (
-                 <div className="space-y-3">
+                  <ul className="divide-y divide-gray-700/70 rounded-md border border-gray-700/50">
                     {messages.map((msg: any) => (
-                       <div key={msg.id} className="bg-gray-700/50 p-3 rounded-lg">
-                          <div className="flex justify-between items-start mb-1">
-                             <div className="font-bold text-yellow-400">{msg.title || '無標題'}</div>
-                             <div className="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleDateString()}</div>
-                          </div>
-                          <div className="text-sm text-gray-300 whitespace-pre-wrap">{msg.content}</div>
-                          <div className="text-xs text-gray-500 mt-2 text-right">來自: {msg.club?.name || '未知場館'}</div>
-                       </div>
+                      <li key={msg.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-800/70">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {!msg.read && <span className="inline-block w-2 h-2 rounded-full bg-blue-400" aria-label="unread"></span>}
+                          <button
+                            className={`text-left truncate hover:underline ${msg.read ? 'text-blue-300' : 'text-blue-400 font-semibold'}`}
+                            onClick={async () => {
+                              try {
+                                const full = await getClubMessage(API_URL, String(member.id), String(msg.id));
+                                setOpenMessage(full);
+                                if (!msg.read) {
+                                  await markClubMessageRead(API_URL, String(member.id), String(msg.id));
+                                  setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
+                                }
+                              } catch (e: any) {
+                                alert(e.message || '讀取失敗');
+                              }
+                            }}
+                            title={String(msg.title || '無標題')}
+                          >
+                            {String(msg.title || '無標題')}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <div className="text-xs text-gray-400">{msg.club?.name || '未知場館'}</div>
+                          <div className="text-xs text-gray-500">{new Date(msg.createdAt).toLocaleDateString()}</div>
+                        </div>
+                      </li>
                     ))}
-                 </div>
+                  </ul>
               )}
+           </div>
+        )}
+
+        {openMessage && (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700">
+              <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+                <div className="font-semibold text-white truncate">{openMessage.title || '無標題'}</div>
+                <button className="text-gray-300 hover:text-white" onClick={() => setOpenMessage(null)}>關閉</button>
+              </div>
+              <div className="px-4 py-3 space-y-2">
+                <div className="text-xs text-gray-400">來自：{openMessage.club?.name || '未知場館'}</div>
+                <div className="text-xs text-gray-500">{new Date(openMessage.createdAt).toLocaleString()}</div>
+                <div className="text-gray-200 whitespace-pre-wrap mt-2">{openMessage.content}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Match Invites */}
+        {member.id === session.id && (
+           <div className="glass rounded-xl p-4">
+             <h3 className="text-lg font-semibold mb-3">比賽邀請 ({invites.length})</h3>
+             {invites.length === 0 ? (
+               <div className="text-gray-400 text-sm">暫無邀請</div>
+             ) : (
+               <div className="space-y-3">
+                 {invites.map((it: any) => (
+                   <div key={it.id} className="bg-gray-700/50 p-3 rounded-lg">
+                     <div className="flex items-center justify-between">
+                       <div>
+                         <div className="font-semibold">房間：{String(it.roomId)}</div>
+                         <div className="text-xs text-gray-400 mt-0.5">狀態：{String(it.status)}</div>
+                         {it.operator && (
+                           <div className="text-xs text-gray-400">邀請人：{it.operator.name || it.operator.email}</div>
+                         )}
+                       </div>
+                       {String(it.status) === 'PENDING' ? (
+                         <button
+                           className="px-3 py-1.5 rounded bg-green-600 text-white text-sm"
+                           onClick={async () => {
+                             try {
+                               await acceptInvite(API_URL, String(it.token), String(member.id));
+                               setInvites(prev => prev.map(p => p.id === it.id ? { ...p, status: 'ACCEPTED', acceptedAt: Date.now() } : p));
+                             } catch (e: any) {
+                               alert(e.message || '操作失敗');
+                             }
+                           }}
+                         >
+                           確認進入比賽
+                         </button>
+                       ) : (
+                         <span className="text-xs text-gray-400">已確認</span>
+                       )}
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             )}
            </div>
         )}
 
