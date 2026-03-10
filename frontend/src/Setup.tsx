@@ -359,8 +359,13 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                       onClick={async () => {
                                         if (!roomId || !p1Email.trim()) { alert('請先輸入 Email'); return; }
                                         try {
-                                          await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p1Email.trim()]);
-                                          alert('已發送比賽通知');
+                                          const r = await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p1Email.trim()]);
+                                          const notFound = (r as any)?.notFound || [];
+                                          if (notFound.length) {
+                                            alert(`此 Email 尚未註冊會員：${notFound.join(', ')}`);
+                                          } else {
+                                            alert('已發送比賽通知');
+                                          }
                                         } catch (e: any) {
                                           alert(e.message || '發送失敗');
                                         }
@@ -400,8 +405,13 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                       onClick={async () => {
                                         if (!roomId || !p2Email.trim()) { alert('請先輸入 Email'); return; }
                                         try {
-                                          await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p2Email.trim()]);
-                                          alert('已發送比賽通知');
+                                          const r = await sendMatchInvites(API_URL, roomId, operatorInfo?.id, [p2Email.trim()]);
+                                          const notFound = (r as any)?.notFound || [];
+                                          if (notFound.length) {
+                                            alert(`此 Email 尚未註冊會員：${notFound.join(', ')}`);
+                                          } else {
+                                            alert('已發送比賽通知');
+                                          }
                                         } catch (e: any) {
                                           alert(e.message || '發送失敗');
                                         }

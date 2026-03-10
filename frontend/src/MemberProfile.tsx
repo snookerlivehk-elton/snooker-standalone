@@ -26,6 +26,7 @@ const MemberProfile: React.FC = () => {
   }, []);
   const sessionEmail = (session as any)?.email;
   const sessionId = (session as any)?.id;
+  const selfMemberId = sessionId ? String(sessionId) : null;
 
   useEffect(() => {
     let mounted = true;
@@ -34,8 +35,9 @@ const MemberProfile: React.FC = () => {
       setLoading(true);
       try {
         if (!id) {
-          if (!sessionEmail) throw new Error('缺少會員識別');
-          setMember({ id: sessionEmail, email: sessionEmail, name: '-', district_code: '-', created_at: Date.now() });
+          if (!sessionEmail && !sessionId) throw new Error('缺少會員識別');
+          const resolvedId = sessionId || sessionEmail;
+          setMember({ id: resolvedId, email: sessionEmail || resolvedId, name: '-', district_code: '-', created_at: Date.now() });
         } else {
           try {
             const data = await getMember(API_URL, id);
@@ -102,14 +104,16 @@ const MemberProfile: React.FC = () => {
     (async () => {
       setMatchesLoading(true);
       try {
-        const res = await getMemberMatches(API_URL, String(member.id));
+        const isSelfView = !!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || ''));
+        const memberIdForApi = isSelfView ? selfMemberId : String(member.id);
+        const res = await getMemberMatches(API_URL, memberIdForApi);
         setMatches(res.matches || []);
         
         // Load messages and joined clubs if viewing self
-        if (member.id === sessionId) {
-           getMyClubMessages(API_URL, String(member.id)).then(setMessages).catch(() => {});
-           getMyJoinedClubs(API_URL, String(member.id)).then(setJoinedClubs).catch(() => {});
-           getMyInvites(API_URL, String(member.id)).then(d => setInvites(d.invites || [])).catch(() => {});
+        if (isSelfView) {
+           getMyClubMessages(API_URL, selfMemberId).then(setMessages).catch(() => {});
+           getMyJoinedClubs(API_URL, selfMemberId).then(setJoinedClubs).catch(() => {});
+           getMyInvites(API_URL, selfMemberId).then(d => setInvites(d.invites || [])).catch(() => {});
         }
       } catch (e) {
         console.error('Failed to load data', e);
@@ -117,7 +121,7 @@ const MemberProfile: React.FC = () => {
         setMatchesLoading(false);
       }
     })();
-  }, [member?.id, sessionId]);
+  }, [member?.id, selfMemberId, sessionEmail]);
 
   if (loading) return <div style={{ padding: 16 }}>載入中...</div>;
   if (error) return <div style={{ padding: 16, color: 'red' }}>{error}</div>;
@@ -162,7 +166,7 @@ const MemberProfile: React.FC = () => {
         </div>
 
         {/* Club Messages */}
-        {member.id === session.id && (
+        {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
            <div className="glass rounded-xl p-4">
               <h3 className="text-lg font-semibold mb-3">場館訊息 ({messages.length})</h3>
               {messages.length === 0 ? (
@@ -177,10 +181,10 @@ const MemberProfile: React.FC = () => {
                             className={`text-left truncate hover:underline ${msg.read ? 'text-blue-300' : 'text-blue-400 font-semibold'}`}
                             onClick={async () => {
                               try {
-                                const full = await getClubMessage(API_URL, String(member.id), String(msg.id));
+                                const full = await getClubMessage(API_URL, selfMemberId, String(msg.id));
                                 setOpenMessage(full);
                                 if (!msg.read) {
-                                  await markClubMessageRead(API_URL, String(member.id), String(msg.id));
+                                  await markClubMessageRead(API_URL, selfMemberId, String(msg.id));
                                   setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m));
                                 }
                               } catch (e: any) {
@@ -205,12 +209,12 @@ const MemberProfile: React.FC = () => {
 
         {openMessage && (
           <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700">
+            <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700 max-h-[85dvh] flex flex-col">
               <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
                 <div className="font-semibold text-white truncate">{openMessage.title || '無標題'}</div>
                 <button className="text-gray-300 hover:text-white" onClick={() => setOpenMessage(null)}>關閉</button>
               </div>
-              <div className="px-4 py-3 space-y-2">
+              <div className="px-4 py-3 space-y-2 overflow-y-auto overscroll-contain">
                 <div className="text-xs text-gray-400">來自：{openMessage.club?.name || '未知場館'}</div>
                 <div className="text-xs text-gray-500">{new Date(openMessage.createdAt).toLocaleString()}</div>
                 <div className="text-gray-200 whitespace-pre-wrap mt-2">{openMessage.content}</div>
@@ -220,7 +224,7 @@ const MemberProfile: React.FC = () => {
         )}
 
         {/* Match Invites */}
-        {member.id === session.id && (
+        {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
            <div className="glass rounded-xl p-4">
              <h3 className="text-lg font-semibold mb-3">比賽邀請 ({invites.length})</h3>
              {invites.length === 0 ? (
@@ -242,7 +246,7 @@ const MemberProfile: React.FC = () => {
                            className="px-3 py-1.5 rounded bg-green-600 text-white text-sm"
                            onClick={async () => {
                              try {
-                               await acceptInvite(API_URL, String(it.token), String(member.id));
+                               await acceptInvite(API_URL, String(it.token), selfMemberId);
                                setInvites(prev => prev.map(p => p.id === it.id ? { ...p, status: 'ACCEPTED', acceptedAt: Date.now() } : p));
                              } catch (e: any) {
                                alert(e.message || '操作失敗');
@@ -263,7 +267,7 @@ const MemberProfile: React.FC = () => {
         )}
 
         {/* Joined Clubs */}
-        {member.id === session.id && (
+        {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
            <div className="glass rounded-xl p-4">
               <h3 className="text-lg font-semibold mb-3">已加入場館 ({joinedClubs.length})</h3>
               {joinedClubs.length === 0 ? (

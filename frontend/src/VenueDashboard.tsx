@@ -225,7 +225,7 @@ const VenueDashboard: React.FC = () => {
         </div>
 
         {/* Club Members List */}
-        <div className="glass rounded-xl p-6">
+        <div className="glass rounded-xl p-4 md:p-6">
           <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
              <h2 className="text-xl font-bold">場館會員 ({clubMembers.length})</h2>
              <button onClick={loadData} className="text-sm text-blue-400 hover:text-blue-300">重新整理</button>
@@ -234,7 +234,7 @@ const VenueDashboard: React.FC = () => {
           {clubMembers.length === 0 ? (
              <div className="text-gray-400 text-center py-8">暫無會員加入</div>
           ) : (
-             <div className="overflow-x-auto">
+             <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse">
                    <thead>
                       <tr className="text-gray-400 border-b border-gray-700">

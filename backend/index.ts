@@ -557,12 +557,15 @@ app.post('/api/matches/invite', async (req, res) => {
     // Lookup members by email
     const uniq = Array.from(new Set(emails.map((e: any) => String(e || '').trim()).filter(Boolean)));
     if (uniq.length === 0) return res.status(400).json({ error: 'no valid emails' });
-    const foundMembers = await prisma.member.findMany({ where: { email: { in: uniq } }, select: { id: true, email: true, name: true } });
-    const foundByEmail = new Map(foundMembers.map(m => [m.email!, m]));
+    const foundMembers = await prisma.member.findMany({
+      where: { OR: uniq.map((em) => ({ email: { equals: em, mode: 'insensitive' } })) },
+      select: { id: true, email: true, name: true }
+    });
+    const foundByEmailLower = new Map(foundMembers.map(m => [String(m.email || '').toLowerCase(), m]));
     const invited: any[] = [];
     const notFound: string[] = [];
     for (const em of uniq) {
-      const m = foundByEmail.get(em);
+      const m = foundByEmailLower.get(String(em).toLowerCase());
       if (!m) { notFound.push(em); continue; }
       const token = randomBytes(16).toString('hex');
       const id = randomUUID();
@@ -571,7 +574,7 @@ app.post('/api/matches/invite', async (req, res) => {
           `INSERT INTO "MatchInvite"("id","roomId","operatorId","memberId","token","status","createdAt") VALUES ($1,$2,$3,$4,$5,'PENDING',CURRENT_TIMESTAMP)`,
           id, String(room_id), opResolved, m.id, token
         );
-        invited.push({ email: em, memberId: m.id, token });
+        invited.push({ email: m.email, memberId: m.id, token });
       } catch (e: any) {
         // Ignore duplicates by token; retry with another
       }
