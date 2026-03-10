@@ -460,62 +460,29 @@ app.post('/api/match-verification-code', async (req, res) => {
 });
 
 app.post('/api/matches/start', async (req, res) => {
-    const { p1_email, p1_code, p2_email, p2_code, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
+    const { p1_email, p2_email, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
     
-    console.log(`[StartMatch] P1: ${p1_email} (code: ${p1_code}), P2: ${p2_email} (code: ${p2_code}), Room: ${room_id}`);
+    console.log(`[StartMatch] P1: ${p1_email}, P2: ${p2_email}, Room: ${room_id}`);
 
     let p1_member_id: string | null = null;
     let p2_member_id: string | null = null;
     
-    // Verify P1
-    if (p1_email && p1_code) {
-        const ver = await prisma.emailVerification.findFirst({
-            where: { email: p1_email, code: p1_code, used_at: null, expires_at: { gt: new Date() } }
-        });
-        if (ver) {
-            const m = await prisma.member.findFirst({ where: { email: p1_email } });
-            if (m) {
-                p1_member_id = m.id;
-                await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
-            } else {
-                return res.status(400).json({ error: `Email ${p1_email} is not registered.` });
-            }
-        } else {
-            return res.status(400).json({ error: `Invalid or expired verification code for ${p1_email}.` });
-        }
-    } else if (p1_email && !p1_code) {
-        // Email provided but no code - if we want to enforce verification for provided emails
-        // return res.status(400).json({ error: `Verification code required for ${p1_email}.` });
-        // Assuming current requirement allows implicit guest if no code provided? 
-        // User said: "只有在滿足上傳條件...才建立 Match"
-        // Let's enforce code if email is non-empty to prevent accidental guest mode when user intended to log in.
-        // Actually, user said: "可否輸入Email後發比賽驗證碼並在setup頁填寫, 防止他人盜用"
-        // This implies if email is entered, it MUST be verified.
-        return res.status(400).json({ error: `Verification code required for Player 1 (${p1_email}).` });
+    if (p1_email) {
+        const email = String(p1_email).trim();
+        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
+        if (!m) return res.status(404).json({ error: `Email ${email} is not registered.` });
+        p1_member_id = m.id;
     }
     
-    // Verify P2
-    if (p2_email && p2_code) {
-        const ver = await prisma.emailVerification.findFirst({
-            where: { email: p2_email, code: p2_code, used_at: null, expires_at: { gt: new Date() } }
-        });
-        if (ver) {
-             const m = await prisma.member.findFirst({ where: { email: p2_email } });
-             if (m) {
-                 p2_member_id = m.id;
-                 await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
-             } else {
-                 return res.status(400).json({ error: `Email ${p2_email} is not registered.` });
-             }
-        } else {
-             return res.status(400).json({ error: `Invalid or expired verification code for ${p2_email}.` });
-        }
-    } else if (p2_email && !p2_code) {
-        return res.status(400).json({ error: `Verification code required for Player 2 (${p2_email}).` });
+    if (p2_email) {
+        const email = String(p2_email).trim();
+        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
+        if (!m) return res.status(404).json({ error: `Email ${email} is not registered.` });
+        p2_member_id = m.id;
     }
     
     if (!p1_member_id && !p2_member_id) {
-        return res.status(400).json({ error: '必須至少有一位球員完成 Email 驗證（或提供有效會員ID）才可建立比賽。' });
+        return res.status(400).json({ error: '必須至少輸入一位已註冊會員的 Email 才可建立比賽。' });
     }
     
     // Resolve operator_id (support ID or Email) and ensure existence

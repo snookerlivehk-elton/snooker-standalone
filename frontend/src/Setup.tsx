@@ -5,7 +5,7 @@ import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
-import { validateMembers, sendMatchVerificationCode, startMatchV2 as startMatch, sendMatchInvites, getRoomInvites } from './lib/api';
+import { validateMembers, startMatchV2 as startMatch, sendMatchInvites, getRoomInvites } from './lib/api';
 import { t } from './lib/i18n';
 
 interface SetupProps {
@@ -16,10 +16,8 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
     const [matchName, setMatchName] = useState('Snooker Match');
     const [p1Name, setP1Name] = useState('Player 1');
     const [p1Email, setP1Email] = useState('');
-    const [p1Code, setP1Code] = useState('');
     const [p2Name, setP2Name] = useState('Player 2');
     const [p2Email, setP2Email] = useState('');
-    const [p2Code, setP2Code] = useState('');
     const [p1Handicap, setP1Handicap] = useState(0);
     const [p2Handicap, setP2Handicap] = useState(0);
     const [redBalls, setRedBalls] = useState(15);
@@ -160,46 +158,11 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
         };
     }, [p1Email, p2Email]);
 
-    const [loadingP1Code, setLoadingP1Code] = useState(false);
-    const [loadingP2Code, setLoadingP2Code] = useState(false);
-
-    const handleSendCode = async (email: string, playerIndex: 1 | 2) => {
-        if (!email || !email.includes('@')) {
-            alert('Please enter a valid email address');
-            return;
-        }
-        const setLoading = playerIndex === 1 ? setLoadingP1Code : setLoadingP2Code;
-        setLoading(true);
-        try {
-            await sendMatchVerificationCode(API_URL, email);
-            alert(`驗證碼已發送到 ${email} (請檢查垃圾郵件箱)`);
-        } catch (e: any) {
-            console.error('Send code error:', e);
-            if (e.message.includes('404') || e.message.includes('not registered')) {
-                alert('此 Email 尚未註冊會員，無法發送驗證碼。');
-            } else {
-                alert(`發送失敗: ${e.message}`);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleStartMatch = async () => {
         const p1EmailTrim = p1Email.trim();
         const p2EmailTrim = p2Email.trim();
-        const p1CodeTrim = p1Code.trim();
-        const p2CodeTrim = p2Code.trim();
         if (!p1EmailTrim && !p2EmailTrim) {
-            alert('請至少輸入一位球員的 Email 並取得驗證碼後再開始比賽。');
-            return;
-        }
-        if (p1EmailTrim && !p1CodeTrim) {
-            alert('球員 1 已輸入 Email，請先輸入驗證碼。');
-            return;
-        }
-        if (p2EmailTrim && !p2CodeTrim) {
-            alert('球員 2 已輸入 Email，請先輸入驗證碼。');
+            alert('請至少輸入一位球員的 Email 後再開始比賽。');
             return;
         }
         if (roomId) {
@@ -245,9 +208,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                 const res = await startMatch(API_URL, {
                     room_id: roomId || '',
                     p1_email: p1Email.trim(),
-                    p1_code: p1Code.trim(),
                     p2_email: p2Email.trim(),
-                    p2_code: p2Code.trim(),
                     frames_required: framesRequired,
                     red_balls: redBalls,
                     handicap0: p1Handicap,
@@ -394,7 +355,6 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <label className="block text-sm font-medium text-white">{t('setup.email')}</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p1Email} onChange={(e) => setP1Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p1Email, 1)} disabled={loadingP1Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP1Code ? '...' : t('setup.sendCode')}</button>
                                     <button
                                       onClick={async () => {
                                         if (!roomId || !p1Email.trim()) { alert('請先輸入 Email'); return; }
@@ -410,10 +370,6 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                       發送比賽通知
                                     </button>
                                 </div>
-                            </div>
-                            <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">{t('setup.verifyCode')}</label>
-                                <input type="text" value={p1Code} onChange={(e) => setP1Code(e.target.value)} placeholder={t('setup.verifyPlaceholder')} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
                                 <label className="block text-sm font-medium text-white">{t('setup.handicap')}</label>
@@ -440,7 +396,6 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                 <label className="block text-sm font-medium text-white">{t('setup.email')}</label>
                                 <div className="flex gap-1">
                                     <input type="email" value={p2Email} onChange={(e) => setP2Email(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white text-xs"/>
-                                    <button onClick={() => handleSendCode(p2Email, 2)} disabled={loadingP2Code} className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">{loadingP2Code ? '...' : t('setup.sendCode')}</button>
                                     <button
                                       onClick={async () => {
                                         if (!roomId || !p2Email.trim()) { alert('請先輸入 Email'); return; }
@@ -456,10 +411,6 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
                                       發送比賽通知
                                     </button>
                                 </div>
-                            </div>
-                            <div className="input-group mt-2">
-                                <label className="block text-sm font-medium text-white">{t('setup.verifyCode')}</label>
-                                <input type="text" value={p2Code} onChange={(e) => setP2Code(e.target.value)} placeholder={t('setup.verifyPlaceholder')} className="mt-1 block w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md shadow-sm text-white"/>
                             </div>
                             <div className="input-group mt-2">
                                 <label className="block text-sm font-medium text-white">{t('setup.handicap')}</label>

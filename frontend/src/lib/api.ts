@@ -61,19 +61,6 @@ export async function createMatchPartial(
   return res.json() as Promise<{ matchId: string; acceptedMemberIds: string[] }>;
 }
 
-export async function sendMatchVerificationCode(apiUrl: string, email: string) {
-  const res = await fetch(`${apiUrl}/api/match-verification-code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `發送驗證碼失敗 (${res.status})`);
-  }
-  return res.json();
-}
-
 // Club API
 export async function getClubProfile(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/my-profile`, {
@@ -231,9 +218,7 @@ export async function startMatchV2(
   apiUrl: string,
   payload: {
     p1_email?: string;
-    p1_code?: string;
     p2_email?: string;
-    p2_code?: string;
     room_id: string;
     operator_id?: string;
     frames_required: number;
