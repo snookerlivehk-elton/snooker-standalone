@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership, getMemberMatches } from './lib/api';
+import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
@@ -10,6 +10,8 @@ const MemberProfile: React.FC = () => {
   const [member, setMember] = useState<any | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [joinedClubs, setJoinedClubs] = useState<any[]>([]);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [clubName, setClubName] = useState('');
@@ -98,8 +100,14 @@ const MemberProfile: React.FC = () => {
       try {
         const res = await getMemberMatches(API_URL, String(member.id));
         setMatches(res.matches || []);
+        
+        // Load messages and joined clubs if viewing self
+        if (member.id === session.id) {
+           getMyClubMessages(API_URL, member.id).then(setMessages).catch(() => {});
+           getMyJoinedClubs(API_URL, member.id).then(setJoinedClubs).catch(() => {});
+        }
       } catch (e) {
-        console.error('Failed to load matches', e);
+        console.error('Failed to load data', e);
       } finally {
         setMatchesLoading(false);
       }
@@ -147,6 +155,51 @@ const MemberProfile: React.FC = () => {
           </div>
           <div className="text-xs text-gray-300/80 mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
+
+        {/* Club Messages */}
+        {member.id === session.id && (
+           <div className="glass rounded-xl p-4">
+              <h3 className="text-lg font-semibold mb-3">場館訊息 ({messages.length})</h3>
+              {messages.length === 0 ? (
+                 <div className="text-gray-400 text-sm">暫無訊息</div>
+              ) : (
+                 <div className="space-y-3">
+                    {messages.map((msg: any) => (
+                       <div key={msg.id} className="bg-gray-700/50 p-3 rounded-lg">
+                          <div className="flex justify-between items-start mb-1">
+                             <div className="font-bold text-yellow-400">{msg.title || '無標題'}</div>
+                             <div className="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleDateString()}</div>
+                          </div>
+                          <div className="text-sm text-gray-300 whitespace-pre-wrap">{msg.content}</div>
+                          <div className="text-xs text-gray-500 mt-2 text-right">來自: {msg.club?.name || '未知場館'}</div>
+                       </div>
+                    ))}
+                 </div>
+              )}
+           </div>
+        )}
+
+        {/* Joined Clubs */}
+        {member.id === session.id && (
+           <div className="glass rounded-xl p-4">
+              <h3 className="text-lg font-semibold mb-3">已加入場館 ({joinedClubs.length})</h3>
+              {joinedClubs.length === 0 ? (
+                 <div className="text-gray-400 text-sm">尚未加入任何場館</div>
+              ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {joinedClubs.map((jc: any) => (
+                       <div key={jc.id} className="bg-gray-700/50 p-3 rounded-lg flex justify-between items-center">
+                          <div>
+                             <div className="font-bold">{jc.club?.name || '未命名場館'}</div>
+                             <div className="text-xs text-gray-400">加入於: {new Date(jc.joinedAt).toLocaleDateString()}</div>
+                          </div>
+                          <a href={`/club/${jc.club?.id}`} target="_blank" className="text-blue-400 text-sm hover:underline">查看</a>
+                       </div>
+                    ))}
+                 </div>
+              )}
+           </div>
+        )}
 
         <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">會員有效期與續期</h3>

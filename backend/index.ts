@@ -11,6 +11,7 @@ import { PrismaClient } from '@prisma/client';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
+import clubRouter from './routes/club.js';
 
 export interface Room {
   id: string;
@@ -107,6 +108,9 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
+
+// Mount Club Router
+app.use('/api/club', clubRouter);
 
 async function resolveMemberIdentifiers(identifiers: string[]): Promise<Map<string, string>> {
   const trimmed = Array.from(

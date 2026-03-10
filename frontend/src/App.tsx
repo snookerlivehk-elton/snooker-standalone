@@ -15,6 +15,7 @@ import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import MemberLogin from './MemberLogin';
 import OperatorDashboard from './OperatorDashboard';
+import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
 import MemberRegisterSimple from './MemberRegisterSimple';
 import Join from './Join';
@@ -55,6 +56,7 @@ function App() {
         <Route path="/operator/login" element={<MemberLogin mode="operator" />} />
         <Route path="/member/:id" element={<MemberProfile />} />
         <Route path="/operator/dashboard" element={<OperatorDashboard />} />
+        <Route path="/club/:clubId" element={<ClubPublicPage />} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/admin/matches" element={<AdminAuth><AdminMatches /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />

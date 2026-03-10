@@ -74,6 +74,78 @@ export async function sendMatchVerificationCode(apiUrl: string, email: string) {
   return res.json();
 }
 
+// Club API
+export async function getClubProfile(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/my-profile`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) throw new Error('Failed to load club profile');
+  return res.json();
+}
+
+export async function updateClubProfile(apiUrl: string, memberId: string, data: any) {
+  const res = await fetch(`${apiUrl}/api/club/my-profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error('Failed to update club profile');
+  return res.json();
+}
+
+export async function getClubMembers(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/my-members`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) throw new Error('Failed to load members');
+  return res.json();
+}
+
+export async function getPublicClubProfile(apiUrl: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/public`);
+  if (!res.ok) throw new Error('Failed to load club public profile');
+  return res.json();
+}
+
+export async function joinClub(apiUrl: string, memberId: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberId, clubId })
+  });
+  if (!res.ok) {
+     const err = await res.json().catch(() => ({}));
+     throw new Error(err.message || err.error || 'Failed to join club');
+  }
+  return res.json();
+}
+
+export async function getMyJoinedClubs(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/joined`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) throw new Error('Failed to load joined clubs');
+  return res.json();
+}
+
+export async function broadcastClubMessage(apiUrl: string, memberId: string, title: string, content: string) {
+  const res = await fetch(`${apiUrl}/api/club/broadcast`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ title, content })
+  });
+  if (!res.ok) throw new Error('Failed to broadcast message');
+  return res.json();
+}
+
+export async function getMyClubMessages(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/messages`, {
+    headers: { 'x-member-id': memberId }
+  });
+  if (!res.ok) throw new Error('Failed to load messages');
+  return res.json();
+}
+
 export async function deleteOperatorRoom(apiUrl: string, roomId: string) {
   const res = await fetch(`${apiUrl}/api/rooms/${roomId}`, {
     method: 'DELETE',

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage } from './lib/api';
+import { QRCodeSVG } from 'qrcode.react';
 
 const OperatorDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +12,10 @@ const OperatorDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
+  const [clubProfile, setClubProfile] = useState<any>({});
+  const [clubMembers, setClubMembers] = useState<any[]>([]);
+  const [msgTitle, setMsgTitle] = useState('');
+  const [msgContent, setMsgContent] = useState('');
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -41,12 +46,16 @@ const OperatorDashboard: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
-        getOperatorActiveRooms(API_URL, operatorId)
+        getOperatorActiveRooms(API_URL, operatorId),
+        getClubProfile(API_URL, operatorId).catch(() => ({})),
+        getClubMembers(API_URL, operatorId).catch(() => [])
       ]);
       setMatches(matchesRes.matches || []);
       setActiveRooms(roomsRes.rooms || []);
+      setClubProfile(clubProfileRes || {});
+      setClubMembers(clubMembersRes || []);
     } catch (err: any) {
       setError(err.message || '無法載入資料');
     } finally {
@@ -103,9 +112,9 @@ const OperatorDashboard: React.FC = () => {
       <div className="max-w-4xl mx-auto grid gap-6">
         
         {/* Header */}
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Snooker Live HK - 操作員介面</h1>
-          <button 
+        <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Snooker Live HK - 操作員介面 <span className="text-sm font-normal text-yellow-500 ml-2">v2.0 Club</span></h1>
+        <button 
             onClick={() => {
               localStorage.removeItem('memberSession');
               navigate('/members/login');
@@ -127,6 +136,179 @@ const OperatorDashboard: React.FC = () => {
             {toast}
           </div>
         )}
+
+        {/* Club Profile Management */}
+        <div className="glass rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">場館資料管理</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 text-gray-400">場館名稱</label>
+               <input 
+                 value={clubProfile.name || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, name: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 placeholder="例如：南華會桌球室"
+               />
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 text-gray-400">場館簡介</label>
+               <textarea 
+                 value={clubProfile.intro || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, intro: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-24" 
+                 placeholder="簡介..."
+               />
+            </div>
+            <div>
+               <label className="block text-sm mb-1 text-gray-400">電話</label>
+               <input 
+                 value={clubProfile.phone || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, phone: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+               />
+            </div>
+            <div>
+               <label className="block text-sm mb-1 text-gray-400">Email</label>
+               <input 
+                 value={clubProfile.email || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, email: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+               />
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 text-gray-400">地址</label>
+               <input 
+                 value={clubProfile.address || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, address: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+               />
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 text-gray-400">Logo URL</label>
+               <input 
+                 value={clubProfile.logoUrl || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, logoUrl: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 placeholder="https://..."
+               />
+            </div>
+          </div>
+          
+          <div className="mt-6 flex justify-between items-center">
+             <button
+              onClick={async () => {
+                try {
+                   if (!operatorId) return;
+                   const res = await updateClubProfile(API_URL, operatorId, clubProfile);
+                   setClubProfile(res);
+                   setToast('場館資料已更新');
+                   setTimeout(() => setToast(null), 3000);
+                } catch (err: any) {
+                   setToast(err.message || '更新失敗');
+                   setTimeout(() => setToast(null), 3000);
+                }
+              }}
+              className="px-4 py-2 rounded brand-button text-black transition-colors"
+            >
+              儲存場館資料
+            </button>
+            
+            {clubProfile.id && (
+                <div className="flex items-center gap-4">
+                    <div className="text-center">
+                        <QRCodeSVG value={`${baseUrl}/club/${clubProfile.id}`} size={64} />
+                        <div className="text-xs text-gray-400 mt-1">入會二維碼</div>
+                    </div>
+                    <Link to={`/club/${clubProfile.id}`} target="_blank" className="text-blue-400 underline text-sm">
+                        預覽公開頁面
+                    </Link>
+                </div>
+            )}
+          </div>
+        </div>
+
+        {/* Club Members List */}
+        <div className="glass rounded-xl p-6">
+          <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+             <h2 className="text-xl font-bold">場館會員 ({clubMembers.length})</h2>
+             <button onClick={loadData} className="text-sm text-blue-400 hover:text-blue-300">重新整理</button>
+          </div>
+          
+          {clubMembers.length === 0 ? (
+             <div className="text-gray-400 text-center py-8">暫無會員加入</div>
+          ) : (
+             <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                   <thead>
+                      <tr className="text-gray-400 border-b border-gray-700">
+                         <th className="py-2 px-3">名稱</th>
+                         <th className="py-2 px-3">Email</th>
+                         <th className="py-2 px-3">電話</th>
+                         <th className="py-2 px-3">加入時間</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {clubMembers.map((cm: any) => (
+                         <tr key={cm.id} className="border-b border-gray-800 hover:bg-gray-700/50">
+                            <td className="py-2 px-3">{cm.member?.name || '-'}</td>
+                            <td className="py-2 px-3 text-sm text-gray-400">{cm.member?.email || '-'}</td>
+                            <td className="py-2 px-3 text-sm">{cm.member?.phone || '-'}</td>
+                            <td className="py-2 px-3 text-sm text-gray-400">{new Date(cm.joinedAt).toLocaleDateString()}</td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          )}
+        </div>
+
+        {/* Broadcast Message */}
+        <div className="glass rounded-xl p-6">
+           <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">發送場館訊息</h2>
+           <div className="space-y-4">
+              <div>
+                 <label className="block text-sm mb-1 text-gray-400">標題</label>
+                 <input 
+                   value={msgTitle}
+                   onChange={(e) => setMsgTitle(e.target.value)}
+                   className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                   placeholder="訊息標題"
+                 />
+              </div>
+              <div>
+                 <label className="block text-sm mb-1 text-gray-400">內容</label>
+                 <textarea 
+                   value={msgContent}
+                   onChange={(e) => setMsgContent(e.target.value)}
+                   className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-24"
+                   placeholder="輸入要發送給所有會員的訊息..."
+                 />
+              </div>
+              <button
+                 onClick={async () => {
+                    if (!msgTitle || !msgContent) {
+                       setToast('請填寫標題和內容');
+                       setTimeout(() => setToast(null), 2000);
+                       return;
+                    }
+                    try {
+                       if (!operatorId) return;
+                       await broadcastClubMessage(API_URL, operatorId, msgTitle, msgContent);
+                       setToast('訊息已發送');
+                       setMsgTitle('');
+                       setMsgContent('');
+                       setTimeout(() => setToast(null), 3000);
+                    } catch (err: any) {
+                       setToast(err.message || '發送失敗');
+                       setTimeout(() => setToast(null), 3000);
+                    }
+                 }}
+                 className="px-4 py-2 rounded brand-button text-black transition-colors"
+              >
+                 發送訊息
+              </button>
+           </div>
+        </div>
 
         {/* Operator Info */}
         <div className="glass rounded-xl p-6">
