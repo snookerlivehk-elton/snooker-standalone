@@ -104,11 +104,6 @@ const AdminMembers: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
-  const districtIndex = useMemo(() => {
-    // Legacy grouping logic removed as per new requirements
-    return {};
-  }, []);
-
   function startEdit(m: any) {
     setEditing((prev) => ({ ...prev, [m.id]: { ...m } }));
   }
@@ -401,6 +396,7 @@ const AdminMembers: React.FC = () => {
 
         </>
       )}
+      </div>
     </div>
   );
 };

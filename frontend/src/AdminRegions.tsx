@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from './config';
 import { listAdminMemberRegions, listAdminMemberDistricts, upsertAdminMemberRegion, upsertAdminMemberDistrict, listMemberRegions, listMemberDistricts, deleteAdminMemberDistrict } from './lib/api';
@@ -23,14 +23,14 @@ const AdminRegions: React.FC = () => {
   const [editingDistrictKey, setEditingDistrictKey] = useState<string | null>(null);
   const [confirmDeleteDistrictKey, setConfirmDeleteDistrictKey] = useState<string | null>(null);
 
-  function resolveAdminToken(): string {
+  const resolveAdminToken = useCallback((): string => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get('token') || '';
     const tokenSaved = typeof window !== 'undefined' ? (localStorage.getItem('adminToken') || '') : '';
-    const token = tokenFromUrl || tokenSaved || adminToken;
+    const token = tokenFromUrl || tokenSaved;
     if (tokenFromUrl && typeof window !== 'undefined') localStorage.setItem('adminToken', tokenFromUrl);
     return token;
-  }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -72,7 +72,7 @@ const AdminRegions: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [resolveAdminToken]);
 
   const handleSubmitRegion = async (e: React.FormEvent) => {
     e.preventDefault();

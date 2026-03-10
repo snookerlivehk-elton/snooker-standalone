@@ -5,7 +5,7 @@ import { parseMatchName, normalizeKey } from './lib/matchName';
 import { RoomStorage } from './lib/RoomStorage';
 import { getCodeForRoom, findRoomIdByCode } from './lib/roomCode';
 import { State } from './lib/State';
-import { validateMembers, ValidateMembersResponse, sendMatchVerificationCode, startMatchV2 as startMatch } from './lib/api';
+import { validateMembers, sendMatchVerificationCode, startMatchV2 as startMatch } from './lib/api';
 import { t } from './lib/i18n';
 
 interface SetupProps {
@@ -282,16 +282,7 @@ const Setup: React.FC<SetupProps> = ({ onStartMatch }) => {
             return;
         }
 
-        // Fallback for no roomId (local only? or just ignore)
-        // The original code allowed it.
-        // We will keep the original logic for no-roomId case but update inputs
-         const p1IdTrim = p1Email.trim();
-        const p2IdTrim = p2Email.trim();
-        // ... (similar logic)
-        
-        // For simplicity, I'll focus on the Room case as that's the primary use case.
-        // But to avoid breaking, I'll just replicate the basic flow without backend match creation if no roomId.
-         onStartMatch({
+        onStartMatch({
             playersInfo: [
                 { name: p1Name, email: p1Email.trim() },
                 { name: p2Name, email: p2Email.trim() },

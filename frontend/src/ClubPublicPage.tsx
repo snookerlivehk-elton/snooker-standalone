@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from './config';
@@ -15,13 +15,7 @@ const ClubPublicPage: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
 
-  useEffect(() => {
-    if (clubId) {
-      loadClub();
-    }
-  }, [clubId]);
-
-  const loadClub = async () => {
+  const loadClub = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getPublicClubProfile(API_URL, clubId!);
@@ -31,7 +25,13 @@ const ClubPublicPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clubId]);
+
+  useEffect(() => {
+    if (clubId) {
+      loadClub();
+    }
+  }, [clubId, loadClub]);
 
   const handleJoin = async () => {
     if (!session.id) {
@@ -78,6 +78,7 @@ const ClubPublicPage: React.FC = () => {
           <img 
             src={club.logoUrl} 
             alt="Club Logo" 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
             style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: '50%', marginBottom: 20, background: '#fff' }} 
           />
         )}

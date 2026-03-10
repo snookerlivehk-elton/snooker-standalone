@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { API_URL } from './config';
 
 const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -6,20 +6,14 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState('');
 
-  // Resolve backend base: use centralized API_URL from config
-  function getBackendBase(): string {
-    return API_URL.replace(/\/$/, '');
-  }
-
-  // Try auth via query param first (avoids CORS preflight); then header
-  async function tryAuthenticate(tok: string): Promise<boolean> {
+  const tryAuthenticate = useCallback(async (tok: string): Promise<boolean> => {
     if (import.meta.env.DEV && typeof window !== 'undefined') {
       const host = window.location.hostname;
       if (host === 'localhost' || host === '127.0.0.1') {
         return true;
       }
     }
-    const base = getBackendBase();
+    const base = API_URL.replace(/\/$/, '');
     // Query-token GET (same-origin or proxied) — avoids preflight
     try {
       const fallbackUrl = `${base}/admin/overview?token=${encodeURIComponent(tok)}&format=json`;
@@ -37,7 +31,7 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } catch {}
 
     return false;
-  }
+  }, []);
 
   // Auto-auth with saved token if present
   useEffect(() => {
@@ -54,7 +48,7 @@ const AdminAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         setIsAuthenticated(true);
       }
     })();
-  }, []);
+  }, [tryAuthenticate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

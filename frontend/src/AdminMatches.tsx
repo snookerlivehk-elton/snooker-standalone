@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { listAdminMatches } from './lib/api';
 
@@ -39,16 +38,16 @@ const AdminMatches: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
 
-  function resolveAdminToken(): string {
+  const resolveAdminToken = useCallback((): string => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get('token') || '';
     const tokenSaved = typeof window !== 'undefined' ? (localStorage.getItem('adminToken') || '') : '';
     const token = tokenFromUrl || tokenSaved;
     if (tokenFromUrl && typeof window !== 'undefined') localStorage.setItem('adminToken', tokenFromUrl);
     return token;
-  }
+  }, []);
 
-  async function load(pageToLoad: number, memberId?: string) {
+  const load = useCallback(async (pageToLoad: number, memberId?: string) => {
     setError(null);
     setLoading(true);
     try {
@@ -67,11 +66,11 @@ const AdminMatches: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }
+  }, [pageSize, resolveAdminToken]);
 
   useEffect(() => {
     load(1);
-  }, []);
+  }, [load]);
 
   function formatDate(value: string | null) {
     if (!value) return '-';

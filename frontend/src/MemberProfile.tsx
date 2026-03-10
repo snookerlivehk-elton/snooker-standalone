@@ -22,6 +22,8 @@ const MemberProfile: React.FC = () => {
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
+  const sessionEmail = (session as any)?.email;
+  const sessionId = (session as any)?.id;
 
   useEffect(() => {
     let mounted = true;
@@ -30,8 +32,8 @@ const MemberProfile: React.FC = () => {
       setLoading(true);
       try {
         if (!id) {
-          if (!session?.email) throw new Error('缺少會員識別');
-          setMember({ id: session.email, email: session.email, name: '-', district_code: '-', created_at: Date.now() });
+          if (!sessionEmail) throw new Error('缺少會員識別');
+          setMember({ id: sessionEmail, email: sessionEmail, name: '-', district_code: '-', created_at: Date.now() });
         } else {
           try {
             const data = await getMember(API_URL, id);
@@ -91,7 +93,7 @@ const MemberProfile: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [id]);
+  }, [id, sessionEmail]);
 
   useEffect(() => {
     if (!member?.id) return;
@@ -102,9 +104,9 @@ const MemberProfile: React.FC = () => {
         setMatches(res.matches || []);
         
         // Load messages and joined clubs if viewing self
-        if (member.id === session.id) {
-           getMyClubMessages(API_URL, member.id).then(setMessages).catch(() => {});
-           getMyJoinedClubs(API_URL, member.id).then(setJoinedClubs).catch(() => {});
+        if (member.id === sessionId) {
+           getMyClubMessages(API_URL, String(member.id)).then(setMessages).catch(() => {});
+           getMyJoinedClubs(API_URL, String(member.id)).then(setJoinedClubs).catch(() => {});
         }
       } catch (e) {
         console.error('Failed to load data', e);
@@ -112,7 +114,7 @@ const MemberProfile: React.FC = () => {
         setMatchesLoading(false);
       }
     })();
-  }, [member?.id]);
+  }, [member?.id, sessionId]);
 
   if (loading) return <div style={{ padding: 16 }}>載入中...</div>;
   if (error) return <div style={{ padding: 16, color: 'red' }}>{error}</div>;

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
+import { API_URL, SOCKET_URL } from './config';
 import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage } from './lib/api';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -21,7 +21,6 @@ const VenueDashboard: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
 
-  const [phone, setPhone] = useState(session.phone || '');
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -32,16 +31,7 @@ const VenueDashboard: React.FC = () => {
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
 
-  useEffect(() => {
-    if (!operatorId) {
-      navigate('/venue/login');
-      return;
-    }
-    
-    loadData();
-  }, [operatorId, navigate]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [matchesRes, roomsRes, clubProfileRes, clubMembersRes] = await Promise.all([
@@ -59,7 +49,16 @@ const VenueDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [operatorId]);
+
+  useEffect(() => {
+    if (!operatorId) {
+      navigate('/venue/login');
+      return;
+    }
+
+    loadData();
+  }, [operatorId, navigate, loadData]);
 
   const handleCreateRoom = async () => {
     if (creating) return;
