@@ -1,8 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
-async function main() {
+export async function createClubTables(prisma: PrismaClient) {
   console.log('Creating Club tables...');
   
   try {
@@ -50,10 +48,7 @@ async function main() {
     `);
     console.log('Created ClubMember_clubId_memberId_key');
 
-    // 5. Add Foreign Keys (Use DO block or try/catch to avoid error if exists, or just try)
-    // Postgres doesn't support IF NOT EXISTS for constraints easily in one line.
-    // We can try adding them and catch errors if they exist.
-    
+    // 5. Add Foreign Keys
     try {
       await prisma.$executeRawUnsafe(`
         ALTER TABLE "ClubProfile" ADD CONSTRAINT "ClubProfile_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -84,7 +79,7 @@ async function main() {
       else console.warn('Error adding ClubMember_memberId_fkey:', e.message);
     }
 
-    // 3. Create ClubMessage table
+    // 6. Create ClubMessage table
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "ClubMessage" (
         "id" TEXT NOT NULL,
@@ -100,9 +95,5 @@ async function main() {
 
   } catch (e) {
     console.error('Error creating tables:', e);
-  } finally {
-    await prisma.$disconnect();
   }
 }
-
-main();

@@ -12,6 +12,7 @@ import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import clubRouter from './routes/club.js';
+import { createClubTables } from './scripts/create_club_tables.js';
 
 export interface Room {
   id: string;
@@ -108,6 +109,7 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
+createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
 
 // Mount Club Router
 app.use('/api/club', clubRouter);

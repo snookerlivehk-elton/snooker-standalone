@@ -42,7 +42,7 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  "include": ["index.ts"],
+  "include": ["index.ts", "scripts/*.ts", "routes/*.ts"],
   "exclude": ["node_modules", "__tests__"],
   "ts-node": {
     "esm": true
