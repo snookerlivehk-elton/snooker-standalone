@@ -58,12 +58,20 @@ router.post('/my-profile', async (req, res) => {
     const { name, intro, address, phone, email, logoUrl } = req.body;
 
     try {
-        // Check if member is ADMIN?
+        console.log(`[Club] Update profile request for member ${memberId}`, req.body);
+        
         const member = await prisma.member.findUnique({ where: { id: memberId } });
-        // Assuming roles are still used. If not, maybe allow any member to create a club? 
-        // User said "Operator ... transform to Club". Operator is ADMIN.
-        if (!member || member.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Only operators can have a club profile' });
+        if (!member) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+
+        // Auto-promote to ADMIN (Venue/Club) if they are creating a profile
+        if (member.role !== 'ADMIN') {
+            console.log(`[Club] Auto-promoting member ${memberId} to ADMIN`);
+            await prisma.member.update({
+                where: { id: memberId },
+                data: { role: 'ADMIN' }
+            });
         }
 
         const club = await prisma.clubProfile.upsert({
@@ -74,6 +82,7 @@ router.post('/my-profile', async (req, res) => {
         
         res.json(club);
     } catch (error) {
+        console.error('[Club] Update error:', error);
         res.status(500).json({ error: String(error) });
     }
 });
