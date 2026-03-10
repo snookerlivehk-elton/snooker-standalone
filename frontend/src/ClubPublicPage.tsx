@@ -83,11 +83,42 @@ const ClubPublicPage: React.FC = () => {
         )}
         
         {/* QR Code Section */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 30 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
           <div style={{ background: '#fff', padding: 15, borderRadius: 12 }}>
             <QRCodeSVG value={window.location.href} size={200} />
           </div>
         </div>
+
+        {!joined ? (
+          <button 
+            onClick={handleJoin}
+            style={{
+              background: '#f5d000',
+              color: '#000',
+              border: 'none',
+              padding: '12px 30px',
+              fontSize: 18,
+              fontWeight: 'bold',
+              borderRadius: 30,
+              cursor: 'pointer',
+              width: '100%',
+              marginBottom: 30
+            }}
+          >
+            加入場館
+          </button>
+        ) : (
+          <div style={{ 
+            background: '#4caf50', 
+            color: '#fff', 
+            padding: 15, 
+            borderRadius: 8, 
+            fontWeight: 'bold',
+            marginBottom: 30
+          }}>
+            已加入此場館 ✅
+          </div>
+        )}
 
         <h1 style={{ margin: '0 0 10px 0', fontSize: 32, color: '#f5d000' }}>{club.name || '未命名場館'}</h1>
         
@@ -103,35 +134,6 @@ const ClubPublicPage: React.FC = () => {
           {club.phone && <div style={{ marginBottom: 10 }}>📞 {club.phone}</div>}
           {club.email && <div style={{ marginBottom: 10 }}>✉️ {club.email}</div>}
         </div>
-
-        {!joined ? (
-          <button 
-            onClick={handleJoin}
-            style={{
-              background: '#f5d000',
-              color: '#000',
-              border: 'none',
-              padding: '12px 30px',
-              fontSize: 18,
-              fontWeight: 'bold',
-              borderRadius: 30,
-              cursor: 'pointer',
-              width: '100%'
-            }}
-          >
-            加入場館
-          </button>
-        ) : (
-          <div style={{ 
-            background: '#4caf50', 
-            color: '#fff', 
-            padding: 15, 
-            borderRadius: 8, 
-            fontWeight: 'bold' 
-          }}>
-            已加入此場館 ✅
-          </div>
-        )}
         
         <div style={{ marginTop: 20 }}>
             <Link to="/join" style={{ color: '#aaa' }}>回首頁</Link>
