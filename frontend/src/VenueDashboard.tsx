@@ -415,7 +415,25 @@ const VenueDashboard: React.FC = () => {
                     <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
                     <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="正價/時" />
                     <label className="text-sm flex items-center gap-1">
-                      <input type="checkbox" checked={t.active} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, active: e.target.checked } : x))} />
+                      <input
+                        type="checkbox"
+                        checked={!!t.active}
+                        onChange={async (e) => {
+                          const nextActive = e.target.checked;
+                          const prevActive = !!t.active;
+                          setTables(prev => prev.map(x => x.id === t.id ? { ...x, active: nextActive } : x));
+                          try {
+                            const updated = await updateTable(API_URL, operatorId, t.id, { active: nextActive });
+                            setTables(prev => prev.map(x => x.id === t.id ? updated : x));
+                            setToast(nextActive ? '球枱已啟用' : '球枱已停用');
+                            setTimeout(() => setToast(null), 2000);
+                          } catch (err: any) {
+                            setTables(prev => prev.map(x => x.id === t.id ? { ...x, active: prevActive } : x));
+                            setToast(err?.message || '更新球枱狀態失敗');
+                            setTimeout(() => setToast(null), 3000);
+                          }
+                        }}
+                      />
                       啟用
                     </label>
                     <button onClick={async () => {
