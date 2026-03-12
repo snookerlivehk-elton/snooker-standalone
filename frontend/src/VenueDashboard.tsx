@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation } from './lib/api';
-import { QRCodeSVG } from 'qrcode.react';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations } from './lib/api';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 
 type PricingRule = {
   daysOfWeek?: number[];
@@ -34,6 +34,7 @@ const VenueDashboard: React.FC = () => {
   const [newPricingMinHours, setNewPricingMinHours] = useState('');
   const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
+  const [allReservations, setAllReservations] = useState<any[]>([]);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -49,6 +50,38 @@ const VenueDashboard: React.FC = () => {
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
+  const joinUrl = clubProfile?.id ? `${baseUrl}/club/${clubProfile.id}` : '';
+  const joinQrSvgRef = useRef<SVGSVGElement | null>(null);
+  const joinQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const downloadJoinQrSvg = useCallback(() => {
+    if (!clubProfile?.id) return;
+    const svg = joinQrSvgRef.current;
+    if (!svg) return;
+    const xml = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `club-${clubProfile.id}-join-qr.svg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [clubProfile?.id]);
+
+  const downloadJoinQrPng = useCallback(() => {
+    if (!clubProfile?.id) return;
+    const canvas = joinQrCanvasRef.current;
+    if (!canvas) return;
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `club-${clubProfile.id}-join-qr.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, [clubProfile?.id]);
 
   const weekDays = useMemo(() => ([
     { n: 1, label: '一' },
@@ -105,14 +138,15 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, tablesRes, pricingRes, pendingRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, tablesRes, pricingRes, pendingRes, allRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
         getOperatorActiveRooms(API_URL, operatorId),
         getClubProfile(API_URL, operatorId).catch(() => ({})),
         getClubMembers(API_URL, operatorId).catch(() => []),
         getMyTables(API_URL, operatorId).catch(() => []),
         getMyPricingSchemes(API_URL, operatorId).catch(() => []),
-        getPendingReservations(API_URL, operatorId).catch(() => [])
+        getPendingReservations(API_URL, operatorId).catch(() => []),
+        getClubReservations(API_URL, operatorId).catch(() => []),
       ]);
       setMatches(matchesRes.matches || []);
       setActiveRooms(roomsRes.rooms || []);
@@ -121,6 +155,7 @@ const VenueDashboard: React.FC = () => {
       setTables(tablesRes || []);
       setPricing(pricingRes || []);
       setPendingReservations(pendingRes || []);
+      setAllReservations(allRes || []);
     } catch (err: any) {
       setError(err.message || '無法載入資料');
     } finally {
@@ -266,9 +301,18 @@ const VenueDashboard: React.FC = () => {
                  placeholder="https://..."
                />
             </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 text-gray-400">付款方式說明（預約用）</label>
+               <textarea
+                 value={clubProfile.paymentInfo || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, paymentInfo: e.target.value })} 
+                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-20" 
+                 placeholder="例如：到場以現金/轉數快付款；需預付訂金..."
+               />
+            </div>
           </div>
           
-          <div className="mt-6 flex justify-between items-center">
+          <div className="mt-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
              <button
               onClick={async () => {
                 try {
@@ -288,10 +332,23 @@ const VenueDashboard: React.FC = () => {
             </button>
             
             {clubProfile.id && (
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="text-center">
-                        <QRCodeSVG value={`${baseUrl}/club/${clubProfile.id}`} size={64} />
+                        <div className="inline-block bg-white p-2 rounded-lg">
+                          <QRCodeSVG ref={joinQrSvgRef as any} value={joinUrl} size={96} />
+                        </div>
                         <div className="text-xs text-gray-400 mt-1">入會二維碼</div>
+                        <div className="mt-2 flex flex-col sm:flex-row gap-2 justify-center">
+                          <button type="button" onClick={downloadJoinQrPng} className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">
+                            下載 PNG
+                          </button>
+                          <button type="button" onClick={downloadJoinQrSvg} className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">
+                            下載 SVG
+                          </button>
+                        </div>
+                        <div style={{ display: 'none' }}>
+                          <QRCodeCanvas ref={joinQrCanvasRef as any} value={joinUrl} size={512} includeMargin />
+                        </div>
                     </div>
                     <Link to={`/club/${clubProfile.id}`} target="_blank" className="text-blue-400 underline text-sm">
                         預覽公開頁面
@@ -648,10 +705,10 @@ const VenueDashboard: React.FC = () => {
                         <td className="py-2 px-3">
                           <div className="flex gap-2">
                             <button onClick={async () => {
-                              try { await confirmReservation(API_URL, operatorId, r.id); setPendingReservations(prev => prev.filter(x => x.id !== r.id)); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              try { await confirmReservation(API_URL, operatorId, r.id); await loadData(); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
                             }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
                             <button onClick={async () => {
-                              try { await cancelReservation(API_URL, operatorId, r.id); setPendingReservations(prev => prev.filter(x => x.id !== r.id)); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
                             }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
                           </div>
                         </td>
@@ -659,6 +716,69 @@ const VenueDashboard: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">全部預約</h3>
+            {allReservations.length === 0 ? (
+              <div className="text-gray-400">暫無預約</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-700">
+                      <th className="py-2 px-3">狀態</th>
+                      <th className="py-2 px-3">會員</th>
+                      <th className="py-2 px-3">球枱</th>
+                      <th className="py-2 px-3">時間</th>
+                      <th className="py-2 px-3">方案</th>
+                      <th className="py-2 px-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allReservations.slice(0, 100).map((r: any) => {
+                      const status = String(r?.status || '').toUpperCase();
+                      const e = new Date(String(r?.endAt));
+                      const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+                      const tag = status === 'PENDING'
+                        ? { label: '待確認', cls: 'bg-amber-900 text-white' }
+                        : status === 'CONFIRMED' && ended
+                          ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
+                          : status === 'CONFIRMED'
+                            ? { label: '已確認', cls: 'bg-blue-800 text-white' }
+                            : status === 'CANCELLED'
+                              ? { label: '已取消', cls: 'bg-gray-700 text-gray-200' }
+                              : { label: status || '—', cls: 'bg-gray-700 text-gray-200' };
+                      const canCancel = status !== 'CANCELLED';
+                      return (
+                        <tr key={r.id} className="border-b border-gray-800">
+                          <td className="py-2 px-3">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
+                          </td>
+                          <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                          <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                          <td className="py-2 px-3 text-sm text-gray-300">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                          <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                          <td className="py-2 px-3">
+                            <button
+                              type="button"
+                              disabled={!canCancel}
+                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                              onClick={async () => {
+                                if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                                try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              }}
+                            >
+                              刪除
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {allReservations.length > 100 && <div className="text-xs text-gray-500 mt-2">只顯示最近 100 筆</div>}
               </div>
             )}
           </div>

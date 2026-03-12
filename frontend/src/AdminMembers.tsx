@@ -278,25 +278,26 @@ const AdminMembers: React.FC = () => {
             </div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>ID</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>姓名</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>Email</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>分區</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員編碼</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員等級</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>電話</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>出生日期</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>有效期</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>建立時間</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMembers.map((m) => (
-                <React.Fragment key={m.id}>
-                  <tr>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>ID</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>姓名</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>Email</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>分區</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員編碼</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員等級</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>電話</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>出生日期</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>有效期</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>建立時間</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMembers.map((m) => (
+                  <React.Fragment key={m.id}>
+                    <tr>
                     <td colSpan={10} style={{ borderBottom: '1px solid #eee', padding: 6 }}>
                       {!editing[m.id] ? (
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -389,10 +390,11 @@ const AdminMembers: React.FC = () => {
                     </td>
                     <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
                   </tr>
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
         </>
       )}

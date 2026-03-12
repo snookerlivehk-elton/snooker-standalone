@@ -15,6 +15,7 @@ export async function createClubTables(prisma: PrismaClient) {
         "phone" TEXT,
         "email" TEXT,
         "logoUrl" TEXT,
+        "paymentInfo" TEXT,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -22,6 +23,10 @@ export async function createClubTables(prisma: PrismaClient) {
       );
     `);
     console.log('Created ClubProfile table');
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ClubProfile" ADD COLUMN IF NOT EXISTS "paymentInfo" TEXT;`);
+    } catch {}
 
     // 2. Create Unique Index on ClubProfile.memberId
     await prisma.$executeRawUnsafe(`

@@ -86,6 +86,7 @@ model ClubProfile {
   phone       String?
   email       String?
   logoUrl     String?
+  paymentInfo String?
   
   members     ClubMember[]
   messages    ClubMessage[]

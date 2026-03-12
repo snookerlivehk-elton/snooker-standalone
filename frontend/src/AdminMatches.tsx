@@ -124,7 +124,7 @@ const AdminMatches: React.FC = () => {
         </div>
       </div>
       {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 14 }}>
           Member ID：
           <input
@@ -158,43 +158,45 @@ const AdminMatches: React.FC = () => {
       {loading && <div>載入中...</div>}
       {!loading && (
         <>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match ID / ROOM_ID</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match Code</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Frames</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Red Balls</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>球員</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>勝方</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>開始時間</th>
-                <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>結束時間</th>
-              </tr>
-            </thead>
-            <tbody>
-              {matches.map((m) => (
-                <tr key={m.id}>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.room_id}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.name}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.match_code || '-'}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.frames_required}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.red_balls}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderPlayers(m)}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderWinner(m)}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.started_at)}</td>
-                  <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.ended_at)}</td>
-                </tr>
-              ))}
-              {matches.length === 0 && (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 900 }}>
+              <thead>
                 <tr>
-                  <td colSpan={9} style={{ padding: 10, textAlign: 'center', color: '#666' }}>
-                    無資料
-                  </td>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match ID / ROOM_ID</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match Code</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Frames</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Red Balls</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>球員</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>勝方</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>開始時間</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>結束時間</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {matches.map((m) => (
+                  <tr key={m.id}>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.room_id}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.name}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.match_code || '-'}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.frames_required}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.red_balls}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderPlayers(m)}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderWinner(m)}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.started_at)}</td>
+                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.ended_at)}</td>
+                  </tr>
+                ))}
+                {matches.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 10, textAlign: 'center', color: '#666' }}>
+                      無資料
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: 13, color: '#444' }}>
               第 {page} / {totalPages} 頁

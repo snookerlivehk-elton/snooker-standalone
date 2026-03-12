@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation } from './lib/api';
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -167,6 +166,16 @@ const ClubPublicPage: React.FC = () => {
   }, [schemes, selScheme]);
 
   const fmtMoney = useCallback((n: number) => new Intl.NumberFormat('zh-HK', { maximumFractionDigits: 2 }).format(n), []);
+  const reservationTag = useCallback((r: any) => {
+    const status = String(r?.status || '').toUpperCase();
+    const e = new Date(String(r?.endAt));
+    const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+    if (status === 'PENDING') return { label: '待確認', bg: '#7c2d12', fg: '#fff' };
+    if (status === 'CONFIRMED' && ended) return { label: '已完成', bg: '#065f46', fg: '#fff' };
+    if (status === 'CONFIRMED') return { label: '已確認', bg: '#1d4ed8', fg: '#fff' };
+    if (status === 'CANCELLED') return { label: '已取消', bg: '#444', fg: '#ddd' };
+    return { label: status || '—', bg: '#444', fg: '#ddd' };
+  }, []);
 
   const selectedTable = useMemo(() => tables.find(t => t.id === selTable) || null, [tables, selTable]);
   const basePricePerHour = useMemo(() => {
@@ -223,6 +232,15 @@ const ClubPublicPage: React.FC = () => {
   if (error) return <div style={{ padding: 20, color: 'red', textAlign: 'center' }}>錯誤: {error}</div>;
   if (!club) return <div style={{ padding: 20, color: '#fff', textAlign: 'center' }}>找不到場館</div>;
 
+  const logoSrc = (() => {
+    const raw = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
+    if (!raw) return null;
+    if (/^data:/i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/')) return `${API_URL}${raw}`;
+    return raw;
+  })();
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -242,19 +260,20 @@ const ClubPublicPage: React.FC = () => {
         boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
         textAlign: 'center'
       }}>
-        {club.logoUrl && (
-          <img 
-            src={club.logoUrl} 
-            alt="Club Logo" 
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: '50%', marginBottom: 20, background: '#fff' }} 
-          />
-        )}
-        
-        {/* QR Code Section */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-          <div style={{ background: '#fff', padding: 15, borderRadius: 12 }}>
-            <QRCodeSVG value={window.location.href} size={200} />
+          <div style={{ background: '#fff', padding: 15, borderRadius: 12, width: 230, height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {logoSrc ? (
+              <img
+                src={logoSrc}
+                alt="Club Logo"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                style={{ width: 200, height: 200, objectFit: 'contain' }}
+              />
+            ) : (
+              <div style={{ width: 200, height: 200, borderRadius: 16, border: '1px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#334155', fontWeight: 700 }}>
+                未設定 LOGO
+              </div>
+            )}
           </div>
         </div>
 
@@ -306,6 +325,12 @@ const ClubPublicPage: React.FC = () => {
         
         <div style={{ textAlign: 'left', background: '#333', padding: 20, borderRadius: 8, marginBottom: 30 }}>
           <h3 style={{ marginTop: 0, borderBottom: '1px solid #444', paddingBottom: 10 }}>預約</h3>
+          {club.paymentInfo && (
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: '#2a2a2a', border: '1px solid #444', borderRadius: 8, color: '#ddd', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, color: '#f5d000' }}>付款方式</div>
+              {String(club.paymentInfo)}
+            </div>
+          )}
           {!session.id ? (
             <div style={{ color: '#ccc' }}>
               需登入才能預約。<a href="/members/login" style={{ color: '#f5d000' }}>登入</a>
@@ -476,33 +501,62 @@ const ClubPublicPage: React.FC = () => {
             <div style={{ color: '#ffb4b4', fontSize: 13 }}>{myResError}</div>
           ) : (
             (() => {
-              const now = Date.now() - 60_000;
-              const upcoming = (Array.isArray(myReservations) ? myReservations : []).filter((r: any) => {
-                const s = new Date(String(r?.startAt));
-                return Number.isFinite(s.getTime()) && s.getTime() >= now;
-              });
-              if (upcoming.length === 0) return <div style={{ color: '#ccc', fontSize: 13 }}>（暫無）</div>;
+              const list = Array.isArray(myReservations) ? myReservations : [];
+              if (list.length === 0) return <div style={{ color: '#ccc', fontSize: 13 }}>（暫無）</div>;
               return (
                 <div style={{ display: 'grid', gap: 8 }}>
-                  {upcoming.slice(0, 20).map((r: any) => {
+                  {list.slice(0, 50).map((r: any) => {
                     const s = new Date(String(r?.startAt));
                     const e = new Date(String(r?.endAt));
                     const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
                     const ymd = ok ? `${s.getFullYear()}-${pad2(s.getMonth() + 1)}-${pad2(s.getDate())}` : '—';
                     const time = ok ? `${pad2(s.getHours())}:${pad2(s.getMinutes())} - ${pad2(e.getHours())}:${pad2(e.getMinutes())}` : '—';
                     const tableName = String(r?.table?.name || '');
-                    const status = String(r?.status || '');
+                    const quote = r?.priceQuote != null ? Number(r.priceQuote) : null;
+                    const quoteText = Number.isFinite(quote) ? `$${fmtMoney(quote as number)}` : null;
+                    const tag = reservationTag(r);
+                    const status = String(r?.status || '').toUpperCase();
+                    const canCancel = status !== 'CANCELLED' && (!Number.isFinite(s.getTime()) || s.getTime() >= Date.now() - 60_000);
                     return (
                       <div key={r.id} style={{ background: '#2a2a2a', border: '1px solid #444', borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                           <div style={{ fontWeight: 700 }}>{tableName || '球枱'}</div>
-                          <div style={{ fontSize: 12, color: '#aaa' }}>{status}</div>
+                          <span style={{ fontSize: 12, background: tag.bg, color: tag.fg, padding: '2px 8px', borderRadius: 999 }}>{tag.label}</span>
                         </div>
-                        <div style={{ fontSize: 13, color: '#ddd', marginTop: 6 }}>{ymd} · {time}</div>
+                        <div style={{ fontSize: 13, color: '#ddd', marginTop: 6 }}>{ymd} · {time}{quoteText ? ` · ${quoteText}` : ''}</div>
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            disabled={!canCancel}
+                            onClick={async () => {
+                              if (!session?.id) return;
+                              if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                              try {
+                                await cancelMyReservation(API_URL, String(club.id), String(session.id), String(r.id));
+                                const myRows = await getMyReservations(API_URL, String(club.id), String(session.id));
+                                setMyReservations(Array.isArray(myRows) ? myRows : []);
+                                try {
+                                  if (selTable && date) {
+                                    const from = new Date(date);
+                                    from.setHours(0, 0, 0, 0);
+                                    const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+                                    const rows = await getAvailability(API_URL, String(club.id), from.toISOString(), to.toISOString(), selTable);
+                                    setDayReservations(Array.isArray(rows) ? rows : []);
+                                  }
+                                } catch {}
+                              } catch (e: any) {
+                                alert(e.message || '刪除失敗');
+                              }
+                            }}
+                            style={{ background: canCancel ? '#b91c1c' : '#666', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 8, cursor: canCancel ? 'pointer' : 'not-allowed', fontSize: 13 }}
+                          >
+                            刪除
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
-                  {upcoming.length > 20 && <div style={{ fontSize: 12, color: '#aaa' }}>只顯示最近 20 筆</div>}
+                  {list.length > 50 && <div style={{ fontSize: 12, color: '#aaa' }}>只顯示最近 50 筆</div>}
                 </div>
               );
             })()

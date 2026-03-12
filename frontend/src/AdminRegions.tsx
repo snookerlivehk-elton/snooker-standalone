@@ -302,42 +302,44 @@ const AdminRegions: React.FC = () => {
                 儲存地方
               </button>
             </form>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
-                </tr>
-              </thead>
-              <tbody>
-                {regions.map((r) => (
-                  <tr key={r.code3} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRegionCode(r.code3 || '');
-                          setRegionName(r.name || '');
-                          setRegionActive(typeof r.active === 'boolean' ? r.active : true);
-                          setEditingRegionKey(String(r.code3 || '').toUpperCase());
-                        }}
-                        style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
-                      >
-                        {r.code3}
-                      </button>
-                    </td>
-                    <td style={{ padding: 6 }}>{r.name}</td>
-                    <td style={{ padding: 6 }}>{r.active ? '是' : '否'}</td>
-                  </tr>
-                ))}
-                {regions.length === 0 && (
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
+                <thead>
                   <tr>
-                    <td colSpan={3} style={{ padding: 6, color: '#666' }}>尚未有地方資料</td>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {regions.map((r) => (
+                    <tr key={r.code3} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRegionCode(r.code3 || '');
+                            setRegionName(r.name || '');
+                            setRegionActive(typeof r.active === 'boolean' ? r.active : true);
+                            setEditingRegionKey(String(r.code3 || '').toUpperCase());
+                          }}
+                          style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
+                        >
+                          {r.code3}
+                        </button>
+                      </td>
+                      <td style={{ padding: 6 }}>{r.name}</td>
+                      <td style={{ padding: 6 }}>{r.active ? '是' : '否'}</td>
+                    </tr>
+                  ))}
+                  {regions.length === 0 && (
+                    <tr>
+                      <td colSpan={3} style={{ padding: 6, color: '#666' }}>尚未有地方資料</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
           <div style={{ padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>分區</h3>
@@ -409,7 +411,7 @@ const AdminRegions: React.FC = () => {
                 儲存分區
               </button>
             </form>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13 }}>顯示地方</span>
               <select
                 value={districtFilterRegion}
@@ -424,65 +426,67 @@ const AdminRegions: React.FC = () => {
                 ))}
               </select>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>地方</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleDistricts.map((d) => (
-                  <tr key={`${d.region_code}-${d.code3}`} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 6 }}>
-                      {d.region_code}
-                    </td>
-                    <td style={{ padding: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDistrictRegionCode(d.region_code || '');
-                          setDistrictCode(d.code3 || '');
-                          setDistrictName(d.name || '');
-                          setDistrictActive(typeof d.active === 'boolean' ? d.active : true);
-                          setEditingDistrictKey(`${String(d.region_code || '').toUpperCase()}::${String(d.code3 || '').toUpperCase()}`);
-                        }}
-                        style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
-                      >
-                        {d.code3}
-                      </button>
-                    </td>
-                    <td style={{ padding: 6 }}>{d.name}</td>
-                    <td style={{ padding: 6 }}>{d.active ? '是' : '否'}</td>
-                    <td style={{ padding: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDistrict(d)}
-                        style={{
-                          padding: '4px 8px',
-                          borderRadius: 4,
-                          border: 'none',
-                          background: '#dc2626',
-                          color: '#fff',
-                          fontSize: 12,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {confirmDeleteDistrictKey === `${String(d.region_code || '').toUpperCase()}::${String(d.code3 || '').toUpperCase()}` ? '再次確認刪除' : '刪除'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {visibleDistricts.length === 0 && (
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ padding: 6, color: '#666' }}>尚未有分區資料</td>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>地方</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
+                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>操作</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visibleDistricts.map((d) => (
+                    <tr key={`${d.region_code}-${d.code3}`} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: 6 }}>
+                        {d.region_code}
+                      </td>
+                      <td style={{ padding: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDistrictRegionCode(d.region_code || '');
+                            setDistrictCode(d.code3 || '');
+                            setDistrictName(d.name || '');
+                            setDistrictActive(typeof d.active === 'boolean' ? d.active : true);
+                            setEditingDistrictKey(`${String(d.region_code || '').toUpperCase()}::${String(d.code3 || '').toUpperCase()}`);
+                          }}
+                          style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
+                        >
+                          {d.code3}
+                        </button>
+                      </td>
+                      <td style={{ padding: 6 }}>{d.name}</td>
+                      <td style={{ padding: 6 }}>{d.active ? '是' : '否'}</td>
+                      <td style={{ padding: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDistrict(d)}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 4,
+                            border: 'none',
+                            background: '#dc2626',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                          }}
+                        >
+                          刪除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {visibleDistricts.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ padding: 6, color: '#666' }}>尚未有分區資料</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

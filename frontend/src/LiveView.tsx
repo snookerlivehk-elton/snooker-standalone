@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { State } from './lib/State';
@@ -65,9 +65,6 @@ const LiveView: React.FC = () => {
         perPlayer: [defaultPlayerStats(0), defaultPlayerStats(1)],
         eventsCount: 0,
     });
-    const [showEndModal, setShowEndModal] = useState(false);
-    const [statsPage, setStatsPage] = useState(0);
-    const totalPages = 1;
     const [connStatus, setConnStatus] = useState<'init' | 'socket_connected' | 'socket_error' | 'socket_disconnected'>('init');
     const [updateSource, setUpdateSource] = useState<'none' | 'storage' | 'socket'>('none');
     const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
@@ -81,7 +78,7 @@ const LiveView: React.FC = () => {
         } catch { return false; }
     }, []);
     const pollRef = useRef<number | null>(null);
-    const startPolling = () => {
+    const startPolling = useCallback(() => {
         if (!roomId) return;
         if (pollRef.current != null) return;
         const updateFromStorage = () => {
@@ -98,13 +95,13 @@ const LiveView: React.FC = () => {
         };
         updateFromStorage();
         pollRef.current = window.setInterval(updateFromStorage, 500);
-    };
-    const stopPolling = () => {
+    }, [roomId]);
+    const stopPolling = useCallback(() => {
         if (pollRef.current != null) {
             clearInterval(pollRef.current);
             pollRef.current = null;
         }
-    };
+    }, []);
 
     useEffect(() => {
         if (!ENABLE_SOCKET) {
@@ -203,7 +200,7 @@ const LiveView: React.FC = () => {
             stopPolling();
             window.removeEventListener('storage', onStorage);
         };
-    }, [roomId]);
+    }, [roomId, socketRoom, startPolling, stopPolling]);
 
     useEffect(() => {
         if (!roomId || !ENABLE_SUPABASE) {
@@ -236,49 +233,16 @@ const LiveView: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId, ENABLE_SUPABASE]);
 
-    const updateAndBroadcastState = (newState: State) => {
-        // Socket broadcast
-        if (socketRef.current) {
-            try { socketRef.current.emit('update gameState', { roomId: socketRoom, newState }); } catch {}
-        }
-        // Supabase broadcast (if enabled)
-        if (ENABLE_SUPABASE && supabaseChannelRef.current) {
-            try { supabaseChannelRef.current.send({ type: 'broadcast', event: 'state', payload: newState.toJSON() }); } catch {}
-        }
-        setGameState(newState);
-        if (roomId) {
-            try { RoomStorage.setState(roomId!, newState.toJSON()); } catch {}
-        }
-    };
-
-    
-
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
         const secs = (seconds % 60).toString().padStart(2, '0');
         return `${mins}:${secs}`;
     };
 
-    const isMatchOver = useMemo(() => gameState?.isMatchOver ?? false, [gameState?.isMatchOver]);
-
     useEffect(() => {
         if (!roomId) return;
         setStats(StatsEngine.compute(roomId, gameState));
-    }, [
-        roomId,
-        eventsRevision,
-        gameState?.shotHistory.length,
-        gameState?.currentPlayerIndex,
-        gameState?.players[0].score,
-        gameState?.players[1].score,
-    ]);
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setStatsPage((p) => (p + 1) % totalPages);
-        }, 8000);
-        return () => clearInterval(timer);
-    }, [totalPages]);
+    }, [roomId, eventsRevision, gameState]);
 
     // Disable end-of-match summary popup for Live Link
     // useEffect(() => {
@@ -314,9 +278,6 @@ const LiveView: React.FC = () => {
         );
     }
 
-    const remainingPoints = gameState.getRemainingPoints();
-    const lead = Math.abs(gameState.players[0].score - gameState.players[1].score);
-    const leader = gameState.players[0].score > gameState.players[1].score ? gameState.players[0] : gameState.players[1];
     const lastShot = gameState.shotHistory[gameState.shotHistory.length - 1];
 
     const nameRaw = gameState.settings.matchName || '';

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead } from './lib/api';
+import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
@@ -11,7 +11,11 @@ const MemberProfile: React.FC = () => {
   const [matches, setMatches] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Record<string, true>>({});
+  const [deletingMessages, setDeletingMessages] = useState(false);
   const [joinedClubs, setJoinedClubs] = useState<any[]>([]);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [openMessage, setOpenMessage] = useState<any | null>(null);
   const [phone, setPhone] = useState('');
@@ -96,7 +100,7 @@ const MemberProfile: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [id, sessionEmail]);
+  }, [id, sessionEmail, sessionId]);
 
   useEffect(() => {
     if (!member?.id) return;
@@ -120,7 +124,36 @@ const MemberProfile: React.FC = () => {
         setMatchesLoading(false);
       }
     })();
-  }, [member?.id, selfMemberId, sessionEmail]);
+  }, [member?.id, member?.email, selfMemberId, sessionEmail]);
+
+  useEffect(() => {
+    if (!selfMemberId) return;
+    const clubs = Array.isArray(joinedClubs) ? joinedClubs : [];
+    if (clubs.length === 0) {
+      setReservations([]);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        setReservationsLoading(true);
+        const rows = await Promise.all(
+          clubs.map(async (j: any) => {
+            const clubId = String(j?.clubId || j?.club?.id || '');
+            if (!clubId) return [];
+            const list = await getMyReservations(API_URL, clubId, selfMemberId).catch(() => []);
+            return (Array.isArray(list) ? list : []).map((r: any) => ({ ...r, _club: j?.club || null, _clubId: clubId }));
+          })
+        );
+        const flat = rows.flat();
+        flat.sort((a: any, b: any) => new Date(String(b?.startAt)).getTime() - new Date(String(a?.startAt)).getTime());
+        if (mounted) setReservations(flat);
+      } finally {
+        if (mounted) setReservationsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [selfMemberId, joinedClubs]);
 
   if (loading) return <div style={{ padding: 16 }}>載入中...</div>;
   if (error) return <div style={{ padding: 16, color: 'red' }}>{error}</div>;
@@ -167,7 +200,51 @@ const MemberProfile: React.FC = () => {
         {/* Club Messages */}
         {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
            <div className="glass rounded-xl p-4">
-              <h3 className="text-lg font-semibold mb-3">場館訊息 ({messages.length})</h3>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3 className="text-lg font-semibold">場館訊息 ({messages.length})</h3>
+                {messages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={deletingMessages || Object.keys(selectedMessageIds).length === 0}
+                      className={`px-3 py-1.5 rounded text-sm ${deletingMessages || Object.keys(selectedMessageIds).length === 0 ? 'bg-gray-700 text-gray-400' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                      onClick={async () => {
+                        const ids = Object.keys(selectedMessageIds);
+                        if (ids.length === 0) return;
+                        if (!confirm(`確定要刪除已選 ${ids.length} 則訊息？`)) return;
+                        try {
+                          setDeletingMessages(true);
+                          await hideClubMessages(API_URL, selfMemberId, ids);
+                          setMessages(prev => prev.filter(m => !selectedMessageIds[String(m.id)]));
+                          setSelectedMessageIds({});
+                        } catch (e: any) {
+                          alert(e.message || '刪除失敗');
+                        } finally {
+                          setDeletingMessages(false);
+                        }
+                      }}
+                    >
+                      刪除已選
+                    </button>
+                    <label className="flex items-center gap-2 text-sm text-gray-300 select-none">
+                      <input
+                        type="checkbox"
+                        checked={messages.length > 0 && Object.keys(selectedMessageIds).length === messages.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const next: Record<string, true> = {};
+                            for (const m of messages) next[String(m.id)] = true;
+                            setSelectedMessageIds(next);
+                          } else {
+                            setSelectedMessageIds({});
+                          }
+                        }}
+                      />
+                      全選
+                    </label>
+                  </div>
+                )}
+              </div>
               {messages.length === 0 ? (
                  <div className="text-gray-400 text-sm">暫無訊息</div>
               ) : (
@@ -175,6 +252,17 @@ const MemberProfile: React.FC = () => {
                     {messages.map((msg: any) => (
                       <li key={msg.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-800/70">
                         <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={!!selectedMessageIds[String(msg.id)]}
+                            onChange={(e) => setSelectedMessageIds(prev => {
+                              const id = String(msg.id);
+                              const next = { ...prev };
+                              if (e.target.checked) next[id] = true;
+                              else delete next[id];
+                              return next;
+                            })}
+                          />
                           {!msg.read && <span className="inline-block w-2 h-2 rounded-full bg-blue-400" aria-label="unread"></span>}
                           <button
                             className={`text-left truncate hover:underline ${msg.read ? 'text-blue-300' : 'text-blue-400 font-semibold'}`}
@@ -204,6 +292,83 @@ const MemberProfile: React.FC = () => {
                   </ul>
               )}
            </div>
+        )}
+
+        {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
+          <div className="glass rounded-xl p-4">
+            <h3 className="text-lg font-semibold mb-3">我的預約 ({reservations.length})</h3>
+            {reservationsLoading ? (
+              <div className="text-gray-400 text-sm">載入中...</div>
+            ) : reservations.length === 0 ? (
+              <div className="text-gray-400 text-sm">暫無預約</div>
+            ) : (
+              <div className="space-y-2">
+                {reservations.slice(0, 50).map((r: any) => {
+                  const s = new Date(String(r?.startAt));
+                  const e = new Date(String(r?.endAt));
+                  const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
+                  const status = String(r?.status || '').toUpperCase();
+                  const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+                  const tag = status === 'PENDING'
+                    ? { label: '待確認', bg: '#7c2d12', fg: '#fff' }
+                    : status === 'CONFIRMED' && ended
+                      ? { label: '已完成', bg: '#065f46', fg: '#fff' }
+                      : status === 'CONFIRMED'
+                        ? { label: '已確認', bg: '#1d4ed8', fg: '#fff' }
+                        : status === 'CANCELLED'
+                          ? { label: '已取消', bg: '#444', fg: '#ddd' }
+                          : { label: status || '—', bg: '#444', fg: '#ddd' };
+                  const clubName = String(r?._club?.name || r?.club?.name || r?._clubId || '');
+                  const canCancel = status !== 'CANCELLED' && (!Number.isFinite(s.getTime()) || s.getTime() >= Date.now() - 60_000);
+                  return (
+                    <div key={String(r.id)} className="bg-gray-700/40 border border-gray-700 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{clubName || '球會'} · {String(r?.table?.name || '球枱')}</div>
+                          <div className="text-xs text-gray-300 mt-1">
+                            {ok ? `${s.toLocaleDateString()} ${s.toLocaleTimeString()} - ${e.toLocaleTimeString()}` : '—'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: tag.bg, color: tag.fg }}>{tag.label}</span>
+                          <button
+                            type="button"
+                            disabled={!canCancel}
+                            className={`px-3 py-1.5 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                            onClick={async () => {
+                              const clubId = String(r?._clubId || r?.clubId || '');
+                              if (!clubId) return;
+                              if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                              try {
+                                await cancelMyReservation(API_URL, clubId, selfMemberId, String(r.id));
+                                const clubs = Array.isArray(joinedClubs) ? joinedClubs : [];
+                                const rows = await Promise.all(
+                                  clubs.map(async (j: any) => {
+                                    const cid = String(j?.clubId || j?.club?.id || '');
+                                    if (!cid) return [];
+                                    const list = await getMyReservations(API_URL, cid, selfMemberId).catch(() => []);
+                                    return (Array.isArray(list) ? list : []).map((x: any) => ({ ...x, _club: j?.club || null, _clubId: cid }));
+                                  })
+                                );
+                                const flat = rows.flat();
+                                flat.sort((a: any, b: any) => new Date(String(b?.startAt)).getTime() - new Date(String(a?.startAt)).getTime());
+                                setReservations(flat);
+                              } catch (e: any) {
+                                alert(e.message || '刪除失敗');
+                              }
+                            }}
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {reservations.length > 50 && <div className="text-xs text-gray-400">只顯示最近 50 筆</div>}
+              </div>
+            )}
+          </div>
         )}
 
         {openMessage && (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { SOCKET_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID, ENABLE_SUPABASE, API_URL } from './config';
@@ -12,7 +12,8 @@ import { t } from './lib/i18n';
 const Overlay: React.FC = () => {
   const { roomId: routeRoomId } = useParams<{ roomId: string }>();
   const slugId = SIMPLE_MODE ? DEFAULT_ROOM_ID : routeRoomId;
-  const paramsRaw = typeof window !== 'undefined' ? new URLSearchParams(window.location.search || '') : null;
+  const search = typeof window !== 'undefined' ? (window.location.search || '') : '';
+  const paramsRaw = useMemo(() => new URLSearchParams(search), [search]);
   const overrideSocketRoom = paramsRaw?.get('socketRoom') || undefined;
   const roomId = slugId ? (findRoomIdByCode(slugId) || slugId) : slugId; // 用於本機 RoomStorage
   const socketRoom = (overrideSocketRoom && overrideSocketRoom.trim()) || slugId || roomId; // 用於 socket 加入房間鍵
@@ -167,7 +168,7 @@ const Overlay: React.FC = () => {
       try { s && s.disconnect(); } catch {}
       try { ch && ch.unsubscribe(); } catch {}
     };
-  }, [roomId]);
+  }, [roomId, paramsRaw, socketRoom]);
 
   if (!gameState) {
     // 顯示置中提示，方便現場對齊與確認連線狀態
@@ -220,7 +221,6 @@ const Overlay: React.FC = () => {
   const lead = Math.abs(gameState.players[0].score - gameState.players[1].score);
   const leader = gameState.players[0].score >= gameState.players[1].score ? gameState.players[0] : gameState.players[1];
   const remainingPoints = gameState.getRemainingPoints();
-  const breakScore = gameState.breakScore;
 
   const renderNameWithHandicap = (index: number) => {
     const name = gameState.players[index].name;
@@ -371,21 +371,12 @@ const Overlay: React.FC = () => {
   };
 
   // 純文字資訊項：不使用膠囊背景
-  const infoItemTextStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 6,
-    fontSize: isCompact ? 16 : 18,
-    fontWeight: 600,
-    color: '#e6e6e6',
-  };
-
   const nameBox: React.CSSProperties = {
     display: 'flex', flexDirection: 'row', alignItems: 'center', gap: isCompact ? 8 : 10,
     padding: isCompact ? '4px 12px' : '4px 14px',
   };
 
-  const getNameStyle = (idx: number): React.CSSProperties => ({
+  const getNameStyle = (_idx: number): React.CSSProperties => ({
     fontSize: isCompact ? 24 : 28,
     fontWeight: 700,
     color: '#fff',
@@ -413,14 +404,6 @@ const Overlay: React.FC = () => {
     fontWeight: 600,
     fontSize: isCompact ? 17 : 22,
     minWidth: isCompact ? 44 : 54,
-    textAlign: 'center',
-  };
-
-  const indicatorStyle: React.CSSProperties = {
-    fontSize: isCompact ? 16 : 20,
-    fontWeight: 700,
-    color: '#7fffd4',
-    minWidth: 26,
     textAlign: 'center',
   };
 

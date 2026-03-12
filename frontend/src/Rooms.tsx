@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
@@ -16,13 +16,13 @@ const Rooms: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState('');
-  const session = (() => {
+  const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
-  })() as { id?: string; role?: string };
+  }, []) as { id?: string; role?: string };
   const isOperator = session?.role === 'ADMIN' || session?.role === 'OPERATOR';
   const operatorId = session?.id;
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -38,9 +38,9 @@ const Rooms: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isOperator, operatorId]);
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
 
   const onCreate = async () => {
     if (!operatorId) return;

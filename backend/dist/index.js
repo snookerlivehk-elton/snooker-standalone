@@ -10,6 +10,8 @@ import { PrismaClient } from '@prisma/client';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
+import clubRouter from './routes/club.js';
+import { createClubTables } from './scripts/create_club_tables.js';
 function incrementLetters(letters) {
     const arr = letters.split('');
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -77,9 +79,31 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
-    ? '*'
+    ? ['*']
     : corsOriginRaw.split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors({ origin: corsOrigins }));
+const allowedSuffixes = [
+    '.up.railway.app',
+    '.snookerlive.hk',
+    '.snookerhk.live',
+];
+const corsOptions = {
+    origin(origin, cb) {
+        if (!origin)
+            return cb(null, true);
+        if (corsOrigins.includes('*'))
+            return cb(null, true);
+        if (corsOrigins.includes(origin))
+            return cb(null, true);
+        if (allowedSuffixes.some(s => origin.endsWith(s)))
+            return cb(null, true);
+        return cb(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-member-id', 'x-write-token', 'Authorization'],
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ strict: false }));
 app.use((err, _req, res, next) => {
@@ -92,6 +116,9 @@ app.use((err, _req, res, next) => {
 });
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
+createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
+// Mount Club Router
+app.use('/api/club', clubRouter);
 async function resolveMemberIdentifiers(identifiers) {
     const trimmed = Array.from(new Set(identifiers
         .map((v) => String(v ?? '').trim())
@@ -423,63 +450,26 @@ app.post('/api/match-verification-code', async (req, res) => {
     }
 });
 app.post('/api/matches/start', async (req, res) => {
-    const { p1_email, p1_code, p2_email, p2_code, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
-    console.log(`[StartMatch] P1: ${p1_email} (code: ${p1_code}), P2: ${p2_email} (code: ${p2_code}), Room: ${room_id}`);
+    const { p1_email, p2_email, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
+    console.log(`[StartMatch] P1: ${p1_email}, P2: ${p2_email}, Room: ${room_id}`);
     let p1_member_id = null;
     let p2_member_id = null;
-    // Verify P1
-    if (p1_email && p1_code) {
-        const ver = await prisma.emailVerification.findFirst({
-            where: { email: p1_email, code: p1_code, used_at: null, expires_at: { gt: new Date() } }
-        });
-        if (ver) {
-            const m = await prisma.member.findFirst({ where: { email: p1_email } });
-            if (m) {
-                p1_member_id = m.id;
-                await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
-            }
-            else {
-                return res.status(400).json({ error: `Email ${p1_email} is not registered.` });
-            }
-        }
-        else {
-            return res.status(400).json({ error: `Invalid or expired verification code for ${p1_email}.` });
-        }
+    if (p1_email) {
+        const email = String(p1_email).trim();
+        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
+        if (!m)
+            return res.status(404).json({ error: `Email ${email} is not registered.` });
+        p1_member_id = m.id;
     }
-    else if (p1_email && !p1_code) {
-        // Email provided but no code - if we want to enforce verification for provided emails
-        // return res.status(400).json({ error: `Verification code required for ${p1_email}.` });
-        // Assuming current requirement allows implicit guest if no code provided? 
-        // User said: "只有在滿足上傳條件...才建立 Match"
-        // Let's enforce code if email is non-empty to prevent accidental guest mode when user intended to log in.
-        // Actually, user said: "可否輸入Email後發比賽驗證碼並在setup頁填寫, 防止他人盜用"
-        // This implies if email is entered, it MUST be verified.
-        return res.status(400).json({ error: `Verification code required for Player 1 (${p1_email}).` });
-    }
-    // Verify P2
-    if (p2_email && p2_code) {
-        const ver = await prisma.emailVerification.findFirst({
-            where: { email: p2_email, code: p2_code, used_at: null, expires_at: { gt: new Date() } }
-        });
-        if (ver) {
-            const m = await prisma.member.findFirst({ where: { email: p2_email } });
-            if (m) {
-                p2_member_id = m.id;
-                await prisma.emailVerification.update({ where: { id: ver.id }, data: { used_at: new Date() } });
-            }
-            else {
-                return res.status(400).json({ error: `Email ${p2_email} is not registered.` });
-            }
-        }
-        else {
-            return res.status(400).json({ error: `Invalid or expired verification code for ${p2_email}.` });
-        }
-    }
-    else if (p2_email && !p2_code) {
-        return res.status(400).json({ error: `Verification code required for Player 2 (${p2_email}).` });
+    if (p2_email) {
+        const email = String(p2_email).trim();
+        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
+        if (!m)
+            return res.status(404).json({ error: `Email ${email} is not registered.` });
+        p2_member_id = m.id;
     }
     if (!p1_member_id && !p2_member_id) {
-        return res.json({ mode: 'guest', message: 'Both players are guests' });
+        return res.status(400).json({ error: '必須至少輸入一位已註冊會員的 Email 才可建立比賽。' });
     }
     // Resolve operator_id (support ID or Email) and ensure existence
     let opResolved = null;
@@ -529,6 +519,134 @@ app.post('/api/matches/start', async (req, res) => {
     }
     catch (e) {
         res.status(500).json({ error: String(e) });
+    }
+});
+// Create match invites for specific member emails (operator triggers from Setup page)
+app.post('/api/matches/invite', async (req, res) => {
+    try {
+        const { room_id, operator_id, emails } = req.body || {};
+        if (!room_id || !Array.isArray(emails) || emails.length === 0) {
+            return res.status(400).json({ error: 'missing room_id or emails' });
+        }
+        const requesterId = String(req.headers['x-member-id'] || '').trim();
+        if (!requesterId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+        if (!requester)
+            return res.status(401).json({ error: 'Unauthorized' });
+        if (requester.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Forbidden' });
+        // Resolve operator id (id or email acceptable)
+        let opResolved = requesterId;
+        if (operator_id) {
+            const opMember = await prisma.member.findFirst({
+                where: { OR: [{ id: String(operator_id) }, { email: String(operator_id) }] },
+                select: { id: true }
+            });
+            if (!opMember)
+                return res.status(404).json({ error: 'Operator not found' });
+            if (opMember.id !== requesterId)
+                return res.status(403).json({ error: 'operator mismatch' });
+            opResolved = opMember.id;
+        }
+        // Lookup members by email
+        const uniq = Array.from(new Set(emails.map((e) => String(e || '').trim()).filter(Boolean)));
+        if (uniq.length === 0)
+            return res.status(400).json({ error: 'no valid emails' });
+        const foundMembers = await prisma.member.findMany({
+            where: { OR: uniq.map((em) => ({ email: { equals: em, mode: 'insensitive' } })) },
+            select: { id: true, email: true, name: true }
+        });
+        const foundByEmailLower = new Map(foundMembers.map(m => [String(m.email || '').toLowerCase(), m]));
+        const invited = [];
+        const notFound = [];
+        for (const em of uniq) {
+            const m = foundByEmailLower.get(String(em).toLowerCase());
+            if (!m) {
+                notFound.push(em);
+                continue;
+            }
+            const token = randomBytes(16).toString('hex');
+            const id = randomUUID();
+            try {
+                await prisma.$executeRawUnsafe(`INSERT INTO "MatchInvite"("id","roomId","operatorId","memberId","token","status","createdAt") VALUES ($1,$2,$3,$4,$5,'PENDING',CURRENT_TIMESTAMP)`, id, String(room_id), opResolved, m.id, token);
+                invited.push({ email: m.email, memberId: m.id, token });
+            }
+            catch (e) {
+                // Ignore duplicates by token; retry with another
+            }
+        }
+        res.json({ invited, notFound });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// List my invites (member inbox-style)
+app.get('/api/matches/invites/my', async (req, res) => {
+    const memberId = req.headers['x-member-id'];
+    if (!memberId)
+        return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const rows = await prisma.$queryRawUnsafe(`SELECT "id","roomId","operatorId","memberId","token","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "memberId"=$1 ORDER BY "createdAt" DESC`, memberId);
+        // Enrich with operator and room info
+        const roomIds = Array.from(new Set(rows.map(r => String(r.roomId))));
+        const opIds = Array.from(new Set(rows.map(r => r.operatorId).filter(Boolean)));
+        const ops = opIds.length ? await prisma.member.findMany({ where: { id: { in: opIds } }, select: { id: true, name: true, email: true, club_name: true } }) : [];
+        const opMap = new Map(ops.map(o => [o.id, o]));
+        const enriched = rows.map(r => ({
+            ...r,
+            operator: r.operatorId ? opMap.get(r.operatorId) || null : null
+        }));
+        res.json({ invites: enriched });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Accept invite (member confirms to join match)
+app.post('/api/matches/invites/accept', async (req, res) => {
+    try {
+        const memberId = req.headers['x-member-id'];
+        const { token } = req.body || {};
+        if (!token)
+            return res.status(400).json({ error: 'missing token' });
+        const rows = await prisma.$queryRawUnsafe(`SELECT "id","roomId","operatorId","memberId","status" FROM "MatchInvite" WHERE "token"=$1 LIMIT 1`, String(token));
+        if (!rows.length)
+            return res.status(404).json({ error: 'invite not found' });
+        const inv = rows[0];
+        if (inv.status !== 'PENDING')
+            return res.status(400).json({ error: 'invite already processed' });
+        if (memberId && String(inv.memberId) !== String(memberId)) {
+            return res.status(403).json({ error: 'member mismatch' });
+        }
+        await prisma.$executeRawUnsafe(`UPDATE "MatchInvite" SET "status"='ACCEPTED',"acceptedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`, inv.id);
+        res.json({ ok: true, roomId: inv.roomId });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+// Room-level: list invites (for Setup page to auto-fill accepted players)
+app.get('/rooms/:roomId/invites', async (req, res) => {
+    const roomId = String(req.params.roomId);
+    try {
+        const rows = await prisma.$queryRawUnsafe(`SELECT "id","memberId","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "roomId"=$1 ORDER BY "createdAt" DESC`, roomId);
+        const memberIds = Array.from(new Set(rows.map(r => r.memberId)));
+        const members = memberIds.length ? await prisma.member.findMany({
+            where: { id: { in: memberIds } },
+            select: { id: true, name: true, email: true }
+        }) : [];
+        const mMap = new Map(members.map(m => [m.id, m]));
+        res.json({
+            invites: rows.map(r => ({
+                ...r,
+                member: mMap.get(r.memberId) || null
+            }))
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
     }
 });
 // Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)
@@ -882,7 +1000,7 @@ app.get('/admin/register', (_req, res) => {
 
         async function register() {
           const emailEl = document.getElementById('email');
-          const email = emailEl.value.trim().normalize('NFKC');
+          const email = emailEl.value.trim().normalize('NFKC').toLowerCase();
           // 將規範化後的值回寫，避免 checkValidity() 基於未規範化的原值誤判
           if (emailEl && typeof emailEl.value === 'string') {
             emailEl.value = email;
@@ -1571,6 +1689,11 @@ app.get('/api/members/:id/matches', async (req, res) => {
                 operatorClub: m.operator?.club_name || '-',
                 // Return raw players and handicaps, frontend will try to display
                 players: m.players.map(p => ({
+                    id: p.member_id, // Add member_id for identification
+                    member: {
+                        id: p.member.id,
+                        name: p.member.name
+                    },
                     name: p.member.name,
                     framesWon: p.frames_won,
                     maxBreak: p.max_break_points,
@@ -1896,6 +2019,14 @@ app.get('/api/operators/:id/matches', async (req, res) => {
         const id = String(req.params.id || '').trim();
         if (!id)
             return res.status(400).json({ error: 'Missing operator ID' });
+        const requesterId = String(req.headers['x-member-id'] || '').trim();
+        if (!requesterId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+        if (!requester)
+            return res.status(401).json({ error: 'Unauthorized' });
+        if (requester.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Forbidden' });
         // Resolve ID if email
         let opId = id;
         if (id.includes('@')) {
@@ -1904,6 +2035,8 @@ app.get('/api/operators/:id/matches', async (req, res) => {
                 return res.status(404).json({ error: 'Operator not found' });
             opId = m.id;
         }
+        if (opId !== requesterId)
+            return res.status(403).json({ error: 'operator mismatch' });
         const matches = await prisma.match.findMany({
             where: { operator_id: opId },
             orderBy: { started_at: 'desc' },
@@ -1949,6 +2082,14 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
         const id = String(req.params.id || '').trim();
         if (!id)
             return res.status(400).json({ error: 'Missing operator ID' });
+        const requesterId = String(req.headers['x-member-id'] || '').trim();
+        if (!requesterId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+        if (!requester)
+            return res.status(401).json({ error: 'Unauthorized' });
+        if (requester.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Forbidden' });
         // Resolve ID if email
         let opId = id;
         if (id.includes('@')) {
@@ -1957,6 +2098,8 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
                 return res.status(404).json({ error: 'Operator not found' });
             opId = m.id;
         }
+        if (opId !== requesterId)
+            return res.status(403).json({ error: 'operator mismatch' });
         // Check active in-memory rooms for this operator
         // We count the rooms currently in the system associated with this operator
         const activeCount = rooms.filter(r => r.operatorId === opId).length;
@@ -2002,6 +2145,14 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
         const id = String(req.params.id || '').trim();
         if (!id)
             return res.status(400).json({ error: 'Missing operator ID' });
+        const requesterId = String(req.headers['x-member-id'] || '').trim();
+        if (!requesterId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+        if (!requester)
+            return res.status(401).json({ error: 'Unauthorized' });
+        if (requester.role !== 'ADMIN')
+            return res.status(403).json({ error: 'Forbidden' });
         // Resolve ID if email
         let opId = id;
         if (id.includes('@')) {
@@ -2010,6 +2161,8 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
                 return res.status(404).json({ error: 'Operator not found' });
             opId = m.id;
         }
+        if (opId !== requesterId)
+            return res.status(403).json({ error: 'operator mismatch' });
         const active = rooms.filter(r => r.operatorId === opId);
         res.json({ rooms: active });
     }
@@ -2018,6 +2171,47 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
     }
 });
 // Simple password hashing helpers (SHA-256 with per-user salt)
+import { OAuth2Client } from 'google-auth-library';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com');
+app.post('/api/auth/google', async (req, res) => {
+    try {
+        const { credential } = req.body;
+        if (!credential)
+            return res.status(400).json({ error: 'Missing credential' });
+        const ticket = await googleClient.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com',
+        });
+        const payload = ticket.getPayload();
+        if (!payload || !payload.email)
+            return res.status(400).json({ error: 'Invalid token' });
+        const email = payload.email.toLowerCase();
+        const googleId = payload.sub;
+        let member = await prisma.member.findUnique({ where: { email } });
+        if (member) {
+            // Logic for google_id update removed due to DB permission issues.
+            // Matching by email only for now.
+            return res.json({
+                ok: true,
+                id: member.id,
+                member: {
+                    id: member.id,
+                    name: member.name,
+                    email: member.email,
+                    member_code: member.member_code,
+                    role: member.role
+                }
+            });
+        }
+        else {
+            return res.status(404).json({ error: 'Google 帳號未連結或未註冊，請先註冊會員' });
+        }
+    }
+    catch (err) {
+        console.error('Google login error:', err);
+        res.status(500).json({ error: 'Login failed: ' + err.message });
+    }
+});
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
     try {

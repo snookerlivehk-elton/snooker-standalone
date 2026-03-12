@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL, API_URL, ENABLE_SOCKET, SOCKET_PATH, SIMPLE_MODE, DEFAULT_ROOM_ID, ENABLE_SUPABASE } from './config';
 import { getWriteToken } from './lib/auth';
-import { createMatch, appendEvents, finalizeMatch, validateMembers, createMatchStrict, createMatchPartial } from './lib/api';
+import { appendEvents, createMatchPartial, finalizeMatch, validateMembers } from './lib/api';
 import { RoomStorage } from './lib/RoomStorage';
 import { State } from './lib/State';
 import PlayerCard from './components/PlayerCard';
@@ -25,12 +25,9 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const navigate = useNavigate();
     const [socket, setSocket] = useState<Socket | null>(null);
     const supabaseChannelRef = useRef<any>(null);
-    const [endModalDismissed, setEndModalDismissed] = useState(false);
     const [showFoulMenu, setShowFoulMenu] = useState(false);
     // 當本地送出更新後，忽略一次伺服器回送，避免覆蓋本地 history 造成 UNDO 失效
     const ignoreNextSocketUpdateRef = useRef(false);
-    const baseUrl = (import.meta.env.BASE_URL || '/');
-    const liveViewUrl = roomId ? `${window.location.origin}${baseUrl}room/${roomId}/live` : `${window.location.origin}${baseUrl}`;
     
     const session = useMemo(() => {
         try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -63,7 +60,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             setUploadStatus('idle');
             hasAppendedFrameEvent.current = false;
         }
-    }, [gameState?.isFrameOver]);
+    }, [gameState]);
 
 
     useEffect(() => {
@@ -83,7 +80,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
                 void 0;
             }
         }
-    }, [SIMPLE_MODE, gameState, setGameState]);
+    }, [gameState, setGameState]);
 
     useEffect(() => {
         if (!ENABLE_SOCKET) {
@@ -109,7 +106,100 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         return () => {
             newSocket.disconnect();
         };
-    }, [roomId]);
+    }, [slugId]);
+
+    const uploadSegment = useCallback(async (finalize: boolean): Promise<'uploaded' | 'skipped'> => {
+        if (!roomId || !gameState) return 'skipped';
+        const p1Id = (gameState.players[0].memberId || '').trim();
+        const p2Id = (gameState.players[1].memberId || '').trim();
+        const hasP1 = !!p1Id;
+        const hasP2 = !!p2Id;
+        if (!hasP1 && !hasP2) {
+            return 'skipped';
+        }
+        const record = StatsEngine.buildMatchRecord(roomId!, gameState);
+        
+        const apiRoomId = slugId || roomId!;
+        const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
+        const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
+        const validIds = idsToCheck.filter(id => (check as any).exists[id]);
+        if (validIds.length === 0) {
+            return 'skipped';
+        }
+        const playersPayload = record.players.map((p, i) => {
+            const originalId = i === 0 ? p1Id : p2Id;
+            const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
+            return {
+                name: p.name,
+                memberId: normalizedId,
+            };
+        });
+        const writeToken = getWriteToken();
+        let matchId = RoomStorage.getMatchId(roomId!);
+        let acceptedMemberIds = RoomStorage.getAcceptedMemberIds(roomId!);
+        if (!matchId) {
+            const created = await createMatchPartial(
+                API_URL,
+                apiRoomId,
+                record.match,
+                playersPayload,
+                { start: record.timestamps.start },
+                writeToken,
+                operatorId,
+            );
+            matchId = created.matchId;
+            acceptedMemberIds = created.acceptedMemberIds || [];
+            RoomStorage.setMatchId(roomId!, matchId);
+            RoomStorage.setAcceptedMemberIds(roomId!, acceptedMemberIds);
+            RoomStorage.setUploadedEventsCount(roomId!, 0);
+        }
+        const prevCount = RoomStorage.getUploadedEventsCount(roomId!);
+        const eventsToUpload = record.events.slice(prevCount);
+        if (eventsToUpload.length > 0 && matchId) {
+            const filteredEvents = eventsToUpload.filter(e => acceptedMemberIds.includes(String(e.playerMemberId || '')));
+            if (filteredEvents.length > 0) {
+                await appendEvents(
+                    API_URL,
+                    matchId,
+                    filteredEvents.map(e => ({
+                        type: e.type,
+                        playerIndex: e.playerIndex,
+                        playerMemberId: e.playerMemberId,
+                        ballName: e.ballName,
+                        points: e.points,
+                        timestamp: e.timestamp,
+                        shotTimeMs: e.shotTimeMs,
+                    })),
+                    writeToken,
+                );
+            }
+            RoomStorage.setUploadedEventsCount(roomId!, prevCount + eventsToUpload.length);
+        }
+        if (finalize && matchId) {
+            const winnerMemberId = (record.winnerIndex !== null)
+                ? (acceptedMemberIds.includes(String(record.players[record.winnerIndex].memberId || '')) ? (record.players[record.winnerIndex].memberId || null) : null)
+                : null;
+            await finalizeMatch(
+                API_URL,
+                matchId,
+                {
+                    foulTotals: record.foulTotals,
+                    stats: record.stats,
+                    timestamps: { end: record.timestamps.end },
+                    winnerMemberId,
+                    playersFinal: record.players,
+                    match: record.match,
+                },
+                writeToken,
+            );
+            try {
+                RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
+            } catch {
+                void 0;
+            }
+        }
+        return 'uploaded';
+    }, [gameState, operatorId, roomId, slugId]);
 
     useEffect(() => {
         if (gameState && roomId && !SIMPLE_MODE && !hasTriedInitialUpload.current) {
@@ -117,7 +207,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             // Attempt to create match record immediately so it appears in history
             uploadSegment(false).catch(() => {});
         }
-    }, [gameState, roomId, SIMPLE_MODE]);
+    }, [gameState, roomId, uploadSegment]);
 
     // Supabase Realtime channel（簡化版或無後端模式下的雲端同步）
     useEffect(() => {
@@ -213,7 +303,7 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             });
         }, 1000);
         return () => clearInterval(id);
-    }, [roomId, socket]);
+    }, [roomId, socket, socketRoom, setGameState]);
 
     const updateAndBroadcastState = (newState: State) => {
         if (socket) {
@@ -237,25 +327,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         }
     };
 
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const secs = (seconds % 60).toString().padStart(2, '0');
-        return `${mins}:${secs}`;
-    };
-
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(liveViewUrl).then(() => {
-            alert('Live view URL copied to clipboard!');
-        });
-    };
-
-    const handleToggleNewRules = () => {
-        if (!gameState) return;
-        const next = gameState.clone();
-        next.settings.newRulesEnabled = !next.settings.newRulesEnabled;
-        updateAndBroadcastState(next);
-    };
-
     const handlePot = (ball: number) => {
         const newState = gameState!.clone();
         newState.pot(ball);
@@ -277,29 +348,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
     const handleFoul = (penalty: number) => {
         const newState = gameState!.clone();
         newState.foul(penalty);
-        if (roomId) {
-            const lastShot = newState.shotHistory[newState.shotHistory.length - 1];
-            if (lastShot && lastShot.type === 'foul') {
-                RoomStorage.appendEvent(roomId!, {
-                    type: 'foul',
-                    playerIndex: lastShot.player,
-                    playerMemberId: newState.players[lastShot.player].memberId,
-                    points: lastShot.points,
-                });
-                RoomStorage.incrementFoulTotal(roomId!, lastShot.player, lastShot.points || 0);
-            }
-        }
-        updateAndBroadcastState(newState);
-    };
-
-    const handleFoulRed = (count: number) => {
-        if (!gameState) return;
-        // Disable in clearing colours or respot black or when insufficient reds
-        if (gameState.isClearingColours || gameState.isRespotBlack || gameState.redsRemaining < count) {
-            return;
-        }
-        const newState = gameState.clone();
-        newState.foulRed(count);
         if (roomId) {
             const lastShot = newState.shotHistory[newState.shotHistory.length - 1];
             if (lastShot && lastShot.type === 'foul') {
@@ -375,102 +423,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
         }
         const newState = popped ? gameState.undoSteps(1) : gameState.undo();
         updateAndBroadcastState(newState);
-    };
-
-    const uploadSegment = async (finalize: boolean): Promise<'uploaded' | 'skipped'> => {
-        if (!roomId || !gameState) return 'skipped';
-        const p1Id = (gameState.players[0].memberId || '').trim();
-        const p2Id = (gameState.players[1].memberId || '').trim();
-        const hasP1 = !!p1Id;
-        const hasP2 = !!p2Id;
-        if (!hasP1 && !hasP2) {
-            return 'skipped';
-        }
-        const record = StatsEngine.buildMatchRecord(roomId!, gameState);
-        console.log('[uploadSegment] record:', record);
-        console.log('[uploadSegment] record.stats:', JSON.stringify(record.stats, null, 2));
-        console.log('[uploadSegment] record.events length:', record.events.length);
-        
-        const apiRoomId = slugId || roomId!;
-        const idsToCheck = [p1Id, p2Id].filter(Boolean) as string[];
-        const check = idsToCheck.length ? await validateMembers(API_URL, idsToCheck) : { exists: {} as Record<string, boolean> };
-        const validIds = idsToCheck.filter(id => (check as any).exists[id]);
-        if (validIds.length === 0) {
-            return 'skipped';
-        }
-        const playersPayload = record.players.map((p, i) => {
-            const originalId = i === 0 ? p1Id : p2Id;
-            const normalizedId = originalId && validIds.includes(originalId) ? originalId : null;
-            return {
-                name: p.name,
-                memberId: normalizedId,
-            };
-        });
-        const writeToken = getWriteToken();
-        let matchId = RoomStorage.getMatchId(roomId!);
-        let acceptedMemberIds = RoomStorage.getAcceptedMemberIds(roomId!);
-        if (!matchId) {
-            const created = await createMatchPartial(
-                API_URL,
-                apiRoomId,
-                record.match,
-                playersPayload,
-                { start: record.timestamps.start },
-                writeToken,
-                operatorId,
-            );
-            matchId = created.matchId;
-            acceptedMemberIds = created.acceptedMemberIds || [];
-            RoomStorage.setMatchId(roomId!, matchId);
-            RoomStorage.setAcceptedMemberIds(roomId!, acceptedMemberIds);
-            RoomStorage.setUploadedEventsCount(roomId!, 0);
-        }
-        const prevCount = RoomStorage.getUploadedEventsCount(roomId!);
-        const eventsToUpload = record.events.slice(prevCount);
-        if (eventsToUpload.length > 0 && matchId) {
-            const filteredEvents = eventsToUpload.filter(e => acceptedMemberIds.includes(String(e.playerMemberId || '')));
-            if (filteredEvents.length > 0) {
-                await appendEvents(
-                    API_URL,
-                    matchId,
-                    filteredEvents.map(e => ({
-                        type: e.type,
-                        playerIndex: e.playerIndex,
-                        playerMemberId: e.playerMemberId,
-                        ballName: e.ballName,
-                        points: e.points,
-                        timestamp: e.timestamp,
-                        shotTimeMs: e.shotTimeMs,
-                    })),
-                    writeToken,
-                );
-            }
-            RoomStorage.setUploadedEventsCount(roomId!, prevCount + eventsToUpload.length);
-        }
-        if (finalize && matchId) {
-            const winnerMemberId = (record.winnerIndex !== null)
-                ? (acceptedMemberIds.includes(String(record.players[record.winnerIndex].memberId || '')) ? (record.players[record.winnerIndex].memberId || null) : null)
-                : null;
-            await finalizeMatch(
-                API_URL,
-                matchId,
-                {
-                    foulTotals: record.foulTotals,
-                    stats: record.stats,
-                    timestamps: { end: record.timestamps.end },
-                    winnerMemberId,
-                    playersFinal: record.players,
-                    match: record.match,
-                },
-                writeToken,
-            );
-            try {
-                RoomStorage.lockRoom(roomId!, record.timestamps.end ?? null);
-            } catch {
-                void 0;
-            }
-        }
-        return 'uploaded';
     };
 
     const proceedToNewFrameState = () => {
@@ -559,36 +511,6 @@ const Scoreboard: React.FC<ScoreboardProps> = ({ gameState, setGameState }) => {
             newState.concede();
             updateAndBroadcastState(newState);
         }
-    };
-
-    const handleMiss = () => {
-        const newState = gameState!.clone();
-        if (roomId) {
-            const shooter = newState.currentPlayerIndex;
-            RoomStorage.appendEvent(roomId!, {
-                type: 'miss',
-                playerIndex: shooter,
-                playerMemberId: newState.players[shooter].memberId,
-                points: 0,
-            });
-        }
-        newState.miss();
-        updateAndBroadcastState(newState);
-    };
-
-    const handleSafe = () => {
-        const newState = gameState!.clone();
-        if (roomId) {
-            const shooter = newState.currentPlayerIndex;
-            RoomStorage.appendEvent(roomId!, {
-                type: 'safe',
-                playerIndex: shooter,
-                playerMemberId: newState.players[shooter].memberId,
-                points: 0,
-            });
-        }
-        newState.safe();
-        updateAndBroadcastState(newState);
     };
 
     const handleToggleFreeBall = () => {

@@ -11,7 +11,7 @@ export default defineConfig({
       inlineAssets: true,
       saveAllAttempts: false,
     },
-    setupNodeEvents(on, config) {
+    setupNodeEvents(on, _config) {
       cypressMochawesomeReporter(on);
     },
   },

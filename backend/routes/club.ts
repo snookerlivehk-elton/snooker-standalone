@@ -85,15 +85,15 @@ router.post('/my-profile', async (req, res) => {
     if (!member) return;
     const memberId = member.id;
     
-    const { name, intro, address, phone, email, logoUrl } = req.body;
+    const { name, intro, address, phone, email, logoUrl, paymentInfo } = req.body;
 
     try {
         console.log(`[Club] Update profile request for member ${memberId}`, req.body);
 
         const club = await prisma.clubProfile.upsert({
             where: { memberId },
-            update: { name, intro, address, phone, email, logoUrl },
-            create: { memberId, name, intro, address, phone, email, logoUrl },
+            update: { name, intro, address, phone, email, logoUrl, paymentInfo },
+            create: { memberId, name, intro, address, phone, email, logoUrl, paymentInfo },
         });
         
         res.json(club);
@@ -223,7 +223,13 @@ router.get('/messages', async (req, res) => {
             readRows = await prisma.$queryRawUnsafe(`SELECT "messageId" FROM "ClubMessageRead" WHERE "memberId"=$1`, memberId);
         } catch {}
         const readSet = new Set(readRows.map(r => String(r.messageId)));
-        const withRead = messages.map(m => ({ ...m, read: readSet.has(m.id) }));
+        let hiddenRows: any[] = [];
+        try {
+            hiddenRows = await prisma.$queryRawUnsafe(`SELECT "messageId" FROM "ClubMessageHide" WHERE "memberId"=$1`, memberId);
+        } catch {}
+        const hiddenSet = new Set(hiddenRows.map(r => String(r.messageId)));
+        const visible = messages.filter(m => !hiddenSet.has(m.id));
+        const withRead = visible.map(m => ({ ...m, read: readSet.has(m.id) }));
         res.json(withRead);
     } catch (error) {
         res.status(500).json({ error: String(error) });
@@ -236,6 +242,13 @@ router.get('/messages/:id', async (req, res) => {
     const memberId = member.id;
     const id = req.params.id;
     try {
+        try {
+            const hidden: any[] = await prisma.$queryRawUnsafe(
+                `SELECT 1 FROM "ClubMessageHide" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
+                memberId, id
+            );
+            if (hidden.length > 0) return res.status(404).json({ error: 'Not found' });
+        } catch {}
         const message = await prisma.clubMessage.findUnique({
             where: { id },
             include: { club: { select: { name: true, logoUrl: true } } }
@@ -274,6 +287,37 @@ router.post('/messages/:id/read', async (req, res) => {
             );
         }
         res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+router.post('/messages/hide', async (req, res) => {
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
+    const ids = (req.body || {}).ids;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    try {
+        await prisma.$executeRawUnsafe(
+            `CREATE TABLE IF NOT EXISTS "ClubMessageHide"(
+                "id" text PRIMARY KEY,
+                "memberId" text NOT NULL,
+                "messageId" text NOT NULL,
+                "hiddenAt" timestamptz DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE("memberId","messageId")
+            )`
+        );
+        const uniqueIds = Array.from(new Set(ids.map((x: any) => String(x).trim()).filter(Boolean)));
+        for (const mid of uniqueIds) {
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "ClubMessageHide"("id","memberId","messageId","hiddenAt")
+                 VALUES ($1,$2,$3,CURRENT_TIMESTAMP)
+                 ON CONFLICT ("memberId","messageId") DO NOTHING`,
+                randomUUID(), memberId, mid
+            );
+        }
+        res.json({ ok: true, hidden: uniqueIds.length });
     } catch (e) {
         res.status(500).json({ error: String(e) });
     }
@@ -421,6 +465,22 @@ router.delete('/pricing/:id', async (req, res) => {
     if (reservationCount > 0) return res.status(409).json({ error: '此方案已有預約紀錄，請改用停用（取消啟用）' });
     await prisma.tablePricingScheme.delete({ where: { id } });
     res.json({ ok: true });
+});
+
+router.get('/reservations', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const { status } = req.query as any;
+    const where: any = { clubId };
+    if (status) where.status = String(status).toUpperCase();
+    const rows = await prisma.tableReservation.findMany({
+        where,
+        orderBy: { startAt: 'desc' },
+        include: { table: true, member: { select: { id: true, name: true, email: true } }, pricingScheme: true }
+    });
+    res.json(rows);
 });
 
 router.get('/reservations/pending', async (req, res) => {
@@ -657,6 +717,18 @@ router.get('/:clubId/reservations/my', async (req, res) => {
         orderBy: { startAt: 'desc' }
     });
     res.json(rows);
+});
+
+router.post('/:clubId/reservations/:id/cancel', async (req, res) => {
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
+    const { clubId, id } = req.params;
+    const r = await prisma.tableReservation.findUnique({ where: { id } });
+    if (!r || r.clubId !== clubId || r.memberId !== memberId) return res.status(404).json({ error: 'Not found' });
+    const { reason } = req.body || {};
+    const updated = await prisma.tableReservation.update({ where: { id }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason || null } });
+    res.json(updated);
 });
 
 export default router;

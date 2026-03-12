@@ -156,6 +156,19 @@ export async function markClubMessageRead(apiUrl: string, memberId: string, mess
   return res.json();
 }
 
+export async function hideClubMessages(apiUrl: string, memberId: string, ids: string[]) {
+  const res = await fetch(`${apiUrl}/api/club/messages/hide`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `刪除訊息失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 // Match Invite APIs
 export async function sendMatchInvites(apiUrl: string, roomId: string, operatorId: string | undefined, emails: string[]) {
   if (!operatorId) throw new Error('Missing operatorId');
@@ -354,6 +367,13 @@ export async function getPendingReservations(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function getClubReservations(apiUrl: string, memberId: string, status?: string) {
+  const q = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${apiUrl}/api/club/reservations${q}`, { headers: { 'x-member-id': memberId } });
+  if (!res.ok) throw new Error('讀取預約清單失敗');
+  return res.json();
+}
+
 export async function confirmReservation(apiUrl: string, memberId: string, id: string) {
   const res = await fetch(`${apiUrl}/api/club/reservations/${encodeURIComponent(id)}/confirm`, {
     method: 'POST',
@@ -430,6 +450,19 @@ export async function getMyReservations(apiUrl: string, clubId: string, memberId
     headers: { 'x-member-id': memberId },
   });
   if (!res.ok) throw new Error('讀取我的預約失敗');
+  return res.json();
+}
+
+export async function cancelMyReservation(apiUrl: string, clubId: string, memberId: string, id: string, reason?: string) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/reservations/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '取消預約失敗');
+  }
   return res.json();
 }
 
