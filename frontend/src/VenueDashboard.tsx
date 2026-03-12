@@ -31,6 +31,7 @@ const VenueDashboard: React.FC = () => {
   const [newPricingTitle, setNewPricingTitle] = useState('');
   const [newPricingDesc, setNewPricingDesc] = useState('');
   const [newPricingPrice, setNewPricingPrice] = useState('');
+  const [newPricingMinHours, setNewPricingMinHours] = useState('');
   const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   
@@ -59,14 +60,40 @@ const VenueDashboard: React.FC = () => {
     { n: 7, label: '日' },
   ]), []);
 
+  const getRulesArray = (rulesJson: any): any[] => {
+    if (Array.isArray(rulesJson)) return rulesJson;
+    if (rulesJson && typeof rulesJson === 'object' && Array.isArray((rulesJson as any).rules)) return (rulesJson as any).rules;
+    return [];
+  };
+
+  const getMinHours = (rulesJson: any): number | null => {
+    if (!rulesJson || typeof rulesJson !== 'object' || Array.isArray(rulesJson)) return null;
+    const v = (rulesJson as any).minHours ?? (rulesJson as any).minQuantityHours ?? (rulesJson as any).minQtyHours;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    const i = Math.floor(n);
+    if (i < 1) return null;
+    return i;
+  };
+
   const normalizeRules = (rulesJson: any): PricingRule[] => {
-    const arr = Array.isArray(rulesJson) ? rulesJson : [];
+    const arr = getRulesArray(rulesJson);
     return arr.map((r: any) => ({
       daysOfWeek: Array.isArray(r?.daysOfWeek) ? r.daysOfWeek.filter((x: any) => typeof x === 'number') : [],
       start: typeof r?.start === 'string' ? r.start : '09:00',
       end: typeof r?.end === 'string' ? r.end : '16:00',
       pricePerHour: r?.pricePerHour == null || r?.pricePerHour === '' ? null : Number(r.pricePerHour),
     }));
+  };
+
+  const withRules = (rulesJson: any, rules: PricingRule[]) => {
+    const minHours = getMinHours(rulesJson);
+    return minHours == null ? rules : { minHours, rules };
+  };
+
+  const withMinHours = (rulesJson: any, minHours: number | null) => {
+    const rules = normalizeRules(rulesJson);
+    return minHours == null ? rules : { minHours, rules };
   };
 
   const toggleDayInRule = (rule: PricingRule, day: number): PricingRule => {
@@ -362,6 +389,7 @@ const VenueDashboard: React.FC = () => {
                 <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
                 <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
                 <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="價目（例如 180）" />
+                <input value={newPricingMinHours} onChange={(e) => setNewPricingMinHours(e.target.value)} type="number" min={1} step={1} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="最低購買時數（例如 2，可空）" />
                 <div className="bg-gray-900/40 border border-gray-700 rounded p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-semibold">生效時間規則</div>
@@ -433,9 +461,11 @@ const VenueDashboard: React.FC = () => {
                 </div>
                 <button onClick={async () => {
                   if (!newPricingTitle.trim()) return;
-                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: newPricingRules, price: newPricingPrice.trim() || undefined });
+                  const minHours = newPricingMinHours.trim() === '' ? null : Math.max(1, parseInt(newPricingMinHours.trim(), 10) || 1);
+                  const rulesJson = minHours == null ? newPricingRules : { minHours, rules: newPricingRules };
+                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson, price: newPricingPrice.trim() || undefined });
                   setPricing([...pricing, row]);
-                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingRules([]);
+                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingMinHours(''); setNewPricingRules([]);
                 }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增方案</button>
               </div>
               <div className="space-y-2">
@@ -444,6 +474,15 @@ const VenueDashboard: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
                       <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="價目" />
+                      <input
+                        value={getMinHours(p.rulesJson) ?? ''}
+                        onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: withMinHours(x.rulesJson, e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 1)) } : x))}
+                        type="number"
+                        min={1}
+                        step={1}
+                        className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                        placeholder="最低時數"
+                      />
                       <select value={p.tableId || ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, tableId: e.target.value || null } : x))} className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm">
                         <option value="">全部球枱</option>
                         {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -477,7 +516,7 @@ const VenueDashboard: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: normalizeRules(x.rulesJson) } : x))}
+                            onClick={() => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: withRules(x.rulesJson, normalizeRules(x.rulesJson)) } : x))}
                             className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
                           >
                             重新整理
@@ -487,7 +526,7 @@ const VenueDashboard: React.FC = () => {
                             onClick={() => setPricing(prev => prev.map(x => {
                               if (x.id !== p.id) return x;
                               const curRules = normalizeRules(x.rulesJson);
-                              return { ...x, rulesJson: [...curRules, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }] };
+                              return { ...x, rulesJson: withRules(x.rulesJson, [...curRules, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }]) };
                             }))}
                             className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
                           >
@@ -513,7 +552,7 @@ const VenueDashboard: React.FC = () => {
                                           if (x.id !== p.id) return x;
                                           const rules = normalizeRules(x.rulesJson);
                                           rules[idx] = toggleDayInRule(rules[idx], d.n);
-                                          return { ...x, rulesJson: rules };
+                                          return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                         }))}
                                         className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-200'}`}
                                       >
@@ -530,7 +569,7 @@ const VenueDashboard: React.FC = () => {
                                       if (x.id !== p.id) return x;
                                       const rules = normalizeRules(x.rulesJson);
                                       rules[idx] = { ...rules[idx], start: e.target.value };
-                                      return { ...x, rulesJson: rules };
+                                      return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                     }))}
                                     className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
                                   />
@@ -542,7 +581,7 @@ const VenueDashboard: React.FC = () => {
                                       if (x.id !== p.id) return x;
                                       const rules = normalizeRules(x.rulesJson);
                                       rules[idx] = { ...rules[idx], end: e.target.value };
-                                      return { ...x, rulesJson: rules };
+                                      return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                     }))}
                                     className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
                                   />
@@ -555,7 +594,7 @@ const VenueDashboard: React.FC = () => {
                                     if (x.id !== p.id) return x;
                                     const rules = normalizeRules(x.rulesJson);
                                     rules[idx] = { ...rules[idx], pricePerHour: e.target.value === '' ? null : Number(e.target.value) };
-                                    return { ...x, rulesJson: rules };
+                                    return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                   }))}
                                   className="w-32 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
                                   placeholder="$/小時(選填)"
@@ -566,7 +605,7 @@ const VenueDashboard: React.FC = () => {
                                     if (x.id !== p.id) return x;
                                     const rules = normalizeRules(x.rulesJson);
                                     const next = rules.filter((_, i) => i !== idx);
-                                    return { ...x, rulesJson: next };
+                                    return { ...x, rulesJson: withRules(x.rulesJson, next) };
                                   }))}
                                   className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
                                 >

@@ -73,8 +73,22 @@ const ClubPublicPage: React.FC = () => {
     const n = Number((selectedScheme as any)?.effectivePricePerHour ?? (selectedScheme as any)?.price);
     return Number.isFinite(n) ? n : null;
   }, [selectedScheme]);
+  const schemeMinHours = useMemo(() => {
+    const v = (selectedScheme as any)?.minHours ?? (selectedScheme as any)?.rulesJson?.minHours ?? (selectedScheme as any)?.rulesJson?.minQuantityHours;
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    const i = Math.floor(n);
+    if (i < 1) return null;
+    return i;
+  }, [selectedScheme]);
 
   const unitPricePerHour = selScheme ? schemePricePerHour : basePricePerHour;
+  const minHoursNotMet = useMemo(() => {
+    if (!selScheme) return false;
+    if (schemeMinHours == null) return false;
+    const h = Math.max(1, Number(hours) || 1);
+    return h + 1e-9 < schemeMinHours;
+  }, [selScheme, schemeMinHours, hours]);
   const totalPrice = useMemo(() => {
     if (unitPricePerHour == null) return null;
     const h = Math.max(1, Number(hours) || 1);
@@ -218,7 +232,9 @@ const ClubPublicPage: React.FC = () => {
                     <option value="">一般</option>
                     {schemes.map(s => {
                       const perHour = Number((s as any).effectivePricePerHour ?? (s as any).price);
-                      const label = Number.isFinite(perHour) ? `${s.title} · $${fmtMoney(perHour)}/小時` : `${s.title} · 未設定價錢`;
+                      const mh = Number((s as any).minHours ?? (s as any).rulesJson?.minHours ?? (s as any).rulesJson?.minQuantityHours);
+                      const minText = Number.isFinite(mh) && mh >= 1 ? `（最少${Math.floor(mh)}小時）` : '';
+                      const label = Number.isFinite(perHour) ? `${s.title} · $${fmtMoney(perHour)}/小時${minText}` : `${s.title} · 未設定價錢${minText}`;
                       return <option key={s.id} value={s.id} disabled={!Number.isFinite(perHour)}>{label}</option>;
                     })}
                   </select>
@@ -248,11 +264,17 @@ const ClubPublicPage: React.FC = () => {
                     此時段沒有可用方案，將以正價計算。
                   </div>
                 )}
+                {minHoursNotMet && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#ffb4b4' }}>
+                    此方案需最少購買 {schemeMinHours} 小時。
+                  </div>
+                )}
               </div>
               <button
                 onClick={async () => {
                   if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
                   if (unitPricePerHour == null) { alert('此時段未設定價錢，無法預約'); return; }
+                  if (minHoursNotMet) { alert(`此方案需最少購買 ${schemeMinHours} 小時`); return; }
                   const [h, m] = start.split(':').map(x => parseInt(x, 10));
                   const s = new Date(date); s.setHours(h, m || 0, 0, 0);
                   const e = new Date(s.getTime() + hours * 60 * 60 * 1000);
@@ -265,8 +287,8 @@ const ClubPublicPage: React.FC = () => {
                     alert(err.message || '預約失敗');
                   }
                 }}
-                disabled={unitPricePerHour == null}
-                style={{ background: unitPricePerHour == null ? '#777' : '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: unitPricePerHour == null ? 'not-allowed' : 'pointer' }}
+                disabled={unitPricePerHour == null || minHoursNotMet}
+                style={{ background: unitPricePerHour == null || minHoursNotMet ? '#777' : '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: unitPricePerHour == null || minHoursNotMet ? 'not-allowed' : 'pointer' }}
               >
                 送出預約
               </button>

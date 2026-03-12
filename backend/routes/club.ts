@@ -484,7 +484,11 @@ router.get('/:clubId/pricing', async (req, res) => {
         where.OR = [{ tableId: null }, { tableId: String(tableId) }];
     }
     const rows = await prisma.tablePricingScheme.findMany({ where, orderBy: [{ title: 'asc' }] });
-    const base = rows.map((r) => ({ ...r, effectivePricePerHour: r.price != null ? toFiniteNumber(r.price as any) : null }));
+    const base = rows.map((r) => ({
+        ...r,
+        minHours: getSchemeMinHours((r as any).rulesJson),
+        effectivePricePerHour: r.price != null ? toFiniteNumber(r.price as any) : null
+    }));
     if (!startAt) return res.json(base);
     const s = new Date(String(startAt));
     if (!Number.isFinite(s.getTime())) return res.status(400).json({ error: 'Invalid startAt' });
@@ -492,9 +496,11 @@ router.get('/:clubId/pricing', async (req, res) => {
         ? new Date(String(endAt))
         : new Date(s.getTime() + (Math.max(1, Number(quantityHours || 1) || 1) * 60 * 60 * 1000));
     if (!Number.isFinite(e.getTime()) || !(e > s)) return res.status(400).json({ error: 'Invalid endAt' });
+    const requestedHours = (e.getTime() - s.getTime()) / (60 * 60 * 1000);
     const tid = tableId ? String(tableId) : null;
     const applicable = base
         .map((scheme) => {
+            if (scheme.minHours != null && requestedHours + 1e-9 < Number(scheme.minHours)) return null;
             const ok = isSchemeApplicable(scheme as any, s, e, tid);
             if (!ok || !(ok as any).ok) return null;
             const rulePrice = (ok as any).pricePerHour != null ? toFiniteNumber((ok as any).pricePerHour) : null;
@@ -524,6 +530,27 @@ function parseHHMM(hhmm: string) {
 function toFiniteNumber(v: any) {
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+}
+function getSchemeMinHours(rulesJson: any) {
+    if (rulesJson == null) return null;
+    if (typeof rulesJson === 'string') {
+        try {
+            const parsed = JSON.parse(rulesJson);
+            return getSchemeMinHours(parsed);
+        } catch {
+            return null;
+        }
+    }
+    if (Array.isArray(rulesJson)) return null;
+    if (typeof rulesJson === 'object') {
+        const v = (rulesJson as any).minHours ?? (rulesJson as any).minQuantityHours ?? (rulesJson as any).minQtyHours;
+        const n = toFiniteNumber(v);
+        if (n == null) return null;
+        const i = Math.floor(n);
+        if (i < 1) return null;
+        return i;
+    }
+    return null;
 }
 function normalizeRulesJson(rulesJson: any): any[] | null {
     if (Array.isArray(rulesJson)) return rulesJson;
@@ -584,12 +611,14 @@ router.post('/:clubId/reservations', async (req, res) => {
     if (overlap > 0) return res.status(409).json({ error: 'Time slot taken' });
     const data: any = { clubId, tableId: table.id, memberId, startAt: s, endAt: e, status: 'PENDING' };
     let unitPrice: number | null = null;
+    let schemeMinHours: number | null = null;
     if (schemeId) {
         const sid = String(schemeId);
         const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
         if (!scheme || scheme.clubId !== clubId) return res.status(400).json({ error: 'Pricing scheme not found' });
         const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
         if (!applicable || !(applicable as any).ok) return res.status(400).json({ error: '方案不適用於此時段' });
+        schemeMinHours = getSchemeMinHours((scheme as any).rulesJson);
         const rulePrice = (applicable as any).pricePerHour != null ? toFiniteNumber((applicable as any).pricePerHour) : null;
         const schemePrice = scheme.price != null ? toFiniteNumber(scheme.price as any) : null;
         unitPrice = rulePrice ?? schemePrice;
@@ -603,6 +632,7 @@ router.post('/:clubId/reservations', async (req, res) => {
         return res.status(400).json({ error: 'No applicable scheme or base price set' });
     }
     const hours = (e.getTime() - s.getTime()) / (60 * 60 * 1000);
+    if (schemeMinHours != null && hours + 1e-9 < schemeMinHours) return res.status(400).json({ error: `此方案需最少購買 ${schemeMinHours} 小時` });
     data.priceQuote = String(unitPrice * hours);
     const created = await prisma.tableReservation.create({ data });
     try {
