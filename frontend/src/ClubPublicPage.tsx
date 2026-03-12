@@ -22,6 +22,32 @@ const ClubPublicPage: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
 
+  const pad2 = useCallback((n: number) => String(n).padStart(2, '0'), []);
+  const minDate = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }, [pad2]);
+
+  const selectedStartAt = useMemo(() => {
+    if (!date || !start) return null;
+    const [h, m] = start.split(':').map(x => parseInt(x, 10));
+    const s = new Date(date);
+    s.setHours(h || 0, m || 0, 0, 0);
+    return Number.isFinite(s.getTime()) ? s : null;
+  }, [date, start]);
+
+  const selectedEndAt = useMemo(() => {
+    if (!selectedStartAt) return null;
+    const h = Math.max(1, Number(hours) || 1);
+    const e = new Date(selectedStartAt.getTime() + h * 60 * 60 * 1000);
+    return Number.isFinite(e.getTime()) ? e : null;
+  }, [selectedStartAt, hours]);
+
+  const isPastStartTime = useMemo(() => {
+    if (!selectedStartAt) return false;
+    return selectedStartAt.getTime() < Date.now() - 60_000;
+  }, [selectedStartAt]);
+
   const loadClub = useCallback(async () => {
     try {
       setLoading(true);
@@ -47,6 +73,10 @@ const ClubPublicPage: React.FC = () => {
       setSchemes([]);
       return;
     }
+    if (isPastStartTime) {
+      setSchemes([]);
+      return;
+    }
     const [h, m] = start.split(':').map(x => parseInt(x, 10));
     const s = new Date(date);
     s.setHours(h || 0, m || 0, 0, 0);
@@ -54,7 +84,7 @@ const ClubPublicPage: React.FC = () => {
     getPublicPricing(API_URL, clubId, selTable, s.toISOString(), e.toISOString())
       .then(setSchemes)
       .catch(() => setSchemes([]));
-  }, [clubId, selTable, date, start, hours]);
+  }, [clubId, selTable, date, start, hours, isPastStartTime]);
 
   useEffect(() => {
     if (selScheme && !schemes.some(s => s.id === selScheme)) setSelScheme('');
@@ -216,7 +246,7 @@ const ClubPublicPage: React.FC = () => {
                 </label>
                 <label>
                   <div style={{ fontSize: 12, color: '#aaa' }}>日期</div>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                  <input type="date" value={date} min={minDate} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
                 </label>
                 <label>
                   <div style={{ fontSize: 12, color: '#aaa' }}>開始時間</div>
@@ -269,17 +299,21 @@ const ClubPublicPage: React.FC = () => {
                     此方案需最少購買 {schemeMinHours} 小時。
                   </div>
                 )}
+                {isPastStartTime && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#ffb4b4' }}>
+                    不能預約已過去的時間，請選擇將來的日期/時間。
+                  </div>
+                )}
               </div>
               <button
                 onClick={async () => {
                   if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
                   if (unitPricePerHour == null) { alert('此時段未設定價錢，無法預約'); return; }
                   if (minHoursNotMet) { alert(`此方案需最少購買 ${schemeMinHours} 小時`); return; }
-                  const [h, m] = start.split(':').map(x => parseInt(x, 10));
-                  const s = new Date(date); s.setHours(h, m || 0, 0, 0);
-                  const e = new Date(s.getTime() + hours * 60 * 60 * 1000);
+                  if (!selectedStartAt || !selectedEndAt) { alert('時間格式不正確'); return; }
+                  if (selectedStartAt.getTime() < Date.now() - 60_000) { alert('不能預約已過去的時間'); return; }
                   try {
-                    const created = await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), endAt: e.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
+                    const created = await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: selectedStartAt.toISOString(), endAt: selectedEndAt.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
                     const quote = created?.priceQuote != null ? Number(created.priceQuote) : null;
                     const quoteText = Number.isFinite(quote) ? `\n報價：$${fmtMoney(quote as number)}` : '';
                     alert(`已送出，待場館確認${quoteText}`);
@@ -287,8 +321,8 @@ const ClubPublicPage: React.FC = () => {
                     alert(err.message || '預約失敗');
                   }
                 }}
-                disabled={unitPricePerHour == null || minHoursNotMet}
-                style={{ background: unitPricePerHour == null || minHoursNotMet ? '#777' : '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: unitPricePerHour == null || minHoursNotMet ? 'not-allowed' : 'pointer' }}
+                disabled={unitPricePerHour == null || minHoursNotMet || isPastStartTime}
+                style={{ background: unitPricePerHour == null || minHoursNotMet || isPastStartTime ? '#777' : '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: unitPricePerHour == null || minHoursNotMet || isPastStartTime ? 'not-allowed' : 'pointer' }}
               >
                 送出預約
               </button>

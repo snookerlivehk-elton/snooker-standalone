@@ -604,6 +604,9 @@ router.post('/:clubId/reservations', async (req, res) => {
     if (!table || table.clubId !== clubId) return res.status(404).json({ error: 'Table not found' });
     const s = new Date(String(startAt));
     const e = endAt ? new Date(String(endAt)) : new Date(s.getTime() + (Number(quantityHours || 0) || 1) * 60 * 60 * 1000);
+    const now = Date.now();
+    if (!Number.isFinite(s.getTime()) || !Number.isFinite(e.getTime())) return res.status(400).json({ error: 'Invalid time range' });
+    if (s.getTime() < now - 60_000) return res.status(400).json({ error: '不能預約已過去的時間' });
     if (!(e > s)) return res.status(400).json({ error: 'Invalid time range' });
     const overlap = await prisma.tableReservation.count({
         where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
