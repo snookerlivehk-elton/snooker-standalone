@@ -100,7 +100,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'x-member-id', 'x-write-token', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'x-member-id', 'x-write-token', 'x-admin-token', 'Authorization'],
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
