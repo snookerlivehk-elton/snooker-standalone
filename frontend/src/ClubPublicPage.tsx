@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, createReservation } from './lib/api';
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -10,6 +10,13 @@ const ClubPublicPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [tables, setTables] = useState<any[]>([]);
+  const [schemes, setSchemes] = useState<any[]>([]);
+  const [selTable, setSelTable] = useState<string>('');
+  const [selScheme, setSelScheme] = useState<string>('');
+  const [date, setDate] = useState<string>('');
+  const [start, setStart] = useState<string>('10:00');
+  const [durationM, setDurationM] = useState<number>(60);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -30,6 +37,8 @@ const ClubPublicPage: React.FC = () => {
   useEffect(() => {
     if (clubId) {
       loadClub();
+      getPublicTables(API_URL, clubId).then(setTables).catch(() => setTables([]));
+      getPublicPricing(API_URL, clubId).then(setSchemes).catch(() => setSchemes([]));
     }
   }, [clubId, loadClub]);
 
@@ -134,6 +143,63 @@ const ClubPublicPage: React.FC = () => {
           {club.address && <div style={{ marginBottom: 10 }}>📍 {club.address}</div>}
           {club.phone && <div style={{ marginBottom: 10 }}>📞 {club.phone}</div>}
           {club.email && <div style={{ marginBottom: 10 }}>✉️ {club.email}</div>}
+        </div>
+        
+        <div style={{ textAlign: 'left', background: '#333', padding: 20, borderRadius: 8, marginBottom: 30 }}>
+          <h3 style={{ marginTop: 0, borderBottom: '1px solid #444', paddingBottom: 10 }}>預約</h3>
+          {!session.id ? (
+            <div style={{ color: '#ccc' }}>
+              需登入才能預約。<a href="/members/login" style={{ color: '#f5d000' }}>登入</a>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
+                <label>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>球枱</div>
+                  <select value={selTable} onChange={(e) => setSelTable(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }}>
+                    <option value="">請選擇</option>
+                    {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>日期</div>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                </label>
+                <label>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>開始時間</div>
+                  <input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                </label>
+                <label>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>時長(分鐘)</div>
+                  <input type="number" min={30} step={30} value={durationM} onChange={(e) => setDurationM(parseInt(e.target.value || '60', 10))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                </label>
+                <label>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>方案</div>
+                  <select value={selScheme} onChange={(e) => setSelScheme(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }}>
+                    <option value="">一般</option>
+                    {schemes.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                  </select>
+                </label>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
+                  const [h, m] = start.split(':').map(x => parseInt(x, 10));
+                  const s = new Date(date); s.setHours(h, m || 0, 0, 0);
+                  const e = new Date(s.getTime() + durationM * 60000);
+                  try {
+                    await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), endAt: e.toISOString(), schemeId: selScheme || undefined });
+                    alert('已送出，待場館確認');
+                  } catch (err: any) {
+                    alert(err.message || '預約失敗');
+                  }
+                }}
+                style={{ background: '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: 'pointer' }}
+              >
+                送出預約
+              </button>
+            </>
+          )}
         </div>
         
         <div style={{ marginTop: 20 }}>

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, getPendingReservations, confirmReservation, cancelReservation } from './lib/api';
 import { QRCodeSVG } from 'qrcode.react';
 
 const VenueDashboard: React.FC = () => {
@@ -16,6 +16,14 @@ const VenueDashboard: React.FC = () => {
   const [clubMembers, setClubMembers] = useState<any[]>([]);
   const [msgTitle, setMsgTitle] = useState('');
   const [msgContent, setMsgContent] = useState('');
+  const [tables, setTables] = useState<any[]>([]);
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableNotes, setNewTableNotes] = useState('');
+  const [pricing, setPricing] = useState<any[]>([]);
+  const [newPricingTitle, setNewPricingTitle] = useState('');
+  const [newPricingDesc, setNewPricingDesc] = useState('');
+  const [newPricingRules, setNewPricingRules] = useState('[]');
+  const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -35,16 +43,22 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, tablesRes, pricingRes, pendingRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
         getOperatorActiveRooms(API_URL, operatorId),
         getClubProfile(API_URL, operatorId).catch(() => ({})),
-        getClubMembers(API_URL, operatorId).catch(() => [])
+        getClubMembers(API_URL, operatorId).catch(() => []),
+        getMyTables(API_URL, operatorId).catch(() => []),
+        getMyPricingSchemes(API_URL, operatorId).catch(() => []),
+        getPendingReservations(API_URL, operatorId).catch(() => [])
       ]);
       setMatches(matchesRes.matches || []);
       setActiveRooms(roomsRes.rooms || []);
       setClubProfile(clubProfileRes || {});
       setClubMembers(clubMembersRes || []);
+      setTables(tablesRes || []);
+      setPricing(pricingRes || []);
+      setPendingReservations(pendingRes || []);
     } catch (err: any) {
       setError(err.message || '無法載入資料');
     } finally {
@@ -258,6 +272,120 @@ const VenueDashboard: React.FC = () => {
                 </table>
              </div>
           )}
+        </div>
+
+        <div className="glass rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">預約管理</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-semibold mb-2">球枱</h3>
+              <div className="flex gap-2 mb-3">
+                <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="球枱名稱" />
+                <button onClick={async () => {
+                  if (!newTableName.trim()) return;
+                  const row = await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined });
+                  setTables([...tables, row]);
+                  setNewTableName(''); setNewTableNotes('');
+                }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增</button>
+              </div>
+              <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white mb-3" placeholder="備註" />
+              <div className="space-y-2">
+                {tables.map(t => (
+                  <div key={t.id} className="flex items-center gap-2 bg-gray-800 p-2 rounded">
+                    <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
+                    <label className="text-sm flex items-center gap-1">
+                      <input type="checkbox" checked={t.active} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, active: e.target.checked } : x))} />
+                      啟用
+                    </label>
+                    <button onClick={async () => {
+                      const cur = tables.find(x => x.id === t.id);
+                      if (!cur) return;
+                      const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null });
+                      setTables(prev => prev.map(x => x.id === t.id ? updated : x));
+                    }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-2">收費方案</h3>
+              <div className="grid gap-2 mb-3">
+                <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
+                <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
+                <textarea value={newPricingRules} onChange={(e) => setNewPricingRules(e.target.value)} className="h-24 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" placeholder='[{"daysOfWeek":[1,2,3],"start":"10:00","end":"18:00","pricePerHour":120}]' />
+                <button onClick={async () => {
+                  if (!newPricingTitle.trim()) return;
+                  let rules: any;
+                  try { rules = JSON.parse(newPricingRules); } catch { alert('rulesJson 需為 JSON'); return; }
+                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: rules });
+                  setPricing([...pricing, row]);
+                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingRules('[]');
+                }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增方案</button>
+              </div>
+              <div className="space-y-2">
+                {pricing.map(p => (
+                  <div key={p.id} className="bg-gray-800 p-2 rounded">
+                    <div className="flex items-center gap-2 mb-2">
+                      <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
+                      <label className="text-sm flex items-center gap-1">
+                        <input type="checkbox" checked={p.active} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, active: e.target.checked } : x))} />
+                        啟用
+                      </label>
+                      <button onClick={async () => {
+                        const cur = pricing.find(x => x.id === p.id);
+                        if (!cur) return;
+                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active });
+                        setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
+                      }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                    </div>
+                    <textarea value={JSON.stringify(p.rulesJson, null, 2)} onChange={(e) => {
+                      try { const v = JSON.parse(e.target.value); setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: v } : x)); } catch {}
+                    }} className="w-full h-24 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">待確認預約</h3>
+            {pendingReservations.length === 0 ? (
+              <div className="text-gray-400">暫無待確認預約</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-700">
+                      <th className="py-2 px-3">會員</th>
+                      <th className="py-2 px-3">球枱</th>
+                      <th className="py-2 px-3">時間</th>
+                      <th className="py-2 px-3">方案</th>
+                      <th className="py-2 px-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingReservations.map((r: any) => (
+                      <tr key={r.id} className="border-b border-gray-800">
+                        <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                        <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                        <td className="py-2 px-3 text-sm text-gray-300">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                        <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            <button onClick={async () => {
+                              try { await confirmReservation(API_URL, operatorId, r.id); setPendingReservations(prev => prev.filter(x => x.id !== r.id)); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                            }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
+                            <button onClick={async () => {
+                              try { await cancelReservation(API_URL, operatorId, r.id); setPendingReservations(prev => prev.filter(x => x.id !== r.id)); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                            }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Broadcast Message */}

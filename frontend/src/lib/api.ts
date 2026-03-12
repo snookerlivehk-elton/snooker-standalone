@@ -260,6 +260,141 @@ export async function appendEvents(
   return res.json(); // { accepted }
 }
 
+export async function getMyTables(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tables/my`, { headers: { 'x-member-id': memberId } });
+  if (!res.ok) throw new Error('讀取球枱失敗');
+  return res.json();
+}
+
+export async function createTable(apiUrl: string, memberId: string, data: { name: string; notes?: string }) {
+  const res = await fetch(`${apiUrl}/api/club/tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '新增球枱失敗');
+  }
+  return res.json();
+}
+
+export async function updateTable(apiUrl: string, memberId: string, id: string, data: any) {
+  const res = await fetch(`${apiUrl}/api/club/tables/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新球枱失敗');
+  }
+  return res.json();
+}
+
+export async function getMyPricingSchemes(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/pricing/my`, { headers: { 'x-member-id': memberId } });
+  if (!res.ok) throw new Error('讀取收費方案失敗');
+  return res.json();
+}
+
+export async function createPricingScheme(apiUrl: string, memberId: string, data: { title: string; description?: string; rulesJson: any; active?: boolean }) {
+  const res = await fetch(`${apiUrl}/api/club/pricing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '新增收費方案失敗');
+  }
+  return res.json();
+}
+
+export async function updatePricingScheme(apiUrl: string, memberId: string, id: string, data: any) {
+  const res = await fetch(`${apiUrl}/api/club/pricing/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新收費方案失敗');
+  }
+  return res.json();
+}
+
+export async function getPendingReservations(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/reservations/pending`, { headers: { 'x-member-id': memberId } });
+  if (!res.ok) throw new Error('讀取待確認預約失敗');
+  return res.json();
+}
+
+export async function confirmReservation(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/reservations/${encodeURIComponent(id)}/confirm`, {
+    method: 'POST',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '確認預約失敗');
+  }
+  return res.json();
+}
+
+export async function cancelReservation(apiUrl: string, memberId: string, id: string, reason?: string) {
+  const res = await fetch(`${apiUrl}/api/club/reservations/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '取消預約失敗');
+  }
+  return res.json();
+}
+
+export async function getPublicTables(apiUrl: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/tables`);
+  if (!res.ok) throw new Error('讀取球枱失敗');
+  return res.json();
+}
+
+export async function getPublicPricing(apiUrl: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/pricing`);
+  if (!res.ok) throw new Error('讀取收費失敗');
+  return res.json();
+}
+
+export async function getAvailability(apiUrl: string, clubId: string, from: string, to: string, tableId?: string) {
+  const q = new URLSearchParams({ from, to, ...(tableId ? { tableId } : {}) });
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/availability?${q.toString()}`);
+  if (!res.ok) throw new Error('讀取可用性失敗');
+  return res.json();
+}
+
+export async function createReservation(apiUrl: string, clubId: string, memberId: string, data: { tableId: string; startAt: string; endAt: string; schemeId?: string }) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/reservations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '預約失敗');
+  }
+  return res.json();
+}
+
+export async function getMyReservations(apiUrl: string, clubId: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${clubId}/reservations/my`, {
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) throw new Error('讀取我的預約失敗');
+  return res.json();
+}
+
 export async function finalizeMatch(
   apiUrl: string,
   matchId: string,

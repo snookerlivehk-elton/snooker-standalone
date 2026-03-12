@@ -71,6 +71,8 @@ model Member {
   
   // Club Membership (If this member joined clubs)
   joinedClubs  ClubMember[]
+
+  reservations TableReservation[]
 }
 
 model ClubProfile {
@@ -90,6 +92,10 @@ model ClubProfile {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  tables      ClubTable[]
+  pricing     TablePricingScheme[]
+  reservations TableReservation[]
 }
 
 model ClubMessage {
@@ -256,6 +262,62 @@ model FoulTotals {
   match         Match   @relation(fields: [match_id], references: [id], onDelete: Cascade)
   player0_total Int     @default(0)
   player1_total Int     @default(0)
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model ClubTable {
+  id            String   @id @default(uuid())
+  clubId        String
+  club          ClubProfile @relation(fields: [clubId], references: [id])
+  name          String
+  active        Boolean  @default(true)
+  displayOrder  Int      @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  reservations  TableReservation[]
+  @@index([clubId, active])
+}
+
+model TablePricingScheme {
+  id            String   @id @default(uuid())
+  clubId        String
+  club          ClubProfile @relation(fields: [clubId], references: [id])
+  title         String
+  description   String?
+  rulesJson     Json
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  reservations  TableReservation[]
+  @@index([clubId, active])
+}
+
+model TableReservation {
+  id              String   @id @default(uuid())
+  clubId          String
+  club            ClubProfile @relation(fields: [clubId], references: [id])
+  tableId         String
+  table           ClubTable @relation(fields: [tableId], references: [id])
+  memberId        String
+  member          Member @relation(fields: [memberId], references: [id])
+  status          ReservationStatus @default(PENDING)
+  startAt         DateTime
+  endAt           DateTime
+  pricingSchemeId String?
+  pricingScheme   TablePricingScheme? @relation(fields: [pricingSchemeId], references: [id])
+  priceQuote      Decimal?
+  createdAt       DateTime @default(now())
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  @@index([clubId, startAt])
+  @@index([tableId, startAt])
 }
 
 model MatchStats {
