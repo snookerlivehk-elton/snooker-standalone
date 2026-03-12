@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getLang, setLang } from '../lib/i18n';
 
 interface TopBarPublicProps {
@@ -11,7 +11,18 @@ interface TopBarPublicProps {
 
 const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onToggleLang, lang = 'zh' }) => {
   const nav = useNavigate();
+  const loc = useLocation();
   const current = useMemo(() => (lang || getLang()), [lang]);
+  const session = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
+  }, []);
+  const showLogout = !!(session && session.id) && !(
+    loc.pathname.startsWith('/members/login') ||
+    loc.pathname.startsWith('/venue/login') ||
+    loc.pathname.startsWith('/members/register') ||
+    loc.pathname.startsWith('/members/simple-register') ||
+    loc.pathname.startsWith('/onboarding')
+  );
   const toggle = () => {
     if (onToggleLang) return onToggleLang();
     const next = (getLang() === 'zh' ? 'en' : 'zh') as 'zh' | 'en';
@@ -32,13 +43,23 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
         )}
         <div className="cue-zh-title text-white text-lg">{title}</div>
       </div>
-      <button
-        onClick={toggle}
-        className="cue-button px-3 py-1 text-sm"
-        aria-label="Language Toggle"
-      >
-        {current === 'zh' ? 'EN' : '中文'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggle}
+          className="cue-button px-3 py-1 text-sm"
+          aria-label="Language Toggle"
+        >
+          {current === 'zh' ? 'EN' : '中文'}
+        </button>
+        {showLogout && (
+          <button
+            onClick={() => { try { localStorage.removeItem('memberSession'); } catch {} nav('/members/login'); }}
+            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm"
+          >
+            登出
+          </button>
+        )}
+      </div>
     </header>
   );
 };
