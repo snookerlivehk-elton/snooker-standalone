@@ -13,7 +13,7 @@ const Onboarding: React.FC = () => {
             <div className="cue-en-sub">Choose your path</div>
             <div className="grid md:grid-cols-3 gap-3 mt-4">
               <a href="/rooms" className="cue-button py-3 text-center rounded">我要開播 / 主持</a>
-              <a href="/join" className="px-4 py-3 text-center rounded bg-gray-700 text-white">只觀戰</a>
+              <a href="/rooms" className="px-4 py-3 text-center rounded bg-gray-700 text-white">只觀戰</a>
               <a href="/android" className="px-4 py-3 text-center rounded bg-gray-700 text-white">Android 串接指引</a>
             </div>
           </div>

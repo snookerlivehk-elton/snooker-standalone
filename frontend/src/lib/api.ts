@@ -97,8 +97,8 @@ export async function getPublicClubProfile(apiUrl: string, clubId: string) {
 export async function joinClub(apiUrl: string, memberId: string, clubId: string) {
   const res = await fetch(`${apiUrl}/api/club/join`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ memberId, clubId })
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ clubId })
   });
   if (!res.ok) {
      const err = await res.json().catch(() => ({}));
@@ -158,9 +158,10 @@ export async function markClubMessageRead(apiUrl: string, memberId: string, mess
 
 // Match Invite APIs
 export async function sendMatchInvites(apiUrl: string, roomId: string, operatorId: string | undefined, emails: string[]) {
+  if (!operatorId) throw new Error('Missing operatorId');
   const res = await fetch(`${apiUrl}/api/matches/invite`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-member-id': operatorId },
     body: JSON.stringify({ room_id: roomId, operator_id: operatorId, emails })
   });
   if (!res.ok) {
@@ -400,7 +401,7 @@ export async function resetPasswordWithCode(apiUrl: string, payload: { email: st
 export async function createOperatorRoom(apiUrl: string, operatorId: string) {
   const res = await fetch(`${apiUrl}/api/operators/${operatorId}/rooms`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-member-id': operatorId },
   });
   if (!res.ok) {
     const err = await res.json();
@@ -412,7 +413,7 @@ export async function createOperatorRoom(apiUrl: string, operatorId: string) {
 export async function getOperatorActiveRooms(apiUrl: string, operatorId: string) {
   const url = new URL(`${apiUrl}/api/operators/${operatorId}/active-rooms`);
   url.searchParams.set('t', String(Date.now()));
-  const res = await fetch(url.toString(), { cache: 'no-store' });
+  const res = await fetch(url.toString(), { cache: 'no-store', headers: { 'x-member-id': operatorId } });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || `取得活躍房間失敗 (${res.status})`);
@@ -423,12 +424,20 @@ export async function getOperatorActiveRooms(apiUrl: string, operatorId: string)
 export async function getOperatorMatches(apiUrl: string, operatorId: string) {
   const url = new URL(`${apiUrl}/api/operators/${operatorId}/matches`);
   url.searchParams.set('t', String(Date.now()));
-  const res = await fetch(url.toString(), { cache: 'no-store' });
+  const res = await fetch(url.toString(), { cache: 'no-store', headers: { 'x-member-id': operatorId } });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || `取得操作員歷史失敗 (${res.status})`);
   }
   return res.json(); // { matches: [] }
+}
+
+export async function listRooms(apiUrl: string) {
+  const url = new URL(`${apiUrl}/api/rooms`);
+  url.searchParams.set('t', String(Date.now()));
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  if (!res.ok) throw new Error(`讀取房間列表失敗 (${res.status})`);
+  return res.json() as Promise<any[]>;
 }
 
 // Admin / Lists

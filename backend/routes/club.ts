@@ -5,6 +5,33 @@ import { randomUUID } from 'crypto';
 const prisma = new PrismaClient();
 const router = express.Router();
 
+async function requireMember(req: express.Request, res: express.Response) {
+    const memberId = String(req.headers['x-member-id'] || '').trim();
+    if (!memberId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, role: true }
+    });
+    if (!member) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    return member;
+}
+
+async function requireClubAdmin(req: express.Request, res: express.Response) {
+    const member = await requireMember(req, res);
+    if (!member) return null;
+    if (member.role !== 'ADMIN') {
+        res.status(403).json({ error: 'Forbidden' });
+        return null;
+    }
+    return member;
+}
+
 // Get Club Profile (Public)
 router.get('/:id/public', async (req, res) => {
     const { id } = req.params;
@@ -38,8 +65,9 @@ router.get('/:id/public', async (req, res) => {
 
 // Get My Club Profile (Private - for Operator)
 router.get('/my-profile', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string; 
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const memberId = member.id;
 
     try {
         const club = await prisma.clubProfile.findUnique({
@@ -53,27 +81,14 @@ router.get('/my-profile', async (req, res) => {
 
 // Update/Create My Club Profile
 router.post('/my-profile', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const memberId = member.id;
     
     const { name, intro, address, phone, email, logoUrl } = req.body;
 
     try {
         console.log(`[Club] Update profile request for member ${memberId}`, req.body);
-        
-        const member = await prisma.member.findUnique({ where: { id: memberId } });
-        if (!member) {
-            return res.status(401).json({ error: 'User not found' });
-        }
-
-        // Auto-promote to ADMIN (Venue/Club) if they are creating a profile
-        if (member.role !== 'ADMIN') {
-            console.log(`[Club] Auto-promoting member ${memberId} to ADMIN`);
-            await prisma.member.update({
-                where: { id: memberId },
-                data: { role: 'ADMIN' }
-            });
-        }
 
         const club = await prisma.clubProfile.upsert({
             where: { memberId },
@@ -90,9 +105,12 @@ router.post('/my-profile', async (req, res) => {
 
 // Join Club
 router.post('/join', async (req, res) => {
-    const { memberId, clubId } = req.body; // clubId is ClubProfile.id
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
+    const { clubId } = req.body; // clubId is ClubProfile.id
     
-    if (!memberId || !clubId) return res.status(400).json({ error: 'Missing memberId or clubId' });
+    if (!clubId) return res.status(400).json({ error: 'Missing clubId' });
 
     try {
         // Check if already joined
@@ -118,8 +136,9 @@ router.post('/join', async (req, res) => {
 
 // Get My Members (for Club)
 router.get('/my-members', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const memberId = member.id;
 
     try {
         const club = await prisma.clubProfile.findUnique({ where: { memberId } });
@@ -138,8 +157,9 @@ router.get('/my-members', async (req, res) => {
 
 // Get My Joined Clubs (for Member)
 router.get('/joined', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
 
     try {
         const joined = await prisma.clubMember.findMany({
@@ -154,9 +174,10 @@ router.get('/joined', async (req, res) => {
 
 // Broadcast Message (Operator only)
 router.post('/broadcast', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const memberId = member.id;
     const { title, content } = req.body;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
         const club = await prisma.clubProfile.findUnique({ where: { memberId } });
@@ -177,8 +198,9 @@ router.post('/broadcast', async (req, res) => {
 
 // Get My Messages (Member)
 router.get('/messages', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
 
     try {
         const memberships = await prisma.clubMember.findMany({
@@ -209,7 +231,9 @@ router.get('/messages', async (req, res) => {
 });
 
 router.get('/messages/:id', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string | undefined;
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
     const id = req.params.id;
     try {
         const message = await prisma.clubMessage.findUnique({
@@ -218,15 +242,13 @@ router.get('/messages/:id', async (req, res) => {
         });
         if (!message) return res.status(404).json({ error: 'Not found' });
         let read = false;
-        if (memberId) {
-            try {
-                const rows: any[] = await prisma.$queryRawUnsafe(
-                    `SELECT 1 FROM "ClubMessageRead" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
-                    memberId, id
-                );
-                read = rows.length > 0;
-            } catch {}
-        }
+        try {
+            const rows: any[] = await prisma.$queryRawUnsafe(
+                `SELECT 1 FROM "ClubMessageRead" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
+                memberId, id
+            );
+            read = rows.length > 0;
+        } catch {}
         res.json({ ...message, read });
     } catch (e) {
         res.status(500).json({ error: String(e) });
@@ -234,8 +256,9 @@ router.get('/messages/:id', async (req, res) => {
 });
 
 router.post('/messages/:id/read', async (req, res) => {
-    const memberId = req.headers['x-member-id'] as string;
-    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberId = member.id;
     const id = req.params.id;
     try {
         const mid = id;

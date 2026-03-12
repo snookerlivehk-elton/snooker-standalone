@@ -16,7 +16,6 @@ const MemberProfile: React.FC = () => {
   const [openMessage, setOpenMessage] = useState<any | null>(null);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [clubName, setClubName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
@@ -268,7 +267,7 @@ const MemberProfile: React.FC = () => {
 
         {/* Joined Clubs */}
         {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
-           <div className="glass rounded-xl p-4">
+           <div className="glass rounded-xl p-4" id="joined-clubs">
               <h3 className="text-lg font-semibold mb-3">已加入場館 ({joinedClubs.length})</h3>
               {joinedClubs.length === 0 ? (
                  <div className="text-gray-400 text-sm">尚未加入任何場館</div>
@@ -329,9 +328,28 @@ const MemberProfile: React.FC = () => {
               <label className="block text-sm mb-1">出生日期</label>
               <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
             </div>
-            <div>
-              <label className="block text-sm mb-1">所屬球會</label>
-              <input value={clubName} onChange={(e) => setClubName(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm">所屬球會</label>
+                <a href="#joined-clubs" className="text-xs text-blue-400 hover:underline">跳到列表</a>
+              </div>
+              {joinedClubs.length === 0 ? (
+                <div className="text-sm text-gray-400">尚未加入任何場館</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {joinedClubs.map((jc: any) => (
+                    <a
+                      key={jc.id}
+                      href={`/club/${jc.club?.id}`}
+                      target="_blank"
+                      className="px-3 py-1.5 rounded-full bg-gray-700 text-sm text-blue-300 hover:bg-gray-600 hover:text-blue-200"
+                      title={jc.club?.name || '場館主頁'}
+                    >
+                      {jc.club?.name || '未命名場館'}
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3">
@@ -356,11 +374,11 @@ const MemberProfile: React.FC = () => {
                         } catch {}
                       }
                       if (targetId && !String(targetId).includes('@')) {
-                        await updateMember(API_URL, adminToken, targetId, { phone, birthDate, clubName });
+                        await updateMember(API_URL, adminToken, targetId, { phone, birthDate });
                         setToast('已同步到後端 (Admin)');
                         setTimeout(() => setToast(null), 3000);
                         // Update local state to reflect changes
-                        setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate, club_name: clubName }));
+                        setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate }));
                         return;
                       }
                     }
@@ -368,10 +386,10 @@ const MemberProfile: React.FC = () => {
                     // Priority 2: Self Update (if member/operator is editing themselves)
                     if (member.id && !String(member.id).includes('@')) {
                          try {
-                             await import('./lib/api').then(m => m.updateMemberSelf(API_URL, member.id, { phone, birthDate, clubName }));
+                             await import('./lib/api').then(m => m.updateMemberSelf(API_URL, member.id, { phone, birthDate }));
                              setToast('已同步到後端');
                              setTimeout(() => setToast(null), 3000);
-                             setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate, club_name: clubName }));
+                             setMember((prev: any) => ({ ...prev, phone, birth_date: birthDate }));
                              return;
                          } catch (e) {
                              console.warn('Self update failed, falling back to local storage', e);
@@ -384,7 +402,7 @@ const MemberProfile: React.FC = () => {
                     const storeRaw = localStorage.getItem('memberOptional');
                     const store = storeRaw ? JSON.parse(storeRaw) : {};
                     const key = String(member.email || member.id);
-                    store[key] = { phone, birthDate, clubName, updatedAt: Date.now() };
+                    store[key] = { phone, birthDate, updatedAt: Date.now() };
                     localStorage.setItem('memberOptional', JSON.stringify(store));
                     setToast('已更新（本地）');
                     setTimeout(() => setToast(null), 3000);

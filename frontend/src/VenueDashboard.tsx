@@ -27,6 +27,7 @@ const VenueDashboard: React.FC = () => {
 
   const operatorId = session.id;
   const operatorName = session.name || session.email;
+  const isOperator = session.role === 'ADMIN' || session.role === 'OPERATOR';
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
@@ -52,13 +53,13 @@ const VenueDashboard: React.FC = () => {
   }, [operatorId]);
 
   useEffect(() => {
-    if (!operatorId) {
+    if (!operatorId || !isOperator) {
       navigate('/venue/login');
       return;
     }
 
     loadData();
-  }, [operatorId, navigate, loadData]);
+  }, [operatorId, isOperator, navigate, loadData]);
 
   const handleCreateRoom = async () => {
     if (creating) return;
@@ -102,7 +103,7 @@ const VenueDashboard: React.FC = () => {
     });
   };
 
-  if (!operatorId) return null;
+  if (!operatorId || !isOperator) return null;
 
   return (
     <div className="brand-page text-white p-6">

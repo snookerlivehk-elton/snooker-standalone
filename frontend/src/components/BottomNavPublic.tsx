@@ -6,8 +6,8 @@ const BottomNavPublic: React.FC = () => {
   const isActive = (path: string) => loc.pathname === path;
   return (
     <nav className="cue-bottomnav w-full fixed bottom-0 left-0 flex items-center justify-around px-3">
-      <Link to="/join" className={`flex-1 mx-1 text-center py-2 text-white ${isActive('/join') ? 'cue-active-tab' : ''}`}>
-        加入房間
+      <Link to="/onboarding" className={`flex-1 mx-1 text-center py-2 text-white ${isActive('/onboarding') ? 'cue-active-tab' : ''}`}>
+        開始
       </Link>
       <Link to="/rooms" className={`flex-1 mx-1 text-center py-2 text-white ${isActive('/rooms') ? 'cue-active-tab' : ''}`}>
         房間

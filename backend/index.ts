@@ -545,14 +545,21 @@ app.post('/api/matches/invite', async (req, res) => {
     if (!room_id || !Array.isArray(emails) || emails.length === 0) {
       return res.status(400).json({ error: 'missing room_id or emails' });
     }
+    const requesterId = String(req.headers['x-member-id'] || '').trim();
+    if (!requesterId) return res.status(401).json({ error: 'Unauthorized' });
+    const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+    if (!requester) return res.status(401).json({ error: 'Unauthorized' });
+    if (requester.role !== 'ADMIN') return res.status(403).json({ error: 'Forbidden' });
     // Resolve operator id (id or email acceptable)
-    let opResolved: string | null = null;
+    let opResolved = requesterId;
     if (operator_id) {
       const opMember = await prisma.member.findFirst({
         where: { OR: [{ id: String(operator_id) }, { email: String(operator_id) }] },
-        select: { id: true, name: true, email: true }
+        select: { id: true }
       });
-      opResolved = opMember?.id || null;
+      if (!opMember) return res.status(404).json({ error: 'Operator not found' });
+      if (opMember.id !== requesterId) return res.status(403).json({ error: 'operator mismatch' });
+      opResolved = opMember.id;
     }
     // Lookup members by email
     const uniq = Array.from(new Set(emails.map((e: any) => String(e || '').trim()).filter(Boolean)));
@@ -2106,6 +2113,12 @@ app.get('/api/operators/:id/matches', async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'Missing operator ID' });
+
+    const requesterId = String(req.headers['x-member-id'] || '').trim();
+    if (!requesterId) return res.status(401).json({ error: 'Unauthorized' });
+    const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+    if (!requester) return res.status(401).json({ error: 'Unauthorized' });
+    if (requester.role !== 'ADMIN') return res.status(403).json({ error: 'Forbidden' });
     
     // Resolve ID if email
     let opId = id;
@@ -2114,6 +2127,7 @@ app.get('/api/operators/:id/matches', async (req, res) => {
       if (!m) return res.status(404).json({ error: 'Operator not found' });
       opId = m.id;
     }
+    if (opId !== requesterId) return res.status(403).json({ error: 'operator mismatch' });
 
     const matches = await prisma.match.findMany({
       where: { operator_id: opId },
@@ -2163,6 +2177,12 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'Missing operator ID' });
 
+    const requesterId = String(req.headers['x-member-id'] || '').trim();
+    if (!requesterId) return res.status(401).json({ error: 'Unauthorized' });
+    const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+    if (!requester) return res.status(401).json({ error: 'Unauthorized' });
+    if (requester.role !== 'ADMIN') return res.status(403).json({ error: 'Forbidden' });
+
     // Resolve ID if email
     let opId = id;
     if (id.includes('@')) {
@@ -2170,6 +2190,7 @@ app.post('/api/operators/:id/rooms', async (req, res) => {
       if (!m) return res.status(404).json({ error: 'Operator not found' });
       opId = m.id;
     }
+    if (opId !== requesterId) return res.status(403).json({ error: 'operator mismatch' });
 
     // Check active in-memory rooms for this operator
     // We count the rooms currently in the system associated with this operator
@@ -2219,6 +2240,12 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'Missing operator ID' });
+
+    const requesterId = String(req.headers['x-member-id'] || '').trim();
+    if (!requesterId) return res.status(401).json({ error: 'Unauthorized' });
+    const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
+    if (!requester) return res.status(401).json({ error: 'Unauthorized' });
+    if (requester.role !== 'ADMIN') return res.status(403).json({ error: 'Forbidden' });
     
     // Resolve ID if email
     let opId = id;
@@ -2227,6 +2254,7 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
       if (!m) return res.status(404).json({ error: 'Operator not found' });
       opId = m.id;
     }
+    if (opId !== requesterId) return res.status(403).json({ error: 'operator mismatch' });
 
     const active = rooms.filter(r => r.operatorId === opId);
     res.json({ rooms: active });

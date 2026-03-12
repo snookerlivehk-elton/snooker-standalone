@@ -137,7 +137,7 @@ const ClubPublicPage: React.FC = () => {
         </div>
         
         <div style={{ marginTop: 20 }}>
-            <Link to="/join" style={{ color: '#aaa' }}>回首頁</Link>
+            <Link to="/me" style={{ color: '#aaa' }}>回首頁</Link>
         </div>
       </div>
     </div>

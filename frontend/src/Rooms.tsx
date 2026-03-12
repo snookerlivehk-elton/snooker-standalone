@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
-import { createOperatorRoom, deleteOperatorRoom, getOperatorActiveRooms } from './lib/api';
+import { createOperatorRoom, deleteOperatorRoom, getOperatorActiveRooms, listRooms } from './lib/api';
 
 interface RoomItem {
   id?: string;
@@ -15,19 +15,24 @@ const Rooms: React.FC = () => {
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState('');
   const session = (() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   })() as { id?: string; role?: string };
-  const isOperator = session?.role === 'ADMIN' || session?.role === 'OPERATOR' || session?.role === 'Operator';
+  const isOperator = session?.role === 'ADMIN' || session?.role === 'OPERATOR';
   const operatorId = session?.id;
 
   const refresh = async () => {
-    if (!operatorId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await getOperatorActiveRooms(API_URL, operatorId);
-      setRooms(res.rooms || []);
+      if (isOperator && operatorId) {
+        const res = await getOperatorActiveRooms(API_URL, operatorId);
+        setRooms(res.rooms || []);
+      } else {
+        const res = await listRooms(API_URL);
+        setRooms(res || []);
+      }
     } catch (e: any) {
       setError(e.message || '讀取房間失敗');
     } finally {
@@ -35,7 +40,7 @@ const Rooms: React.FC = () => {
     }
   };
 
-  useEffect(() => { if (isOperator && operatorId) void refresh(); }, []);
+  useEffect(() => { void refresh(); }, []);
 
   const onCreate = async () => {
     if (!operatorId) return;
@@ -72,11 +77,25 @@ const Rooms: React.FC = () => {
         <div className="max-w-3xl mx-auto space-y-4">
           {!isOperator && (
             <div className="cue-card p-4">
-              <div className="font-bold mb-1">僅場館/球會可管理房間</div>
-              <div className="text-sm text-gray-300">請以場館身份登入以建立/管理房間</div>
+              <div className="cue-zh-title mb-1">觀眾加入</div>
+              <div className="cue-en-sub">Enter Room Code</div>
               <div className="mt-3 flex gap-2">
-                <a href="/venue/login" className="cue-button px-4 py-2 rounded">場館登入</a>
-                <a href="/members/login" className="px-4 py-2 rounded bg-gray-700 text-white">會員登入</a>
+                <input
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white"
+                  placeholder="例如：AAAAA0001"
+                />
+                <button
+                  className="cue-button px-4 py-2 rounded"
+                  onClick={() => {
+                    const code = joinCode.trim();
+                    if (!code) return;
+                    window.location.href = `/room/${encodeURIComponent(code)}/live`;
+                  }}
+                >
+                  進入
+                </button>
               </div>
             </div>
           )}
@@ -111,14 +130,16 @@ const Rooms: React.FC = () => {
                   <div className="text-xs text-gray-300">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ''}</div>
                 </div>
                 <div className="flex gap-2">
+                  {isOperator && (
+                    <a
+                      className="flex-1 cue-button py-2 text-center rounded"
+                      href={r.code ? `/room/${encodeURIComponent(r.code)}` : (r.id ? `/room/${encodeURIComponent(r.id)}` : '#')}
+                    >
+                      主持
+                    </a>
+                  )}
                   <a
-                    className="flex-1 cue-button py-2 text-center rounded"
-                    href={r.code ? `/room/${encodeURIComponent(r.code)}` : (r.id ? `/room/${encodeURIComponent(r.id)}` : '#')}
-                  >
-                    主持
-                  </a>
-                  <a
-                    className="flex-1 px-3 py-2 text-center rounded bg-gray-700 text-white"
+                    className={`${isOperator ? 'flex-1' : 'flex-1'} px-3 py-2 text-center rounded bg-gray-700 text-white`}
                     href={r.code ? `/room/${encodeURIComponent(r.code)}/live` : (r.id ? `/room/${encodeURIComponent(r.id)}/live` : '#')}
                   >
                     觀眾
