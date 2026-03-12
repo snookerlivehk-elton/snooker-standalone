@@ -38,15 +38,48 @@ const ClubPublicPage: React.FC = () => {
     if (clubId) {
       loadClub();
       getPublicTables(API_URL, clubId).then(setTables).catch(() => setTables([]));
-      getPublicPricing(API_URL, clubId).then(setSchemes).catch(() => setSchemes([]));
+      setSchemes([]);
     }
   }, [clubId, loadClub]);
 
   useEffect(() => {
-    if (clubId && selTable) {
-      getPublicPricing(API_URL, clubId, selTable).then(setSchemes).catch(() => setSchemes([]));
+    if (!clubId || !selTable || !date || !start || !hours) {
+      setSchemes([]);
+      return;
     }
-  }, [clubId, selTable]);
+    const [h, m] = start.split(':').map(x => parseInt(x, 10));
+    const s = new Date(date);
+    s.setHours(h || 0, m || 0, 0, 0);
+    const e = new Date(s.getTime() + Math.max(1, Number(hours) || 1) * 60 * 60 * 1000);
+    getPublicPricing(API_URL, clubId, selTable, s.toISOString(), e.toISOString())
+      .then(setSchemes)
+      .catch(() => setSchemes([]));
+  }, [clubId, selTable, date, start, hours]);
+
+  useEffect(() => {
+    if (selScheme && !schemes.some(s => s.id === selScheme)) setSelScheme('');
+  }, [schemes, selScheme]);
+
+  const fmtMoney = useCallback((n: number) => new Intl.NumberFormat('zh-HK', { maximumFractionDigits: 2 }).format(n), []);
+
+  const selectedTable = useMemo(() => tables.find(t => t.id === selTable) || null, [tables, selTable]);
+  const basePricePerHour = useMemo(() => {
+    const n = Number((selectedTable as any)?.basePrice);
+    return Number.isFinite(n) ? n : null;
+  }, [selectedTable]);
+
+  const selectedScheme = useMemo(() => schemes.find(s => s.id === selScheme) || null, [schemes, selScheme]);
+  const schemePricePerHour = useMemo(() => {
+    const n = Number((selectedScheme as any)?.effectivePricePerHour ?? (selectedScheme as any)?.price);
+    return Number.isFinite(n) ? n : null;
+  }, [selectedScheme]);
+
+  const unitPricePerHour = selScheme ? schemePricePerHour : basePricePerHour;
+  const totalPrice = useMemo(() => {
+    if (unitPricePerHour == null) return null;
+    const h = Math.max(1, Number(hours) || 1);
+    return unitPricePerHour * h;
+  }, [unitPricePerHour, hours]);
 
   const handleJoin = async () => {
     if (!session.id) {
@@ -177,30 +210,63 @@ const ClubPublicPage: React.FC = () => {
                 </label>
                 <label>
                   <div style={{ fontSize: 12, color: '#aaa' }}>時數</div>
-                  <input type="number" min={1} step={1} value={hours} onChange={(e) => setHours(parseInt(e.target.value || '1', 10))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                  <input type="number" min={1} step={1} value={hours} onChange={(e) => setHours(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
                 </label>
                 <label>
                   <div style={{ fontSize: 12, color: '#aaa' }}>方案</div>
                   <select value={selScheme} onChange={(e) => setSelScheme(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }}>
                     <option value="">一般</option>
-                    {schemes.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                    {schemes.map(s => {
+                      const perHour = Number((s as any).effectivePricePerHour ?? (s as any).price);
+                      const label = Number.isFinite(perHour) ? `${s.title} · $${fmtMoney(perHour)}/小時` : `${s.title} · 未設定價錢`;
+                      return <option key={s.id} value={s.id} disabled={!Number.isFinite(perHour)}>{label}</option>;
+                    })}
                   </select>
                 </label>
+              </div>
+              <div style={{ background: '#2a2a2a', border: '1px solid #444', borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 14 }}>
+                  <div style={{ color: '#aaa' }}>每小時</div>
+                  <div style={{ fontWeight: 700 }}>
+                    {unitPricePerHour == null ? '未設定' : `$${fmtMoney(unitPricePerHour)}`}
+                    <span style={{ marginLeft: 8, color: '#aaa', fontWeight: 400 }}>
+                      {selScheme ? (selectedScheme ? `（${selectedScheme.title}）` : '') : '（正價）'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 14, marginTop: 6 }}>
+                  <div style={{ color: '#aaa' }}>總價</div>
+                  <div style={{ fontWeight: 700 }}>{totalPrice == null ? '—' : `$${fmtMoney(totalPrice)}`}</div>
+                </div>
+                {unitPricePerHour == null && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#ffb4b4' }}>
+                    此球枱未設定正價，且此時段沒有可用方案／方案價錢未設定，暫時無法提交預約。
+                  </div>
+                )}
+                {unitPricePerHour != null && schemes.length === 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#aaa' }}>
+                    此時段沒有可用方案，將以正價計算。
+                  </div>
+                )}
               </div>
               <button
                 onClick={async () => {
                   if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
+                  if (unitPricePerHour == null) { alert('此時段未設定價錢，無法預約'); return; }
                   const [h, m] = start.split(':').map(x => parseInt(x, 10));
                   const s = new Date(date); s.setHours(h, m || 0, 0, 0);
                   const e = new Date(s.getTime() + hours * 60 * 60 * 1000);
                   try {
-                    await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
-                    alert('已送出，待場館確認');
+                    const created = await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), endAt: e.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
+                    const quote = created?.priceQuote != null ? Number(created.priceQuote) : null;
+                    const quoteText = Number.isFinite(quote) ? `\n報價：$${fmtMoney(quote as number)}` : '';
+                    alert(`已送出，待場館確認${quoteText}`);
                   } catch (err: any) {
                     alert(err.message || '預約失敗');
                   }
                 }}
-                style={{ background: '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: 'pointer' }}
+                disabled={unitPricePerHour == null}
+                style={{ background: unitPricePerHour == null ? '#777' : '#4caf50', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 8, cursor: unitPricePerHour == null ? 'not-allowed' : 'pointer' }}
               >
                 送出預約
               </button>

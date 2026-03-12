@@ -292,6 +292,18 @@ export async function updateTable(apiUrl: string, memberId: string, id: string, 
   return res.json();
 }
 
+export async function deleteTable(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/tables/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '刪除球枱失敗');
+  }
+  return res.json();
+}
+
 export async function getMyPricingSchemes(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/pricing/my`, { headers: { 'x-member-id': memberId } });
   if (!res.ok) throw new Error('讀取收費方案失敗');
@@ -320,6 +332,18 @@ export async function updatePricingScheme(apiUrl: string, memberId: string, id: 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '更新收費方案失敗');
+  }
+  return res.json();
+}
+
+export async function deletePricingScheme(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/pricing/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '刪除收費方案失敗');
   }
   return res.json();
 }
@@ -361,8 +385,20 @@ export async function getPublicTables(apiUrl: string, clubId: string) {
   return res.json();
 }
 
-export async function getPublicPricing(apiUrl: string, clubId: string, tableId?: string) {
-  const q = new URLSearchParams({ ...(tableId ? { tableId } : {}) });
+export async function getPublicPricing(
+  apiUrl: string,
+  clubId: string,
+  tableId?: string,
+  startAt?: string,
+  endAt?: string,
+  quantityHours?: number,
+) {
+  const q = new URLSearchParams({
+    ...(tableId ? { tableId } : {}),
+    ...(startAt ? { startAt } : {}),
+    ...(endAt ? { endAt } : {}),
+    ...(quantityHours != null ? { quantityHours: String(quantityHours) } : {}),
+  });
   const url = q.toString() ? `${apiUrl}/api/club/${clubId}/pricing?${q}` : `${apiUrl}/api/club/${clubId}/pricing`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('讀取收費失敗');

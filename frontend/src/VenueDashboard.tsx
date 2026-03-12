@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, getPendingReservations, confirmReservation, cancelReservation } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation } from './lib/api';
 import { QRCodeSVG } from 'qrcode.react';
+
+type PricingRule = {
+  daysOfWeek?: number[];
+  start?: string;
+  end?: string;
+  pricePerHour?: number | null;
+};
 
 const VenueDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +31,7 @@ const VenueDashboard: React.FC = () => {
   const [newPricingTitle, setNewPricingTitle] = useState('');
   const [newPricingDesc, setNewPricingDesc] = useState('');
   const [newPricingPrice, setNewPricingPrice] = useState('');
-  const [newPricingRules, setNewPricingRules] = useState('[]');
+  const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   
   const session = useMemo(() => {
@@ -41,6 +48,32 @@ const VenueDashboard: React.FC = () => {
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
+
+  const weekDays = useMemo(() => ([
+    { n: 1, label: '一' },
+    { n: 2, label: '二' },
+    { n: 3, label: '三' },
+    { n: 4, label: '四' },
+    { n: 5, label: '五' },
+    { n: 6, label: '六' },
+    { n: 7, label: '日' },
+  ]), []);
+
+  const normalizeRules = (rulesJson: any): PricingRule[] => {
+    const arr = Array.isArray(rulesJson) ? rulesJson : [];
+    return arr.map((r: any) => ({
+      daysOfWeek: Array.isArray(r?.daysOfWeek) ? r.daysOfWeek.filter((x: any) => typeof x === 'number') : [],
+      start: typeof r?.start === 'string' ? r.start : '09:00',
+      end: typeof r?.end === 'string' ? r.end : '16:00',
+      pricePerHour: r?.pricePerHour == null || r?.pricePerHour === '' ? null : Number(r.pricePerHour),
+    }));
+  };
+
+  const toggleDayInRule = (rule: PricingRule, day: number): PricingRule => {
+    const days = Array.isArray(rule.daysOfWeek) ? rule.daysOfWeek : [];
+    const next = days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort((a, b) => a - b);
+    return { ...rule, daysOfWeek: next };
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -307,6 +340,18 @@ const VenueDashboard: React.FC = () => {
                       const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null, basePrice: cur.basePrice ?? null });
                       setTables(prev => prev.map(x => x.id === t.id ? updated : x));
                     }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                    <button onClick={async () => {
+                      if (!window.confirm('確定要刪除此球枱？（已有預約紀錄的球枱將無法刪除，請改用停用）')) return;
+                      try {
+                        await deleteTable(API_URL, operatorId, t.id);
+                        setTables(prev => prev.filter(x => x.id !== t.id));
+                        setToast('球枱已刪除');
+                        setTimeout(() => setToast(null), 2000);
+                      } catch (e: any) {
+                        setToast(e.message || '刪除失敗');
+                        setTimeout(() => setToast(null), 3000);
+                      }
+                    }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">刪除</button>
                   </div>
                 ))}
               </div>
@@ -317,16 +362,80 @@ const VenueDashboard: React.FC = () => {
                 <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
                 <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
                 <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="價目（例如 180）" />
-                <select onChange={(e) => {/* store temp in state via inline closure not available here */}} className="hidden" />
-                <div className="text-xs text-gray-400">在下方每筆方案中可設定適用球枱</div>
-                <textarea value={newPricingRules} onChange={(e) => setNewPricingRules(e.target.value)} className="h-24 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" placeholder='[{"daysOfWeek":[1,2,3],"start":"10:00","end":"18:00","pricePerHour":120}]' />
+                <div className="bg-gray-900/40 border border-gray-700 rounded p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-semibold">生效時間規則</div>
+                    <button
+                      onClick={() => setNewPricingRules(prev => [...prev, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }])}
+                      className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                      type="button"
+                    >
+                      新增規則
+                    </button>
+                  </div>
+                  {newPricingRules.length === 0 ? (
+                    <div className="text-xs text-gray-400">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {newPricingRules.map((r, idx) => (
+                        <div key={idx} className="bg-gray-800 rounded p-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              {weekDays.map(d => {
+                                const active = (r.daysOfWeek || []).includes(d.n);
+                                return (
+                                  <button
+                                    key={d.n}
+                                    type="button"
+                                    onClick={() => setNewPricingRules(prev => prev.map((x, i) => i === idx ? toggleDayInRule(x, d.n) : x))}
+                                    className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-200'}`}
+                                  >
+                                    {d.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="time"
+                                value={r.start || '09:00'}
+                                onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, start: e.target.value } : x))}
+                                className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                              />
+                              <span className="text-gray-400 text-sm">-</span>
+                              <input
+                                type="time"
+                                value={r.end || '16:00'}
+                                onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, end: e.target.value } : x))}
+                                className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                              />
+                            </div>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={r.pricePerHour ?? ''}
+                              onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, pricePerHour: e.target.value === '' ? null : Number(e.target.value) } : x))}
+                              className="w-32 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                              placeholder="$/小時(選填)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setNewPricingRules(prev => prev.filter((_, i) => i !== idx))}
+                              className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                            >
+                              刪除規則
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button onClick={async () => {
                   if (!newPricingTitle.trim()) return;
-                  let rules: any;
-                  try { rules = JSON.parse(newPricingRules); } catch { alert('rulesJson 需為 JSON'); return; }
-                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: rules, price: newPricingPrice.trim() || undefined });
+                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: newPricingRules, price: newPricingPrice.trim() || undefined });
                   setPricing([...pricing, row]);
-                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingRules('[]');
+                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingRules([]);
                 }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增方案</button>
               </div>
               <div className="space-y-2">
@@ -349,10 +458,126 @@ const VenueDashboard: React.FC = () => {
                         const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price, tableId: cur.tableId || null });
                         setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
                       }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                      <button onClick={async () => {
+                        if (!window.confirm('確定要刪除此方案？（已有預約紀錄的方案將無法刪除，請改用停用）')) return;
+                        try {
+                          await deletePricingScheme(API_URL, operatorId, p.id);
+                          setPricing(prev => prev.filter(x => x.id !== p.id));
+                          setToast('方案已刪除');
+                          setTimeout(() => setToast(null), 2000);
+                        } catch (e: any) {
+                          setToast(e.message || '刪除失敗');
+                          setTimeout(() => setToast(null), 3000);
+                        }
+                      }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">刪除</button>
                     </div>
-                    <textarea value={JSON.stringify(p.rulesJson, null, 2)} onChange={(e) => {
-                      try { const v = JSON.parse(e.target.value); setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: v } : x)); } catch {}
-                    }} className="w-full h-24 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" />
+                    <div className="bg-gray-900/40 border border-gray-700 rounded p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold">生效時間規則</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: normalizeRules(x.rulesJson) } : x))}
+                            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                          >
+                            重新整理
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPricing(prev => prev.map(x => {
+                              if (x.id !== p.id) return x;
+                              const curRules = normalizeRules(x.rulesJson);
+                              return { ...x, rulesJson: [...curRules, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }] };
+                            }))}
+                            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                          >
+                            新增規則
+                          </button>
+                        </div>
+                      </div>
+                      {normalizeRules(p.rulesJson).length === 0 ? (
+                        <div className="text-xs text-gray-400">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
+                      ) : (
+                        <div className="grid gap-2">
+                          {normalizeRules(p.rulesJson).map((r, idx) => (
+                            <div key={idx} className="bg-gray-800 rounded p-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  {weekDays.map(d => {
+                                    const active = (r.daysOfWeek || []).includes(d.n);
+                                    return (
+                                      <button
+                                        key={d.n}
+                                        type="button"
+                                        onClick={() => setPricing(prev => prev.map(x => {
+                                          if (x.id !== p.id) return x;
+                                          const rules = normalizeRules(x.rulesJson);
+                                          rules[idx] = toggleDayInRule(rules[idx], d.n);
+                                          return { ...x, rulesJson: rules };
+                                        }))}
+                                        className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-200'}`}
+                                      >
+                                        {d.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="time"
+                                    value={r.start || '09:00'}
+                                    onChange={(e) => setPricing(prev => prev.map(x => {
+                                      if (x.id !== p.id) return x;
+                                      const rules = normalizeRules(x.rulesJson);
+                                      rules[idx] = { ...rules[idx], start: e.target.value };
+                                      return { ...x, rulesJson: rules };
+                                    }))}
+                                    className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                  />
+                                  <span className="text-gray-400 text-sm">-</span>
+                                  <input
+                                    type="time"
+                                    value={r.end || '16:00'}
+                                    onChange={(e) => setPricing(prev => prev.map(x => {
+                                      if (x.id !== p.id) return x;
+                                      const rules = normalizeRules(x.rulesJson);
+                                      rules[idx] = { ...rules[idx], end: e.target.value };
+                                      return { ...x, rulesJson: rules };
+                                    }))}
+                                    className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                  />
+                                </div>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={r.pricePerHour ?? ''}
+                                  onChange={(e) => setPricing(prev => prev.map(x => {
+                                    if (x.id !== p.id) return x;
+                                    const rules = normalizeRules(x.rulesJson);
+                                    rules[idx] = { ...rules[idx], pricePerHour: e.target.value === '' ? null : Number(e.target.value) };
+                                    return { ...x, rulesJson: rules };
+                                  }))}
+                                  className="w-32 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                  placeholder="$/小時(選填)"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setPricing(prev => prev.map(x => {
+                                    if (x.id !== p.id) return x;
+                                    const rules = normalizeRules(x.rulesJson);
+                                    const next = rules.filter((_, i) => i !== idx);
+                                    return { ...x, rulesJson: next };
+                                  }))}
+                                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                                >
+                                  刪除規則
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

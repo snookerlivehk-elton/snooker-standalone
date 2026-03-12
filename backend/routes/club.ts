@@ -333,6 +333,29 @@ router.put('/tables/:id', async (req, res) => {
     res.json(row);
 });
 
+router.delete('/tables/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = req.params.id;
+    const t = await prisma.clubTable.findUnique({ where: { id } });
+    if (!t || t.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
+    const reservationCount = await prisma.tableReservation.count({ where: { tableId: id } });
+    if (reservationCount > 0) return res.status(409).json({ error: '此球枱已有預約紀錄，請改用停用（取消啟用）' });
+    const schemes = await prisma.tablePricingScheme.findMany({ where: { clubId, tableId: id }, select: { id: true } });
+    if (schemes.length > 0) {
+        const schemeIds = schemes.map(s => s.id);
+        const schemeReservationCount = await prisma.tableReservation.count({ where: { pricingSchemeId: { in: schemeIds } } });
+        if (schemeReservationCount > 0) return res.status(409).json({ error: '此球枱的方案已有預約紀錄，請先停用相關方案' });
+    }
+    await prisma.$transaction([
+        prisma.tablePricingScheme.deleteMany({ where: { clubId, tableId: id } }),
+        prisma.clubTable.delete({ where: { id } }),
+    ]);
+    res.json({ ok: true });
+});
+
 router.get('/pricing/my', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
@@ -384,6 +407,20 @@ router.put('/pricing/:id', async (req, res) => {
         }
     });
     res.json(row);
+});
+
+router.delete('/pricing/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = req.params.id;
+    const p = await prisma.tablePricingScheme.findUnique({ where: { id } });
+    if (!p || p.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
+    const reservationCount = await prisma.tableReservation.count({ where: { pricingSchemeId: id } });
+    if (reservationCount > 0) return res.status(409).json({ error: '此方案已有預約紀錄，請改用停用（取消啟用）' });
+    await prisma.tablePricingScheme.delete({ where: { id } });
+    res.json({ ok: true });
 });
 
 router.get('/reservations/pending', async (req, res) => {
@@ -441,13 +478,31 @@ router.get('/:clubId/tables', async (req, res) => {
 
 router.get('/:clubId/pricing', async (req, res) => {
     const { clubId } = req.params;
-    const { tableId } = req.query as any;
+    const { tableId, startAt, endAt, quantityHours } = req.query as any;
     const where: any = { clubId, active: true };
     if (tableId) {
         where.OR = [{ tableId: null }, { tableId: String(tableId) }];
     }
     const rows = await prisma.tablePricingScheme.findMany({ where, orderBy: [{ title: 'asc' }] });
-    res.json(rows);
+    const base = rows.map((r) => ({ ...r, effectivePricePerHour: r.price != null ? toFiniteNumber(r.price as any) : null }));
+    if (!startAt) return res.json(base);
+    const s = new Date(String(startAt));
+    if (!Number.isFinite(s.getTime())) return res.status(400).json({ error: 'Invalid startAt' });
+    const e = endAt
+        ? new Date(String(endAt))
+        : new Date(s.getTime() + (Math.max(1, Number(quantityHours || 1) || 1) * 60 * 60 * 1000));
+    if (!Number.isFinite(e.getTime()) || !(e > s)) return res.status(400).json({ error: 'Invalid endAt' });
+    const tid = tableId ? String(tableId) : null;
+    const applicable = base
+        .map((scheme) => {
+            const ok = isSchemeApplicable(scheme as any, s, e, tid);
+            if (!ok || !(ok as any).ok) return null;
+            const rulePrice = (ok as any).pricePerHour != null ? toFiniteNumber((ok as any).pricePerHour) : null;
+            const effective = rulePrice ?? scheme.effectivePricePerHour ?? null;
+            return { ...scheme, effectivePricePerHour: effective };
+        })
+        .filter(Boolean);
+    res.json(applicable);
 });
 
 router.get('/:clubId/availability', async (req, res) => {
@@ -466,13 +521,34 @@ function parseHHMM(hhmm: string) {
     const [h, m] = hhmm.split(':').map((x) => parseInt(x, 10));
     return { h: h || 0, m: m || 0 };
 }
+function toFiniteNumber(v: any) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+function normalizeRulesJson(rulesJson: any): any[] | null {
+    if (Array.isArray(rulesJson)) return rulesJson;
+    if (typeof rulesJson === 'string') {
+        try {
+            const parsed = JSON.parse(rulesJson);
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).rules)) return (parsed as any).rules;
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    if (rulesJson && typeof rulesJson === 'object' && Array.isArray((rulesJson as any).rules)) return (rulesJson as any).rules;
+    return null;
+}
 function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | null) {
     if (scheme.active !== true) return false;
     if (scheme.tableId && tableId && scheme.tableId !== tableId) return false;
     // Only support same-day windows for now
     if (s.toDateString() !== e.toDateString()) return false;
     try {
-        const rules = Array.isArray(scheme.rulesJson) ? scheme.rulesJson : [];
+        const rules = normalizeRulesJson(scheme.rulesJson);
+        if (rules == null) return false;
+        if (rules.length === 0) return { ok: true, pricePerHour: null };
         const dow = ((s.getDay() + 6) % 7) + 1; // Make Monday=1 ... Sunday=7
         for (const r of rules) {
             const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
@@ -482,7 +558,7 @@ function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | nu
             const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
             const re = new Date(s); re.setHours(eh, em, 0, 0);
             if (s >= rs && e <= re) {
-                const pricePerHour = r.pricePerHour != null ? Number(r.pricePerHour) : null;
+                const pricePerHour = r.pricePerHour != null ? toFiniteNumber(r.pricePerHour) : null;
                 return { ok: true, pricePerHour };
             }
         }
@@ -511,16 +587,17 @@ router.post('/:clubId/reservations', async (req, res) => {
     if (schemeId) {
         const sid = String(schemeId);
         const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
-        if (scheme && scheme.clubId === clubId) {
-            const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
-            if (applicable && (applicable as any).ok) {
-                data.pricingSchemeId = sid;
-                unitPrice = (applicable as any).pricePerHour != null ? Number((applicable as any).pricePerHour) : (scheme.price != null ? Number(scheme.price as any) : null);
-            }
-        }
+        if (!scheme || scheme.clubId !== clubId) return res.status(400).json({ error: 'Pricing scheme not found' });
+        const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
+        if (!applicable || !(applicable as any).ok) return res.status(400).json({ error: '方案不適用於此時段' });
+        const rulePrice = (applicable as any).pricePerHour != null ? toFiniteNumber((applicable as any).pricePerHour) : null;
+        const schemePrice = scheme.price != null ? toFiniteNumber(scheme.price as any) : null;
+        unitPrice = rulePrice ?? schemePrice;
+        if (unitPrice == null) return res.status(400).json({ error: '方案未設定價錢' });
+        data.pricingSchemeId = sid;
     }
     if (unitPrice == null) {
-        unitPrice = table.basePrice != null ? Number(table.basePrice as any) : null;
+        unitPrice = table.basePrice != null ? toFiniteNumber(table.basePrice as any) : null;
     }
     if (unitPrice == null) {
         return res.status(400).json({ error: 'No applicable scheme or base price set' });
