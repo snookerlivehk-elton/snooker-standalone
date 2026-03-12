@@ -298,7 +298,7 @@ export async function getMyPricingSchemes(apiUrl: string, memberId: string) {
   return res.json();
 }
 
-export async function createPricingScheme(apiUrl: string, memberId: string, data: { title: string; description?: string; rulesJson: any; active?: boolean }) {
+export async function createPricingScheme(apiUrl: string, memberId: string, data: { title: string; description?: string; rulesJson: any; price?: string | number | null; active?: boolean }) {
   const res = await fetch(`${apiUrl}/api/club/pricing`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },

@@ -22,6 +22,7 @@ const VenueDashboard: React.FC = () => {
   const [pricing, setPricing] = useState<any[]>([]);
   const [newPricingTitle, setNewPricingTitle] = useState('');
   const [newPricingDesc, setNewPricingDesc] = useState('');
+  const [newPricingPrice, setNewPricingPrice] = useState('');
   const [newPricingRules, setNewPricingRules] = useState('[]');
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   
@@ -312,14 +313,15 @@ const VenueDashboard: React.FC = () => {
               <div className="grid gap-2 mb-3">
                 <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
                 <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
+                <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="價目（例如 180）" />
                 <textarea value={newPricingRules} onChange={(e) => setNewPricingRules(e.target.value)} className="h-24 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" placeholder='[{"daysOfWeek":[1,2,3],"start":"10:00","end":"18:00","pricePerHour":120}]' />
                 <button onClick={async () => {
                   if (!newPricingTitle.trim()) return;
                   let rules: any;
                   try { rules = JSON.parse(newPricingRules); } catch { alert('rulesJson 需為 JSON'); return; }
-                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: rules });
+                  const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson: rules, price: newPricingPrice.trim() || undefined });
                   setPricing([...pricing, row]);
-                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingRules('[]');
+                  setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingRules('[]');
                 }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增方案</button>
               </div>
               <div className="space-y-2">
@@ -327,6 +329,7 @@ const VenueDashboard: React.FC = () => {
                   <div key={p.id} className="bg-gray-800 p-2 rounded">
                     <div className="flex items-center gap-2 mb-2">
                       <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
+                      <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="價目" />
                       <label className="text-sm flex items-center gap-1">
                         <input type="checkbox" checked={p.active} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, active: e.target.checked } : x))} />
                         啟用
@@ -334,7 +337,7 @@ const VenueDashboard: React.FC = () => {
                       <button onClick={async () => {
                         const cur = pricing.find(x => x.id === p.id);
                         if (!cur) return;
-                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active });
+                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price });
                         setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
                       }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
                     </div>

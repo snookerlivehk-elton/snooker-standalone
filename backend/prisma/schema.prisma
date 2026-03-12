@@ -290,6 +290,7 @@ model TablePricingScheme {
   club          ClubProfile @relation(fields: [clubId], references: [id])
   title         String
   description   String?
+  price         Decimal?
   rulesJson     Json
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())

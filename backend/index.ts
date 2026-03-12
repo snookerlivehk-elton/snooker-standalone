@@ -92,10 +92,30 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
-  ? '*'
+  ? ['*']
   : corsOriginRaw.split(',').map(s => s.trim()).filter(Boolean);
 
-app.use(cors({ origin: corsOrigins as any }));
+const allowedSuffixes = [
+  '.up.railway.app',
+  '.snookerlive.hk',
+  '.snookerhk.live',
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (corsOrigins.includes('*')) return cb(null, true);
+    if (corsOrigins.includes(origin)) return cb(null, true);
+    if (allowedSuffixes.some(s => origin.endsWith(s))) return cb(null, true);
+    return cb(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-member-id', 'x-write-token', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ strict: false }));
 app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {

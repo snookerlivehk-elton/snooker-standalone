@@ -331,9 +331,18 @@ router.post('/pricing', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
-    const { title, description, rulesJson, active } = req.body;
+    const { title, description, rulesJson, active, price } = req.body;
     if (!title || rulesJson == null) return res.status(400).json({ error: 'Missing fields' });
-    const row = await prisma.tablePricingScheme.create({ data: { clubId, title, description: description || null, rulesJson, active: active ?? true } });
+    const row = await prisma.tablePricingScheme.create({
+        data: {
+            clubId,
+            title,
+            description: description || null,
+            rulesJson,
+            active: active ?? true,
+            price: price == null || price === '' ? null : String(price),
+        }
+    });
     res.json(row);
 });
 
@@ -345,8 +354,17 @@ router.put('/pricing/:id', async (req, res) => {
     const id = req.params.id;
     const p = await prisma.tablePricingScheme.findUnique({ where: { id } });
     if (!p || p.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
-    const { title, description, rulesJson, active } = req.body;
-    const row = await prisma.tablePricingScheme.update({ where: { id }, data: { title, description, rulesJson, active } });
+    const { title, description, rulesJson, active, price } = req.body;
+    const row = await prisma.tablePricingScheme.update({
+        where: { id },
+        data: {
+            title,
+            description,
+            rulesJson,
+            active,
+            ...(price === undefined ? {} : { price: price == null || price === '' ? null : String(price) }),
+        }
+    });
     res.json(row);
 });
 
@@ -438,7 +456,14 @@ router.post('/:clubId/reservations', async (req, res) => {
     });
     if (overlap > 0) return res.status(409).json({ error: 'Time slot taken' });
     const data: any = { clubId, tableId: table.id, memberId, startAt: s, endAt: e, status: 'PENDING' };
-    if (schemeId) data.pricingSchemeId = String(schemeId);
+    if (schemeId) {
+        const sid = String(schemeId);
+        const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
+        if (scheme && scheme.clubId === clubId) {
+            data.pricingSchemeId = sid;
+            data.priceQuote = scheme.price;
+        }
+    }
     const created = await prisma.tableReservation.create({ data });
     try {
         const messageTitle = '新預約待確認';
