@@ -222,7 +222,7 @@ const VenueDashboard: React.FC = () => {
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Snooker Live HK - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.1 Club</span></h1>
+        <h1 className="text-3xl font-bold">Cue Aim System - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.1 Club</span></h1>
         <button 
             onClick={() => {
               localStorage.removeItem('memberSession');

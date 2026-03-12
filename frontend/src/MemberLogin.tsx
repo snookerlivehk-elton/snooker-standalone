@@ -124,7 +124,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
     <div className="brand-page text-white p-6 flex items-center justify-center">
       <div className="w-full max-w-md glass rounded-xl p-6">
         <div className="text-center mb-6">
-          <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Snooker Live HK</div>
+          <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Cue Aim System</div>
           <h2 className="text-2xl font-bold mt-1">
             {view === 'login' && (mode === 'venue' ? '場館/球會登入' : '會員登入')}
             {view === 'forgot-request' && '忘記密碼'}

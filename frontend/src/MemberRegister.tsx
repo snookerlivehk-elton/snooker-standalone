@@ -212,7 +212,7 @@ const MemberRegister: React.FC = () => {
       <div className="max-w-3xl mx-auto glass rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Snooker Live HK</div>
+            <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Cue Aim System</div>
             <h2 className="text-2xl font-bold accent-yellow">會員註冊</h2>
           </div>
           <button

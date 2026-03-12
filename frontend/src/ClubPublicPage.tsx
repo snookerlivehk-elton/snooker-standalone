@@ -358,7 +358,7 @@ const ClubPublicPage: React.FC = () => {
                   <input type="number" min={1} step={1} value={hours} onChange={(e) => setHours(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
                 </label>
                 <label>
-                  <div style={{ fontSize: 12, color: '#aaa' }}>方案</div>
+                  <div style={{ fontSize: 12, color: '#aaa' }}>優惠方案</div>
                   <select value={selScheme} onChange={(e) => setSelScheme(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }}>
                     <option value="">一般</option>
                     {schemes.map(s => {
