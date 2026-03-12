@@ -275,12 +275,14 @@ model ClubTable {
   clubId        String
   club          ClubProfile @relation(fields: [clubId], references: [id])
   name          String
+  basePrice     Decimal?
   active        Boolean  @default(true)
   displayOrder  Int      @default(0)
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   reservations  TableReservation[]
+  pricingSchemes TablePricingScheme[]
   @@index([clubId, active])
 }
 
@@ -288,6 +290,8 @@ model TablePricingScheme {
   id            String   @id @default(uuid())
   clubId        String
   club          ClubProfile @relation(fields: [clubId], references: [id])
+  tableId       String?
+  table         ClubTable? @relation(fields: [tableId], references: [id])
   title         String
   description   String?
   price         Decimal?
@@ -297,6 +301,7 @@ model TablePricingScheme {
   updatedAt     DateTime @updatedAt
   reservations  TableReservation[]
   @@index([clubId, active])
+  @@index([tableId])
 }
 
 model TableReservation {

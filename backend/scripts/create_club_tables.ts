@@ -161,6 +161,7 @@ export async function createClubTables(prisma: PrismaClient) {
         "id" TEXT NOT NULL,
         "clubId" TEXT NOT NULL,
         "name" TEXT NOT NULL,
+        "basePrice" DECIMAL(65,30),
         "active" BOOLEAN NOT NULL DEFAULT true,
         "displayOrder" INTEGER NOT NULL DEFAULT 0,
         "notes" TEXT,
@@ -169,12 +170,16 @@ export async function createClubTables(prisma: PrismaClient) {
         CONSTRAINT "ClubTable_pkey" PRIMARY KEY ("id")
       );
     `);
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ClubTable" ADD COLUMN IF NOT EXISTS "basePrice" DECIMAL(65,30);`);
+    } catch {}
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ClubTable_clubId_active_idx" ON "ClubTable"("clubId", "active");`);
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "TablePricingScheme" (
         "id" TEXT NOT NULL,
         "clubId" TEXT NOT NULL,
+        "tableId" TEXT,
         "title" TEXT NOT NULL,
         "description" TEXT,
         "price" DECIMAL(65,30),
@@ -188,7 +193,11 @@ export async function createClubTables(prisma: PrismaClient) {
     try {
       await prisma.$executeRawUnsafe(`ALTER TABLE "TablePricingScheme" ADD COLUMN IF NOT EXISTS "price" DECIMAL(65,30);`);
     } catch {}
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "TablePricingScheme" ADD COLUMN IF NOT EXISTS "tableId" TEXT;`);
+    } catch {}
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TablePricingScheme_clubId_active_idx" ON "TablePricingScheme"("clubId", "active");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TablePricingScheme_tableId_idx" ON "TablePricingScheme"("tableId");`);
 
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "TableReservation" (
@@ -225,6 +234,13 @@ export async function createClubTables(prisma: PrismaClient) {
       `);
     } catch (e: any) {
       if (!e.message.includes('already exists')) console.warn('Error adding TablePricingScheme_clubId_fkey:', e.message);
+    }
+    try {
+      await prisma.$executeRawUnsafe(`
+        ALTER TABLE "TablePricingScheme" ADD CONSTRAINT "TablePricingScheme_tableId_fkey" FOREIGN KEY ("tableId") REFERENCES "ClubTable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      `);
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) console.warn('Error adding TablePricingScheme_tableId_fkey:', e.message);
     }
 
     try {

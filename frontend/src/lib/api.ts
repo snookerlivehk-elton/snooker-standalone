@@ -266,7 +266,7 @@ export async function getMyTables(apiUrl: string, memberId: string) {
   return res.json();
 }
 
-export async function createTable(apiUrl: string, memberId: string, data: { name: string; notes?: string }) {
+export async function createTable(apiUrl: string, memberId: string, data: { name: string; notes?: string; basePrice?: string | number }) {
   const res = await fetch(`${apiUrl}/api/club/tables`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
@@ -298,7 +298,7 @@ export async function getMyPricingSchemes(apiUrl: string, memberId: string) {
   return res.json();
 }
 
-export async function createPricingScheme(apiUrl: string, memberId: string, data: { title: string; description?: string; rulesJson: any; price?: string | number | null; active?: boolean }) {
+export async function createPricingScheme(apiUrl: string, memberId: string, data: { title: string; description?: string; rulesJson: any; price?: string | number | null; active?: boolean; tableId?: string | null }) {
   const res = await fetch(`${apiUrl}/api/club/pricing`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
@@ -361,8 +361,10 @@ export async function getPublicTables(apiUrl: string, clubId: string) {
   return res.json();
 }
 
-export async function getPublicPricing(apiUrl: string, clubId: string) {
-  const res = await fetch(`${apiUrl}/api/club/${clubId}/pricing`);
+export async function getPublicPricing(apiUrl: string, clubId: string, tableId?: string) {
+  const q = new URLSearchParams({ ...(tableId ? { tableId } : {}) });
+  const url = q.toString() ? `${apiUrl}/api/club/${clubId}/pricing?${q}` : `${apiUrl}/api/club/${clubId}/pricing`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('讀取收費失敗');
   return res.json();
 }
@@ -374,7 +376,7 @@ export async function getAvailability(apiUrl: string, clubId: string, from: stri
   return res.json();
 }
 
-export async function createReservation(apiUrl: string, clubId: string, memberId: string, data: { tableId: string; startAt: string; endAt: string; schemeId?: string }) {
+export async function createReservation(apiUrl: string, clubId: string, memberId: string, data: { tableId: string; startAt: string; endAt?: string; quantityHours?: number; schemeId?: string }) {
   const res = await fetch(`${apiUrl}/api/club/${clubId}/reservations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },

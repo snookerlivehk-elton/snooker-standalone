@@ -16,7 +16,7 @@ const ClubPublicPage: React.FC = () => {
   const [selScheme, setSelScheme] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [start, setStart] = useState<string>('10:00');
-  const [durationM, setDurationM] = useState<number>(60);
+  const [hours, setHours] = useState<number>(1);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -41,6 +41,12 @@ const ClubPublicPage: React.FC = () => {
       getPublicPricing(API_URL, clubId).then(setSchemes).catch(() => setSchemes([]));
     }
   }, [clubId, loadClub]);
+
+  useEffect(() => {
+    if (clubId && selTable) {
+      getPublicPricing(API_URL, clubId, selTable).then(setSchemes).catch(() => setSchemes([]));
+    }
+  }, [clubId, selTable]);
 
   const handleJoin = async () => {
     if (!session.id) {
@@ -170,8 +176,8 @@ const ClubPublicPage: React.FC = () => {
                   <input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
                 </label>
                 <label>
-                  <div style={{ fontSize: 12, color: '#aaa' }}>時長(分鐘)</div>
-                  <input type="number" min={30} step={30} value={durationM} onChange={(e) => setDurationM(parseInt(e.target.value || '60', 10))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
+                  <div style={{ fontSize: 12, color: '#aaa' }}>時數</div>
+                  <input type="number" min={1} step={1} value={hours} onChange={(e) => setHours(parseInt(e.target.value || '1', 10))} style={{ width: '100%', padding: 8, borderRadius: 6, background: '#222', color: '#fff', border: '1px solid #555' }} />
                 </label>
                 <label>
                   <div style={{ fontSize: 12, color: '#aaa' }}>方案</div>
@@ -186,9 +192,9 @@ const ClubPublicPage: React.FC = () => {
                   if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
                   const [h, m] = start.split(':').map(x => parseInt(x, 10));
                   const s = new Date(date); s.setHours(h, m || 0, 0, 0);
-                  const e = new Date(s.getTime() + durationM * 60000);
+                  const e = new Date(s.getTime() + hours * 60 * 60 * 1000);
                   try {
-                    await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), endAt: e.toISOString(), schemeId: selScheme || undefined });
+                    await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: s.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
                     alert('已送出，待場館確認');
                   } catch (err: any) {
                     alert(err.message || '預約失敗');

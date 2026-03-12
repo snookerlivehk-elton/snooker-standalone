@@ -298,9 +298,16 @@ router.post('/tables', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
-    const { name, notes } = req.body;
+    const { name, notes, basePrice } = req.body;
     if (!name) return res.status(400).json({ error: 'Missing name' });
-    const row = await prisma.clubTable.create({ data: { clubId, name, notes: notes || null } });
+    const row = await prisma.clubTable.create({
+        data: {
+            clubId,
+            name,
+            notes: notes || null,
+            basePrice: basePrice == null || basePrice === '' ? null : String(basePrice),
+        }
+    });
     res.json(row);
 });
 
@@ -312,8 +319,17 @@ router.put('/tables/:id', async (req, res) => {
     const id = req.params.id;
     const t = await prisma.clubTable.findUnique({ where: { id } });
     if (!t || t.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
-    const { name, active, displayOrder, notes } = req.body;
-    const row = await prisma.clubTable.update({ where: { id }, data: { name, active, displayOrder, notes } });
+    const { name, active, displayOrder, notes, basePrice } = req.body;
+    const row = await prisma.clubTable.update({
+        where: { id },
+        data: {
+            ...(name === undefined ? {} : { name }),
+            ...(active === undefined ? {} : { active }),
+            ...(displayOrder === undefined ? {} : { displayOrder }),
+            ...(notes === undefined ? {} : { notes }),
+            ...(basePrice === undefined ? {} : { basePrice: basePrice == null || basePrice === '' ? null : String(basePrice) }),
+        }
+    });
     res.json(row);
 });
 
@@ -331,11 +347,12 @@ router.post('/pricing', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
-    const { title, description, rulesJson, active, price } = req.body;
+    const { title, description, rulesJson, active, price, tableId } = req.body;
     if (!title || rulesJson == null) return res.status(400).json({ error: 'Missing fields' });
     const row = await prisma.tablePricingScheme.create({
         data: {
             clubId,
+            tableId: tableId || null,
             title,
             description: description || null,
             rulesJson,
@@ -354,14 +371,15 @@ router.put('/pricing/:id', async (req, res) => {
     const id = req.params.id;
     const p = await prisma.tablePricingScheme.findUnique({ where: { id } });
     if (!p || p.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
-    const { title, description, rulesJson, active, price } = req.body;
+    const { title, description, rulesJson, active, price, tableId } = req.body;
     const row = await prisma.tablePricingScheme.update({
         where: { id },
         data: {
-            title,
-            description,
-            rulesJson,
-            active,
+            ...(title === undefined ? {} : { title }),
+            ...(description === undefined ? {} : { description }),
+            ...(rulesJson === undefined ? {} : { rulesJson }),
+            ...(active === undefined ? {} : { active }),
+            ...(tableId === undefined ? {} : { tableId: tableId || null }),
             ...(price === undefined ? {} : { price: price == null || price === '' ? null : String(price) }),
         }
     });
@@ -423,7 +441,12 @@ router.get('/:clubId/tables', async (req, res) => {
 
 router.get('/:clubId/pricing', async (req, res) => {
     const { clubId } = req.params;
-    const rows = await prisma.tablePricingScheme.findMany({ where: { clubId, active: true }, orderBy: [{ title: 'asc' }] });
+    const { tableId } = req.query as any;
+    const where: any = { clubId, active: true };
+    if (tableId) {
+        where.OR = [{ tableId: null }, { tableId: String(tableId) }];
+    }
+    const rows = await prisma.tablePricingScheme.findMany({ where, orderBy: [{ title: 'asc' }] });
     res.json(rows);
 });
 
@@ -439,31 +462,71 @@ router.get('/:clubId/availability', async (req, res) => {
     res.json(rows);
 });
 
+function parseHHMM(hhmm: string) {
+    const [h, m] = hhmm.split(':').map((x) => parseInt(x, 10));
+    return { h: h || 0, m: m || 0 };
+}
+function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | null) {
+    if (scheme.active !== true) return false;
+    if (scheme.tableId && tableId && scheme.tableId !== tableId) return false;
+    // Only support same-day windows for now
+    if (s.toDateString() !== e.toDateString()) return false;
+    try {
+        const rules = Array.isArray(scheme.rulesJson) ? scheme.rulesJson : [];
+        const dow = ((s.getDay() + 6) % 7) + 1; // Make Monday=1 ... Sunday=7
+        for (const r of rules) {
+            const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
+            if (days.length > 0 && !days.includes(dow)) continue;
+            const { h: sh, m: sm } = parseHHMM(r.start || '00:00');
+            const { h: eh, m: em } = parseHHMM(r.end || '23:59');
+            const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
+            const re = new Date(s); re.setHours(eh, em, 0, 0);
+            if (s >= rs && e <= re) {
+                const pricePerHour = r.pricePerHour != null ? Number(r.pricePerHour) : null;
+                return { ok: true, pricePerHour };
+            }
+        }
+    } catch {}
+    return false;
+}
+
 router.post('/:clubId/reservations', async (req, res) => {
     const member = await requireMember(req, res);
     if (!member) return;
     const memberId = member.id;
     const { clubId } = req.params;
-    const { tableId, startAt, endAt, schemeId } = req.body || {};
-    if (!tableId || !startAt || !endAt) return res.status(400).json({ error: 'Missing fields' });
+    const { tableId, startAt, endAt, schemeId, quantityHours } = req.body || {};
+    if (!tableId || !startAt) return res.status(400).json({ error: 'Missing fields' });
     const table = await prisma.clubTable.findUnique({ where: { id: String(tableId) } });
     if (!table || table.clubId !== clubId) return res.status(404).json({ error: 'Table not found' });
     const s = new Date(String(startAt));
-    const e = new Date(String(endAt));
+    const e = endAt ? new Date(String(endAt)) : new Date(s.getTime() + (Number(quantityHours || 0) || 1) * 60 * 60 * 1000);
     if (!(e > s)) return res.status(400).json({ error: 'Invalid time range' });
     const overlap = await prisma.tableReservation.count({
         where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
     });
     if (overlap > 0) return res.status(409).json({ error: 'Time slot taken' });
     const data: any = { clubId, tableId: table.id, memberId, startAt: s, endAt: e, status: 'PENDING' };
+    let unitPrice: number | null = null;
     if (schemeId) {
         const sid = String(schemeId);
         const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
         if (scheme && scheme.clubId === clubId) {
-            data.pricingSchemeId = sid;
-            data.priceQuote = scheme.price;
+            const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
+            if (applicable && (applicable as any).ok) {
+                data.pricingSchemeId = sid;
+                unitPrice = (applicable as any).pricePerHour != null ? Number((applicable as any).pricePerHour) : (scheme.price != null ? Number(scheme.price as any) : null);
+            }
         }
     }
+    if (unitPrice == null) {
+        unitPrice = table.basePrice != null ? Number(table.basePrice as any) : null;
+    }
+    if (unitPrice == null) {
+        return res.status(400).json({ error: 'No applicable scheme or base price set' });
+    }
+    const hours = (e.getTime() - s.getTime()) / (60 * 60 * 1000);
+    data.priceQuote = String(unitPrice * hours);
     const created = await prisma.tableReservation.create({ data });
     try {
         const messageTitle = '新預約待確認';

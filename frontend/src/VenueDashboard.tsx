@@ -19,6 +19,7 @@ const VenueDashboard: React.FC = () => {
   const [tables, setTables] = useState<any[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newTableNotes, setNewTableNotes] = useState('');
+  const [newTableBasePrice, setNewTableBasePrice] = useState('');
   const [pricing, setPricing] = useState<any[]>([]);
   const [newPricingTitle, setNewPricingTitle] = useState('');
   const [newPricingDesc, setNewPricingDesc] = useState('');
@@ -282,11 +283,12 @@ const VenueDashboard: React.FC = () => {
               <h3 className="font-semibold mb-2">球枱</h3>
               <div className="flex gap-2 mb-3">
                 <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="球枱名稱" />
+                <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="正價/時" />
                 <button onClick={async () => {
                   if (!newTableName.trim()) return;
-                  const row = await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined });
+                  const row = await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined, basePrice: newTableBasePrice.trim() || undefined });
                   setTables([...tables, row]);
-                  setNewTableName(''); setNewTableNotes('');
+                  setNewTableName(''); setNewTableNotes(''); setNewTableBasePrice('');
                 }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增</button>
               </div>
               <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white mb-3" placeholder="備註" />
@@ -294,6 +296,7 @@ const VenueDashboard: React.FC = () => {
                 {tables.map(t => (
                   <div key={t.id} className="flex items-center gap-2 bg-gray-800 p-2 rounded">
                     <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
+                    <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="正價/時" />
                     <label className="text-sm flex items-center gap-1">
                       <input type="checkbox" checked={t.active} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, active: e.target.checked } : x))} />
                       啟用
@@ -301,7 +304,7 @@ const VenueDashboard: React.FC = () => {
                     <button onClick={async () => {
                       const cur = tables.find(x => x.id === t.id);
                       if (!cur) return;
-                      const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null });
+                      const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null, basePrice: cur.basePrice ?? null });
                       setTables(prev => prev.map(x => x.id === t.id ? updated : x));
                     }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
                   </div>
@@ -314,6 +317,8 @@ const VenueDashboard: React.FC = () => {
                 <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
                 <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
                 <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="價目（例如 180）" />
+                <select onChange={(e) => {/* store temp in state via inline closure not available here */}} className="hidden" />
+                <div className="text-xs text-gray-400">在下方每筆方案中可設定適用球枱</div>
                 <textarea value={newPricingRules} onChange={(e) => setNewPricingRules(e.target.value)} className="h-24 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white font-mono text-xs" placeholder='[{"daysOfWeek":[1,2,3],"start":"10:00","end":"18:00","pricePerHour":120}]' />
                 <button onClick={async () => {
                   if (!newPricingTitle.trim()) return;
@@ -330,6 +335,10 @@ const VenueDashboard: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
                       <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="價目" />
+                      <select value={p.tableId || ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, tableId: e.target.value || null } : x))} className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm">
+                        <option value="">全部球枱</option>
+                        {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
                       <label className="text-sm flex items-center gap-1">
                         <input type="checkbox" checked={p.active} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, active: e.target.checked } : x))} />
                         啟用
@@ -337,7 +346,7 @@ const VenueDashboard: React.FC = () => {
                       <button onClick={async () => {
                         const cur = pricing.find(x => x.id === p.id);
                         if (!cur) return;
-                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price });
+                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price, tableId: cur.tableId || null });
                         setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
                       }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
                     </div>
