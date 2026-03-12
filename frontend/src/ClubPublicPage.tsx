@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, createReservation } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, createReservation } from './lib/api';
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -17,6 +17,9 @@ const ClubPublicPage: React.FC = () => {
   const [date, setDate] = useState<string>('');
   const [start, setStart] = useState<string>('10:00');
   const [hours, setHours] = useState<number>(1);
+  const [dayReservations, setDayReservations] = useState<any[]>([]);
+  const [availLoading, setAvailLoading] = useState(false);
+  const [availError, setAvailError] = useState<string | null>(null);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -47,6 +50,34 @@ const ClubPublicPage: React.FC = () => {
     if (!selectedStartAt) return false;
     return selectedStartAt.getTime() < Date.now() - 60_000;
   }, [selectedStartAt]);
+
+  const daySlotButtons = useMemo(() => {
+    if (!date) return [];
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    if (!Number.isFinite(dayStart.getTime())) return [];
+
+    const intervals = (Array.isArray(dayReservations) ? dayReservations : [])
+      .map((r) => {
+        const s = new Date(String((r as any)?.startAt));
+        const e = new Date(String((r as any)?.endAt));
+        if (!Number.isFinite(s.getTime()) || !Number.isFinite(e.getTime())) return null;
+        return { startAt: s.getTime(), endAt: e.getTime() };
+      })
+      .filter(Boolean) as Array<{ startAt: number; endAt: number }>;
+
+    const overlaps = (aStart: number, aEnd: number) => intervals.some((it) => it.startAt < aEnd && it.endAt > aStart);
+
+    return Array.from({ length: 24 }).map((_, hour) => {
+      const slotStart = new Date(dayStart.getTime());
+      slotStart.setHours(hour, 0, 0, 0);
+      const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000);
+      const busy = overlaps(slotStart.getTime(), slotEnd.getTime());
+      const isPast = slotEnd.getTime() < Date.now() - 60_000;
+      const label = `${pad2(hour)}:00`;
+      return { hour, label, busy, isPast };
+    });
+  }, [dayReservations, date, pad2]);
 
   const loadClub = useCallback(async () => {
     try {
@@ -85,6 +116,31 @@ const ClubPublicPage: React.FC = () => {
       .then(setSchemes)
       .catch(() => setSchemes([]));
   }, [clubId, selTable, date, start, hours, isPastStartTime]);
+
+  useEffect(() => {
+    if (!clubId || !selTable || !date) {
+      setDayReservations([]);
+      setAvailError(null);
+      return;
+    }
+    const from = new Date(date);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) {
+      setDayReservations([]);
+      setAvailError('日期格式不正確');
+      return;
+    }
+    setAvailLoading(true);
+    setAvailError(null);
+    getAvailability(API_URL, clubId, from.toISOString(), to.toISOString(), selTable)
+      .then((rows) => setDayReservations(Array.isArray(rows) ? rows : []))
+      .catch((e: any) => {
+        setDayReservations([]);
+        setAvailError(e?.message || '讀取可用性失敗');
+      })
+      .finally(() => setAvailLoading(false));
+  }, [clubId, selTable, date]);
 
   useEffect(() => {
     if (selScheme && !schemes.some(s => s.id === selScheme)) setSelScheme('');
@@ -326,6 +382,55 @@ const ClubPublicPage: React.FC = () => {
               >
                 送出預約
               </button>
+            </>
+          )}
+        </div>
+
+        <div style={{ textAlign: 'left', background: '#333', padding: 20, borderRadius: 8, marginBottom: 30 }}>
+          <h3 style={{ marginTop: 0, borderBottom: '1px solid #444', paddingBottom: 10 }}>當日時間表</h3>
+          {!selTable || !date ? (
+            <div style={{ color: '#ccc', fontSize: 13 }}>請先選擇球枱及日期，即可查看該日已預約/空閒時段。</div>
+          ) : availLoading ? (
+            <div style={{ color: '#ccc', fontSize: 13 }}>載入中...</div>
+          ) : availError ? (
+            <div style={{ color: '#ffb4b4', fontSize: 13 }}>{availError}</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 10 }}>按空閒時段可自動填入「開始時間」。紅色=已預約，綠色=空閒。</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                {daySlotButtons.map((b) => {
+                  const disabled = b.busy || b.isPast;
+                  const bg = b.busy ? '#7f1d1d' : (b.isPast ? '#444' : '#14532d');
+                  const fg = b.busy ? '#fff' : (b.isPast ? '#bbb' : '#fff');
+                  return (
+                    <button
+                      key={b.hour}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setStart(b.label)}
+                      style={{ padding: '10px 8px', borderRadius: 8, border: '1px solid #444', background: bg, color: fg, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13 }}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 12, color: '#aaa' }}>
+                已預約時段：
+                {Array.isArray(dayReservations) && dayReservations.length > 0 ? (
+                  <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
+                    {dayReservations.map((r: any) => {
+                      const s = new Date(String(r?.startAt));
+                      const e = new Date(String(r?.endAt));
+                      const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
+                      const label = ok ? `${pad2(s.getHours())}:${pad2(s.getMinutes())} - ${pad2(e.getHours())}:${pad2(e.getMinutes())}` : '—';
+                      return <div key={r.id} style={{ background: '#2a2a2a', border: '1px solid #444', borderRadius: 8, padding: '8px 10px' }}>{label}</div>;
+                    })}
+                  </div>
+                ) : (
+                  <span style={{ marginLeft: 6, color: '#ccc' }}>（暫無）</span>
+                )}
+              </div>
             </>
           )}
         </div>
