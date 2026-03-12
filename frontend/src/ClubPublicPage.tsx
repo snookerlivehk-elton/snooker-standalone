@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, createReservation } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation } from './lib/api';
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -20,6 +20,9 @@ const ClubPublicPage: React.FC = () => {
   const [dayReservations, setDayReservations] = useState<any[]>([]);
   const [availLoading, setAvailLoading] = useState(false);
   const [availError, setAvailError] = useState<string | null>(null);
+  const [myReservations, setMyReservations] = useState<any[]>([]);
+  const [myResLoading, setMyResLoading] = useState(false);
+  const [myResError, setMyResError] = useState<string | null>(null);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -98,6 +101,23 @@ const ClubPublicPage: React.FC = () => {
       setSchemes([]);
     }
   }, [clubId, loadClub]);
+
+  useEffect(() => {
+    if (!clubId || !session?.id) {
+      setMyReservations([]);
+      setMyResError(null);
+      return;
+    }
+    setMyResLoading(true);
+    setMyResError(null);
+    getMyReservations(API_URL, clubId, session.id)
+      .then((rows) => setMyReservations(Array.isArray(rows) ? rows : []))
+      .catch((e: any) => {
+        setMyReservations([]);
+        setMyResError(e?.message || '讀取我的預約失敗');
+      })
+      .finally(() => setMyResLoading(false));
+  }, [clubId, session]);
 
   useEffect(() => {
     if (!clubId || !selTable || !date || !start || !hours) {
@@ -373,6 +393,17 @@ const ClubPublicPage: React.FC = () => {
                     const quote = created?.priceQuote != null ? Number(created.priceQuote) : null;
                     const quoteText = Number.isFinite(quote) ? `\n報價：$${fmtMoney(quote as number)}` : '';
                     alert(`已送出，待場館確認${quoteText}`);
+                    try {
+                      const from = new Date(date);
+                      from.setHours(0, 0, 0, 0);
+                      const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+                      const [rows, myRows] = await Promise.all([
+                        getAvailability(API_URL, club.id, from.toISOString(), to.toISOString(), selTable),
+                        getMyReservations(API_URL, club.id, session.id),
+                      ]);
+                      setDayReservations(Array.isArray(rows) ? rows : []);
+                      setMyReservations(Array.isArray(myRows) ? myRows : []);
+                    } catch {}
                   } catch (err: any) {
                     alert(err.message || '預約失敗');
                   }
@@ -432,6 +463,49 @@ const ClubPublicPage: React.FC = () => {
                 )}
               </div>
             </>
+          )}
+        </div>
+
+        <div style={{ textAlign: 'left', background: '#333', padding: 20, borderRadius: 8, marginBottom: 30 }}>
+          <h3 style={{ marginTop: 0, borderBottom: '1px solid #444', paddingBottom: 10 }}>我的預約（此場館）</h3>
+          {!session.id ? (
+            <div style={{ color: '#ccc', fontSize: 13 }}>需登入才能查看。</div>
+          ) : myResLoading ? (
+            <div style={{ color: '#ccc', fontSize: 13 }}>載入中...</div>
+          ) : myResError ? (
+            <div style={{ color: '#ffb4b4', fontSize: 13 }}>{myResError}</div>
+          ) : (
+            (() => {
+              const now = Date.now() - 60_000;
+              const upcoming = (Array.isArray(myReservations) ? myReservations : []).filter((r: any) => {
+                const s = new Date(String(r?.startAt));
+                return Number.isFinite(s.getTime()) && s.getTime() >= now;
+              });
+              if (upcoming.length === 0) return <div style={{ color: '#ccc', fontSize: 13 }}>（暫無）</div>;
+              return (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {upcoming.slice(0, 20).map((r: any) => {
+                    const s = new Date(String(r?.startAt));
+                    const e = new Date(String(r?.endAt));
+                    const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
+                    const ymd = ok ? `${s.getFullYear()}-${pad2(s.getMonth() + 1)}-${pad2(s.getDate())}` : '—';
+                    const time = ok ? `${pad2(s.getHours())}:${pad2(s.getMinutes())} - ${pad2(e.getHours())}:${pad2(e.getMinutes())}` : '—';
+                    const tableName = String(r?.table?.name || '');
+                    const status = String(r?.status || '');
+                    return (
+                      <div key={r.id} style={{ background: '#2a2a2a', border: '1px solid #444', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{tableName || '球枱'}</div>
+                          <div style={{ fontSize: 12, color: '#aaa' }}>{status}</div>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#ddd', marginTop: 6 }}>{ymd} · {time}</div>
+                      </div>
+                    );
+                  })}
+                  {upcoming.length > 20 && <div style={{ fontSize: 12, color: '#aaa' }}>只顯示最近 20 筆</div>}
+                </div>
+              );
+            })()
           )}
         </div>
         

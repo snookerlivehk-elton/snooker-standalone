@@ -611,7 +611,7 @@ router.post('/:clubId/reservations', async (req, res) => {
     const overlap = await prisma.tableReservation.count({
         where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
     });
-    if (overlap > 0) return res.status(409).json({ error: 'Time slot taken' });
+    if (overlap > 0) return res.status(409).json({ error: '該時段已被預約，請選擇其他時間' });
     const data: any = { clubId, tableId: table.id, memberId, startAt: s, endAt: e, status: 'PENDING' };
     let unitPrice: number | null = null;
     let schemeMinHours: number | null = null;
