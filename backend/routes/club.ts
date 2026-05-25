@@ -639,7 +639,7 @@ router.post('/reservations/:id/confirm', async (req, res) => {
     const overlap = await prisma.tableReservation.count({
         where: {
             tableId: r.tableId,
-            status: 'CONFIRMED',
+            status: { in: ['CONFIRMED', 'BLOCKED'] },
             AND: [{ startAt: { lt: r.endAt } }, { endAt: { gt: r.startAt } }],
             NOT: { id }
         }
@@ -709,10 +709,51 @@ router.get('/:clubId/availability', async (req, res) => {
     if (!from || !to) return res.status(400).json({ error: 'Missing from/to' });
     const start = new Date(String(from));
     const end = new Date(String(to));
-    const where: any = { clubId, status: { in: ['PENDING', 'CONFIRMED'] }, AND: [{ startAt: { lt: end } }, { endAt: { gt: start } }] };
+    const where: any = { clubId, status: { in: ['PENDING', 'CONFIRMED', 'BLOCKED'] }, AND: [{ startAt: { lt: end } }, { endAt: { gt: start } }] };
     if (tableId) where.tableId = String(tableId);
     const rows = await prisma.tableReservation.findMany({ where, include: { table: true }, orderBy: { startAt: 'asc' } });
     res.json(rows);
+});
+
+router.post('/reservations/manual', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+
+    const { tableId, startAt, endAt, quantityHours, mode, memberId } = req.body || {};
+    if (!tableId || !startAt) return res.status(400).json({ error: 'Missing fields' });
+    const table = await prisma.clubTable.findUnique({ where: { id: String(tableId) } });
+    if (!table || table.clubId !== clubId) return res.status(404).json({ error: 'Table not found' });
+
+    const s = new Date(String(startAt));
+    const e = endAt ? new Date(String(endAt)) : new Date(s.getTime() + (Number(quantityHours || 0) || 1) * 60 * 60 * 1000);
+    const now = Date.now();
+    if (!Number.isFinite(s.getTime()) || !Number.isFinite(e.getTime()) || !(e > s)) return res.status(400).json({ error: 'Invalid time range' });
+    if (e.getTime() < now - 60_000) return res.status(400).json({ error: '不能建立已結束的時段' });
+
+    const normalizedMode = String(mode || 'BLOCK').toUpperCase();
+    const isBlock = normalizedMode === 'BLOCK';
+    const targetMemberId = isBlock ? member.id : String(memberId || '').trim();
+    if (!targetMemberId) return res.status(400).json({ error: 'memberId required' });
+
+    const overlap = await prisma.tableReservation.count({
+        where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED', 'BLOCKED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
+    });
+    if (overlap > 0) return res.status(409).json({ error: '該時段已被預約/封鎖，請選擇其他時間' });
+
+    const created = await prisma.tableReservation.create({
+        data: {
+            clubId,
+            tableId: table.id,
+            memberId: targetMemberId,
+            startAt: s,
+            endAt: e,
+            status: isBlock ? 'BLOCKED' : 'CONFIRMED',
+            confirmedAt: new Date(),
+        }
+    });
+    res.json(created);
 });
 
 function parseHHMM(hhmm: string) {
@@ -801,7 +842,7 @@ router.post('/:clubId/reservations', async (req, res) => {
     if (s.getTime() < now - 60_000) return res.status(400).json({ error: '不能預約已過去的時間' });
     if (!(e > s)) return res.status(400).json({ error: 'Invalid time range' });
     const overlap = await prisma.tableReservation.count({
-        where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
+        where: { tableId: table.id, status: { in: ['PENDING', 'CONFIRMED', 'BLOCKED'] }, AND: [{ startAt: { lt: e } }, { endAt: { gt: s } }] }
     });
     if (overlap > 0) return res.status(409).json({ error: '該時段已被預約，請選擇其他時間' });
     const data: any = { clubId, tableId: table.id, memberId, startAt: s, endAt: e, status: 'PENDING' };

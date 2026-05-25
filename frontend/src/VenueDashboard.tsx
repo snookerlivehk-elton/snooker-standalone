@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 
 type PricingRule = {
@@ -35,6 +35,14 @@ const VenueDashboard: React.FC = () => {
   const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   const [allReservations, setAllReservations] = useState<any[]>([]);
+
+  const [manualMode, setManualMode] = useState<'BLOCK' | 'MEMBER'>('BLOCK');
+  const [manualTableId, setManualTableId] = useState('');
+  const [manualMemberId, setManualMemberId] = useState('');
+  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualStart, setManualStart] = useState(() => `${String(new Date().getHours()).padStart(2, '0')}:00`);
+  const [manualHours, setManualHours] = useState(1);
+  const [manualCreating, setManualCreating] = useState(false);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -698,6 +706,131 @@ const VenueDashboard: React.FC = () => {
 
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
+          <div className="cue-surface rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="font-semibold">手動預約 / 封鎖時段</div>
+              <select
+                value={manualMode}
+                onChange={(e) => {
+                  const v = String(e.target.value || 'BLOCK').toUpperCase();
+                  setManualMode(v === 'MEMBER' ? 'MEMBER' : 'BLOCK');
+                }}
+                className="px-3 py-2 rounded cue-input text-sm"
+              >
+                <option value="BLOCK">封鎖時段（禁止網上預約）</option>
+                <option value="MEMBER">手動預約（指定會員）</option>
+              </select>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-6">
+              <div className="md:col-span-2">
+                <label className="block text-sm mb-1 cue-muted">球枱</label>
+                <select
+                  value={manualTableId}
+                  onChange={(e) => setManualTableId(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                >
+                  <option value="">選擇球枱</option>
+                  {tables.filter((t: any) => t?.active !== false).map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {manualMode === 'MEMBER' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm mb-1 cue-muted">會員</label>
+                  <select
+                    value={manualMemberId}
+                    onChange={(e) => setManualMemberId(e.target.value)}
+                    className="w-full px-3 py-2 rounded cue-input"
+                  >
+                    <option value="">選擇會員</option>
+                    {clubMembers.map((cm: any) => (
+                      <option key={cm.member?.id || cm.id} value={cm.member?.id || ''}>
+                        {cm.member?.name || '-'}{cm.member?.email ? ` (${cm.member.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="md:col-span-1">
+                <label className="block text-sm mb-1 cue-muted">日期</label>
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-sm mb-1 cue-muted">開始</label>
+                <input
+                  type="time"
+                  value={manualStart}
+                  onChange={(e) => setManualStart(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                />
+              </div>
+              <div className="md:col-span-1">
+                <label className="block text-sm mb-1 cue-muted">時數</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={manualHours}
+                  onChange={(e) => setManualHours(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
+                  className="w-full px-3 py-2 rounded cue-input"
+                />
+              </div>
+              <div className="md:col-span-1 flex items-end">
+                <button
+                  type="button"
+                  disabled={manualCreating}
+                  onClick={async () => {
+                    try {
+                      if (!operatorId) return;
+                      if (!manualTableId) throw new Error('請先選擇球枱');
+                      if (manualMode === 'MEMBER' && !manualMemberId) throw new Error('請先選擇會員');
+                      if (!manualDate || !manualStart) throw new Error('請選擇日期/開始時間');
+
+                      const [hh, mm] = String(manualStart).split(':').map((x) => parseInt(x, 10));
+                      const s = new Date(String(manualDate));
+                      s.setHours(hh || 0, mm || 0, 0, 0);
+                      const h = Math.max(1, Number(manualHours) || 1);
+                      const e = new Date(s.getTime() + h * 60 * 60 * 1000);
+                      if (!Number.isFinite(s.getTime()) || !Number.isFinite(e.getTime()) || !(e > s)) throw new Error('時間格式不正確');
+
+                      setManualCreating(true);
+                      await createManualReservation(API_URL, operatorId, {
+                        mode: manualMode,
+                        tableId: manualTableId,
+                        startAt: s.toISOString(),
+                        endAt: e.toISOString(),
+                        quantityHours: h,
+                        ...(manualMode === 'MEMBER' ? { memberId: manualMemberId } : {}),
+                      });
+                      setToast(manualMode === 'BLOCK' ? '已封鎖該時段' : '已建立手動預約');
+                      setTimeout(() => setToast(null), 2000);
+                      await loadData();
+                    } catch (e: any) {
+                      setToast(e?.message || '建立失敗');
+                      setTimeout(() => setToast(null), 3000);
+                    } finally {
+                      setManualCreating(false);
+                    }
+                  }}
+                  className="w-full px-4 py-2 rounded cue-button hover:brightness-95 text-white font-semibold disabled:opacity-60"
+                >
+                  {manualCreating ? '處理中...' : (manualMode === 'BLOCK' ? '封鎖' : '建立')}
+                </button>
+              </div>
+            </div>
+            <div className="text-xs cue-muted mt-2">
+              封鎖時段會直接佔用該球枱時段，網上預約會因衝突而無法提交。
+            </div>
+          </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h3 className="font-semibold mb-2">球枱</h3>
@@ -1064,6 +1197,8 @@ const VenueDashboard: React.FC = () => {
                       const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
                       const tag = status === 'PENDING'
                         ? { label: '待確認', cls: 'bg-amber-900 text-white' }
+                        : status === 'BLOCKED'
+                          ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
                         : status === 'CONFIRMED' && ended
                           ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
                           : status === 'CONFIRMED'

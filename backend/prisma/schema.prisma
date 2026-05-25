@@ -300,6 +300,7 @@ model FoulTotals {
 enum ReservationStatus {
   PENDING
   CONFIRMED
+  BLOCKED
   CANCELLED
 }
 

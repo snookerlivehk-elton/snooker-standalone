@@ -475,6 +475,23 @@ export async function cancelReservation(apiUrl: string, memberId: string, id: st
   return res.json();
 }
 
+export async function createManualReservation(
+  apiUrl: string,
+  operatorId: string,
+  payload: { tableId: string; startAt: string; endAt?: string; quantityHours?: number; mode: 'BLOCK' | 'MEMBER'; memberId?: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/reservations/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': operatorId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '建立失敗');
+  }
+  return res.json();
+}
+
 export async function getPublicTables(apiUrl: string, clubId: string) {
   const res = await fetch(`${apiUrl}/api/club/${clubId}/tables`);
   if (!res.ok) throw new Error('讀取球枱失敗');
