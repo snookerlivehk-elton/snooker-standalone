@@ -12,6 +12,14 @@ type PricingRule = {
   pricePerHour?: number | null;
 };
 
+function normalizeVideoHref(raw: any): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  return `https://${s}`;
+}
+
 const VenueDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -615,6 +623,7 @@ const VenueDashboard: React.FC = () => {
                         <th className="py-2 px-2">會員</th>
                         <th className="py-2 px-2">分數</th>
                         <th className="py-2 px-2">日期</th>
+                        <th className="py-2 px-2">影片</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -623,6 +632,15 @@ const VenueDashboard: React.FC = () => {
                           <td className="py-2 px-2">{r.member?.name || '-'}</td>
                           <td className="py-2 px-2 font-semibold accent-yellow">{r.points}</td>
                           <td className="py-2 px-2 cue-muted">{r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}</td>
+                          <td className="py-2 px-2">
+                            {normalizeVideoHref(r.video_url) ? (
+                              <a href={normalizeVideoHref(r.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
+                                影片連結
+                              </a>
+                            ) : (
+                              <span className="cue-muted">-</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -691,8 +709,8 @@ const VenueDashboard: React.FC = () => {
                         <td className="py-2 px-2">{b.member?.name || '-'}</td>
                         <td className="py-2 px-2 font-semibold accent-yellow">{b.points}</td>
                         <td className="py-2 px-2">
-                          {b.video_url ? (
-                            <a href={b.video_url} target="_blank" rel="noreferrer" className="accent-blue underline">
+                          {normalizeVideoHref(b.video_url) ? (
+                            <a href={normalizeVideoHref(b.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
                               連結
                             </a>
                           ) : (

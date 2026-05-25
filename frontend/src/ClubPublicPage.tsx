@@ -6,6 +6,14 @@ import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 
+function normalizeVideoHref(raw: any): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  return `https://${s}`;
+}
+
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
   const [club, setClub] = useState<any>(null);
@@ -377,6 +385,16 @@ const ClubPublicPage: React.FC = () => {
                             <div className="text-xs cue-muted">
                               {r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}
                             </div>
+                            {normalizeVideoHref(r.video_url) && (
+                              <a
+                                href={normalizeVideoHref(r.video_url) as string}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs accent-blue underline"
+                              >
+                                影片連結
+                              </a>
+                            )}
                           </div>
                           <div className="flex-shrink-0 font-semibold accent-yellow">
                             {r.points}

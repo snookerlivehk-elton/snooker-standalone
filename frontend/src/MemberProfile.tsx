@@ -3,6 +3,14 @@ import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
 import { getMember, listMembers, updateMember, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation, getMyBreaks } from './lib/api';
 
+function normalizeVideoHref(raw: any): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  return `https://${s}`;
+}
+
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
@@ -220,8 +228,8 @@ const MemberProfile: React.FC = () => {
                         <td className="py-2 px-2">{b.club?.name || '-'}</td>
                         <td className="py-2 px-2 font-semibold accent-yellow">{b.points}</td>
                         <td className="py-2 px-2">
-                          {b.video_url ? (
-                            <a href={b.video_url} target="_blank" rel="noreferrer" className="accent-blue underline">
+                          {normalizeVideoHref(b.video_url) ? (
+                            <a href={normalizeVideoHref(b.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
                               連結
                             </a>
                           ) : (
