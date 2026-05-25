@@ -15,6 +15,17 @@
   }
   :root {
     --brand-bg: #0b0f17;
+    --brand-fg: #ffffff;
+    --brand-muted: rgba(255,255,255,0.78);
+    --brand-border: rgba(255,255,255,0.10);
+    --brand-surface: rgba(255,255,255,0.06);
+    --brand-surface-strong: rgba(255,255,255,0.10);
+    --brand-input-bg: rgba(17,24,39,0.55);
+    --brand-input-border: rgba(148,163,184,0.28);
+    --brand-input-placeholder: rgba(255,255,255,0.45);
+    --brand-page-bg: radial-gradient(1200px 600px at 10% 10%, rgba(14,165,233,0.12), transparent 60%),
+                     radial-gradient(800px 400px at 80% 20%, rgba(250,204,21,0.10), transparent 60%),
+                     var(--brand-bg);
     --brand-yellow: #facc15;
     --brand-blue: #0ea5e9;
     --glass-bg: rgba(255,255,255,0.06);
@@ -28,14 +39,29 @@
     --cue-text-zh: "Noto Sans TC", "PingFang HK", "Heiti TC", "Microsoft JhengHei", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     --cue-text-en: "Inter", "Segoe UI", Roboto, sans-serif;
   }
+
+  html[data-theme="light"] {
+    --brand-bg: #f8fafc;
+    --brand-fg: #0f172a;
+    --brand-muted: rgba(15,23,42,0.68);
+    --brand-border: rgba(15,23,42,0.14);
+    --brand-surface: rgba(255,255,255,0.75);
+    --brand-surface-strong: rgba(255,255,255,0.92);
+    --brand-input-bg: rgba(255,255,255,0.92);
+    --brand-input-border: rgba(15,23,42,0.18);
+    --brand-input-placeholder: rgba(15,23,42,0.45);
+    --brand-page-bg: radial-gradient(1200px 600px at 10% 10%, rgba(14,165,233,0.12), transparent 60%),
+                     radial-gradient(800px 400px at 80% 20%, rgba(250,204,21,0.10), transparent 60%),
+                     var(--brand-bg);
+    --glass-bg: rgba(255,255,255,0.75);
+    --glass-border: rgba(15,23,42,0.12);
+  }
 }
 
 @layer components {
   .brand-page {
-    background: radial-gradient(1200px 600px at 10% 10%, rgba(14,165,233,0.12), transparent 60%),
-                radial-gradient(800px 400px at 80% 20%, rgba(250,204,21,0.10), transparent 60%),
-                var(--brand-bg);
-    color: #fff;
+    background: var(--brand-page-bg);
+    color: var(--brand-fg);
     min-height: 100vh;
     min-height: 100dvh;
     width: 100%;
@@ -46,6 +72,28 @@
     backdrop-filter: saturate(180%) blur(10px);
     border: 1px solid var(--glass-border);
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .cue-muted {
+    color: var(--brand-muted);
+  }
+  .cue-surface {
+    background: var(--brand-surface);
+    border: 1px solid var(--brand-border);
+  }
+  .cue-surface-strong {
+    background: var(--brand-surface-strong);
+    border: 1px solid var(--brand-border);
+  }
+  .cue-border {
+    border-color: var(--brand-border);
+  }
+  .cue-input {
+    background: var(--brand-input-bg);
+    border: 1px solid var(--brand-input-border);
+    color: var(--brand-fg);
+  }
+  .cue-input::placeholder {
+    color: var(--brand-input-placeholder);
   }
   .brand-button {
     background: linear-gradient(90deg, var(--brand-yellow), #eab308);
@@ -83,14 +131,14 @@
   .cue-topbar {
     height: 8vh; /* 固定 8% */
     min-height: 56px;
-    background: rgba(0,0,0,0.5);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
     backdrop-filter: blur(10px);
   }
   .cue-bottomnav {
     height: 64px;
-    background: rgba(0,0,0,0.5);
-    border-top: 1px solid rgba(255,255,255,0.08);
+    background: var(--glass-bg);
+    border-top: 1px solid var(--glass-border);
     backdrop-filter: blur(10px);
   }
   .cue-active-tab {

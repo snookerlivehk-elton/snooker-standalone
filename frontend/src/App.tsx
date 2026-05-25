@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import Admin from './Admin';
 import Scoreboard from './Scoreboard';
@@ -28,28 +28,47 @@ import { GOOGLE_CLIENT_ID } from './config';
 // Force frontend redeploy
 function LogoutButton() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem('theme') === 'light' ? 'light' : 'dark');
+    } catch {
+      return 'dark';
+    }
+  });
   const session = (() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   })() as { id?: string };
   const hasSession = !!session?.id;
-  const hide =
-    location.pathname.startsWith('/members/login') ||
-    location.pathname.startsWith('/venue/login') ||
-    location.pathname.startsWith('/members/register') ||
-    location.pathname.startsWith('/members/simple-register') ||
-    location.pathname.startsWith('/onboarding');
-  if (!hasSession || hide) return null;
+
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('theme', theme);
+    } catch {}
+  }, [theme]);
+
   return (
-    <button
-      className="fixed top-3 right-3 z-50 px-3 py-2 rounded bg-gray-700/90 hover:bg-gray-600 text-white text-sm"
-      onClick={() => {
-        localStorage.removeItem('memberSession');
-        navigate('/members/login');
-      }}
-    >
-      登出
-    </button>
+    <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
+      <button
+        type="button"
+        className="px-3 py-2 rounded cue-surface-strong text-sm font-semibold hover:brightness-95"
+        onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+      >
+        {theme === 'dark' ? '日間' : '夜間'}
+      </button>
+      {hasSession && (
+        <button
+          type="button"
+          className="px-3 py-2 rounded cue-surface-strong text-sm font-semibold hover:brightness-95"
+          onClick={() => {
+            localStorage.removeItem('memberSession');
+            navigate('/members/login');
+          }}
+        >
+          登出
+        </button>
+      )}
+    </div>
   );
 }
 

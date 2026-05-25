@@ -121,7 +121,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
   };
 
   return (
-    <div className="brand-page text-white p-6 flex items-center justify-center">
+    <div className="brand-page p-4 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-md glass rounded-xl p-6">
         <div className="text-center mb-6">
           <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Cue Aim System</div>
@@ -140,7 +140,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 lowercase"
+                className="w-full px-3 py-2 rounded cue-input lowercase"
                 required
               />
             </div>
@@ -150,54 +150,54 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                className="w-full px-3 py-2 rounded cue-input"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50 font-bold"
+              className="px-4 py-2 rounded cue-button disabled:opacity-50 font-bold"
             >
               {loading ? '登入中...' : '登入'}
             </button>
             
             <div className="flex items-center my-2">
-              <div className="flex-grow border-t border-gray-600"></div>
-              <span className="mx-2 text-gray-400 text-sm">OR</span>
-              <div className="flex-grow border-t border-gray-600"></div>
+              <div className="flex-grow border-t" style={{ borderColor: 'var(--brand-border)' }}></div>
+              <span className="mx-2 cue-muted text-sm">OR</span>
+              <div className="flex-grow border-t" style={{ borderColor: 'var(--brand-border)' }}></div>
             </div>
 
             <div className="flex justify-center">
                <GoogleLogin
                   onSuccess={onGoogleSuccess}
                   onError={() => setError('Google Login Failed')}
-                  theme="filled_black"
+                  theme="outline"
                   text="signin_with"
                   shape="pill"
                />
             </div>
 
-            <div className="flex justify-between mt-2 text-sm text-gray-400">
+            <div className="flex justify-between mt-2 text-sm cue-muted">
               <button type="button" onClick={() => {
                 setView('forgot-request');
                 setError(null);
                 setSuccessMsg(null);
-              }} className="hover:text-white underline">
+              }} className="hover:brightness-95 underline">
                 忘記密碼？
               </button>
-              <button type="button" onClick={() => navigate('/members/register')} className="hover:text-white underline">
+              <button type="button" onClick={() => navigate('/members/register')} className="hover:brightness-95 underline">
                 首次使用？Google 登入
               </button>
             </div>
             
-            <div className="mt-4 text-center border-t border-gray-700 pt-3">
+            <div className="mt-4 text-center border-t pt-3" style={{ borderColor: 'var(--brand-border)' }}>
               {mode === 'member' ? (
-                <button type="button" onClick={() => navigate('/venue/login')} className="text-sm text-yellow-500 hover:text-yellow-400">
+                <button type="button" onClick={() => navigate('/venue/login')} className="text-sm accent-yellow hover:brightness-95">
                   我是場館/球會管理員？在此登入
                 </button>
               ) : (
-                <button type="button" onClick={() => navigate('/members/login')} className="text-sm text-yellow-500 hover:text-yellow-400">
+                <button type="button" onClick={() => navigate('/members/login')} className="text-sm accent-yellow hover:brightness-95">
                   我是普通會員？在此登入
                 </button>
               )}
@@ -207,14 +207,14 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
 
         {view === 'forgot-request' && (
           <form onSubmit={onRequestCode} className="grid gap-4">
-            <p className="text-sm text-gray-300">請輸入您的註冊 Email，我們將發送驗證碼給您。</p>
+            <p className="text-sm cue-muted">請輸入您的註冊 Email，我們將發送驗證碼給您。</p>
             <div>
               <label className="block text-sm font-medium mb-1">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 lowercase"
+                className="w-full px-3 py-2 rounded cue-input lowercase"
                 required
               />
             </div>
@@ -226,14 +226,14 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                   setError(null);
                   setSuccessMsg(null);
                 }}
-                className="flex-1 px-4 py-2 rounded bg-gray-600 hover:bg-gray-700"
+                className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95"
               >
                 返回
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded cue-button disabled:opacity-50"
               >
                 {loading ? '發送中...' : '發送驗證碼'}
               </button>
@@ -243,7 +243,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
 
         {view === 'forgot-reset' && (
           <form onSubmit={onResetPassword} className="grid gap-4">
-            <div className="bg-gray-700 p-3 rounded text-sm mb-2">
+            <div className="cue-surface rounded p-3 text-sm mb-2">
               驗證碼已發送至 <span className="text-yellow-400 font-mono">{email}</span>
             </div>
             <div>
@@ -252,7 +252,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 type="text"
                 value={resetCode}
                 onChange={(e) => setResetCode(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                className="w-full px-3 py-2 rounded cue-input"
                 placeholder="6位數字"
                 required
               />
@@ -263,7 +263,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                className="w-full px-3 py-2 rounded cue-input"
                 placeholder="至少8位，含英數"
                 required
               />
@@ -274,7 +274,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                className="w-full px-3 py-2 rounded cue-input"
                 required
               />
             </div>
@@ -282,14 +282,14 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
               <button
                 type="button"
                 onClick={() => setView('forgot-request')}
-                className="flex-1 px-4 py-2 rounded bg-gray-600 hover:bg-gray-700"
+                className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95"
               >
                 上一步
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-4 py-2 rounded bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded cue-button disabled:opacity-50"
               >
                 {loading ? '重設中...' : '重設密碼'}
               </button>
@@ -297,8 +297,8 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
           </form>
         )}
 
-        {error && <div className="text-red-400 mt-4 text-center p-2 bg-red-900/30 rounded border border-red-800/50">{error}</div>}
-        {successMsg && <div className="text-green-400 mt-4 text-center p-2 bg-green-900/30 rounded border border-green-800/50">{successMsg}</div>}
+        {error && <div className="text-red-500 mt-4 text-center p-2 cue-surface rounded">{error}</div>}
+        {successMsg && <div className="text-emerald-600 mt-4 text-center p-2 cue-surface rounded">{successMsg}</div>}
       </div>
     </div>
   );

@@ -158,9 +158,9 @@ const MemberProfile: React.FC = () => {
     return () => { mounted = false; };
   }, [selfMemberId, joinedClubs]);
 
-  if (loading) return <div style={{ padding: 16 }}>載入中...</div>;
-  if (error) return <div style={{ padding: 16, color: 'red' }}>{error}</div>;
-  if (!member) return <div style={{ padding: 16 }}>查無資料</div>;
+  if (loading) return <div className="brand-page p-4 cue-muted">載入中...</div>;
+  if (error) return <div className="brand-page p-4 text-red-500">{error}</div>;
+  if (!member) return <div className="brand-page p-4 cue-muted">查無資料</div>;
 
   const optionalDisplay = (() => {
     try {
@@ -174,7 +174,7 @@ const MemberProfile: React.FC = () => {
   const birthDisplay = String((member.birthDate ?? optionalDisplay.birthDate ?? '') || '') || '-';
 
   return (
-    <div className="brand-page text-white p-6">
+    <div className="brand-page p-4 sm:p-6">
       <div className="max-w-3xl mx-auto grid gap-6">
         <div className="glass rounded-xl p-4">
           <h2 className="text-xl font-bold mb-3">會員資料</h2>
@@ -188,24 +188,24 @@ const MemberProfile: React.FC = () => {
             <div><span className="font-semibold">出生日期：</span>{birthDisplay}</div>
             <div><span className="font-semibold">所屬球會：</span>{String(member.club_name || member.clubName || '未設定')}</div>
           </div>
-          <div className="text-xs text-gray-300/80 mt-2">必填資料不可更改；選填資料可於下方更新</div>
+          <div className="text-xs cue-muted mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
 
         {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
           <div className="glass rounded-xl p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
               <h3 className="text-lg font-semibold">我的單杆歷史</h3>
-              <div className="text-sm text-gray-400">{breaksLoading ? '載入中...' : `${breaks.length} 筆`}</div>
+              <div className="text-sm cue-muted">{breaksLoading ? '載入中...' : `${breaks.length} 筆`}</div>
             </div>
             {breaksLoading ? (
-              <div className="text-gray-400 text-sm">載入中...</div>
+              <div className="cue-muted text-sm">載入中...</div>
             ) : breaks.length === 0 ? (
-              <div className="text-gray-400 text-sm">暫無紀錄</div>
+              <div className="cue-muted text-sm">暫無紀錄</div>
             ) : (
               <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
+                    <tr className="cue-muted border-b cue-border">
                       <th className="py-2 px-2">日期</th>
                       <th className="py-2 px-2">場館</th>
                       <th className="py-2 px-2">分數</th>
@@ -215,20 +215,20 @@ const MemberProfile: React.FC = () => {
                   </thead>
                   <tbody>
                     {breaks.map((b: any) => (
-                      <tr key={b.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                        <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
+                      <tr key={b.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-2 cue-muted whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
                         <td className="py-2 px-2">{b.club?.name || '-'}</td>
-                        <td className="py-2 px-2 font-semibold text-yellow-400">{b.points}</td>
+                        <td className="py-2 px-2 font-semibold accent-yellow">{b.points}</td>
                         <td className="py-2 px-2">
                           {b.video_url ? (
-                            <a href={b.video_url} target="_blank" rel="noreferrer" className="text-blue-400 underline">
+                            <a href={b.video_url} target="_blank" rel="noreferrer" className="accent-blue underline">
                               連結
                             </a>
                           ) : (
-                            <span className="text-gray-500">-</span>
+                            <span className="cue-muted">-</span>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-gray-300">{b.note || '-'}</td>
+                        <td className="py-2 px-2 cue-muted">{b.note || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -248,7 +248,7 @@ const MemberProfile: React.FC = () => {
                     <button
                       type="button"
                       disabled={deletingMessages || Object.keys(selectedMessageIds).length === 0}
-                      className={`px-3 py-1.5 rounded text-sm ${deletingMessages || Object.keys(selectedMessageIds).length === 0 ? 'bg-gray-700 text-gray-400' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                      className={`px-3 py-1.5 rounded text-sm ${deletingMessages || Object.keys(selectedMessageIds).length === 0 ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
                       onClick={async () => {
                         const ids = Object.keys(selectedMessageIds);
                         if (ids.length === 0) return;
@@ -267,7 +267,7 @@ const MemberProfile: React.FC = () => {
                     >
                       刪除已選
                     </button>
-                    <label className="flex items-center gap-2 text-sm text-gray-300 select-none">
+                    <label className="flex items-center gap-2 text-sm cue-muted select-none">
                       <input
                         type="checkbox"
                         checked={messages.length > 0 && Object.keys(selectedMessageIds).length === messages.length}
@@ -287,11 +287,11 @@ const MemberProfile: React.FC = () => {
                 )}
               </div>
               {messages.length === 0 ? (
-                 <div className="text-gray-400 text-sm">暫無訊息</div>
+                 <div className="cue-muted text-sm">暫無訊息</div>
               ) : (
-                  <ul className="divide-y divide-gray-700/70 rounded-md border border-gray-700/50">
+                  <ul className="rounded-md border cue-border overflow-hidden">
                     {messages.map((msg: any) => (
-                      <li key={msg.id} className="flex items-center justify-between px-3 py-2 hover:bg-gray-800/70">
+                      <li key={msg.id} className="flex items-center justify-between px-3 py-2 border-b cue-border last:border-b-0 hover:brightness-95">
                         <div className="flex items-center gap-2 min-w-0">
                           <input
                             type="checkbox"
@@ -306,7 +306,7 @@ const MemberProfile: React.FC = () => {
                           />
                           {!msg.read && <span className="inline-block w-2 h-2 rounded-full bg-blue-400" aria-label="unread"></span>}
                           <button
-                            className={`text-left truncate hover:underline ${msg.read ? 'text-blue-300' : 'text-blue-400 font-semibold'}`}
+                            className={`text-left truncate hover:underline ${msg.read ? 'accent-blue' : 'accent-blue font-semibold'}`}
                             onClick={async () => {
                               try {
                                 const full = await getClubMessage(API_URL, selfMemberId, String(msg.id));
@@ -325,8 +325,8 @@ const MemberProfile: React.FC = () => {
                           </button>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <div className="text-xs text-gray-400">{msg.club?.name || '未知場館'}</div>
-                          <div className="text-xs text-gray-500">{new Date(msg.createdAt).toLocaleDateString()}</div>
+                          <div className="text-xs cue-muted">{msg.club?.name || '未知場館'}</div>
+                          <div className="text-xs cue-muted">{new Date(msg.createdAt).toLocaleDateString()}</div>
                         </div>
                       </li>
                     ))}
@@ -339,11 +339,11 @@ const MemberProfile: React.FC = () => {
           <div className="glass rounded-xl p-4">
             <h3 className="text-lg font-semibold mb-3">我的預約 ({reservations.length})</h3>
             {reservationsLoading ? (
-              <div className="text-gray-400 text-sm">載入中...</div>
+              <div className="cue-muted text-sm">載入中...</div>
             ) : reservations.length === 0 ? (
-              <div className="text-gray-400 text-sm">暫無預約</div>
+              <div className="cue-muted text-sm">暫無預約</div>
             ) : (
-              <div className="space-y-2">
+                  <div className="space-y-2">
                 {reservations.slice(0, 50).map((r: any) => {
                   const s = new Date(String(r?.startAt));
                   const e = new Date(String(r?.endAt));
@@ -362,11 +362,11 @@ const MemberProfile: React.FC = () => {
                   const clubName = String(r?._club?.name || r?.club?.name || r?._clubId || '');
                   const canCancel = status !== 'CANCELLED' && (!Number.isFinite(s.getTime()) || s.getTime() >= Date.now() - 60_000);
                   return (
-                    <div key={String(r.id)} className="bg-gray-700/40 border border-gray-700 rounded-lg p-3">
+                    <div key={String(r.id)} className="cue-surface rounded-lg p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-semibold truncate">{clubName || '球會'} · {String(r?.table?.name || '球枱')}</div>
-                          <div className="text-xs text-gray-300 mt-1">
+                          <div className="text-xs cue-muted mt-1">
                             {ok ? `${s.toLocaleDateString()} ${s.toLocaleTimeString()} - ${e.toLocaleTimeString()}` : '—'}
                           </div>
                         </div>
@@ -375,7 +375,7 @@ const MemberProfile: React.FC = () => {
                           <button
                             type="button"
                             disabled={!canCancel}
-                            className={`px-3 py-1.5 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                            className={`px-3 py-1.5 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
                             onClick={async () => {
                               const clubId = String(r?._clubId || r?.clubId || '');
                               if (!clubId) return;
@@ -406,7 +406,7 @@ const MemberProfile: React.FC = () => {
                     </div>
                   );
                 })}
-                {reservations.length > 50 && <div className="text-xs text-gray-400">只顯示最近 50 筆</div>}
+                {reservations.length > 50 && <div className="text-xs cue-muted">只顯示最近 50 筆</div>}
               </div>
             )}
           </div>
@@ -414,15 +414,15 @@ const MemberProfile: React.FC = () => {
 
         {openMessage && (
           <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700 max-h-[85dvh] flex flex-col">
-              <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                <div className="font-semibold text-white truncate">{openMessage.title || '無標題'}</div>
-                <button className="text-gray-300 hover:text-white" onClick={() => setOpenMessage(null)}>關閉</button>
+            <div className="cue-surface-strong rounded-lg shadow-xl max-w-lg w-full max-h-[85dvh] flex flex-col">
+              <div className="px-4 py-3 border-b cue-border flex items-center justify-between">
+                <div className="font-semibold truncate">{openMessage.title || '無標題'}</div>
+                <button className="cue-muted hover:brightness-95" onClick={() => setOpenMessage(null)}>關閉</button>
               </div>
               <div className="px-4 py-3 space-y-2 overflow-y-auto overscroll-contain">
-                <div className="text-xs text-gray-400">來自：{openMessage.club?.name || '未知場館'}</div>
-                <div className="text-xs text-gray-500">{new Date(openMessage.createdAt).toLocaleString()}</div>
-                <div className="text-gray-200 whitespace-pre-wrap mt-2">{openMessage.content}</div>
+                <div className="text-xs cue-muted">來自：{openMessage.club?.name || '未知場館'}</div>
+                <div className="text-xs cue-muted">{new Date(openMessage.createdAt).toLocaleString()}</div>
+                <div className="whitespace-pre-wrap mt-2">{openMessage.content}</div>
               </div>
             </div>
           </div>
@@ -433,17 +433,17 @@ const MemberProfile: React.FC = () => {
            <div className="glass rounded-xl p-4">
              <h3 className="text-lg font-semibold mb-3">比賽邀請 ({invites.length})</h3>
              {invites.length === 0 ? (
-               <div className="text-gray-400 text-sm">暫無邀請</div>
+               <div className="cue-muted text-sm">暫無邀請</div>
              ) : (
                <div className="space-y-3">
                  {invites.map((it: any) => (
-                   <div key={it.id} className="bg-gray-700/50 p-3 rounded-lg">
+                   <div key={it.id} className="cue-surface p-3 rounded-lg">
                      <div className="flex items-center justify-between">
                        <div>
                          <div className="font-semibold">房間：{String(it.roomId)}</div>
-                         <div className="text-xs text-gray-400 mt-0.5">狀態：{String(it.status)}</div>
+                         <div className="text-xs cue-muted mt-0.5">狀態：{String(it.status)}</div>
                          {it.operator && (
-                           <div className="text-xs text-gray-400">邀請人：{it.operator.name || it.operator.email}</div>
+                           <div className="text-xs cue-muted">邀請人：{it.operator.name || it.operator.email}</div>
                          )}
                        </div>
                        {String(it.status) === 'PENDING' ? (
@@ -461,7 +461,7 @@ const MemberProfile: React.FC = () => {
                            確認進入比賽
                          </button>
                        ) : (
-                         <span className="text-xs text-gray-400">已確認</span>
+                         <span className="text-xs cue-muted">已確認</span>
                        )}
                      </div>
                    </div>
@@ -476,16 +476,16 @@ const MemberProfile: React.FC = () => {
            <div className="glass rounded-xl p-4" id="joined-clubs">
               <h3 className="text-lg font-semibold mb-3">已加入場館 ({joinedClubs.length})</h3>
               {joinedClubs.length === 0 ? (
-                 <div className="text-gray-400 text-sm">尚未加入任何場館</div>
+                 <div className="cue-muted text-sm">尚未加入任何場館</div>
               ) : (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {joinedClubs.map((jc: any) => (
-                       <div key={jc.id} className="bg-gray-700/50 p-3 rounded-lg flex justify-between items-center">
+                       <div key={jc.id} className="cue-surface p-3 rounded-lg flex justify-between items-center">
                           <div>
                              <div className="font-bold">{jc.club?.name || '未命名場館'}</div>
-                             <div className="text-xs text-gray-400">加入於: {new Date(jc.joinedAt).toLocaleDateString()}</div>
+                             <div className="text-xs cue-muted">加入於: {new Date(jc.joinedAt).toLocaleDateString()}</div>
                           </div>
-                          <a href={`/club/${jc.club?.id}`} target="_blank" className="text-blue-400 text-sm hover:underline">查看</a>
+                          <a href={`/club/${jc.club?.id}`} target="_blank" className="accent-blue text-sm hover:underline">查看</a>
                        </div>
                     ))}
                  </div>
@@ -498,19 +498,19 @@ const MemberProfile: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm mb-1">電話</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
             </div>
             <div>
               <label className="block text-sm mb-1">出生日期</label>
-              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
             </div>
             <div className="md:col-span-2">
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm">所屬球會</label>
-                <a href="#joined-clubs" className="text-xs text-blue-400 hover:underline">跳到列表</a>
+                <a href="#joined-clubs" className="text-xs accent-blue hover:underline">跳到列表</a>
               </div>
               {joinedClubs.length === 0 ? (
-                <div className="text-sm text-gray-400">尚未加入任何場館</div>
+                <div className="text-sm cue-muted">尚未加入任何場館</div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {joinedClubs.map((jc: any) => (
@@ -518,7 +518,7 @@ const MemberProfile: React.FC = () => {
                       key={jc.id}
                       href={`/club/${jc.club?.id}`}
                       target="_blank"
-                      className="px-3 py-1.5 rounded-full bg-gray-700 text-sm text-blue-300 hover:bg-gray-600 hover:text-blue-200"
+                      className="px-3 py-1.5 rounded-full cue-surface-strong text-sm accent-blue hover:brightness-95"
                       title={jc.club?.name || '場館主頁'}
                     >
                       {jc.club?.name || '未命名場館'}
@@ -597,11 +597,11 @@ const MemberProfile: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm mb-1">新密碼</label>
-              <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
             </div>
             <div>
               <label className="block text-sm mb-1">確認新密碼</label>
-              <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+              <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
             </div>
           </div>
           <div className="mt-3">
@@ -622,7 +622,7 @@ const MemberProfile: React.FC = () => {
                   setTimeout(() => setToast(null), 3000);
                 } catch {}
               }}
-              className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700"
+              className="px-4 py-2 rounded cue-button hover:brightness-95"
             >
               重設密碼
             </button>
@@ -634,11 +634,11 @@ const MemberProfile: React.FC = () => {
           {matchesLoading ? (
             <div>載入中...</div>
           ) : matches.length === 0 ? (
-            <div className="text-gray-400 text-sm">尚無比賽記錄</div>
+            <div className="cue-muted text-sm">尚無比賽記錄</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="text-gray-400 border-b border-gray-700">
+                <thead className="cue-muted border-b cue-border">
                   <tr>
                     <th className="py-2 px-2">日期</th>
                     <th className="py-2 px-2">賽事</th>
@@ -660,22 +660,22 @@ const MemberProfile: React.FC = () => {
                     const duration = m.started_at && m.ended_at ? Math.round((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 60000) + ' 分鐘' : '-';
                     
                     return (
-                      <tr key={m.id} className="border-b border-gray-700 hover:bg-gray-750">
+                      <tr key={m.id} className="border-b cue-border hover:brightness-95">
                         <td className="py-2 px-2">
                           {new Date(m.started_at).toLocaleDateString()}
                           <br/>
-                          <span className="text-xs text-gray-400">{new Date(m.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-xs cue-muted">{new Date(m.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </td>
                         <td className="py-2 px-2">
                           <div className="font-medium">{m.name}</div>
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs cue-muted">
                             局數: {m.frames_required}
                             {(m.handicap0 > 0 || m.handicap1 > 0) && ` | 讓分: ${m.handicap0}/${m.handicap1}`}
                           </div>
                         </td>
                         <td className="py-2 px-2">
                            {m.operator?.name || '-'}<br/>
-                           <span className="text-xs text-gray-400">{m.operator?.club_name || '-'}</span>
+                           <span className="text-xs cue-muted">{m.operator?.club_name || '-'}</span>
                         </td>
                         <td className="py-2 px-2 font-bold">
                           {myPlayer.frames_won} - {opponent?.frames_won || 0}
@@ -700,7 +700,7 @@ const MemberProfile: React.FC = () => {
           )}
         </div>
 
-        {toast && <div className="text-green-400">{toast}</div>}
+        {toast && <div className="text-emerald-600">{toast}</div>}
       </div>
     </div>
   );

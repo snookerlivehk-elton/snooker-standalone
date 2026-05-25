@@ -40,7 +40,7 @@ const Me: React.FC = () => {
               <div className="cue-en-sub">Please login or register</div>
               <div className="mt-3 flex gap-2">
                 <a href="/members/login" className="cue-button px-4 py-2 rounded">登入</a>
-                <a href="/members/register" className="px-4 py-2 rounded bg-gray-700 text-white">註冊</a>
+                <a href="/members/register" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95">註冊</a>
               </div>
             </div>
           )}
@@ -58,15 +58,15 @@ const Me: React.FC = () => {
               </div>
               <div className="cue-card p-4">
                 <div className="cue-zh-title mb-2">最近比賽</div>
-                {loading && <div className="text-sm text-gray-300">讀取中…</div>}
-                {!loading && matches.length === 0 && <div className="text-sm text-gray-300">暫無資料</div>}
+                {loading && <div className="text-sm cue-muted">讀取中…</div>}
+                {!loading && matches.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
                 {!loading && matches.length > 0 && (
                   <div className="space-y-2">
                     {matches.slice(0, 5).map((m, idx) => (
                       <div key={m.id || idx} className="flex items-center justify-between text-sm">
                         <div className="font-medium">{m.opponentName || '對手'}</div>
-                        <div className="text-gray-300">{m.score || '-'}</div>
-                        <div className="text-gray-400">{m.duration || ''}</div>
+                        <div className="cue-muted">{m.score || '-'}</div>
+                        <div className="cue-muted">{m.duration || ''}</div>
                       </div>
                     ))}
                   </div>

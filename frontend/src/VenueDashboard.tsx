@@ -256,96 +256,96 @@ const VenueDashboard: React.FC = () => {
   if (!operatorId || !isOperator) return null;
 
   return (
-    <div className="brand-page text-white p-6">
+    <div className="brand-page p-4 sm:p-6">
       <div className="max-w-4xl mx-auto grid gap-6">
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Cue Aim System - 場館管理後台 <span className="text-sm font-normal text-yellow-500 ml-2">v2.1 Club</span></h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Cue Aim System - 場館管理後台 <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span></h1>
         <button 
             onClick={() => {
               localStorage.removeItem('memberSession');
               navigate('/members/login');
             }}
-            className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+            className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors"
           >
             登出
           </button>
         </div>
 
         {error && (
-          <div className="bg-red-900 text-red-200 p-3 rounded-lg">
+          <div className="cue-surface p-3 rounded-lg text-red-600">
             {error}
           </div>
         )}
 
         {toast && (
-          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow-lg z-50">
+          <div className="fixed bottom-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded shadow-lg z-50">
             {toast}
           </div>
         )}
 
         {/* Club Profile Management */}
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">場館資料管理</h2>
+          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">場館資料管理</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">場館名稱 (Club Name)</label>
+               <label className="block text-sm mb-1 cue-muted">場館名稱 (Club Name)</label>
                <input 
                  value={clubProfile.name || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, name: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 className="w-full px-3 py-2 rounded cue-input" 
                  placeholder="例如：南華會桌球室"
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">場館簡介 (Intro)</label>
+               <label className="block text-sm mb-1 cue-muted">場館簡介 (Intro)</label>
                <textarea 
                  value={clubProfile.intro || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, intro: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-24" 
+                 className="w-full px-3 py-2 rounded cue-input h-24" 
                  placeholder="簡介..."
                />
             </div>
             <div>
-               <label className="block text-sm mb-1 text-gray-400">聯絡電話 (Phone)</label>
+               <label className="block text-sm mb-1 cue-muted">聯絡電話 (Phone)</label>
                <input 
                  value={clubProfile.phone || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, phone: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 className="w-full px-3 py-2 rounded cue-input" 
                />
             </div>
             <div>
-               <label className="block text-sm mb-1 text-gray-400">聯絡 Email</label>
+               <label className="block text-sm mb-1 cue-muted">聯絡 Email</label>
                <input 
                  value={clubProfile.email || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, email: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 className="w-full px-3 py-2 rounded cue-input" 
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">地址 (Address)</label>
+               <label className="block text-sm mb-1 cue-muted">地址 (Address)</label>
                <input 
                  value={clubProfile.address || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, address: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 className="w-full px-3 py-2 rounded cue-input" 
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">Logo URL</label>
+               <label className="block text-sm mb-1 cue-muted">Logo URL</label>
                <input 
                  value={clubProfile.logoUrl || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, logoUrl: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" 
+                 className="w-full px-3 py-2 rounded cue-input" 
                  placeholder="https://..."
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 text-gray-400">付款方式說明（預約用）</label>
+               <label className="block text-sm mb-1 cue-muted">付款方式說明（預約用）</label>
                <textarea
                  value={clubProfile.paymentInfo || ''} 
                  onChange={(e) => setClubProfile({ ...clubProfile, paymentInfo: e.target.value })} 
-                 className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-20" 
+                 className="w-full px-3 py-2 rounded cue-input h-20" 
                  placeholder="例如：到場以現金/轉數快付款；需預付訂金..."
                />
             </div>
@@ -376,12 +376,12 @@ const VenueDashboard: React.FC = () => {
                         <div className="inline-block bg-white p-2 rounded-lg">
                           <QRCodeSVG ref={joinQrSvgRef as any} value={joinUrl} size={96} />
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">入會二維碼</div>
+                        <div className="text-xs cue-muted mt-1">入會二維碼</div>
                         <div className="mt-2 flex flex-col sm:flex-row gap-2 justify-center">
-                          <button type="button" onClick={downloadJoinQrPng} className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">
+                          <button type="button" onClick={downloadJoinQrPng} className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-xs">
                             下載 PNG
                           </button>
-                          <button type="button" onClick={downloadJoinQrSvg} className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs">
+                          <button type="button" onClick={downloadJoinQrSvg} className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-xs">
                             下載 SVG
                           </button>
                         </div>
@@ -399,18 +399,18 @@ const VenueDashboard: React.FC = () => {
 
         {/* Club Members List */}
         <div className="glass rounded-xl p-4 md:p-6">
-          <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
              <h2 className="text-xl font-bold">場館會員 ({clubMembers.length})</h2>
-             <button onClick={loadData} className="text-sm text-blue-400 hover:text-blue-300">重新整理</button>
+             <button onClick={loadData} className="text-sm accent-blue hover:underline">重新整理</button>
           </div>
           
           {clubMembers.length === 0 ? (
-             <div className="text-gray-400 text-center py-8">暫無會員加入</div>
+             <div className="cue-muted text-center py-8">暫無會員加入</div>
           ) : (
              <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse">
                    <thead>
-                      <tr className="text-gray-400 border-b border-gray-700">
+                      <tr className="cue-muted border-b cue-border">
                          <th className="py-2 px-3">名稱</th>
                          <th className="py-2 px-3">Email</th>
                          <th className="py-2 px-3">電話</th>
@@ -419,11 +419,11 @@ const VenueDashboard: React.FC = () => {
                    </thead>
                    <tbody>
                       {clubMembers.map((cm: any) => (
-                         <tr key={cm.id} className="border-b border-gray-800 hover:bg-gray-700/50">
+                         <tr key={cm.id} className="border-b cue-border hover:brightness-95">
                             <td className="py-2 px-3">{cm.member?.name || '-'}</td>
-                            <td className="py-2 px-3 text-sm text-gray-400">{cm.member?.email || '-'}</td>
+                            <td className="py-2 px-3 text-sm cue-muted">{cm.member?.email || '-'}</td>
                             <td className="py-2 px-3 text-sm">{cm.member?.phone || '-'}</td>
-                            <td className="py-2 px-3 text-sm text-gray-400">{new Date(cm.joinedAt).toLocaleDateString()}</td>
+                            <td className="py-2 px-3 text-sm cue-muted">{new Date(cm.joinedAt).toLocaleDateString()}</td>
                          </tr>
                       ))}
                    </tbody>
@@ -433,19 +433,19 @@ const VenueDashboard: React.FC = () => {
         </div>
 
         <div className="glass rounded-xl p-4 md:p-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b border-gray-700 pb-2">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">單杆紀錄</h2>
             <div className="flex flex-wrap gap-2 items-center">
               <input
                 type="month"
                 value={breakFilterMonth}
                 onChange={(e) => setBreakFilterMonth(e.target.value)}
-                className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                className="px-3 py-2 rounded cue-input text-sm"
               />
               <select
                 value={breakFilterMember}
                 onChange={(e) => setBreakFilterMember(e.target.value)}
-                className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                className="px-3 py-2 rounded cue-input text-sm"
               >
                 <option value="">全部會員</option>
                 {clubMembers.map((cm: any) => (
@@ -456,7 +456,7 @@ const VenueDashboard: React.FC = () => {
               </select>
               <button
                 onClick={loadBreakData}
-                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm"
+                className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
               >
                 重新整理
               </button>
@@ -465,11 +465,11 @@ const VenueDashboard: React.FC = () => {
 
           <div className="grid gap-3 md:grid-cols-6">
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1 text-gray-300">會員</label>
+              <label className="block text-sm mb-1 cue-muted">會員</label>
               <select
                 value={breakMemberId}
                 onChange={(e) => setBreakMemberId(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                className="w-full px-3 py-2 rounded cue-input"
               >
                 <option value="">選擇會員</option>
                 {clubMembers.map((cm: any) => (
@@ -480,40 +480,40 @@ const VenueDashboard: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm mb-1 text-gray-300">分數</label>
+              <label className="block text-sm mb-1 cue-muted">分數</label>
               <input
                 value={breakPoints}
                 onChange={(e) => setBreakPoints(e.target.value)}
                 type="number"
                 min={1}
-                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                className="w-full px-3 py-2 rounded cue-input"
                 placeholder="例如 78"
               />
             </div>
             <div>
-              <label className="block text-sm mb-1 text-gray-300">日期</label>
+              <label className="block text-sm mb-1 cue-muted">日期</label>
               <input
                 value={breakRecordedAt}
                 onChange={(e) => setBreakRecordedAt(e.target.value)}
                 type="date"
-                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                className="w-full px-3 py-2 rounded cue-input"
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1 text-gray-300">影片連結（可空）</label>
+              <label className="block text-sm mb-1 cue-muted">影片連結（可空）</label>
               <input
                 value={breakVideoUrl}
                 onChange={(e) => setBreakVideoUrl(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                className="w-full px-3 py-2 rounded cue-input"
                 placeholder="https://..."
               />
             </div>
             <div className="md:col-span-5">
-              <label className="block text-sm mb-1 text-gray-300">備註（可空）</label>
+              <label className="block text-sm mb-1 cue-muted">備註（可空）</label>
               <input
                 value={breakNote}
                 onChange={(e) => setBreakNote(e.target.value)}
-                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                className="w-full px-3 py-2 rounded cue-input"
                 placeholder="例如：友誼賽 / 練習"
               />
             </div>
@@ -542,7 +542,7 @@ const VenueDashboard: React.FC = () => {
                     setTimeout(() => setToast(null), 3000);
                   }
                 }}
-                className="w-full px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="w-full px-4 py-2 rounded cue-button hover:brightness-95 text-white font-semibold"
               >
                 新增
               </button>
@@ -550,17 +550,17 @@ const VenueDashboard: React.FC = () => {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-3">
+            <div className="cue-surface rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-semibold">歷史最高單杆 Top 10</div>
               </div>
               {leaderHighest.length === 0 ? (
-                <div className="text-sm text-gray-400">暫無資料</div>
+                <div className="text-sm cue-muted">暫無資料</div>
               ) : (
                 <div className="overflow-x-auto -mx-2 px-2">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-700">
+                      <tr className="cue-muted border-b cue-border">
                         <th className="py-2 px-2">會員</th>
                         <th className="py-2 px-2">分數</th>
                         <th className="py-2 px-2">日期</th>
@@ -568,10 +568,10 @@ const VenueDashboard: React.FC = () => {
                     </thead>
                     <tbody>
                       {leaderHighest.map((r: any) => (
-                        <tr key={r.id} className="border-b border-gray-800">
+                        <tr key={r.id} className="border-b cue-border">
                           <td className="py-2 px-2">{r.member?.name || '-'}</td>
-                          <td className="py-2 px-2 font-semibold text-yellow-400">{r.points}</td>
-                          <td className="py-2 px-2 text-gray-400">{r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}</td>
+                          <td className="py-2 px-2 font-semibold accent-yellow">{r.points}</td>
+                          <td className="py-2 px-2 cue-muted">{r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -580,32 +580,32 @@ const VenueDashboard: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-3">
+            <div className="cue-surface rounded-lg p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
                 <div className="font-semibold">本月累計 Top 10</div>
                 <input
                   type="month"
                   value={leaderMonth}
                   onChange={(e) => setLeaderMonth(e.target.value)}
-                  className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                  className="px-3 py-2 rounded cue-input text-sm"
                 />
               </div>
               {leaderMonthly.length === 0 ? (
-                <div className="text-sm text-gray-400">暫無資料</div>
+                <div className="text-sm cue-muted">暫無資料</div>
               ) : (
                 <div className="overflow-x-auto -mx-2 px-2">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-700">
+                      <tr className="cue-muted border-b cue-border">
                         <th className="py-2 px-2">會員</th>
                         <th className="py-2 px-2">累計</th>
                       </tr>
                     </thead>
                     <tbody>
                       {leaderMonthly.map((r: any) => (
-                        <tr key={r.member?.id || r.member_id} className="border-b border-gray-800">
+                        <tr key={r.member?.id || r.member_id} className="border-b cue-border">
                           <td className="py-2 px-2">{r.member?.name || '-'}</td>
-                          <td className="py-2 px-2 font-semibold text-green-400">{r.totalPoints}</td>
+                          <td className="py-2 px-2 font-semibold text-emerald-600">{r.totalPoints}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -618,14 +618,14 @@ const VenueDashboard: React.FC = () => {
           <div className="mt-6">
             <div className="font-semibold mb-2">紀錄列表</div>
             {breaksLoading ? (
-              <div className="text-sm text-gray-400">載入中...</div>
+              <div className="text-sm cue-muted">載入中...</div>
             ) : breaks.length === 0 ? (
-              <div className="text-sm text-gray-400">暫無紀錄</div>
+              <div className="text-sm cue-muted">暫無紀錄</div>
             ) : (
               <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
+                    <tr className="cue-muted border-b cue-border">
                       <th className="py-2 px-2">日期</th>
                       <th className="py-2 px-2">會員</th>
                       <th className="py-2 px-2">分數</th>
@@ -635,20 +635,20 @@ const VenueDashboard: React.FC = () => {
                   </thead>
                   <tbody>
                     {breaks.map((b: any) => (
-                      <tr key={b.id} className="border-b border-gray-800 hover:bg-gray-700/30">
-                        <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
+                      <tr key={b.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-2 cue-muted whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
                         <td className="py-2 px-2">{b.member?.name || '-'}</td>
-                        <td className="py-2 px-2 font-semibold text-yellow-400">{b.points}</td>
+                        <td className="py-2 px-2 font-semibold accent-yellow">{b.points}</td>
                         <td className="py-2 px-2">
                           {b.video_url ? (
-                            <a href={b.video_url} target="_blank" rel="noreferrer" className="text-blue-400 underline">
+                            <a href={b.video_url} target="_blank" rel="noreferrer" className="accent-blue underline">
                               連結
                             </a>
                           ) : (
-                            <span className="text-gray-500">-</span>
+                            <span className="cue-muted">-</span>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-gray-300">{b.note || '-'}</td>
+                        <td className="py-2 px-2 cue-muted">{b.note || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -659,26 +659,26 @@ const VenueDashboard: React.FC = () => {
         </div>
 
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">預約管理</h2>
+          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h3 className="font-semibold mb-2">球枱</h3>
               <div className="flex gap-2 mb-3">
-                <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="球枱名稱" />
-                <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="正價/時" />
+                <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 px-3 py-2 rounded cue-input" placeholder="球枱名稱" />
+                <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded cue-input" placeholder="正價/時" />
                 <button onClick={async () => {
                   if (!newTableName.trim()) return;
                   const row = await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined, basePrice: newTableBasePrice.trim() || undefined });
                   setTables([...tables, row]);
                   setNewTableName(''); setNewTableNotes(''); setNewTableBasePrice('');
-                }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增</button>
+                }} className="px-3 py-2 rounded cue-button hover:brightness-95 text-white">新增</button>
               </div>
-              <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white mb-3" placeholder="備註" />
+              <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded cue-input mb-3" placeholder="備註" />
               <div className="space-y-2">
                 {tables.map(t => (
-                  <div key={t.id} className="flex items-center gap-2 bg-gray-800 p-2 rounded">
-                    <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
-                    <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="正價/時" />
+                  <div key={t.id} className="flex items-center gap-2 cue-surface p-2 rounded">
+                    <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded cue-input" />
+                    <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded cue-input text-sm" placeholder="正價/時" />
                     <label className="text-sm flex items-center gap-1">
                       <input
                         type="checkbox"
@@ -706,7 +706,7 @@ const VenueDashboard: React.FC = () => {
                       if (!cur) return;
                       const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null, basePrice: cur.basePrice ?? null });
                       setTables(prev => prev.map(x => x.id === t.id ? updated : x));
-                    }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                    }} className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm">儲存</button>
                     <button onClick={async () => {
                       if (!window.confirm('確定要刪除此球枱？（已有預約紀錄的球枱將無法刪除，請改用停用）')) return;
                       try {
@@ -726,27 +726,27 @@ const VenueDashboard: React.FC = () => {
             <div>
               <h3 className="font-semibold mb-2">收費方案</h3>
               <div className="grid gap-2 mb-3">
-                <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案標題" />
-                <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="方案說明" />
-                <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="價目（例如 180）" />
-                <input value={newPricingMinHours} onChange={(e) => setNewPricingMinHours(e.target.value)} type="number" min={1} step={1} className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" placeholder="最低購買時數（例如 2，可空）" />
-                <div className="bg-gray-900/40 border border-gray-700 rounded p-3">
+                <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded cue-input" placeholder="方案標題" />
+                <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded cue-input" placeholder="方案說明" />
+                <input value={newPricingPrice} onChange={(e) => setNewPricingPrice(e.target.value)} type="number" step="0.01" className="px-3 py-2 rounded cue-input" placeholder="價目（例如 180）" />
+                <input value={newPricingMinHours} onChange={(e) => setNewPricingMinHours(e.target.value)} type="number" min={1} step={1} className="px-3 py-2 rounded cue-input" placeholder="最低購買時數（例如 2，可空）" />
+                <div className="cue-surface rounded p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-sm font-semibold">生效時間規則</div>
                     <button
                       onClick={() => setNewPricingRules(prev => [...prev, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }])}
-                      className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                      className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm"
                       type="button"
                     >
                       新增規則
                     </button>
                   </div>
                   {newPricingRules.length === 0 ? (
-                    <div className="text-xs text-gray-400">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
+                    <div className="text-xs cue-muted">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
                   ) : (
                     <div className="grid gap-2">
                       {newPricingRules.map((r, idx) => (
-                        <div key={idx} className="bg-gray-800 rounded p-2">
+                        <div key={idx} className="cue-surface rounded p-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="flex items-center gap-1">
                               {weekDays.map(d => {
@@ -756,7 +756,7 @@ const VenueDashboard: React.FC = () => {
                                     key={d.n}
                                     type="button"
                                     onClick={() => setNewPricingRules(prev => prev.map((x, i) => i === idx ? toggleDayInRule(x, d.n) : x))}
-                                    className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-200'}`}
+                                    className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'cue-surface-strong cue-muted'}`}
                                   >
                                     {d.label}
                                   </button>
@@ -768,14 +768,14 @@ const VenueDashboard: React.FC = () => {
                                 type="time"
                                 value={r.start || '09:00'}
                                 onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, start: e.target.value } : x))}
-                                className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                className="px-2 py-1 rounded cue-input text-sm"
                               />
-                              <span className="text-gray-400 text-sm">-</span>
+                              <span className="cue-muted text-sm">-</span>
                               <input
                                 type="time"
                                 value={r.end || '16:00'}
                                 onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, end: e.target.value } : x))}
-                                className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                className="px-2 py-1 rounded cue-input text-sm"
                               />
                             </div>
                             <input
@@ -783,7 +783,7 @@ const VenueDashboard: React.FC = () => {
                               step="0.01"
                               value={r.pricePerHour ?? ''}
                               onChange={(e) => setNewPricingRules(prev => prev.map((x, i) => i === idx ? { ...x, pricePerHour: e.target.value === '' ? null : Number(e.target.value) } : x))}
-                              className="w-32 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                              className="w-32 px-2 py-1 rounded cue-input text-sm"
                               placeholder="$/小時(選填)"
                             />
                             <button
@@ -806,24 +806,24 @@ const VenueDashboard: React.FC = () => {
                   const row = await createPricingScheme(API_URL, operatorId, { title: newPricingTitle.trim(), description: newPricingDesc.trim() || undefined, rulesJson, price: newPricingPrice.trim() || undefined });
                   setPricing([...pricing, row]);
                   setNewPricingTitle(''); setNewPricingDesc(''); setNewPricingPrice(''); setNewPricingMinHours(''); setNewPricingRules([]);
-                }} className="px-3 py-2 rounded bg-blue-600 hover:bg-blue-700">新增方案</button>
+                }} className="px-3 py-2 rounded cue-button hover:brightness-95 text-white">新增方案</button>
               </div>
               <div className="space-y-2">
                 {pricing.map(p => (
-                  <div key={p.id} className="bg-gray-800 p-2 rounded">
+                  <div key={p.id} className="cue-surface p-2 rounded">
                     <div className="flex items-center gap-2 mb-2">
-                      <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white" />
-                      <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm" placeholder="價目" />
+                      <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded cue-input" />
+                      <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded cue-input text-sm" placeholder="價目" />
                       <input
                         value={getMinHours(p.rulesJson) ?? ''}
                         onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: withMinHours(x.rulesJson, e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 1)) } : x))}
                         type="number"
                         min={1}
                         step={1}
-                        className="w-28 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                        className="w-28 px-2 py-1 rounded cue-input text-sm"
                         placeholder="最低時數"
                       />
-                      <select value={p.tableId || ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, tableId: e.target.value || null } : x))} className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm">
+                      <select value={p.tableId || ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, tableId: e.target.value || null } : x))} className="px-2 py-1 rounded cue-input text-sm">
                         <option value="">全部球枱</option>
                         {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
@@ -836,7 +836,7 @@ const VenueDashboard: React.FC = () => {
                         if (!cur) return;
                         const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price, tableId: cur.tableId || null });
                         setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
-                      }} className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm">儲存</button>
+                      }} className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm">儲存</button>
                       <button onClick={async () => {
                         if (!window.confirm('確定要刪除此方案？（已有預約紀錄的方案將無法刪除，請改用停用）')) return;
                         try {
@@ -850,14 +850,14 @@ const VenueDashboard: React.FC = () => {
                         }
                       }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">刪除</button>
                     </div>
-                    <div className="bg-gray-900/40 border border-gray-700 rounded p-3">
+                    <div className="cue-surface rounded p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-sm font-semibold">生效時間規則</div>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, rulesJson: withRules(x.rulesJson, normalizeRules(x.rulesJson)) } : x))}
-                            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                            className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm"
                           >
                             重新整理
                           </button>
@@ -868,18 +868,18 @@ const VenueDashboard: React.FC = () => {
                               const curRules = normalizeRules(x.rulesJson);
                               return { ...x, rulesJson: withRules(x.rulesJson, [...curRules, { daysOfWeek: [1, 2, 3, 4, 5], start: '09:00', end: '16:00', pricePerHour: null }]) };
                             }))}
-                            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                            className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm"
                           >
                             新增規則
                           </button>
                         </div>
                       </div>
                       {normalizeRules(p.rulesJson).length === 0 ? (
-                        <div className="text-xs text-gray-400">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
+                        <div className="text-xs cue-muted">不設定規則＝任何時間都可用（若要限定時段，請新增規則）</div>
                       ) : (
                         <div className="grid gap-2">
                           {normalizeRules(p.rulesJson).map((r, idx) => (
-                            <div key={idx} className="bg-gray-800 rounded p-2">
+                            <div key={idx} className="cue-surface rounded p-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <div className="flex items-center gap-1">
                                   {weekDays.map(d => {
@@ -894,7 +894,7 @@ const VenueDashboard: React.FC = () => {
                                           rules[idx] = toggleDayInRule(rules[idx], d.n);
                                           return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                         }))}
-                                        className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-gray-200'}`}
+                                        className={`px-2 py-1 rounded text-xs ${active ? 'bg-yellow-500 text-black' : 'cue-surface-strong cue-muted'}`}
                                       >
                                         {d.label}
                                       </button>
@@ -911,9 +911,9 @@ const VenueDashboard: React.FC = () => {
                                       rules[idx] = { ...rules[idx], start: e.target.value };
                                       return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                     }))}
-                                    className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                    className="px-2 py-1 rounded cue-input text-sm"
                                   />
-                                  <span className="text-gray-400 text-sm">-</span>
+                                  <span className="cue-muted text-sm">-</span>
                                   <input
                                     type="time"
                                     value={r.end || '16:00'}
@@ -923,7 +923,7 @@ const VenueDashboard: React.FC = () => {
                                       rules[idx] = { ...rules[idx], end: e.target.value };
                                       return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                     }))}
-                                    className="px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                    className="px-2 py-1 rounded cue-input text-sm"
                                   />
                                 </div>
                                 <input
@@ -936,7 +936,7 @@ const VenueDashboard: React.FC = () => {
                                     rules[idx] = { ...rules[idx], pricePerHour: e.target.value === '' ? null : Number(e.target.value) };
                                     return { ...x, rulesJson: withRules(x.rulesJson, rules) };
                                   }))}
-                                  className="w-32 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                                  className="w-32 px-2 py-1 rounded cue-input text-sm"
                                   placeholder="$/小時(選填)"
                                 />
                                 <button
@@ -965,12 +965,12 @@ const VenueDashboard: React.FC = () => {
           <div className="mt-6">
             <h3 className="font-semibold mb-2">待確認預約</h3>
             {pendingReservations.length === 0 ? (
-              <div className="text-gray-400">暫無待確認預約</div>
+              <div className="cue-muted">暫無待確認預約</div>
             ) : (
               <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
+                    <tr className="cue-muted border-b cue-border">
                       <th className="py-2 px-3">會員</th>
                       <th className="py-2 px-3">球枱</th>
                       <th className="py-2 px-3">時間</th>
@@ -980,10 +980,10 @@ const VenueDashboard: React.FC = () => {
                   </thead>
                   <tbody>
                     {pendingReservations.map((r: any) => (
-                      <tr key={r.id} className="border-b border-gray-800">
+                      <tr key={r.id} className="border-b cue-border hover:brightness-95">
                         <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
                         <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                        <td className="py-2 px-3 text-sm text-gray-300">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                        <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
                         <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
                         <td className="py-2 px-3">
                           <div className="flex gap-2">
@@ -1005,12 +1005,12 @@ const VenueDashboard: React.FC = () => {
           <div className="mt-6">
             <h3 className="font-semibold mb-2">全部預約</h3>
             {allReservations.length === 0 ? (
-              <div className="text-gray-400">暫無預約</div>
+              <div className="cue-muted">暫無預約</div>
             ) : (
               <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="text-gray-400 border-b border-gray-700">
+                    <tr className="cue-muted border-b cue-border">
                       <th className="py-2 px-3">狀態</th>
                       <th className="py-2 px-3">會員</th>
                       <th className="py-2 px-3">球枱</th>
@@ -1031,23 +1031,23 @@ const VenueDashboard: React.FC = () => {
                           : status === 'CONFIRMED'
                             ? { label: '已確認', cls: 'bg-blue-800 text-white' }
                             : status === 'CANCELLED'
-                              ? { label: '已取消', cls: 'bg-gray-700 text-gray-200' }
-                              : { label: status || '—', cls: 'bg-gray-700 text-gray-200' };
+                              ? { label: '已取消', cls: 'cue-surface-strong cue-muted' }
+                              : { label: status || '—', cls: 'cue-surface-strong cue-muted' };
                       const canCancel = status !== 'CANCELLED';
                       return (
-                        <tr key={r.id} className="border-b border-gray-800">
+                        <tr key={r.id} className="border-b cue-border hover:brightness-95">
                           <td className="py-2 px-3">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
                           </td>
                           <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
                           <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                          <td className="py-2 px-3 text-sm text-gray-300">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                          <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
                           <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
                           <td className="py-2 px-3">
                             <button
                               type="button"
                               disabled={!canCancel}
-                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
                               onClick={async () => {
                                 if (!confirm('確定要刪除此預約（取消）嗎？')) return;
                                 try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
@@ -1061,7 +1061,7 @@ const VenueDashboard: React.FC = () => {
                     })}
                   </tbody>
                 </table>
-                {allReservations.length > 100 && <div className="text-xs text-gray-500 mt-2">只顯示最近 100 筆</div>}
+                {allReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
               </div>
             )}
           </div>
@@ -1069,23 +1069,23 @@ const VenueDashboard: React.FC = () => {
 
         {/* Broadcast Message */}
         <div className="glass rounded-xl p-6">
-           <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">發送場館訊息</h2>
+           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">發送場館訊息</h2>
            <div className="space-y-4">
               <div>
-                 <label className="block text-sm mb-1 text-gray-400">標題</label>
+                 <label className="block text-sm mb-1 cue-muted">標題</label>
                  <input 
                    value={msgTitle}
                    onChange={(e) => setMsgTitle(e.target.value)}
-                   className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                   className="w-full px-3 py-2 rounded cue-input"
                    placeholder="訊息標題"
                  />
               </div>
               <div>
-                 <label className="block text-sm mb-1 text-gray-400">內容</label>
+                 <label className="block text-sm mb-1 cue-muted">內容</label>
                  <textarea 
                    value={msgContent}
                    onChange={(e) => setMsgContent(e.target.value)}
-                   className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white h-24"
+                   className="w-full px-3 py-2 rounded cue-input h-24"
                    placeholder="輸入要發送給所有會員的訊息..."
                  />
               </div>
@@ -1119,21 +1119,21 @@ const VenueDashboard: React.FC = () => {
         <div className="glass rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-3">帳戶設定</h3>
           <div className="grid md:grid-cols-2 gap-3">
-             <div className="md:col-span-2 text-gray-400 mb-2">
+             <div className="md:col-span-2 cue-muted mb-2">
                 當前登入帳號：{operatorName} ({session.email})
              </div>
           </div>
           
-          <div className="mt-4 border-t border-gray-700 pt-4">
+          <div className="mt-4 border-t cue-border pt-4">
             <h4 className="text-md font-semibold mb-2">重設密碼</h4>
             <div className="grid md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm mb-1 text-gray-400">新密碼</label>
-                <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+                <label className="block text-sm mb-1 cue-muted">新密碼</label>
+                <input type="password" value={resetPwd} onChange={(e) => setResetPwd(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
               </div>
               <div>
-                <label className="block text-sm mb-1 text-gray-400">確認新密碼</label>
-                <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white" />
+                <label className="block text-sm mb-1 cue-muted">確認新密碼</label>
+                <input type="password" value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
               </div>
             </div>
             <button
@@ -1170,7 +1170,7 @@ const VenueDashboard: React.FC = () => {
                    setTimeout(() => setToast(null), 3000);
                 }
               }}
-              className="mt-3 px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="mt-3 px-4 py-2 rounded cue-button hover:brightness-95 transition-colors"
             >
               重設密碼
             </button>
@@ -1179,14 +1179,14 @@ const VenueDashboard: React.FC = () => {
 
         {/* Active Rooms Management */}
         <div className="glass rounded-xl p-6">
-          <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">進行中的房間</h2>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm cue-muted">
               {activeRooms.length} / 5
             </span>
           </div>
           
-          <p className="text-gray-400 mb-6 text-sm">
+          <p className="cue-muted mb-6 text-sm">
             您最多可以同時建立 5 個進行中的房間。建立後請使用下方連結進行設置或分享。
           </p>
 
@@ -1195,7 +1195,7 @@ const VenueDashboard: React.FC = () => {
             disabled={creating || activeRooms.length >= 5}
             className={`w-full py-3 rounded-lg font-bold mb-8 transition-colors ${
               creating || activeRooms.length >= 5
-                ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                ? 'cue-surface-strong cursor-not-allowed cue-muted'
                 : 'brand-button hover:brightness-95 text-black'
             }`}
           >
@@ -1205,9 +1205,9 @@ const VenueDashboard: React.FC = () => {
           {activeRooms.length > 0 ? (
             <div className="space-y-4">
               {activeRooms.map((room) => (
-                <div key={room.id} className="bg-gray-700 p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                <div key={room.id} className="cue-surface p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="bg-gray-900 px-3 py-1 rounded font-mono text-yellow-400 font-bold">
+                    <div className="cue-surface-strong px-3 py-1 rounded font-mono accent-yellow font-bold">
                       {room.code}
                     </div>
                     <div className="text-lg font-semibold">{room.name}</div>
@@ -1237,7 +1237,7 @@ const VenueDashboard: React.FC = () => {
                       disabled={deletingId === room.id}
                       className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                         deletingId === room.id
-                          ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                          ? 'cue-surface-strong cursor-not-allowed cue-muted'
                           : 'bg-red-600 hover:bg-red-700 text-white'
                       }`}
                     >
@@ -1248,19 +1248,19 @@ const VenueDashboard: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center text-gray-500 py-8 bg-gray-900/50 rounded-lg border border-gray-700 border-dashed">
+            <div className="text-center cue-muted py-8 cue-surface rounded-lg border border-dashed cue-border">
               目前沒有進行中的房間
             </div>
           )}
         </div>
 
         {/* Historical Room Records */}
-        <div className="bg-gray-800 rounded-xl p-6 shadow-lg">
-          <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+        <div className="glass rounded-xl p-6">
+          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">歷史房間記錄</h2>
             <button 
               onClick={loadData}
-              className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+              className="text-sm cue-surface-strong hover:brightness-95 px-3 py-1 rounded transition-colors"
             >
               重新整理
             </button>
@@ -1273,7 +1273,7 @@ const VenueDashboard: React.FC = () => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="text-gray-400 bg-gray-900/50 border-b border-gray-700">
+                <thead className="cue-muted border-b cue-border">
                   <tr>
                     <th className="py-3 px-4">日期</th>
                     <th className="py-3 px-4">房間/比賽代碼</th>
@@ -1292,10 +1292,10 @@ const VenueDashboard: React.FC = () => {
                       : '-';
                     
                     return (
-                      <tr key={m.id} className="hover:bg-gray-700/50 transition-colors">
+                      <tr key={m.id} className="hover:brightness-95 transition-colors">
                         <td className="py-3 px-4 align-top">{dateStr}</td>
                         <td className="py-3 px-4 align-top">
-                          <span className="font-mono bg-gray-900 px-2 py-0.5 rounded text-gray-300">
+                          <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
                             {m.matchCode || '-'}
                           </span>
                         </td>
@@ -1310,7 +1310,7 @@ const VenueDashboard: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{m.p0.name}</span>
                               {m.p0.handicap !== 0 && (
-                                <span className="text-xs bg-gray-600 px-1.5 rounded">
+                                <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
                                   {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
                                 </span>
                               )}
@@ -1323,7 +1323,7 @@ const VenueDashboard: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{m.p1.name}</span>
                               {m.p1.handicap !== 0 && (
-                                <span className="text-xs bg-gray-600 px-1.5 rounded">
+                                <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
                                   {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
                                 </span>
                               )}
