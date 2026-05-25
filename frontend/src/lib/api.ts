@@ -155,6 +155,77 @@ export async function getPublicClubProfile(apiUrl: string, clubId: string) {
   return res.json();
 }
 
+export async function getPublicClubs(apiUrl: string, params?: { q?: string; limit?: number }) {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set('q', params.q);
+  if (params?.limit != null) sp.set('limit', String(params.limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/public${qs ? `?${qs}` : ''}`);
+  if (!res.ok) throw new Error('Failed to load clubs');
+  return res.json();
+}
+
+export async function getSiteNotice(apiUrl: string) {
+  const res = await fetch(`${apiUrl}/api/site/notice`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to load site notice');
+  return res.json();
+}
+
+export async function updateSiteNotice(
+  apiUrl: string,
+  adminToken: string,
+  payload: { enabled?: boolean; message?: string; youtubeEmbedUrl?: string | null }
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/site/notice?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新公告失敗');
+  }
+  return res.json();
+}
+
+export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number) {
+  const sp = new URLSearchParams();
+  if (limit != null) sp.set('limit', String(limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/leaderboard/members/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('讀取會員榜失敗');
+  return res.json();
+}
+
+export async function getLeaderboardMembersMonthly(apiUrl: string, month: string, limit?: number) {
+  const sp = new URLSearchParams();
+  sp.set('month', month);
+  if (limit != null) sp.set('limit', String(limit));
+  const res = await fetch(`${apiUrl}/api/leaderboard/members/monthly?${sp.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('讀取會員榜失敗');
+  return res.json();
+}
+
+export async function getLeaderboardClubsHighest(apiUrl: string, limit?: number) {
+  const sp = new URLSearchParams();
+  if (limit != null) sp.set('limit', String(limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/leaderboard/clubs/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('讀取場館榜失敗');
+  return res.json();
+}
+
+export async function getLeaderboardClubsMonthly(apiUrl: string, month: string, limit?: number) {
+  const sp = new URLSearchParams();
+  sp.set('month', month);
+  if (limit != null) sp.set('limit', String(limit));
+  const res = await fetch(`${apiUrl}/api/leaderboard/clubs/monthly?${sp.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('讀取場館榜失敗');
+  return res.json();
+}
+
 export async function joinClub(apiUrl: string, memberId: string, clubId: string) {
   const res = await fetch(`${apiUrl}/api/club/join`, {
     method: 'POST',

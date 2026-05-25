@@ -40,6 +40,62 @@ async function requireClubAdmin(req: express.Request, res: express.Response) {
     return member;
 }
 
+router.get('/public', async (req, res) => {
+    try {
+        const qRaw = req.query.q ?? req.query.keyword ?? '';
+        const q = String(qRaw || '').trim();
+        const limitRaw = req.query.limit ?? '';
+        const limitNum = Number(limitRaw);
+        const take = Number.isFinite(limitNum) ? Math.max(1, Math.min(200, Math.floor(limitNum))) : 50;
+        const now = new Date();
+
+        const where: any = {
+            member: {
+                role: 'ADMIN',
+                is_enabled: true,
+                OR: [
+                    { access_expires_at: null },
+                    { access_expires_at: { gt: now } },
+                ],
+            },
+        };
+
+        if (q) {
+            where.OR = [
+                { name: { contains: q, mode: 'insensitive' } },
+                { intro: { contains: q, mode: 'insensitive' } },
+                { address: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+            ];
+        }
+
+        const rows = await prisma.clubProfile.findMany({
+            where,
+            orderBy: [{ updatedAt: 'desc' }],
+            take,
+            select: {
+                id: true,
+                name: true,
+                intro: true,
+                address: true,
+                phone: true,
+                logoUrl: true,
+                member: { select: { name: true } },
+            },
+        });
+
+        const result = rows.map((r) => ({
+            ...r,
+            name: r.name || r.member?.name || '',
+        }));
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error listing public clubs:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Get Club Profile (Public)
 router.get('/:id/public', async (req, res) => {
     const { id } = req.params;

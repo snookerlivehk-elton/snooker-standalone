@@ -23,6 +23,7 @@ import Rooms from './Rooms';
 import Me from './Me';
 import Onboarding from './Onboarding';
 import AndroidGuide from './AndroidGuide';
+import HomePage from './HomePage';
 import { GOOGLE_CLIENT_ID } from './config';
 
 // Force frontend redeploy
@@ -90,7 +91,7 @@ function App() {
       <LogoutButton />
       <Routes>
         {/* Public routes for LIVE app */}
-        <Route path="/" element={<Navigate to="/members/login" replace />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
         <Route path="/rooms" element={<Rooms />} />

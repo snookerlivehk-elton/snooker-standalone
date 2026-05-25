@@ -159,6 +159,15 @@ model LiveAnnouncement {
   @@index([deletedAt])
 }
 
+model SiteNotice {
+  id              String   @id @default("main")
+  enabled         Boolean  @default(true)
+  message         String   @default("")
+  youtubeEmbedUrl String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
 model ClubMember {
   id        String   @id @default(uuid())
   clubId    String

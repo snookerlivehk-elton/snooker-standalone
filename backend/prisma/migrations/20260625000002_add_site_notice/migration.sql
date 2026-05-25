@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS "SiteNotice" (
+  "id" TEXT NOT NULL DEFAULT 'main',
+  "enabled" BOOLEAN NOT NULL DEFAULT true,
+  "message" TEXT NOT NULL DEFAULT '',
+  "youtubeEmbedUrl" TEXT,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "SiteNotice_pkey" PRIMARY KEY ("id")
+);
+
+INSERT INTO "SiteNotice" ("id")
+VALUES ('main')
+ON CONFLICT ("id") DO NOTHING;
+

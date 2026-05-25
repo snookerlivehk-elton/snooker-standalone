@@ -2978,6 +2978,184 @@ app.patch('/api/admin/breaks/:id', adminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/site/notice', async (_req, res) => {
+  try {
+    const row = await prisma.siteNotice.findUnique({ where: { id: 'main' } });
+    res.json(row || { id: 'main', enabled: true, message: '', youtubeEmbedUrl: null });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+function parseMonthRangeUtc(month: string) {
+  const m = String(month || '').trim();
+  const match = /^(\d{4})-(\d{2})$/.exec(m);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const mon = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(mon) || mon < 1 || mon > 12) return null;
+  const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
+  return { start, end };
+}
+
+function parseLimit(raw: any, fallback: number) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(200, Math.floor(n)));
+}
+
+app.get('/api/leaderboard/members/highest', async (req, res) => {
+  try {
+    const take = parseLimit(req.query.limit, 10);
+    const rows = await prisma.breakRecord.groupBy({
+      by: ['member_id'],
+      where: { deleted_at: null },
+      _max: { points: true },
+      orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
+      take,
+    });
+    const ids = rows.map((r) => r.member_id);
+    const members = await prisma.member.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, member_code: true },
+    });
+    const memberMap = new Map(members.map((m) => [m.id, m]));
+    res.json(
+      rows.map((r) => ({
+        memberId: r.member_id,
+        member: memberMap.get(r.member_id) || null,
+        points: r._max.points || 0,
+      }))
+    );
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.get('/api/leaderboard/members/monthly', async (req, res) => {
+  try {
+    const take = parseLimit(req.query.limit, 10);
+    const month = String(req.query.month || '').trim();
+    const range = parseMonthRangeUtc(month);
+    if (!range) return res.status(400).json({ error: 'month invalid' });
+
+    const rows = await prisma.breakRecord.groupBy({
+      by: ['member_id'],
+      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+      _sum: { points: true },
+      orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
+      take,
+    });
+    const ids = rows.map((r) => r.member_id);
+    const members = await prisma.member.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, member_code: true },
+    });
+    const memberMap = new Map(members.map((m) => [m.id, m]));
+    res.json(
+      rows.map((r) => ({
+        memberId: r.member_id,
+        member: memberMap.get(r.member_id) || null,
+        points: r._sum.points || 0,
+      }))
+    );
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.get('/api/leaderboard/clubs/highest', async (req, res) => {
+  try {
+    const take = parseLimit(req.query.limit, 10);
+    const rows = await prisma.breakRecord.groupBy({
+      by: ['club_id'],
+      where: { deleted_at: null },
+      _max: { points: true },
+      orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
+      take,
+    });
+    const ids = rows.map((r) => r.club_id);
+    const clubs = await prisma.clubProfile.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
+    });
+    const clubMap = new Map(clubs.map((c) => [c.id, c]));
+    res.json(
+      rows.map((r) => {
+        const club = clubMap.get(r.club_id);
+        return {
+          clubId: r.club_id,
+          club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
+          points: r._max.points || 0,
+        };
+      })
+    );
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.get('/api/leaderboard/clubs/monthly', async (req, res) => {
+  try {
+    const take = parseLimit(req.query.limit, 10);
+    const month = String(req.query.month || '').trim();
+    const range = parseMonthRangeUtc(month);
+    if (!range) return res.status(400).json({ error: 'month invalid' });
+
+    const rows = await prisma.breakRecord.groupBy({
+      by: ['club_id'],
+      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+      _sum: { points: true },
+      orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
+      take,
+    });
+    const ids = rows.map((r) => r.club_id);
+    const clubs = await prisma.clubProfile.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
+    });
+    const clubMap = new Map(clubs.map((c) => [c.id, c]));
+    res.json(
+      rows.map((r) => {
+        const club = clubMap.get(r.club_id);
+        return {
+          clubId: r.club_id,
+          club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
+          points: r._sum.points || 0,
+        };
+      })
+    );
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.put('/api/admin/site/notice', adminAuth, async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const enabled = payload.enabled === undefined ? undefined : !!payload.enabled;
+    const message = payload.message === undefined ? undefined : String(payload.message || '');
+    const youtubeEmbedUrl =
+      payload.youtubeEmbedUrl === undefined
+        ? undefined
+        : (String(payload.youtubeEmbedUrl || '').trim() || null);
+
+    const row = await prisma.siteNotice.upsert({
+      where: { id: 'main' },
+      create: { id: 'main', enabled: enabled ?? true, message: message ?? '', youtubeEmbedUrl: youtubeEmbedUrl ?? null },
+      update: {
+        ...(enabled === undefined ? {} : { enabled }),
+        ...(message === undefined ? {} : { message }),
+        ...(youtubeEmbedUrl === undefined ? {} : { youtubeEmbedUrl }),
+      },
+    });
+    res.json(row);
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
 app.delete('/api/admin/breaks/:id', adminAuth, async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();
