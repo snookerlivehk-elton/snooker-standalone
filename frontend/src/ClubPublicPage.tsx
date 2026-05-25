@@ -4,6 +4,7 @@ import { API_URL } from './config';
 import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
+import TimeFeeCalculator from './components/TimeFeeCalculator';
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -324,6 +325,10 @@ const ClubPublicPage: React.FC = () => {
                 {club.intro}
               </p>
             )}
+
+            <div className="mt-6">
+              <TimeFeeCalculator title="波鐘計算機" />
+            </div>
 
             <div className="mt-6 cue-surface rounded-lg p-4 text-left">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">

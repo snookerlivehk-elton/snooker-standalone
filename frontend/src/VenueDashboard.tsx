@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
 import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
+import TimeFeeCalculator from './components/TimeFeeCalculator';
 
 type PricingRule = {
   daysOfWeek?: number[];
@@ -440,6 +441,10 @@ const VenueDashboard: React.FC = () => {
                   </Link>
                 )}
             </div>
+          </div>
+
+          <div className="mt-6">
+            <TimeFeeCalculator title="波鐘計算機" />
           </div>
         </div>
 
