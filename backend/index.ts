@@ -1837,22 +1837,20 @@ app.get('/api/me/breaks', async (req, res) => {
   }
 });
 
-// Register a new member with district-based sequential member_code (no country prefix for now)
 app.post('/api/members/register', async (req, res) => {
   try {
     const payload = (req.body || {}) as {
       email?: string;
       name?: string;
-      regionCode?: string;
-      districtCode?: string;
-      districtName?: string;
       phone?: string;
       birthDate?: string;
+      clubName?: string;
     };
 
     const email = String(payload.email || '').trim().normalize('NFKC');
     const name = String(payload.name || '').trim();
     const phone = payload.phone ? String(payload.phone).trim() : undefined;
+    const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
 
     if (!email || !name) {
@@ -1862,9 +1860,6 @@ app.post('/api/members/register', async (req, res) => {
     if (!emailOk) {
       return res.status(400).json({ error: 'email 格式不正確' });
     }
-
-    const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
-    const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
 
     const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
     if (birthDateStr && Number.isNaN(birthDate!.getTime())) {
@@ -1877,61 +1872,30 @@ app.post('/api/members/register', async (req, res) => {
         throw new Error('email 已存在');
       }
 
-      let regionCode = regionRaw;
-      let districtCode = districtRaw;
-
-      if (!regionCode && districtCode) {
-        regionCode = 'HKG';
+      let memberCode: string | null = null;
+      for (let i = 0; i < 5; i++) {
+        const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+        const exists = await tx.member.findFirst({ where: { member_code: code } });
+        if (!exists) {
+          memberCode = code;
+          break;
+        }
       }
-
-      if (!regionCode || !districtCode) {
-        throw new Error('regionCode 與 districtCode 為必填');
-      }
-
-      const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
-      if (!region || region.active === false) {
-        throw new Error('無效的地方編號');
-      }
-
-      const district = await tx.memberDistrict.findFirst({
-        where: { region_code: regionCode, code3: districtCode, active: true },
-      });
-      if (!district) {
-        throw new Error('無效的分區編號');
-      }
-
-      const seq = await tx.memberCodeSequence.upsert({
-        where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
-        update: { next_seq: { increment: 1 } },
-        create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
-        select: { next_seq: true },
-      });
-      const current = seq.next_seq - 1;
-      const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
-
-      // const token = Buffer.from(randomBytes(24)).toString('hex');
-      // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      const now = new Date();
-      const membershipExpires = new Date(now.getTime());
-      membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
 
       const created = await tx.member.create({
         data: {
           id: randomUUID(),
           name,
           email,
-          // region_code: regionCode,
-          district_code: districtCode,
+          district_code: null,
           phone: phone ?? null,
+          club_name: clubName ?? null,
           birth_date: birthDate ?? null,
           member_code: memberCode,
-          // email_verification_token: token,
-          // email_verification_expires_at: expiresAt,
-          membership_expires_at: membershipExpires,
+          membership_expires_at: null,
         },
       });
-      return { id: created.id, memberCode, token: '' }; // token empty
+      return { id: created.id, memberCode }; // token empty
     });
 
     // 寄送驗證信（若已配置郵件供應商）
@@ -2049,9 +2013,6 @@ app.post('/api/members/register-with-code', async (req, res) => {
       code?: string;
       name?: string;
       password?: string;
-      regionCode?: string;
-      districtCode?: string;
-      districtName?: string;
       phone?: string;
       birthDate?: string;
       clubName?: string;
@@ -2106,41 +2067,20 @@ app.post('/api/members/register-with-code', async (req, res) => {
       where: { id: verification.id },
       data: { used_at: now },
     });
-    const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
-    const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
     const result = await prisma.$transaction(async (tx) => {
       const existsEmail = await tx.member.findFirst({ where: { email } });
       if (existsEmail) {
         throw new Error('email 已存在');
       }
-      let regionCode = regionRaw;
-      let districtCode = districtRaw;
-      if (!regionCode && districtCode) {
-        regionCode = 'HKG';
+      let memberCode: string | null = null;
+      for (let i = 0; i < 5; i++) {
+        const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+        const exists = await tx.member.findFirst({ where: { member_code: code } });
+        if (!exists) {
+          memberCode = code;
+          break;
+        }
       }
-      if (!regionCode || !districtCode) {
-        throw new Error('regionCode 與 districtCode 為必填');
-      }
-      const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
-      if (!region || region.active === false) {
-        throw new Error('無效的地方編號');
-      }
-      const district = await tx.memberDistrict.findFirst({
-        where: { region_code: regionCode, code3: districtCode, active: true },
-      });
-      if (!district) {
-        throw new Error('無效的分區編號');
-      }
-      const seq = await tx.memberCodeSequence.upsert({
-        where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
-        update: { next_seq: { increment: 1 } },
-        create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
-        select: { next_seq: true },
-      });
-      const current = seq.next_seq - 1;
-      const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
-      const membershipExpires = new Date(now.getTime());
-      membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
       const salt = makeSalt();
       const h = createHash('sha256');
       h.update(salt + password);
@@ -2150,12 +2090,12 @@ app.post('/api/members/register-with-code', async (req, res) => {
           id: randomUUID(),
           name,
           email,
-          district_code: districtCode,
+          district_code: null,
           phone: phone ?? null,
           club_name: clubName ?? null,
           birth_date: birthDate ?? null,
           member_code: memberCode,
-          membership_expires_at: membershipExpires,
+          membership_expires_at: null,
           password_salt: salt,
           password_hash: digest,
           password_updated_at: now,

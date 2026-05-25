@@ -918,8 +918,6 @@ export async function registerMemberWithCode(
     name: string;
     email: string;
     password: string;
-    regionCode: string;
-    districtCode: string;
     code: string;
     phone?: string;
     clubName?: string;

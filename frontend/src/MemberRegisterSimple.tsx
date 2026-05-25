@@ -4,12 +4,11 @@ import { API_URL } from './config';
 const MemberRegisterSimple: React.FC = () => {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [districtCode, setDistrictCode] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ id: number; memberCode: string } | null>(null);
+  const [result, setResult] = useState<{ id: string; memberCode: string | null } | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +21,6 @@ const MemberRegisterSimple: React.FC = () => {
       const payload = {
         email: email.trim().toLowerCase(),
         name: name.trim(),
-        districtCode: districtCode.trim() || '',
         phone: phone.trim() || undefined,
         birthDate: birthDate.trim() || undefined,
       };
@@ -59,18 +57,12 @@ const MemberRegisterSimple: React.FC = () => {
             <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600" required/>
           </div>
           <div>
-            <label className="block text-sm mb-1">分區代碼（選填）</label>
-            <input type="text" value={districtCode} onChange={e => setDistrictCode(e.target.value)} placeholder="例如：HKI" className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"/>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
               <label className="block text-sm mb-1">電話（選填）</label>
               <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"/>
             </div>
-            <div>
+          <div>
               <label className="block text-sm mb-1">出生日期（選填）</label>
               <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"/>
-            </div>
           </div>
           <div className="flex justify-end">
             <button type="submit" disabled={loading} className="px-4 py-2 rounded brand-button text-black disabled:opacity-50">{loading ? '提交中...' : '註冊'}</button>
@@ -80,7 +72,7 @@ const MemberRegisterSimple: React.FC = () => {
         {result && (
           <div className="mt-4 bg-black/40 border border-white/10 rounded p-3">
             <div>註冊成功！會員ID：{result.id}</div>
-            <div>會員編碼：{result.memberCode}</div>
+            <div>會員編碼：{result.memberCode || '-'}</div>
           </div>
         )}
       </div>

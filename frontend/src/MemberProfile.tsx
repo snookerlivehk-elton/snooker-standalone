@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation, getMyBreaks } from './lib/api';
+import { getMember, listMembers, updateMember, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation, getMyBreaks } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
@@ -25,7 +25,6 @@ const MemberProfile: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
-  const [renewLoading, setRenewLoading] = useState(false);
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
@@ -173,13 +172,6 @@ const MemberProfile: React.FC = () => {
   })();
   const phoneDisplay = String((member.phone ?? optionalDisplay.phone ?? '') || '') || '-';
   const birthDisplay = String((member.birthDate ?? optionalDisplay.birthDate ?? '') || '') || '-';
-  const membershipExpiryDisplay = (() => {
-    const raw = (member.membership_expires_at || member.membershipExpiresAt) as string | undefined;
-    if (!raw) return '-';
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return String(raw);
-    return d.toLocaleDateString();
-  })();
 
   return (
     <div className="brand-page text-white p-6">
@@ -191,11 +183,9 @@ const MemberProfile: React.FC = () => {
             <div><span className="font-semibold">姓名：</span>{String(member.name || '-')}</div>
             <div><span className="font-semibold">Email：</span>{String(member.email || '-')}</div>
             <div><span className="font-semibold">會員編碼：</span>{String(member.member_code || '無')}</div>
-            <div><span className="font-semibold">地區代碼：</span>{String(member.district_code || '未設定')}</div>
             <div><span className="font-semibold">建立時間：</span>{member.created_at ? new Date(member.created_at).toLocaleString() : '-'}</div>
             <div><span className="font-semibold">電話：</span>{phoneDisplay}</div>
             <div><span className="font-semibold">出生日期：</span>{birthDisplay}</div>
-            <div><span className="font-semibold">會員有效期：</span>{membershipExpiryDisplay}</div>
             <div><span className="font-semibold">所屬球會：</span>{String(member.club_name || member.clubName || '未設定')}</div>
           </div>
           <div className="text-xs text-gray-300/80 mt-2">必填資料不可更改；選填資料可於下方更新</div>
@@ -502,36 +492,6 @@ const MemberProfile: React.FC = () => {
               )}
            </div>
         )}
-
-        <div className="glass rounded-xl p-4">
-          <h3 className="text-lg font-semibold mb-3">會員有效期與續期</h3>
-          <div className="mb-3">
-            <div><span className="font-semibold">目前有效期：</span>{membershipExpiryDisplay}</div>
-          </div>
-          <button
-            disabled={renewLoading || !member.id}
-            onClick={async () => {
-              try {
-                setRenewLoading(true);
-                const targetId = String(member.id);
-                // Pass empty token as it's not required by this endpoint, and default 3 years
-                const res = await renewMembership(API_URL, '', targetId, 3);
-                const updated = res.member ?? res;
-                setMember((prev: any) => ({ ...(prev || member), ...updated }));
-                setToast('續期申請成功，已延長 3 年');
-                setTimeout(() => setToast(null), 3000);
-              } catch (e: any) {
-                setToast(e?.message || '續期申請失敗');
-                setTimeout(() => setToast(null), 3000);
-              } finally {
-                setRenewLoading(false);
-              }
-            }}
-            className="px-4 py-2 rounded brand-button text-black disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {renewLoading ? '申請中...' : '申請續期（+3 年）'}
-          </button>
-        </div>
 
         <div className="glass rounded-xl p-4">
           <h3 className="text-lg font-semibold mb-3">更新選填資料</h3>
