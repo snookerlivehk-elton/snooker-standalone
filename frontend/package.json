@@ -9,7 +9,7 @@
     "postbuild": "echo Using public/404.html for GitHub Pages SPA redirect",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "start": "vite preview --host 0.0.0.0 --port $PORT",
+    "start": "serve -s dist -l $PORT",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "predeploy": "npm run build",
