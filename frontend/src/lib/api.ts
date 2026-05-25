@@ -1019,6 +1019,74 @@ export async function listAdminMatches(
   return res.json();
 }
 
+export async function listAdminBreaks(
+  apiUrl: string,
+  adminToken: string,
+  options?: {
+    page?: number;
+    pageSize?: number;
+    memberId?: string;
+    clubId?: string;
+    month?: string;
+    q?: string;
+    includeDeleted?: boolean;
+  }
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const params = new URLSearchParams();
+  if (adminToken) params.set('token', adminToken);
+  if (options?.page) params.set('page', String(options.page));
+  if (options?.pageSize) params.set('pageSize', String(options.pageSize));
+  if (options?.memberId) params.set('memberId', options.memberId);
+  if (options?.clubId) params.set('clubId', options.clubId);
+  if (options?.month) params.set('month', options.month);
+  if (options?.q) params.set('q', options.q);
+  if (options?.includeDeleted) params.set('includeDeleted', '1');
+
+  const url = `${base}/api/admin/breaks?${params.toString()}`;
+  const res = await fetch(url, {
+    headers: { 'x-admin-token': adminToken },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`取得單杆列表失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function patchAdminBreak(
+  apiUrl: string,
+  adminToken: string,
+  id: string,
+  payload: { points?: number; recordedAt?: string; videoUrl?: string | null; note?: string | null; restore?: boolean }
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/breaks/${encodeURIComponent(id)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新單杆失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function deleteAdminBreak(apiUrl: string, adminToken: string, id: string, reason?: string | null) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/breaks/${encodeURIComponent(id)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ reason: reason || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `刪除單杆失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 // Admin Regions
 export async function upsertAdminMemberRegion(
   apiUrl: string,

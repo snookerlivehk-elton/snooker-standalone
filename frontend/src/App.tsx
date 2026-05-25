@@ -18,6 +18,7 @@ import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
 import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
+import AdminBreaks from './AdminBreaks';
 import MemberRegisterSimple from './MemberRegisterSimple';
 import Rooms from './Rooms';
 import Me from './Me';
@@ -99,6 +100,7 @@ function App() {
         <Route path="/android" element={<AndroidGuide />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
+        <Route path="/admin/breaks" element={<AdminAuth><AdminBreaks /></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
         <Route path="/members/login" element={<MemberLogin mode="member" />} />

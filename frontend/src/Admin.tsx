@@ -98,12 +98,32 @@ const Admin: React.FC = () => {
           <button
             onClick={() => {
               const tok = localStorage.getItem('adminToken') || '';
+              const url = `${window.location.origin}${base}/admin/overview${tok ? `?token=${encodeURIComponent(tok)}&v=overview` : '?v=overview'}`;
+              window.location.href = url;
+            }}
+            className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-3 rounded transition-colors"
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => {
+              const tok = localStorage.getItem('adminToken') || '';
               const url = `${window.location.origin}${base}/admin/members${tok ? `?token=${encodeURIComponent(tok)}&v=members` : '?v=members'}`;
               window.location.href = url;
             }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded transition-colors"
           >
             Members
+          </button>
+          <button
+            onClick={() => {
+              const tok = localStorage.getItem('adminToken') || '';
+              const url = `${window.location.origin}${base}/admin/breaks${tok ? `?token=${encodeURIComponent(tok)}&v=breaks` : '?v=breaks'}`;
+              window.location.href = url;
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded transition-colors"
+          >
+            Breaks
           </button>
           <button
             onClick={() => {

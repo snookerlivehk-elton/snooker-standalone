@@ -2931,6 +2931,69 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/breaks', adminAuth, async (req, res) => {
+  try {
+    const page = Number((req.query.page as string) || '1');
+    const pageSize = Number((req.query.pageSize as string) || '50');
+    const take = Math.max(1, Math.min(Number.isFinite(pageSize) ? Math.floor(pageSize) : 50, 200));
+    const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+    const skip = Math.max(0, (safePage - 1) * take);
+
+    const memberId = String((req.query.memberId as string) || '').trim();
+    const clubId = String((req.query.clubId as string) || '').trim();
+    const month = String((req.query.month as string) || '').trim();
+    const q = String((req.query.q as string) || '').trim();
+    const includeDeleted = String((req.query.includeDeleted as string) || '').trim() === '1';
+
+    const where: any = {};
+    if (!includeDeleted) where.deleted_at = null;
+    if (memberId) where.member_id = memberId;
+    if (clubId) where.club_id = clubId;
+    if (month) {
+      const range = parseMonthRangeUtc(month);
+      if (!range) return res.status(400).json({ error: 'month invalid' });
+      where.recorded_at = { gte: range.start, lt: range.end };
+    }
+    if (q) {
+      where.OR = [
+        { note: { contains: q, mode: 'insensitive' } },
+        { video_url: { contains: q, mode: 'insensitive' } },
+        { member: { name: { contains: q, mode: 'insensitive' } } },
+        { member: { member_code: { contains: q, mode: 'insensitive' } } },
+        { club: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, rows] = await prisma.$transaction([
+      prisma.breakRecord.count({ where }),
+      prisma.breakRecord.findMany({
+        where,
+        orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+        include: {
+          member: { select: { id: true, name: true, member_code: true } },
+          club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+        },
+      }),
+    ]);
+
+    const breaks = rows.map((r: any) => ({
+      ...r,
+      club: r.club
+        ? {
+            ...r.club,
+            name: r.club.name || r.club.member?.name || '',
+          }
+        : null,
+    }));
+
+    res.json({ total, page: safePage, pageSize: take, breaks });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 app.patch('/api/admin/breaks/:id', adminAuth, async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();

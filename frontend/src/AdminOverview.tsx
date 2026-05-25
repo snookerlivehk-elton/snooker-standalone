@@ -16,6 +16,17 @@ const AdminOverview: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
 
+  function resolveBasePath(): string {
+    const rawBase = (import.meta.env.BASE_URL || '/');
+    let base = rawBase.replace(/\/+$/, '');
+    try {
+      const p = window.location.pathname;
+      const m = p.match(/^(.*)\/admin(?:\/.*)?$/);
+      if (m && m[1] !== '') base = m[1];
+    } catch {}
+    return base;
+  }
+
   function resolveToken(): string {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -91,7 +102,33 @@ const AdminOverview: React.FC = () => {
   return (
     <div className="brand-page p-8">
       <div className="max-w-3xl mx-auto glass rounded-xl p-6">
-        <h1 className="text-2xl font-bold mb-4 accent-yellow">系統概覽</h1>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h1 className="text-2xl font-bold accent-yellow">系統概覽</h1>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+              onClick={() => {
+                const base = resolveBasePath();
+                const tok = resolveToken();
+                window.location.href = `${window.location.origin}${base}/admin${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+              }}
+            >
+              返回主PANEL
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+              onClick={() => {
+                const base = resolveBasePath();
+                const tok = resolveToken();
+                window.location.href = `${window.location.origin}${base}/admin/breaks${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+              }}
+            >
+              單杆管理
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-black/40 border border-white/10 rounded p-4">
             <div className="text-sm text-gray-300/80">狀態</div>
