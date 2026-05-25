@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation } from './lib/api';
+import { getMember, listMembers, updateMember, renewMembership, getMemberMatches, getMyClubMessages, getMyJoinedClubs, getMyInvites, acceptInvite, getClubMessage, markClubMessageRead, hideClubMessages, getMyReservations, cancelMyReservation, getMyBreaks } from './lib/api';
 
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
@@ -17,6 +17,8 @@ const MemberProfile: React.FC = () => {
   const [reservations, setReservations] = useState<any[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
+  const [breaks, setBreaks] = useState<any[]>([]);
+  const [breaksLoading, setBreaksLoading] = useState(false);
   const [openMessage, setOpenMessage] = useState<any | null>(null);
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -117,6 +119,8 @@ const MemberProfile: React.FC = () => {
            getMyClubMessages(API_URL, selfMemberId).then(setMessages).catch(() => {});
            getMyJoinedClubs(API_URL, selfMemberId).then(setJoinedClubs).catch(() => {});
            getMyInvites(API_URL, selfMemberId).then(d => setInvites(d.invites || [])).catch(() => {});
+           setBreaksLoading(true);
+           getMyBreaks(API_URL, selfMemberId).then((rows) => setBreaks(Array.isArray(rows) ? rows : [])).catch(() => {}).finally(() => setBreaksLoading(false));
         }
       } catch (e) {
         console.error('Failed to load data', e);
@@ -196,6 +200,53 @@ const MemberProfile: React.FC = () => {
           </div>
           <div className="text-xs text-gray-300/80 mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
+
+        {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (
+          <div className="glass rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-lg font-semibold">我的單杆歷史</h3>
+              <div className="text-sm text-gray-400">{breaksLoading ? '載入中...' : `${breaks.length} 筆`}</div>
+            </div>
+            {breaksLoading ? (
+              <div className="text-gray-400 text-sm">載入中...</div>
+            ) : breaks.length === 0 ? (
+              <div className="text-gray-400 text-sm">暫無紀錄</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-700">
+                      <th className="py-2 px-2">日期</th>
+                      <th className="py-2 px-2">場館</th>
+                      <th className="py-2 px-2">分數</th>
+                      <th className="py-2 px-2">影片</th>
+                      <th className="py-2 px-2">備註</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breaks.map((b: any) => (
+                      <tr key={b.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                        <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
+                        <td className="py-2 px-2">{b.club?.name || '-'}</td>
+                        <td className="py-2 px-2 font-semibold text-yellow-400">{b.points}</td>
+                        <td className="py-2 px-2">
+                          {b.video_url ? (
+                            <a href={b.video_url} target="_blank" rel="noreferrer" className="text-blue-400 underline">
+                              連結
+                            </a>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-gray-300">{b.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Club Messages */}
         {!!selfMemberId && (String(member.id) === selfMemberId || String(member.email || '') === String(sessionEmail || '')) && (

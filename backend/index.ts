@@ -1793,6 +1793,50 @@ app.get('/api/members/:id/matches', async (req, res) => {
   }
 });
 
+app.get('/api/me/breaks', async (req, res) => {
+  try {
+    const memberId = String(req.headers['x-member-id'] || '').trim();
+    if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
+    const member = await prisma.member.findUnique({ where: { id: memberId }, select: { id: true, is_enabled: true } });
+    if (!member) return res.status(401).json({ error: 'Unauthorized' });
+    if (member.is_enabled === false) return res.status(403).json({ error: 'Disabled' });
+
+    const parseMonthRange = (month: string) => {
+      const m = String(month || '').trim();
+      const match = /^(\d{4})-(\d{2})$/.exec(m);
+      if (!match) return null;
+      const year = Number(match[1]);
+      const mon = Number(match[2]);
+      if (!Number.isFinite(year) || !Number.isFinite(mon) || mon < 1 || mon > 12) return null;
+      const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
+      const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
+      return { start, end };
+    };
+
+    const clubId = req.query.clubId ? String(req.query.clubId).trim() : '';
+    const month = req.query.month ? String(req.query.month).trim() : '';
+
+    const where: any = { member_id: memberId, deleted_at: null };
+    if (clubId) where.club_id = clubId;
+    if (month) {
+      const range = parseMonthRange(month);
+      if (!range) return res.status(400).json({ error: 'month invalid' });
+      where.recorded_at = { gte: range.start, lt: range.end };
+    }
+
+    const rows = await prisma.breakRecord.findMany({
+      where,
+      orderBy: [{ recorded_at: 'desc' }],
+      include: {
+        club: { select: { id: true, name: true, logoUrl: true } },
+      },
+    });
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 // Register a new member with district-based sequential member_code (no country prefix for now)
 app.post('/api/members/register', async (req, res) => {
   try {
@@ -2872,6 +2916,77 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.patch('/api/admin/breaks/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: '缺少 break ID' });
+
+    const body = (req.body || {}) as {
+      points?: number;
+      recordedAt?: string;
+      videoUrl?: string | null;
+      note?: string | null;
+      restore?: boolean;
+    };
+
+    const data: any = {
+      updated_at: new Date(),
+      updated_by_admin: 'super_admin',
+    };
+
+    if (body.points !== undefined) {
+      const p = Number(body.points);
+      if (!Number.isFinite(p) || p <= 0) return res.status(400).json({ error: 'points invalid' });
+      data.points = Math.floor(p);
+    }
+    if (body.recordedAt !== undefined) {
+      const d = new Date(String(body.recordedAt || ''));
+      if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'recordedAt invalid' });
+      data.recorded_at = d;
+    }
+    if (body.videoUrl !== undefined) data.video_url = body.videoUrl ? String(body.videoUrl).trim() : null;
+    if (body.note !== undefined) data.note = body.note ? String(body.note).trim() : null;
+    if (body.restore) {
+      data.deleted_at = null;
+      data.deleted_by_admin = null;
+      data.delete_reason = null;
+    }
+
+    const row = await prisma.breakRecord.update({
+      where: { id },
+      data,
+    });
+    res.json(row);
+  } catch (err: any) {
+    if ((err as any)?.code === 'P2025') return res.status(404).json({ error: 'break 不存在' });
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.delete('/api/admin/breaks/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: '缺少 break ID' });
+    const reasonRaw = (req.body || {}).reason;
+    const reason = reasonRaw == null ? null : String(reasonRaw).trim() || null;
+
+    const row = await prisma.breakRecord.update({
+      where: { id },
+      data: {
+        deleted_at: new Date(),
+        deleted_by_admin: 'super_admin',
+        delete_reason: reason,
+        updated_at: new Date(),
+        updated_by_admin: 'super_admin',
+      },
+    });
+    res.json(row);
+  } catch (err: any) {
+    if ((err as any)?.code === 'P2025') return res.status(404).json({ error: 'break 不存在' });
     res.status(500).json({ error: String(err?.message || err) });
   }
 });

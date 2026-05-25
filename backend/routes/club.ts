@@ -13,10 +13,14 @@ async function requireMember(req: express.Request, res: express.Response) {
     }
     const member = await prisma.member.findUnique({
         where: { id: memberId },
-        select: { id: true, role: true }
+        select: { id: true, role: true, is_enabled: true, access_expires_at: true }
     });
     if (!member) {
         res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    if (member.is_enabled === false) {
+        res.status(403).json({ error: 'Disabled' });
         return null;
     }
     return member;
@@ -27,6 +31,10 @@ async function requireClubAdmin(req: express.Request, res: express.Response) {
     if (!member) return null;
     if (member.role !== 'ADMIN') {
         res.status(403).json({ error: 'Forbidden' });
+        return null;
+    }
+    if (member.access_expires_at && new Date(member.access_expires_at).getTime() < Date.now()) {
+        res.status(403).json({ error: 'Expired' });
         return null;
     }
     return member;
@@ -327,6 +335,130 @@ async function getMyClubId(memberId: string) {
     const club = await prisma.clubProfile.findUnique({ where: { memberId } });
     return club?.id || null;
 }
+
+function parseMonthRange(month: string) {
+    const m = String(month || '').trim();
+    const match = /^(\d{4})-(\d{2})$/.exec(m);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const mon = Number(match[2]);
+    if (!Number.isFinite(year) || !Number.isFinite(mon) || mon < 1 || mon > 12) return null;
+    const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
+    const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
+    return { start, end };
+}
+
+router.post('/breaks', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+
+    const payload = req.body || {};
+    const targetMemberId = String(payload.memberId || '').trim();
+    const points = Number(payload.points);
+    const recordedAtRaw = payload.recordedAt;
+    const videoUrl = payload.videoUrl == null ? null : String(payload.videoUrl).trim() || null;
+    const note = payload.note == null ? null : String(payload.note).trim() || null;
+
+    if (!targetMemberId) return res.status(400).json({ error: 'memberId required' });
+    if (!Number.isFinite(points) || points <= 0) return res.status(400).json({ error: 'points invalid' });
+
+    const membership = await prisma.clubMember.findUnique({
+        where: { clubId_memberId: { clubId, memberId: targetMemberId } }
+    });
+    if (!membership) return res.status(400).json({ error: 'Member not in club' });
+
+    const recorded_at = recordedAtRaw ? new Date(String(recordedAtRaw)) : new Date();
+    if (recordedAtRaw && Number.isNaN(recorded_at.getTime())) return res.status(400).json({ error: 'recordedAt invalid' });
+
+    const row = await prisma.breakRecord.create({
+        data: {
+            id: randomUUID(),
+            club_id: clubId,
+            member_id: targetMemberId,
+            points: Math.floor(points),
+            recorded_at,
+            video_url: videoUrl,
+            note,
+            created_by_member_id: member.id,
+        },
+        include: {
+            member: { select: { id: true, name: true, email: true, member_code: true } },
+        }
+    });
+    res.json(row);
+});
+
+router.get('/breaks', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const { month, memberId } = req.query as any;
+    const where: any = { club_id: clubId, deleted_at: null };
+    if (memberId) where.member_id = String(memberId).trim();
+    if (month) {
+        const range = parseMonthRange(String(month));
+        if (!range) return res.status(400).json({ error: 'month invalid' });
+        where.recorded_at = { gte: range.start, lt: range.end };
+    }
+    const rows = await prisma.breakRecord.findMany({
+        where,
+        orderBy: [{ recorded_at: 'desc' }],
+        include: { member: { select: { id: true, name: true, email: true, member_code: true } } }
+    });
+    res.json(rows);
+});
+
+router.get('/:clubId/leaderboard/highest', async (req, res) => {
+    const clubId = String(req.params.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'clubId required' });
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+
+    const rows = await prisma.breakRecord.findMany({
+        where: { club_id: clubId, deleted_at: null },
+        orderBy: [{ points: 'desc' }, { recorded_at: 'desc' }],
+        take: limit,
+        include: { member: { select: { id: true, name: true, email: true, member_code: true } } }
+    });
+    res.json(rows);
+});
+
+router.get('/:clubId/leaderboard/monthly', async (req, res) => {
+    const clubId = String(req.params.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'clubId required' });
+    const month = req.query.month ? String(req.query.month) : '';
+    const range = month ? parseMonthRange(month) : null;
+    if (month && !range) return res.status(400).json({ error: 'month invalid' });
+
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+
+    const where: any = { club_id: clubId, deleted_at: null };
+    if (range) where.recorded_at = { gte: range.start, lt: range.end };
+
+    const grouped = await prisma.breakRecord.groupBy({
+        by: ['member_id'],
+        where,
+        _sum: { points: true },
+        orderBy: { _sum: { points: 'desc' } },
+        take: limit,
+    });
+
+    const ids = grouped.map(g => g.member_id);
+    const members = ids.length === 0 ? [] : await prisma.member.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, email: true, member_code: true }
+    });
+    const map = new Map(members.map(m => [m.id, m]));
+
+    res.json(grouped.map(g => ({
+        member: map.get(g.member_id) || { id: g.member_id, name: '-', email: null, member_code: null },
+        totalPoints: g._sum.points || 0,
+    })));
+});
 
 router.get('/tables/my', async (req, res) => {
     const member = await requireClubAdmin(req, res);

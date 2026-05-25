@@ -49,7 +49,9 @@ model Member {
   birth_date   DateTime?
   is_guest     Boolean      @default(false)
   role         MemberRole   @default(MEMBER)
+  is_enabled   Boolean      @default(true)
   membership_expires_at DateTime?
+  access_expires_at DateTime?
   // Authentication
   password_hash String?
   password_salt String?
@@ -65,6 +67,8 @@ model Member {
   matchesWon   Match[]      @relation("winner_member")
   matchesOperated Match[]   @relation("match_operator")
   rooms        Room[]
+  breakRecords BreakRecord[]
+  createdBreakRecords BreakRecord[] @relation("break_created_by")
   
   // Club Relationship (If this member is a Club/Operator)
   clubProfile  ClubProfile?
@@ -90,6 +94,7 @@ model ClubProfile {
   
   members     ClubMember[]
   messages    ClubMessage[]
+  breakRecords BreakRecord[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -97,6 +102,33 @@ model ClubProfile {
   tables      ClubTable[]
   pricing     TablePricingScheme[]
   reservations TableReservation[]
+}
+
+model BreakRecord {
+  id                  String      @id @default(uuid())
+  club_id             String
+  member_id           String
+  points              Int
+  recorded_at         DateTime    @default(now())
+  video_url           String?
+  note                String?
+  created_at          DateTime    @default(now())
+  created_by_member_id String
+  updated_at          DateTime?
+  updated_by_admin    String?
+  deleted_at          DateTime?
+  deleted_by_admin    String?
+  delete_reason       String?
+
+  club                ClubProfile @relation(fields: [club_id], references: [id])
+  member              Member      @relation(fields: [member_id], references: [id])
+  created_by          Member      @relation("break_created_by", fields: [created_by_member_id], references: [id])
+
+  @@index([club_id, recorded_at])
+  @@index([member_id, recorded_at])
+  @@index([club_id, member_id, recorded_at])
+  @@index([club_id, points])
+  @@index([deleted_at])
 }
 
 model ClubMessage {

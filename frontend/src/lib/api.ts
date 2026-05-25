@@ -88,6 +88,67 @@ export async function getClubMembers(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function createClubBreak(
+  apiUrl: string,
+  memberId: string,
+  payload: { memberId: string; points: number; recordedAt?: string; videoUrl?: string; note?: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/breaks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to create break');
+  }
+  return res.json();
+}
+
+export async function getClubBreaks(
+  apiUrl: string,
+  memberId: string,
+  params?: { month?: string; memberId?: string }
+) {
+  const sp = new URLSearchParams();
+  if (params?.month) sp.set('month', params.month);
+  if (params?.memberId) sp.set('memberId', params.memberId);
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/breaks${qs ? `?${qs}` : ''}`, {
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to load breaks');
+  }
+  return res.json();
+}
+
+export async function getClubLeaderboardHighest(apiUrl: string, clubId: string, limit?: number) {
+  const sp = new URLSearchParams();
+  if (limit) sp.set('limit', String(limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/leaderboard/highest${qs ? `?${qs}` : ''}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to load leaderboard');
+  }
+  return res.json();
+}
+
+export async function getClubLeaderboardMonthly(apiUrl: string, clubId: string, month: string, limit?: number) {
+  const sp = new URLSearchParams();
+  sp.set('month', month);
+  if (limit) sp.set('limit', String(limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/leaderboard/monthly?${qs}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to load leaderboard');
+  }
+  return res.json();
+}
+
 export async function getPublicClubProfile(apiUrl: string, clubId: string) {
   const res = await fetch(`${apiUrl}/api/club/${clubId}/public`);
   if (!res.ok) throw new Error('Failed to load club public profile');
@@ -112,6 +173,21 @@ export async function getMyJoinedClubs(apiUrl: string, memberId: string) {
     headers: { 'x-member-id': memberId }
   });
   if (!res.ok) throw new Error('Failed to load joined clubs');
+  return res.json();
+}
+
+export async function getMyBreaks(apiUrl: string, memberId: string, params?: { clubId?: string; month?: string }) {
+  const sp = new URLSearchParams();
+  if (params?.clubId) sp.set('clubId', params.clubId);
+  if (params?.month) sp.set('month', params.month);
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/me/breaks${qs ? `?${qs}` : ''}`, {
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to load breaks');
+  }
   return res.json();
 }
 

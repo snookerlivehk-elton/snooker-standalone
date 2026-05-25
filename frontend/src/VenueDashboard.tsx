@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 
 type PricingRule = {
@@ -43,6 +43,19 @@ const VenueDashboard: React.FC = () => {
   const [resetPwd, setResetPwd] = useState('');
   const [resetPwd2, setResetPwd2] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+
+  const [breaks, setBreaks] = useState<any[]>([]);
+  const [breaksLoading, setBreaksLoading] = useState(false);
+  const [breakMemberId, setBreakMemberId] = useState('');
+  const [breakPoints, setBreakPoints] = useState('');
+  const [breakRecordedAt, setBreakRecordedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [breakVideoUrl, setBreakVideoUrl] = useState('');
+  const [breakNote, setBreakNote] = useState('');
+  const [breakFilterMonth, setBreakFilterMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [breakFilterMember, setBreakFilterMember] = useState('');
+  const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
+  const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
 
   const operatorId = session.id;
   const operatorName = session.name || session.email;
@@ -163,6 +176,26 @@ const VenueDashboard: React.FC = () => {
     }
   }, [operatorId]);
 
+  const loadBreakData = useCallback(async () => {
+    if (!operatorId || !clubProfile?.id) return;
+    setBreaksLoading(true);
+    try {
+      const [rows, highest, monthly] = await Promise.all([
+        getClubBreaks(API_URL, operatorId, { month: breakFilterMonth, memberId: breakFilterMember || undefined }).catch(() => []),
+        getClubLeaderboardHighest(API_URL, clubProfile.id, 10).catch(() => []),
+        getClubLeaderboardMonthly(API_URL, clubProfile.id, leaderMonth, 10).catch(() => []),
+      ]);
+      setBreaks(Array.isArray(rows) ? rows : []);
+      setLeaderHighest(Array.isArray(highest) ? highest : []);
+      setLeaderMonthly(Array.isArray(monthly) ? monthly : []);
+    } catch (err: any) {
+      setToast(err?.message || '載入單杆資料失敗');
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setBreaksLoading(false);
+    }
+  }, [operatorId, clubProfile?.id, breakFilterMonth, breakFilterMember, leaderMonth]);
+
   useEffect(() => {
     if (!operatorId || !isOperator) {
       navigate('/venue/login');
@@ -171,6 +204,12 @@ const VenueDashboard: React.FC = () => {
 
     loadData();
   }, [operatorId, isOperator, navigate, loadData]);
+
+  useEffect(() => {
+    if (!operatorId || !isOperator) return;
+    if (!clubProfile?.id) return;
+    loadBreakData();
+  }, [operatorId, isOperator, clubProfile?.id, loadBreakData]);
 
   const handleCreateRoom = async () => {
     if (creating) return;
@@ -391,6 +430,232 @@ const VenueDashboard: React.FC = () => {
                 </table>
              </div>
           )}
+        </div>
+
+        <div className="glass rounded-xl p-4 md:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b border-gray-700 pb-2">
+            <h2 className="text-xl font-bold">單杆紀錄</h2>
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="month"
+                value={breakFilterMonth}
+                onChange={(e) => setBreakFilterMonth(e.target.value)}
+                className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+              />
+              <select
+                value={breakFilterMember}
+                onChange={(e) => setBreakFilterMember(e.target.value)}
+                className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+              >
+                <option value="">全部會員</option>
+                {clubMembers.map((cm: any) => (
+                  <option key={cm.member?.id || cm.id} value={cm.member?.id || ''}>
+                    {cm.member?.name || '-'}{cm.member?.email ? ` (${cm.member.email})` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={loadBreakData}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm"
+              >
+                重新整理
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 text-gray-300">會員</label>
+              <select
+                value={breakMemberId}
+                onChange={(e) => setBreakMemberId(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+              >
+                <option value="">選擇會員</option>
+                {clubMembers.map((cm: any) => (
+                  <option key={cm.member?.id || cm.id} value={cm.member?.id || ''}>
+                    {cm.member?.name || '-'}{cm.member?.member_code ? ` [${cm.member.member_code}]` : ''}{cm.member?.email ? ` (${cm.member.email})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm mb-1 text-gray-300">分數</label>
+              <input
+                value={breakPoints}
+                onChange={(e) => setBreakPoints(e.target.value)}
+                type="number"
+                min={1}
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                placeholder="例如 78"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1 text-gray-300">日期</label>
+              <input
+                value={breakRecordedAt}
+                onChange={(e) => setBreakRecordedAt(e.target.value)}
+                type="date"
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 text-gray-300">影片連結（可空）</label>
+              <input
+                value={breakVideoUrl}
+                onChange={(e) => setBreakVideoUrl(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                placeholder="https://..."
+              />
+            </div>
+            <div className="md:col-span-5">
+              <label className="block text-sm mb-1 text-gray-300">備註（可空）</label>
+              <input
+                value={breakNote}
+                onChange={(e) => setBreakNote(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white"
+                placeholder="例如：友誼賽 / 練習"
+              />
+            </div>
+            <div className="md:col-span-1 flex items-end">
+              <button
+                onClick={async () => {
+                  try {
+                    if (!breakMemberId) throw new Error('請先選擇會員');
+                    const p = Number(breakPoints);
+                    if (!Number.isFinite(p) || p <= 0) throw new Error('分數無效');
+                    await createClubBreak(API_URL, operatorId, {
+                      memberId: breakMemberId,
+                      points: p,
+                      recordedAt: breakRecordedAt,
+                      videoUrl: breakVideoUrl.trim() || undefined,
+                      note: breakNote.trim() || undefined,
+                    });
+                    setToast('已新增單杆紀錄');
+                    setTimeout(() => setToast(null), 2000);
+                    setBreakPoints('');
+                    setBreakVideoUrl('');
+                    setBreakNote('');
+                    await loadBreakData();
+                  } catch (e: any) {
+                    setToast(e?.message || '新增失敗');
+                    setTimeout(() => setToast(null), 3000);
+                  }
+                }}
+                className="w-full px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+              >
+                新增
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-semibold">歷史最高單杆 Top 10</div>
+              </div>
+              {leaderHighest.length === 0 ? (
+                <div className="text-sm text-gray-400">暫無資料</div>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-700">
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">分數</th>
+                        <th className="py-2 px-2">日期</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderHighest.map((r: any) => (
+                        <tr key={r.id} className="border-b border-gray-800">
+                          <td className="py-2 px-2">{r.member?.name || '-'}</td>
+                          <td className="py-2 px-2 font-semibold text-yellow-400">{r.points}</td>
+                          <td className="py-2 px-2 text-gray-400">{r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
+                <div className="font-semibold">本月累計 Top 10</div>
+                <input
+                  type="month"
+                  value={leaderMonth}
+                  onChange={(e) => setLeaderMonth(e.target.value)}
+                  className="px-3 py-2 rounded bg-gray-700 border border-gray-600 text-white text-sm"
+                />
+              </div>
+              {leaderMonthly.length === 0 ? (
+                <div className="text-sm text-gray-400">暫無資料</div>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-700">
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">累計</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderMonthly.map((r: any) => (
+                        <tr key={r.member?.id || r.member_id} className="border-b border-gray-800">
+                          <td className="py-2 px-2">{r.member?.name || '-'}</td>
+                          <td className="py-2 px-2 font-semibold text-green-400">{r.totalPoints}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="font-semibold mb-2">紀錄列表</div>
+            {breaksLoading ? (
+              <div className="text-sm text-gray-400">載入中...</div>
+            ) : breaks.length === 0 ? (
+              <div className="text-sm text-gray-400">暫無紀錄</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-700">
+                      <th className="py-2 px-2">日期</th>
+                      <th className="py-2 px-2">會員</th>
+                      <th className="py-2 px-2">分數</th>
+                      <th className="py-2 px-2">影片</th>
+                      <th className="py-2 px-2">備註</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breaks.map((b: any) => (
+                      <tr key={b.id} className="border-b border-gray-800 hover:bg-gray-700/30">
+                        <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{b.recorded_at ? new Date(b.recorded_at).toLocaleDateString() : '-'}</td>
+                        <td className="py-2 px-2">{b.member?.name || '-'}</td>
+                        <td className="py-2 px-2 font-semibold text-yellow-400">{b.points}</td>
+                        <td className="py-2 px-2">
+                          {b.video_url ? (
+                            <a href={b.video_url} target="_blank" rel="noreferrer" className="text-blue-400 underline">
+                              連結
+                            </a>
+                          ) : (
+                            <span className="text-gray-500">-</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-gray-300">{b.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="glass rounded-xl p-6">
