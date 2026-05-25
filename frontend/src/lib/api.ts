@@ -626,18 +626,6 @@ export async function loginGoogle(
   if (primary.status === 404) {
     const fallback = await tryPost(`${apiUrl}/auth/google`);
     if (fallback.ok) return fallback.json();
-    if (fallback.status === 404) {
-      const altBase =
-        typeof window !== 'undefined' && window.location.hostname.endsWith('railway.app')
-          ? 'https://snooker-backend-production.up.railway.app'
-          : '';
-      if (altBase) {
-        const alt = await tryPost(`${altBase}/api/auth/google`);
-        if (alt.ok) return alt.json();
-        const err = await alt.json().catch(() => ({}));
-        throw new Error(err.error || `登入失敗 (${alt.status})`);
-      }
-    }
     const err = await fallback.json().catch(() => ({}));
     throw new Error(err.error || `登入失敗 (${fallback.status})`);
   }

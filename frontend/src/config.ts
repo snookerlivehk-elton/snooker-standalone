@@ -24,6 +24,9 @@ const prodDefaultBackend = (() => {
   if (host === 'snookerlivehk-elton.github.io') {
     return 'https://snooker-backend-production.up.railway.app';
   }
+  if (host.endsWith('.up.railway.app')) {
+    return 'https://snooker-backend-production.up.railway.app';
+  }
   if (host.endsWith('snookerhk.live')) {
     return 'https://api.snookerhk.live';
   }
