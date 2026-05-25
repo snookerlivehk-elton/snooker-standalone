@@ -13,6 +13,7 @@ import MemberProfile from './MemberProfile';
 import AdminMembers from './AdminMembers';
 import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
+import AdminVenues from './AdminVenues';
 import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
 import ClubPublicPage from './ClubPublicPage';
@@ -89,6 +90,7 @@ function App() {
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/admin/matches" element={<AdminAuth><AdminMatches /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
+        <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
         <Route path="/room/:roomId" element={<Scoreboard gameState={gameState} setGameState={setGameState} />} />
         <Route path="/room/:roomId/setup" element={<Setup onStartMatch={handleStartMatch} />} />
         <Route path="/room/:roomId/live" element={<LiveView />} />

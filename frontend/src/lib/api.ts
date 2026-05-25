@@ -735,7 +735,17 @@ export async function updateMember(
   apiUrl: string,
   adminToken: string,
   id: string,
-  data: { phone?: string; birthDate?: string; role?: string; membershipExpiresAt?: string; clubName?: string }
+  data: {
+    name?: string;
+    email?: string | null;
+    member_code?: string | null;
+    phone?: string | null;
+    birthDate?: string | null;
+    role?: string | null;
+    clubName?: string | null;
+    is_enabled?: boolean | null;
+    accessExpiresAt?: string | null;
+  }
 ) {
   const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
     method: 'PUT',

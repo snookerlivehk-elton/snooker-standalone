@@ -1,35 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
-import { listMembers, updateMember, deleteMember, listAdminMemberRegions, listAdminMemberDistricts } from './lib/api';
+import { listMembers, updateMember, deleteMember } from './lib/api';
 
 const AdminMembers: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Dynamic regions/districts
-  const [regions, setRegions] = useState<any[]>([]);
-  const [allDistricts, setAllDistricts] = useState<any[]>([]);
   const [editing, setEditing] = useState<Record<string, any>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Filters
   const [filterName, setFilterName] = useState('');
   const [filterEmail, setFilterEmail] = useState('');
-  const [filterRegion, setFilterRegion] = useState('');
-  const [filterDistrict, setFilterDistrict] = useState('');
   const [filterCode, setFilterCode] = useState('');
   const [filterRole, setFilterRole] = useState('');
-
-  // Derived district options based on selected region
-  const availableDistricts = useMemo(() => {
-    if (!filterRegion) return [];
-    return allDistricts.filter(d => 
-      String(d.region_code || '').toUpperCase() === String(filterRegion).toUpperCase() ||
-      String(d.regionCode || '').toUpperCase() === String(filterRegion).toUpperCase()
-    ).sort((a, b) => String(a.code3 || '').localeCompare(String(b.code3 || '')));
-  }, [allDistricts, filterRegion]);
 
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
@@ -37,38 +22,9 @@ const AdminMembers: React.FC = () => {
       if (filterEmail && !String(m.email || '').toLowerCase().includes(filterEmail.toLowerCase())) return false;
       if (filterCode && !String(m.member_code || '').toLowerCase().includes(filterCode.toLowerCase())) return false;
       if (filterRole && String(m.role || 'MEMBER') !== filterRole) return false;
-      
-      const dist = String(m.district_code || m.partition || '').trim();
-      
-      if (filterRegion) {
-        if (!dist) return false;
-        // Check if district belongs to the selected region using dynamic data
-        const regionDistList = allDistricts.filter(d => 
-          String(d.region_code || '').toUpperCase() === String(filterRegion).toUpperCase() ||
-          String(d.regionCode || '').toUpperCase() === String(filterRegion).toUpperCase()
-        );
-        
-        const found = regionDistList.find(d => 
-          String(d.code3 || '').toUpperCase() === dist.toUpperCase() || 
-          d.name === dist
-        );
-        
-        if (!found) {
-           // Fallback heuristic: district starts with region code?
-           if (!dist.toUpperCase().startsWith(filterRegion.toUpperCase())) return false;
-        }
-      }
-      
-      if (filterDistrict && dist !== filterDistrict) return false;
-
       return true;
     });
-  }, [members, filterName, filterEmail, filterRegion, filterDistrict, filterCode, filterRole, allDistricts]);
-
-  // Reset district filter when region changes
-  useEffect(() => {
-    setFilterDistrict('');
-  }, [filterRegion]);
+  }, [members, filterName, filterEmail, filterCode, filterRole]);
 
   useEffect(() => {
     let mounted = true;
@@ -82,18 +38,10 @@ const AdminMembers: React.FC = () => {
         const token = tokenFromUrl || tokenSaved;
         if (tokenFromUrl) localStorage.setItem('adminToken', tokenFromUrl);
         if (!token) throw new Error('缺少系統管理員密鑰');
-        
-        // Fetch members, regions, and districts in parallel
-        const [membersData, regionsData, districtsData] = await Promise.all([
-          listMembers(API_URL, token),
-          listAdminMemberRegions(API_URL, token).catch(() => ({ regions: [] })),
-          listAdminMemberDistricts(API_URL, token).catch(() => ({ districts: [] }))
-        ]);
 
         if (mounted) {
+          const membersData = await listMembers(API_URL, token);
           setMembers(membersData.members || []);
-          setRegions(regionsData.regions || []);
-          setAllDistricts(districtsData.districts || []);
         }
       } catch (err: any) {
         if (mounted) setError(err.message || '載入失敗');
@@ -124,12 +72,12 @@ const AdminMembers: React.FC = () => {
     const payload = {
       name: e.name,
       email: e.email,
-      district_code: e.district_code,
       member_code: e.member_code,
       phone: e.phone,
       birthDate: e.birthDate,
       role: e.role,
-      membershipExpiresAt: e.membership_expires_at || e.membershipExpiresAt,
+      is_enabled: e.is_enabled,
+      accessExpiresAt: e.access_expires_at || e.accessExpiresAt,
     };
     if (!adminToken) { setError('缺少管理員密鑰'); return; }
     await updateMember(API_URL, adminToken, id, payload);
@@ -217,7 +165,7 @@ const AdminMembers: React.FC = () => {
             {!loading && (
               <>
                 <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                     <input
                       placeholder="姓名"
                       value={filterName}
@@ -230,28 +178,6 @@ const AdminMembers: React.FC = () => {
                       onChange={e => setFilterEmail(e.target.value)}
                       className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                     />
-                    <select
-                      value={filterRegion}
-                      onChange={e => setFilterRegion(e.target.value)}
-                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                    >
-                      <option value="">全部大區</option>
-                      {regions.map(r => (
-                        <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={filterDistrict}
-                      onChange={e => setFilterDistrict(e.target.value)}
-                      disabled={!filterRegion}
-                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:opacity-60 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                    >
-                      <option value="">全部地區</option>
-                      {availableDistricts.map(d => (
-                        <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
-                      ))}
-                    </select>
 
                     <input
                       placeholder="會員編碼"
@@ -274,8 +200,6 @@ const AdminMembers: React.FC = () => {
                         onClick={() => {
                           setFilterName('');
                           setFilterEmail('');
-                          setFilterRegion('');
-                          setFilterDistrict('');
                           setFilterCode('');
                           setFilterRole('');
                         }}
@@ -294,12 +218,12 @@ const AdminMembers: React.FC = () => {
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">ID</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">姓名</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">Email</th>
-                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">分區</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">會員編碼</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">會員等級</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">啟用</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">場館限期</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">電話</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">出生日期</th>
-                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">有效期</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">建立時間</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">操作</th>
                       </tr>
@@ -338,17 +262,6 @@ const AdminMembers: React.FC = () => {
                             <td className="border-b border-slate-100 px-3 py-2 align-top">
                               {isEditing ? (
                                 <input
-                                  value={row.district_code || ''}
-                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), district_code: e.target.value } }))}
-                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                                />
-                              ) : (
-                                <span className="block max-w-[140px] truncate" title={String(m.district_code ?? m.partition ?? '')}>{m.district_code ?? m.partition ?? '-'}</span>
-                              )}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 align-top">
-                              {isEditing ? (
-                                <input
                                   value={row.member_code || ''}
                                   onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), member_code: e.target.value } }))}
                                   className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
@@ -373,6 +286,41 @@ const AdminMembers: React.FC = () => {
                             </td>
                             <td className="border-b border-slate-100 px-3 py-2 align-top">
                               {isEditing ? (
+                                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(row.is_enabled)}
+                                    onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
+                                  />
+                                  <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                                </label>
+                              ) : (
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${m.is_enabled === false ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {m.is_enabled === false ? '停用' : '啟用'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  type="date"
+                                  disabled={String(row.role || m.role || 'MEMBER') !== 'ADMIN'}
+                                  value={
+                                    row.accessExpiresAt ||
+                                    row.access_expires_at ||
+                                    (m.access_expires_at ? new Date(m.access_expires_at).toISOString().slice(0, 10) : '')
+                                  }
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), accessExpiresAt: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:opacity-60 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="whitespace-nowrap">
+                                  {m.role === 'ADMIN' && m.access_expires_at ? new Date(m.access_expires_at).toLocaleDateString() : '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
                                 <input
                                   value={row.phone || ''}
                                   onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), phone: e.target.value } }))}
@@ -391,34 +339,6 @@ const AdminMembers: React.FC = () => {
                                 />
                               ) : (
                                 <span className="whitespace-nowrap">{m.birthDate ?? m.birth_date ?? '-'}</span>
-                              )}
-                            </td>
-                            <td className="border-b border-slate-100 px-3 py-2 align-top">
-                              {isEditing ? (
-                                <input
-                                  type="date"
-                                  value={
-                                    row.membershipExpiresAt ||
-                                    row.membership_expires_at ||
-                                    (m.membership_expires_at
-                                      ? new Date(m.membership_expires_at).toISOString().slice(0, 10)
-                                      : '')
-                                  }
-                                  onChange={(e) =>
-                                    setEditing((p) => ({
-                                      ...p,
-                                      [m.id]: {
-                                        ...(p[m.id] || m),
-                                        membershipExpiresAt: e.target.value,
-                                      },
-                                    }))
-                                  }
-                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                                />
-                              ) : (
-                                <span className="whitespace-nowrap">
-                                  {m.membership_expires_at ? new Date(m.membership_expires_at).toLocaleDateString() : '-'}
-                                </span>
                               )}
                             </td>
                             <td className="border-b border-slate-100 px-3 py-2 align-top text-slate-700">

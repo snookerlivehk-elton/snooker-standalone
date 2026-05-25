@@ -2723,6 +2723,10 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       membership_expires_at?: string | null;
       club_name?: string | null;
       clubName?: string | null;
+      is_enabled?: boolean | null;
+      isEnabled?: boolean | null;
+      access_expires_at?: string | null;
+      accessExpiresAt?: string | null;
     };
 
     const data: any = {};
@@ -2764,6 +2768,26 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
       const r = String(body.role || 'MEMBER').toUpperCase();
       data.role = r === 'ADMIN' ? 'ADMIN' : 'MEMBER';
     }
+
+    const enabledRaw = body.is_enabled ?? body.isEnabled;
+    if (enabledRaw !== undefined) {
+      data.is_enabled = Boolean(enabledRaw);
+    }
+
+    const accessRaw = body.access_expires_at ?? body.accessExpiresAt;
+    if (accessRaw !== undefined) {
+      const s = String(accessRaw || '').trim();
+      if (!s) {
+        data.access_expires_at = null;
+      } else {
+        const d = new Date(s);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ error: '場館限期格式不正確' });
+        }
+        data.access_expires_at = d;
+      }
+    }
+
     const member = await prisma.member.update({
       where: { id },
       data,
