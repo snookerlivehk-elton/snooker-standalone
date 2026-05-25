@@ -1,10 +1,5 @@
 name: Deploy Backend
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
   workflow_dispatch:
 jobs:
   deploy:
@@ -18,7 +13,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
+      - name: Setup jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
       - name: Install deps
         run: npm install --no-audit --no-fund
       - name: Railway CLI
@@ -47,8 +46,6 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           ALLOW_ORIGINS: ${{ secrets.ALLOW_ORIGINS }}
           SOCKET_PATH: ${{ secrets.SOCKET_PATH }}
-          PORT: ${{ secrets.PORT }}
-          DB_FILE: ${{ secrets.DB_FILE }}
           RAILWAY_SERVICE_NAME: ${{ secrets.RAILWAY_SERVICE_NAME }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
@@ -57,8 +54,6 @@ jobs:
           railway variables set ADMIN_TOKEN="$ADMIN_TOKEN" --service "$SERVICE_NAME" || true
           railway variables set ALLOW_ORIGINS="$ALLOW_ORIGINS" --service "$SERVICE_NAME" || true
           railway variables set SOCKET_PATH="$SOCKET_PATH" --service "$SERVICE_NAME" || true
-          railway variables set PORT="$PORT" --service "$SERVICE_NAME" || true
-          railway variables set DB_FILE="$DB_FILE" --service "$SERVICE_NAME" || true
           railway variables set NIXPACKS_NODE_INSTALL_CMD="npm install --no-audit --no-fund" --service "$SERVICE_NAME" || true
       - name: Get Service Domain
         id: domain
