@@ -2270,7 +2270,7 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
 // Simple password hashing helpers (SHA-256 with per-user salt)
 import { OAuth2Client } from 'google-auth-library';
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com');
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com');
 
 app.post('/api/auth/google', async (req, res) => {
   try {
@@ -2279,7 +2279,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com',
+      audience: process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com',
     });
     const payload = ticket.getPayload();
     if (!payload || !payload.email) return res.status(400).json({ error: 'Invalid token' });

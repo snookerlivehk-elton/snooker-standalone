@@ -6,6 +6,7 @@ ENV VITE_API_URL=https://api.snookerhk.live
 ENV VITE_SOCKET_URL=https://api.snookerhk.live
 ENV VITE_SOCKET_PATH=/socket.io
 ENV VITE_ENABLE_SOCKET=true
+ENV VITE_GOOGLE_CLIENT_ID=277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com
 COPY package*.json ./
 RUN npm ci
 COPY . .

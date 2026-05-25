@@ -62,6 +62,12 @@ export const API_URL: string =
 // App display name (UI + document.title)
 export const APP_NAME: string = (import.meta.env.VITE_APP_NAME as string | undefined) || 'Snooker Standalone';
 
+const googleClientIdOverride = params?.get('googleClientId') || params?.get('google_client_id') || undefined;
+export const GOOGLE_CLIENT_ID: string =
+  googleClientIdOverride ||
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ||
+  '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com';
+
 // Supabase configuration (optional for simple-mode realtime without self-hosted backend)
 const supabaseUrlOverride = params?.get('supabaseUrl') || undefined;
 const supabaseKeyOverride = params?.get('supabaseKey') || undefined;
