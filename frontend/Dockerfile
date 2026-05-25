@@ -17,5 +17,5 @@ RUN npm i -g serve@14
 COPY --from=builder /app/dist /app/dist
 COPY package*.json /app/
 ENV NODE_ENV=production
-EXPOSE 3000
-CMD ["sh", "-lc", "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"]
+EXPOSE 8080
+CMD ["sh", "-lc", "serve -s dist -l tcp://0.0.0.0:${PORT:-8080}"]
