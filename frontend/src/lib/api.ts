@@ -201,6 +201,53 @@ export async function broadcastClubMessage(apiUrl: string, memberId: string, tit
   return res.json();
 }
 
+export async function createLiveAnnouncement(
+  apiUrl: string,
+  memberId: string,
+  payload: { title: string; startsAt: string; liveUrl: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/live-announcements`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '建立直播通告失敗');
+  }
+  return res.json();
+}
+
+export async function getLiveAnnouncements(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/live-announcements`, {
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取直播通告失敗');
+  }
+  return res.json();
+}
+
+export async function deleteLiveAnnouncement(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/live-announcements/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '刪除直播通告失敗');
+  }
+  return res.json();
+}
+
+export async function getPublicLiveAnnouncements(apiUrl: string, limit?: number) {
+  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
+  const res = await fetch(`${apiUrl}/api/club/live-announcements/public${q}`);
+  if (!res.ok) throw new Error('讀取直播通告失敗');
+  return res.json();
+}
+
 export async function getMyClubMessages(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/messages`, {
     headers: { 'x-member-id': memberId }

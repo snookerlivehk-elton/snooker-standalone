@@ -11,6 +11,22 @@ function normalizeVideoHref(raw: any): string | null {
   return `https://${s}`;
 }
 
+function linkifyText(text: any): React.ReactNode {
+  const s = String(text ?? '');
+  const parts = s.split(/(https?:\/\/[^\s]+|www\.[^\s]+)/g);
+  return parts.map((p, idx) => {
+    const isUrl = /^https?:\/\//i.test(p) || /^www\./i.test(p);
+    if (!isUrl) return p;
+    const href = normalizeVideoHref(p);
+    if (!href) return p;
+    return (
+      <a key={idx} href={href} target="_blank" rel="noreferrer" className="accent-blue underline">
+        {p}
+      </a>
+    );
+  });
+}
+
 const MemberProfile: React.FC = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
@@ -430,7 +446,7 @@ const MemberProfile: React.FC = () => {
               <div className="px-4 py-3 space-y-2 overflow-y-auto overscroll-contain">
                 <div className="text-xs cue-muted">來自：{openMessage.club?.name || '未知場館'}</div>
                 <div className="text-xs cue-muted">{new Date(openMessage.createdAt).toLocaleString()}</div>
-                <div className="whitespace-pre-wrap mt-2">{openMessage.content}</div>
+                <div className="whitespace-pre-wrap mt-2">{linkifyText(openMessage.content)}</div>
               </div>
             </div>
           </div>

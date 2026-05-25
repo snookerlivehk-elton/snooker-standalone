@@ -204,6 +204,92 @@ router.post('/broadcast', async (req, res) => {
     }
 });
 
+function normalizeHttpUrl(raw: any): string | null {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return `https:${s}`;
+    return `https://${s}`;
+}
+function formatHongKongDateTime(d: Date): string {
+    try {
+        return d.toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+        return d.toISOString();
+    }
+}
+
+router.post('/live-announcements', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+
+    const payload = req.body || {};
+    const title = String(payload.title || '').trim();
+    const startsAtRaw = payload.startsAt;
+    const liveUrl = normalizeHttpUrl(payload.liveUrl);
+    if (!title) return res.status(400).json({ error: 'title required' });
+    if (!startsAtRaw) return res.status(400).json({ error: 'startsAt required' });
+    if (!liveUrl) return res.status(400).json({ error: 'liveUrl required' });
+    const startsAt = new Date(String(startsAtRaw));
+    if (!Number.isFinite(startsAt.getTime())) return res.status(400).json({ error: 'startsAt invalid' });
+
+    const row = await prisma.liveAnnouncement.create({
+        data: {
+            id: randomUUID(),
+            clubId,
+            title,
+            startsAt,
+            liveUrl,
+            createdByMemberId: member.id,
+        }
+    });
+    try {
+        const msgTitle = `直播通告：${title}`;
+        const content = `日期時間：${formatHongKongDateTime(startsAt)}\n直播連結：${liveUrl}`;
+        await prisma.clubMessage.create({ data: { clubId, title: msgTitle, content } });
+    } catch {}
+    res.json(row);
+});
+
+router.get('/live-announcements', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const rows = await prisma.liveAnnouncement.findMany({
+        where: { clubId, deletedAt: null },
+        orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    res.json(rows);
+});
+
+router.delete('/live-announcements/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = req.params.id;
+    const row = await prisma.liveAnnouncement.findUnique({ where: { id } });
+    if (!row || row.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
+    const updated = await prisma.liveAnnouncement.update({ where: { id }, data: { deletedAt: new Date() } });
+    res.json(updated);
+});
+
+router.get('/live-announcements/public', async (req, res) => {
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(50, Math.max(1, Number(limitRaw || 20) || 20));
+    const now = new Date();
+    const rows = await prisma.liveAnnouncement.findMany({
+        where: { deletedAt: null, startsAt: { gte: new Date(now.getTime() - 12 * 60 * 60 * 1000) } },
+        orderBy: [{ startsAt: 'asc' }],
+        take: limit,
+        include: { club: { select: { id: true, name: true, logoUrl: true } } }
+    });
+    res.json(rows);
+});
+
 // Get My Messages (Member)
 router.get('/messages', async (req, res) => {
     const member = await requireMember(req, res);

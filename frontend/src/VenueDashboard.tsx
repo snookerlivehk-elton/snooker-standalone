@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 
@@ -32,6 +32,12 @@ const VenueDashboard: React.FC = () => {
   const [clubMembers, setClubMembers] = useState<any[]>([]);
   const [msgTitle, setMsgTitle] = useState('');
   const [msgContent, setMsgContent] = useState('');
+  const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
+  const [liveTitle, setLiveTitle] = useState('');
+  const [liveDate, setLiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [liveTime, setLiveTime] = useState(() => `${String(new Date().getHours()).padStart(2, '0')}:00`);
+  const [liveUrl, setLiveUrl] = useState('');
+  const [liveCreating, setLiveCreating] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newTableNotes, setNewTableNotes] = useState('');
@@ -168,11 +174,12 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, tablesRes, pricingRes, pendingRes, allRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
         getOperatorActiveRooms(API_URL, operatorId),
         getClubProfile(API_URL, operatorId).catch(() => ({})),
         getClubMembers(API_URL, operatorId).catch(() => []),
+        getLiveAnnouncements(API_URL, operatorId).catch(() => []),
         getMyTables(API_URL, operatorId).catch(() => []),
         getMyPricingSchemes(API_URL, operatorId).catch(() => []),
         getPendingReservations(API_URL, operatorId).catch(() => []),
@@ -182,6 +189,7 @@ const VenueDashboard: React.FC = () => {
       setActiveRooms(roomsRes.rooms || []);
       setClubProfile(clubProfileRes || {});
       setClubMembers(clubMembersRes || []);
+      setLiveAnnouncements(Array.isArray(liveRes) ? liveRes : []);
       setTables(tablesRes || []);
       setPricing(pricingRes || []);
       setPendingReservations(pendingRes || []);
@@ -1264,6 +1272,119 @@ const VenueDashboard: React.FC = () => {
         </div>
 
         {/* Broadcast Message */}
+        <div className="glass rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽直播通告</h2>
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">日期</label>
+              <input type="date" value={liveDate} onChange={(e) => setLiveDate(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">時間</label>
+              <input type="time" value={liveTime} onChange={(e) => setLiveTime(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">標題</label>
+              <input value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：週末友誼賽直播" />
+            </div>
+            <div className="md:col-span-5">
+              <label className="block text-sm mb-1 cue-muted">直播連結</label>
+              <input value={liveUrl} onChange={(e) => setLiveUrl(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="https://..." />
+              <div className="text-xs cue-muted mt-1">發佈後會同時以「場館訊息」推送，會員可直接點擊連結觀看。</div>
+            </div>
+            <div className="md:col-span-1 flex items-end">
+              <button
+                type="button"
+                disabled={liveCreating}
+                className="w-full px-4 py-2 rounded brand-button text-black transition-colors disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    if (!operatorId) return;
+                    const t = liveTitle.trim();
+                    const u = liveUrl.trim();
+                    if (!t) throw new Error('請輸入標題');
+                    if (!u) throw new Error('請輸入直播連結');
+                    if (!liveDate || !liveTime) throw new Error('請選擇日期及時間');
+                    const d = new Date(`${liveDate}T${liveTime}:00`);
+                    if (!Number.isFinite(d.getTime())) throw new Error('日期/時間格式不正確');
+                    setLiveCreating(true);
+                    await createLiveAnnouncement(API_URL, operatorId, { title: t, startsAt: d.toISOString(), liveUrl: u });
+                    setToast('已發佈直播通告');
+                    setTimeout(() => setToast(null), 2000);
+                    setLiveTitle('');
+                    setLiveUrl('');
+                    await loadData();
+                  } catch (e: any) {
+                    setToast(e?.message || '發佈失敗');
+                    setTimeout(() => setToast(null), 3000);
+                  } finally {
+                    setLiveCreating(false);
+                  }
+                }}
+              >
+                {liveCreating ? '發佈中…' : '發佈'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            {liveAnnouncements.length === 0 ? (
+              <div className="text-sm cue-muted">暫無直播通告</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-2">日期時間</th>
+                      <th className="py-2 px-2">標題</th>
+                      <th className="py-2 px-2">連結</th>
+                      <th className="py-2 px-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveAnnouncements.slice(0, 50).map((it: any) => (
+                      <tr key={it.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-2 cue-muted whitespace-nowrap">{it.startsAt ? new Date(it.startsAt).toLocaleString() : '-'}</td>
+                        <td className="py-2 px-2 font-semibold">{it.title}</td>
+                        <td className="py-2 px-2">
+                          {normalizeVideoHref(it.liveUrl) ? (
+                            <a href={normalizeVideoHref(it.liveUrl) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
+                              直播連結
+                            </a>
+                          ) : (
+                            <span className="cue-muted">-</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                            onClick={async () => {
+                              if (!confirm('確定要刪除此直播通告？')) return;
+                              try {
+                                await deleteLiveAnnouncement(API_URL, operatorId, String(it.id));
+                                await loadData();
+                                setToast('已刪除');
+                                setTimeout(() => setToast(null), 2000);
+                              } catch (e: any) {
+                                setToast(e?.message || '刪除失敗');
+                                setTimeout(() => setToast(null), 3000);
+                              }
+                            }}
+                          >
+                            刪除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {liveAnnouncements.length > 50 && <div className="text-xs cue-muted mt-2">只顯示最近 50 筆</div>}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="glass rounded-xl p-6">
            <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">發送場館訊息</h2>
            <div className="space-y-4">

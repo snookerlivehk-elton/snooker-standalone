@@ -77,6 +77,7 @@ model Member {
   joinedClubs  ClubMember[]
 
   reservations TableReservation[]
+  liveAnnouncements LiveAnnouncement[]
 }
 
 model ClubProfile {
@@ -95,6 +96,7 @@ model ClubProfile {
   members     ClubMember[]
   messages    ClubMessage[]
   breakRecords BreakRecord[]
+  liveAnnouncements LiveAnnouncement[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -138,6 +140,23 @@ model ClubMessage {
   title     String?
   content   String
   createdAt DateTime @default(now())
+}
+
+model LiveAnnouncement {
+  id                String   @id @default(uuid())
+  clubId            String
+  club              ClubProfile @relation(fields: [clubId], references: [id])
+  title             String
+  startsAt          DateTime
+  liveUrl           String
+  createdByMemberId String
+  createdBy         Member @relation(fields: [createdByMemberId], references: [id])
+  createdAt         DateTime @default(now())
+  deletedAt         DateTime?
+
+  @@index([clubId, startsAt])
+  @@index([startsAt])
+  @@index([deletedAt])
 }
 
 model ClubMember {

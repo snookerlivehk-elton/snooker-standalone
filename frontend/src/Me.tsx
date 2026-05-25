@@ -2,7 +2,15 @@ import React, { useEffect, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
-import { getMember, getMemberMatches } from './lib/api';
+import { getMember, getMemberMatches, getPublicLiveAnnouncements } from './lib/api';
+
+function normalizeHttpUrl(raw: any): string | null {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('//')) return `https:${s}`;
+  return `https://${s}`;
+}
 
 const Me: React.FC = () => {
   const session = (() => {
@@ -11,6 +19,8 @@ const Me: React.FC = () => {
   const memberId = session?.id;
   const [profile, setProfile] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
+  const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,6 +38,22 @@ const Me: React.FC = () => {
       }
     })();
   }, [memberId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLiveLoading(true);
+      try {
+        const rows = await getPublicLiveAnnouncements(API_URL, 20);
+        if (mounted) setLiveAnnouncements(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setLiveAnnouncements([]);
+      } finally {
+        if (mounted) setLiveLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
@@ -67,6 +93,31 @@ const Me: React.FC = () => {
                         <div className="font-medium">{m.opponentName || '對手'}</div>
                         <div className="cue-muted">{m.score || '-'}</div>
                         <div className="cue-muted">{m.duration || ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="cue-card p-4">
+                <div className="cue-zh-title mb-2">直播通告</div>
+                {liveLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                {!liveLoading && liveAnnouncements.length === 0 && <div className="text-sm cue-muted">暫無通告</div>}
+                {!liveLoading && liveAnnouncements.length > 0 && (
+                  <div className="space-y-2">
+                    {liveAnnouncements.slice(0, 10).map((it: any) => (
+                      <div key={it.id} className="flex items-start justify-between gap-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{it.title}</div>
+                          <div className="text-xs cue-muted">
+                            {it.club?.name ? `${it.club.name} · ` : ''}
+                            {it.startsAt ? new Date(it.startsAt).toLocaleString() : ''}
+                          </div>
+                        </div>
+                        {normalizeHttpUrl(it.liveUrl) && (
+                          <a href={normalizeHttpUrl(it.liveUrl) as string} target="_blank" rel="noreferrer" className="accent-blue underline flex-shrink-0">
+                            觀看
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>
