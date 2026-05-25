@@ -2286,12 +2286,17 @@ app.post('/api/auth/google', async (req, res) => {
 
     const email = payload.email.toLowerCase();
     const googleId = payload.sub;
+    const displayName = String(payload.name || payload.given_name || '').trim() || (email.split('@')[0] || email);
+    const emailVerified = Boolean((payload as any).email_verified);
 
     let member = await prisma.member.findUnique({ where: { email } });
 
     if (member) {
       // Logic for google_id update removed due to DB permission issues.
       // Matching by email only for now.
+      if ((member as any).is_enabled === false) {
+        return res.status(403).json({ error: '此帳號已被停用' });
+      }
       
       return res.json({ 
         ok: true, 
@@ -2305,7 +2310,49 @@ app.post('/api/auth/google', async (req, res) => {
         } 
       });
     } else {
-       return res.status(404).json({ error: 'Google 帳號未連結或未註冊，請先註冊會員' });
+      if (!emailVerified) {
+        return res.status(400).json({ error: 'Google Email 尚未驗證，無法註冊' });
+      }
+
+      const created = await prisma.$transaction(async (tx) => {
+        let memberCode: string | null = null;
+        for (let i = 0; i < 5; i++) {
+          const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+          const exists = await tx.member.findFirst({ where: { member_code: code } });
+          if (!exists) {
+            memberCode = code;
+            break;
+          }
+        }
+
+        const m = await tx.member.create({
+          data: {
+            id: randomUUID(),
+            name: displayName,
+            email,
+            district_code: null,
+            phone: null,
+            club_name: null,
+            birth_date: null,
+            member_code: memberCode,
+            membership_expires_at: null,
+            is_enabled: true,
+          },
+        });
+        return m;
+      });
+
+      return res.status(201).json({
+        ok: true,
+        id: created.id,
+        member: {
+          id: created.id,
+          name: created.name,
+          email: created.email,
+          member_code: created.member_code,
+          role: created.role,
+        },
+      });
     }
 
   } catch (err: any) {
