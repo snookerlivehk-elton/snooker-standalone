@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 
@@ -24,6 +24,12 @@ const ClubPublicPage: React.FC = () => {
   const [myReservations, setMyReservations] = useState<any[]>([]);
   const [myResLoading, setMyResLoading] = useState(false);
   const [myResError, setMyResError] = useState<string | null>(null);
+
+  const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
+  const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
+  const [leaderLoading, setLeaderLoading] = useState(false);
+  const [leaderError, setLeaderError] = useState<string | null>(null);
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -119,6 +125,36 @@ const ClubPublicPage: React.FC = () => {
       })
       .finally(() => setMyResLoading(false));
   }, [clubId, session]);
+
+  useEffect(() => {
+    if (!clubId) {
+      setLeaderHighest([]);
+      setLeaderMonthly([]);
+      setLeaderError(null);
+      return;
+    }
+    let mounted = true;
+    setLeaderLoading(true);
+    setLeaderError(null);
+    Promise.all([
+      getClubLeaderboardHighest(API_URL, clubId, 10).catch(() => []),
+      getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10).catch(() => []),
+    ])
+      .then(([highest, monthly]) => {
+        if (!mounted) return;
+        setLeaderHighest(Array.isArray(highest) ? highest : []);
+        setLeaderMonthly(Array.isArray(monthly) ? monthly : []);
+      })
+      .catch((e: any) => {
+        if (!mounted) return;
+        setLeaderError(e?.message || '讀取排行榜失敗');
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLeaderLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [clubId, leaderMonth]);
 
   useEffect(() => {
     if (!clubId || !selTable || !date || !start || !hours) {
@@ -288,6 +324,71 @@ const ClubPublicPage: React.FC = () => {
                 {club.intro}
               </p>
             )}
+
+            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">
+                <div className="font-semibold text-lg">單杆排行榜</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xs cue-muted">本月</div>
+                  <input
+                    type="month"
+                    value={leaderMonth}
+                    onChange={(e) => setLeaderMonth(e.target.value)}
+                    className="px-3 py-1.5 rounded cue-input text-sm"
+                  />
+                </div>
+              </div>
+
+              {leaderError && <div className="text-sm text-red-500 mb-2">{leaderError}</div>}
+              {leaderLoading && <div className="text-sm cue-muted mb-2">載入中...</div>}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="cue-surface-strong rounded-lg p-3">
+                  <div className="font-semibold mb-2">歷史最高單杆 Top 10</div>
+                  {leaderHighest.length === 0 ? (
+                    <div className="text-sm cue-muted">暫無資料</div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {leaderHighest.slice(0, 10).map((r: any, idx: number) => (
+                        <div key={r.id || `${r.member?.id || 'm'}-${idx}`} className="flex items-center justify-between gap-3 text-sm">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">
+                              {idx + 1}. {r.member?.name || '-'}
+                            </div>
+                            <div className="text-xs cue-muted">
+                              {r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 font-semibold accent-yellow">
+                            {r.points}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="cue-surface-strong rounded-lg p-3">
+                  <div className="font-semibold mb-2">本月累計 Top 10</div>
+                  {leaderMonthly.length === 0 ? (
+                    <div className="text-sm cue-muted">暫無資料</div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {leaderMonthly.slice(0, 10).map((r: any, idx: number) => (
+                        <div key={r.member?.id || `${idx}`} className="flex items-center justify-between gap-3 text-sm">
+                          <div className="min-w-0 font-semibold truncate">
+                            {idx + 1}. {r.member?.name || '-'}
+                          </div>
+                          <div className="flex-shrink-0 font-semibold text-emerald-600">
+                            {r.totalPoints}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <div className="mt-6 cue-surface rounded-lg p-4 text-left">
               <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">聯絡資訊</div>
