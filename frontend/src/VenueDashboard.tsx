@@ -63,7 +63,7 @@ const VenueDashboard: React.FC = () => {
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
-  const joinUrl = clubProfile?.id ? `${baseUrl}/club/${clubProfile.id}` : '';
+  const joinUrl = clubProfile?.id ? new URL(`/club/${clubProfile.id}`, window.location.origin).toString() : '';
   const joinQrSvgRef = useRef<SVGSVGElement | null>(null);
   const joinQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -370,11 +370,19 @@ const VenueDashboard: React.FC = () => {
               儲存場館資料
             </button>
             
-            {clubProfile.id && (
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                    <div className="text-center">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="text-center">
+                    {clubProfile.id ? (
+                      <>
                         <div className="inline-block bg-white p-2 rounded-lg">
-                          <QRCodeSVG ref={joinQrSvgRef as any} value={joinUrl} size={96} />
+                          <QRCodeSVG
+                            ref={joinQrSvgRef as any}
+                            value={joinUrl}
+                            size={120}
+                            fgColor="#000000"
+                            bgColor="#FFFFFF"
+                            includeMargin
+                          />
                         </div>
                         <div className="text-xs cue-muted mt-1">入會二維碼</div>
                         <div className="mt-2 flex flex-col sm:flex-row gap-2 justify-center">
@@ -388,12 +396,42 @@ const VenueDashboard: React.FC = () => {
                         <div style={{ display: 'none' }}>
                           <QRCodeCanvas ref={joinQrCanvasRef as any} value={joinUrl} size={512} includeMargin />
                         </div>
-                    </div>
-                    <Link to={`/club/${clubProfile.id}`} target="_blank" className="text-blue-400 underline text-sm">
-                        預覽公開頁面
-                    </Link>
+                      </>
+                    ) : (
+                      <div className="cue-surface rounded-lg p-3">
+                        <div className="text-sm font-semibold mb-1">入會二維碼</div>
+                        <div className="text-xs cue-muted mb-2">首次使用請先儲存一次場館資料，以生成入會連結。</div>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 rounded cue-button hover:brightness-95 text-xs w-full"
+                          onClick={async () => {
+                            try {
+                              if (!operatorId) return;
+                              const payload = {
+                                ...clubProfile,
+                                name: String(clubProfile?.name || '').trim() || String(operatorName || '未命名場館'),
+                              };
+                              const res = await updateClubProfile(API_URL, operatorId, payload);
+                              setClubProfile(res);
+                              setToast('已生成入會二維碼');
+                              setTimeout(() => setToast(null), 2000);
+                            } catch (e: any) {
+                              setToast(e?.message || '生成失敗');
+                              setTimeout(() => setToast(null), 3000);
+                            }
+                          }}
+                        >
+                          生成二維碼
+                        </button>
+                      </div>
+                    )}
                 </div>
-            )}
+                {clubProfile.id && (
+                  <Link to={`/club/${clubProfile.id}`} target="_blank" className="accent-blue underline text-sm">
+                      預覽公開頁面
+                  </Link>
+                )}
+            </div>
           </div>
         </div>
 
