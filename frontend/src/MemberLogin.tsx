@@ -187,7 +187,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
                 忘記密碼？
               </button>
               <button type="button" onClick={() => navigate('/members/register')} className="hover:text-white underline">
-                註冊新帳號
+                首次使用？Google 登入
               </button>
             </div>
             
