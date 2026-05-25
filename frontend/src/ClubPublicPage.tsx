@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
+import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly, getMyJoinedClubs } from './lib/api';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
@@ -109,6 +109,20 @@ const ClubPublicPage: React.FC = () => {
       setSchemes([]);
     }
   }, [clubId, loadClub]);
+
+  useEffect(() => {
+    if (!clubId || !session?.id) {
+      setJoined(false);
+      return;
+    }
+    getMyJoinedClubs(API_URL, session.id)
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        const ok = list.some((r: any) => String(r?.clubId || r?.club?.id || '') === String(clubId));
+        setJoined(ok);
+      })
+      .catch(() => setJoined(false));
+  }, [clubId, session]);
 
   useEffect(() => {
     if (!clubId || !session?.id) {
