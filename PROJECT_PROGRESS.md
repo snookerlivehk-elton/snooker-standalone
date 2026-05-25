@@ -124,6 +124,7 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - 場館搜尋：目前先做關鍵字；如需要可再加「區域」等維度（要先定義資料欄位/來源）
 - 龍虎榜：如需要顯示更多欄位（會員編號、場館 logo），可調整 API response 或前端呈現
 - 公告：如需多則公告、排程生效時間、歷史紀錄，需擴展 `SiteNotice` model
+- 下一階段（可行報告 + 排程）：見 `NEXT_PHASE_FEASIBILITY_AND_ROADMAP.md`
 
 ## 本機開發（快速提示）
 
@@ -134,4 +135,3 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - frontend：
   - `npm i`
   - `npm run dev` / `npm run build`
-
