@@ -170,234 +170,303 @@ const AdminMembers: React.FC = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#111827', padding: '40px 16px' }}>
-      <div className="brand-page text-white" style={{ maxWidth: 840, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <h2 className="accent-yellow">管理員：會員列表</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Link
-            to="/members/register"
-            style={{ padding: '6px 10px', borderRadius: 6, background: '#6b7280', color: '#fff', textDecoration: 'none' }}
-          >
-            會員註冊
-          </Link>
-          <button
-            onClick={() => {
-              const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
-              window.location.href = url;
-            }}
-            style={{ padding: '6px 10px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}
-          >
-            Admin Panel
-          </button>
+    <div className="brand-page min-h-screen text-white">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 py-10">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="accent-yellow text-2xl font-bold">管理員：會員列表</h2>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/members/register"
+              className="rounded-md bg-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+            >
+              會員註冊
+            </Link>
+            <button
+              onClick={() => {
+                const tok = localStorage.getItem('adminToken') || '';
+                const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
+                window.location.href = url;
+              }}
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              Admin Panel
+            </button>
+          </div>
         </div>
-      </div>
-      {loading && <div>載入中...</div>}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-      {!loading && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 13, color: '#666' }}>
-              {error ? '後端連線異常' : '後端連線正常'}
+
+        <div className="rounded-xl bg-white text-slate-900 shadow-sm ring-1 ring-black/5">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-slate-600">
+                {error ? (
+                  <span className="text-red-600">後端連線異常</span>
+                ) : (
+                  <span className="text-emerald-700">後端連線正常</span>
+                )}
+              </div>
+              <div className="text-sm text-slate-600">
+                目前符合條件：<span className="font-semibold text-slate-900">{filteredMembers.length}</span> / 總共：{members.length} 位
+              </div>
             </div>
           </div>
 
-          {/* Filter Bar */}
-          <div style={{ background: '#f9fafb', padding: 12, borderRadius: 8, marginBottom: 16, border: '1px solid #e5e7eb' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-              <input 
-                placeholder="姓名" 
-                value={filterName} 
-                onChange={e => setFilterName(e.target.value)} 
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
-              />
-              <input 
-                placeholder="Email" 
-                value={filterEmail} 
-                onChange={e => setFilterEmail(e.target.value)} 
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
-              />
-              
-              <select 
-                value={filterRegion} 
-                onChange={e => setFilterRegion(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14, minWidth: 120 }}
-              >
-                <option value="">全部大區</option>
-                {regions.map(r => (
-                  <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
-                ))}
-              </select>
-              
-              <select 
-                value={filterDistrict} 
-                onChange={e => setFilterDistrict(e.target.value)} 
-                disabled={!filterRegion}
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14, minWidth: 120, opacity: !filterRegion ? 0.6 : 1 }}
-              >
-                <option value="">全部地區</option>
-                {availableDistricts.map(d => (
-                  <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
-                ))}
-              </select>
-              
-              <input 
-                placeholder="會員編碼" 
-                value={filterCode} 
-                onChange={e => setFilterCode(e.target.value)} 
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
-              />
-              
-              <select 
-                value={filterRole} 
-                onChange={e => setFilterRole(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', fontSize: 14 }}
-              >
-                <option value="">全部等級</option>
-                <option value="MEMBER">普通會員</option>
-                <option value="ADMIN">操作員</option>
-              </select>
-              
-              <button 
-                onClick={() => { 
-                  setFilterName(''); 
-                  setFilterEmail(''); 
-                  setFilterRegion(''); 
-                  setFilterDistrict(''); 
-                  setFilterCode(''); 
-                  setFilterRole(''); 
-                }}
-                style={{ padding: '6px 12px', borderRadius: 4, background: '#e5e7eb', color: '#374151', border: 'none', cursor: 'pointer', fontSize: 14 }}
-              >
-                清除
-              </button>
-            </div>
-            <div style={{ marginTop: 10, fontSize: 13, color: '#4b5563' }}>
-              目前符合條件：<span style={{ fontWeight: 'bold', color: '#111827' }}>{filteredMembers.length}</span> / 總共：{members.length} 位
-            </div>
-          </div>
+          <div className="px-4 py-4">
+            {loading && <div className="text-sm text-slate-600">載入中...</div>}
+            {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
 
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>ID</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>姓名</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>Email</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>分區</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員編碼</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>會員等級</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>電話</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>出生日期</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>有效期</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 8 }}>建立時間</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.map((m) => (
-                  <React.Fragment key={m.id}>
-                    <tr>
-                    <td colSpan={10} style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {!editing[m.id] ? (
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={() => startEdit(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}>編輯</button>
-                          <button onClick={() => removeMember(m)} style={{ padding: '4px 8px', borderRadius: 6, background: '#dc2626', color: '#fff', border: 'none' }}>
-                            {confirmDeleteId === m.id ? '再次確認刪除' : '刪除'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={() => saveEdit(m.id)} style={{ padding: '4px 8px', borderRadius: 6, background: '#16a34a', color: '#fff', border: 'none' }}>儲存</button>
-                          <button onClick={() => cancelEdit(m.id)} style={{ padding: '4px 8px', borderRadius: 6, background: '#6b7280', color: '#fff', border: 'none' }}>取消</button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                  <tr key={m.id}>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.id}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].name || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), name: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.name)}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].email || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), email: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.email || '-')}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].district_code || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), district_code: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.district_code ?? m.partition ?? '-')}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].member_code || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), member_code: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.member_code || '-')}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <select
-                          value={editing[m.id].role || m.role || 'MEMBER'}
-                          onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), role: e.target.value } }))}
-                          style={{ width: '100%' }}
-                        >
-                          <option value="MEMBER">普通會員</option>
-                          <option value="ADMIN">場館/球會</option>
-                        </select>
-                      ) : (
-                        (m.role === 'ADMIN' ? '場館/球會' : '普通會員')
-                      )}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].phone || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), phone: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.phone ?? '-')}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input value={editing[m.id].birthDate || ''} onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), birthDate: e.target.value } }))} style={{ width: '100%' }} />
-                      ) : (m.birthDate ?? m.birth_date ?? '-')}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>
-                      {editing[m.id] ? (
-                        <input
-                          type="date"
-                          value={
-                            editing[m.id].membershipExpiresAt ||
-                            editing[m.id].membership_expires_at ||
-                            (m.membership_expires_at
-                              ? new Date(m.membership_expires_at).toISOString().slice(0, 10)
-                              : '')
-                          }
-                          onChange={(e) =>
-                            setEditing((p) => ({
-                              ...p,
-                              [m.id]: {
-                                ...(p[m.id] || m),
-                                membershipExpiresAt: e.target.value,
-                              },
-                            }))
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      ) : (
-                        m.membership_expires_at
-                          ? new Date(m.membership_expires_at).toLocaleDateString()
-                          : '-'
-                      )}
-                    </td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
-                  </tr>
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            {!loading && (
+              <>
+                <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                    <input
+                      placeholder="姓名"
+                      value={filterName}
+                      onChange={e => setFilterName(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                    <input
+                      placeholder="Email"
+                      value={filterEmail}
+                      onChange={e => setFilterEmail(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                    <select
+                      value={filterRegion}
+                      onChange={e => setFilterRegion(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="">全部大區</option>
+                      {regions.map(r => (
+                        <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
+                      ))}
+                    </select>
 
-        </>
-      )}
+                    <select
+                      value={filterDistrict}
+                      onChange={e => setFilterDistrict(e.target.value)}
+                      disabled={!filterRegion}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 disabled:opacity-60 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="">全部地區</option>
+                      {availableDistricts.map(d => (
+                        <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
+                      ))}
+                    </select>
+
+                    <input
+                      placeholder="會員編碼"
+                      value={filterCode}
+                      onChange={e => setFilterCode(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+
+                    <div className="flex gap-2">
+                      <select
+                        value={filterRole}
+                        onChange={e => setFilterRole(e.target.value)}
+                        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      >
+                        <option value="">全部等級</option>
+                        <option value="MEMBER">普通會員</option>
+                        <option value="ADMIN">場館/球會</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          setFilterName('');
+                          setFilterEmail('');
+                          setFilterRegion('');
+                          setFilterDistrict('');
+                          setFilterCode('');
+                          setFilterRole('');
+                        }}
+                        className="h-10 shrink-0 rounded-md bg-slate-200 px-3 text-sm font-semibold text-slate-800 hover:bg-slate-300 transition-colors"
+                      >
+                        清除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
+                  <table className="min-w-[1280px] w-full border-collapse text-sm">
+                    <thead className="sticky top-0 z-10 bg-slate-50">
+                      <tr>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">ID</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">姓名</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">Email</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">分區</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">會員編碼</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">會員等級</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">電話</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">出生日期</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">有效期</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">建立時間</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredMembers.map((m) => {
+                        const isEditing = Boolean(editing[m.id]);
+                        const row = editing[m.id] || m;
+                        return (
+                          <tr key={m.id} className="odd:bg-white even:bg-slate-50">
+                            <td className="border-b border-slate-100 px-3 py-2 align-top font-mono text-xs text-slate-600">
+                              <span title={String(m.id)} className="block max-w-[240px] truncate">{m.id}</span>
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.name || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), name: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="block max-w-[200px] truncate" title={String(m.name || '')}>{m.name || '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.email || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), email: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="block max-w-[280px] truncate" title={String(m.email || '')}>{m.email || '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.district_code || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), district_code: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="block max-w-[140px] truncate" title={String(m.district_code ?? m.partition ?? '')}>{m.district_code ?? m.partition ?? '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.member_code || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), member_code: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="block max-w-[160px] truncate" title={String(m.member_code || '')}>{m.member_code || '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <select
+                                  value={row.role || m.role || 'MEMBER'}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), role: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                >
+                                  <option value="MEMBER">普通會員</option>
+                                  <option value="ADMIN">場館/球會</option>
+                                </select>
+                              ) : (
+                                <span className="whitespace-nowrap">{m.role === 'ADMIN' ? '場館/球會' : '普通會員'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.phone || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), phone: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="block max-w-[160px] truncate" title={String(m.phone ?? '')}>{m.phone ?? '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  value={row.birthDate || ''}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), birthDate: e.target.value } }))}
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="whitespace-nowrap">{m.birthDate ?? m.birth_date ?? '-'}</span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {isEditing ? (
+                                <input
+                                  type="date"
+                                  value={
+                                    row.membershipExpiresAt ||
+                                    row.membership_expires_at ||
+                                    (m.membership_expires_at
+                                      ? new Date(m.membership_expires_at).toISOString().slice(0, 10)
+                                      : '')
+                                  }
+                                  onChange={(e) =>
+                                    setEditing((p) => ({
+                                      ...p,
+                                      [m.id]: {
+                                        ...(p[m.id] || m),
+                                        membershipExpiresAt: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                />
+                              ) : (
+                                <span className="whitespace-nowrap">
+                                  {m.membership_expires_at ? new Date(m.membership_expires_at).toLocaleDateString() : '-'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top text-slate-700">
+                              <span className="whitespace-nowrap">{m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</span>
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              {!isEditing ? (
+                                <div className="flex flex-wrap gap-2 whitespace-nowrap">
+                                  <button
+                                    onClick={() => startEdit(m)}
+                                    className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
+                                  >
+                                    編輯
+                                  </button>
+                                  <button
+                                    onClick={() => removeMember(m)}
+                                    className={`${confirmDeleteId === m.id ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'} rounded-md px-2.5 py-1.5 text-xs font-semibold text-white transition-colors`}
+                                  >
+                                    {confirmDeleteId === m.id ? '再次確認刪除' : '刪除'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-2 whitespace-nowrap">
+                                  <button
+                                    onClick={() => saveEdit(m.id)}
+                                    className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                                  >
+                                    儲存
+                                  </button>
+                                  <button
+                                    onClick={() => cancelEdit(m.id)}
+                                    className="rounded-md bg-slate-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
