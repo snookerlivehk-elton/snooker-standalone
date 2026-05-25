@@ -26,14 +26,14 @@ const Join: React.FC = () => {
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="例如：ABCD1234 或房間ID"
-              className="w-full px-3 py-2 rounded bg-gray-800 text-white border border-gray-700"
+              className="w-full px-3 py-2 rounded cue-input"
             />
           </div>
           <button onClick={onJoin} className="w-full cue-button py-3 font-bold rounded">
             加入
           </button>
           <div className="mt-6 text-center">
-            <div className="mb-2 text-sm text-gray-300">或掃描 QR 加入</div>
+            <div className="mb-2 text-sm cue-muted">或掃描 QR 加入</div>
             <div className="flex items-center justify-center">
               <div className="bg-white p-3 rounded" aria-label="QR placeholder">
                 <div style={{ width: 168, height: 168, background: '#eee' }} />

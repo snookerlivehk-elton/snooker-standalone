@@ -36,12 +36,12 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
           <button
             onClick={() => nav(-1)}
             aria-label="Back"
-            className="text-white/90 hover:text-white text-xl"
+            className="cue-muted hover:brightness-95 text-xl"
           >
             ←
           </button>
         )}
-        <div className="cue-zh-title text-white text-lg">{title}</div>
+        <div className="cue-zh-title text-lg">{title}</div>
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -54,7 +54,7 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
         {showLogout && (
           <button
             onClick={() => { try { localStorage.removeItem('memberSession'); } catch {} nav('/members/login'); }}
-            className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm"
+            className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm"
           >
             登出
           </button>
