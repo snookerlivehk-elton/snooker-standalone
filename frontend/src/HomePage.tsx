@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
+import PageSection from './components/PageSection';
 import { API_URL } from './config';
 import {
   getLeaderboardClubsHighest,
@@ -152,215 +153,252 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
-      <TopBarPublic title="主頁" />
+      <TopBarPublic title="SnookerHK Live" showBack={false} />
       <main className="flex-1 px-4 pt-4 pb-20">
-        <div className="max-w-5xl mx-auto space-y-4">
-          <div className="cue-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="cue-zh-title">SnookerHK Live</div>
-                <div className="cue-en-sub">Clubs · Breaks · Live</div>
-              </div>
-              <div className="flex gap-2">
-                <a href="/members/login" className="cue-button px-4 py-2 rounded">
-                  會員登入
-                </a>
-                <a href="/venue/login" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95">
-                  場館登入
-                </a>
-              </div>
-            </div>
-            {hasSession && (
-              <div className="mt-3 text-sm cue-muted">
-                已登入，可到 <a href="/me" className="accent-blue underline">個人</a> / <a href={`/member/${encodeURIComponent(session.id as string)}`} className="accent-blue underline">我的頁面</a>
-              </div>
-            )}
-          </div>
-
-          <div className="cue-card p-4">
-            <div className="cue-zh-title mb-2">全站公告</div>
-            {noticeLoading && <div className="text-sm cue-muted">讀取中…</div>}
-            {!noticeLoading && !showNotice && <div className="text-sm cue-muted">暫無公告</div>}
-            {!noticeLoading && showNotice && (
-              <div className="text-sm whitespace-pre-wrap">{String(notice.message || '')}</div>
-            )}
-            {youtubeEmbed && (
-              <div className="mt-3">
-                <div className="aspect-video w-full cue-surface rounded overflow-hidden">
-                  <iframe
-                    src={youtubeEmbed}
-                    title="YouTube Live"
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    allowFullScreen
-                  />
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div
+            className="cue-card overflow-hidden"
+            style={{
+              background:
+                'radial-gradient(900px 420px at 15% 20%, rgba(14,165,233,0.20), transparent 60%), radial-gradient(800px 420px at 85% 20%, rgba(250,204,21,0.16), transparent 60%), var(--glass-bg)',
+            }}
+          >
+            <div className="p-5 md:p-8">
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="cue-zh-title text-2xl md:text-4xl">SnookerHK Live</div>
+                  <div className="cue-en-sub mt-1">Clubs · Breaks · Live</div>
+                  <div className="text-sm cue-muted mt-3 max-w-2xl">
+                    查場館、睇單杆榜、追直播通告。主頁採資訊型分欄版面，之後加新區塊/新頁都容易擴展。
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <a href="/members/login" className="cue-button px-4 py-2 rounded">
+                    會員登入
+                  </a>
+                  <a href="/venue/login" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95">
+                    場館登入
+                  </a>
+                  <a href="/members/register" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95">
+                    註冊
+                  </a>
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="cue-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="cue-zh-title">場館搜尋</div>
-              <div className="flex items-center gap-2">
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="關鍵字（場館名 / 地址 / 電話）"
-                  className="cue-input rounded px-3 py-2 text-sm w-64 max-w-[70vw]"
-                />
-                <button
-                  type="button"
-                  onClick={() => loadClubs()}
-                  className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                  disabled={clubsLoading}
-                >
-                  搜尋
-                </button>
-              </div>
-            </div>
-            <div className="mt-3">
-              {clubsLoading && <div className="text-sm cue-muted">讀取中…</div>}
-              {!clubsLoading && clubs.length === 0 && <div className="text-sm cue-muted">找不到場館</div>}
-              {!clubsLoading && clubs.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {clubs.map((c: any) => (
-                    <a
-                      key={c.id}
-                      href={`/club/${encodeURIComponent(c.id)}`}
-                      className="cue-surface rounded p-3 hover:brightness-95 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        {normalizeHttpUrl(c.logoUrl) ? (
-                          <img
-                            src={normalizeHttpUrl(c.logoUrl) as string}
-                            alt={c.name || 'club'}
-                            className="w-12 h-12 rounded object-cover cue-surface-strong"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded cue-surface-strong flex items-center justify-center font-bold">
-                            {(String(c.name || '?').trim().slice(0, 1) || '?').toUpperCase()}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-semibold truncate">{c.name || '場館'}</div>
-                          <div className="text-xs cue-muted truncate">{c.address || c.phone || ''}</div>
-                        </div>
-                      </div>
-                    </a>
-                  ))}
+              {hasSession && (
+                <div className="mt-4 text-sm cue-muted">
+                  已登入：<a href="/me" className="accent-blue underline">個人</a> /{' '}
+                  <a href={`/member/${encodeURIComponent(session.id as string)}`} className="accent-blue underline">我的頁面</a>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="cue-card p-4">
-            <div className="cue-zh-title mb-2">直播排程</div>
-            {liveLoading && <div className="text-sm cue-muted">讀取中…</div>}
-            {!liveLoading && liveAnnouncements.length === 0 && <div className="text-sm cue-muted">暫無通告</div>}
-            {!liveLoading && liveAnnouncements.length > 0 && (
-              <div className="space-y-2">
-                {liveAnnouncements.slice(0, 10).map((it: any) => (
-                  <div key={it.id} className="flex items-start justify-between gap-3 text-sm">
-                    <div className="min-w-0">
-                      <div className="font-semibold truncate">{it.title}</div>
-                      <div className="text-xs cue-muted">
-                        {it.club?.name ? `${it.club.name} · ` : ''}
-                        {it.startsAt ? new Date(it.startsAt).toLocaleString() : ''}
-                      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+            <div className="space-y-4">
+              <PageSection
+                title="全站公告"
+                right={
+                  <a href="/admin/overview" className="text-sm accent-blue underline">
+                    管理
+                  </a>
+                }
+              >
+                {noticeLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                {!noticeLoading && !showNotice && <div className="text-sm cue-muted">暫無公告</div>}
+                {!noticeLoading && showNotice && (
+                  <div className="text-sm whitespace-pre-wrap">{String(notice.message || '')}</div>
+                )}
+                {youtubeEmbed && (
+                  <div className="mt-3">
+                    <div className="aspect-video w-full cue-surface rounded overflow-hidden">
+                      <iframe
+                        src={youtubeEmbed}
+                        title="YouTube Live"
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
                     </div>
-                    {normalizeHttpUrl(it.liveUrl) && (
+                  </div>
+                )}
+              </PageSection>
+
+              <PageSection title="直播排程">
+                {liveLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                {!liveLoading && liveAnnouncements.length === 0 && <div className="text-sm cue-muted">暫無通告</div>}
+                {!liveLoading && liveAnnouncements.length > 0 && (
+                  <div className="space-y-3">
+                    {liveAnnouncements.slice(0, 10).map((it: any) => (
+                      <div key={it.id} className="cue-surface rounded p-3">
+                        <div className="flex items-start justify-between gap-3 text-sm">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{it.title}</div>
+                            <div className="text-xs cue-muted mt-1">
+                              {it.club?.name ? `${it.club.name} · ` : ''}
+                              {it.startsAt ? new Date(it.startsAt).toLocaleString() : ''}
+                            </div>
+                          </div>
+                          {normalizeHttpUrl(it.liveUrl) && (
+                            <a
+                              href={normalizeHttpUrl(it.liveUrl) as string}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="accent-blue underline flex-shrink-0"
+                            >
+                              觀看
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PageSection>
+
+              <PageSection
+                title="場館搜尋"
+                right={
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="關鍵字"
+                      className="cue-input rounded px-3 py-2 text-sm w-44"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => loadClubs()}
+                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                      disabled={clubsLoading}
+                    >
+                      搜尋
+                    </button>
+                  </div>
+                }
+              >
+                {clubsLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                {!clubsLoading && clubs.length === 0 && <div className="text-sm cue-muted">找不到場館</div>}
+                {!clubsLoading && clubs.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {clubs.map((c: any) => (
                       <a
-                        href={normalizeHttpUrl(it.liveUrl) as string}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="accent-blue underline flex-shrink-0"
+                        key={c.id}
+                        href={`/club/${encodeURIComponent(c.id)}`}
+                        className="cue-surface rounded p-3 hover:brightness-95 transition"
                       >
-                        觀看
+                        <div className="flex items-center gap-3">
+                          {normalizeHttpUrl(c.logoUrl) ? (
+                            <img
+                              src={normalizeHttpUrl(c.logoUrl) as string}
+                              alt={c.name || 'club'}
+                              className="w-12 h-12 rounded object-cover cue-surface-strong"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded cue-surface-strong flex items-center justify-center font-bold">
+                              {(String(c.name || '?').trim().slice(0, 1) || '?').toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{c.name || '場館'}</div>
+                            <div className="text-xs cue-muted truncate">{c.address || c.phone || ''}</div>
+                          </div>
+                        </div>
                       </a>
+                    ))}
+                  </div>
+                )}
+              </PageSection>
+            </div>
+
+            <div className="space-y-4">
+              <PageSection
+                title="龍虎榜"
+                right={
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="cue-muted">月份</div>
+                    <input
+                      type="month"
+                      value={month}
+                      onChange={(e) => setMonth(e.target.value)}
+                      className="cue-input rounded px-3 py-2"
+                    />
+                  </div>
+                }
+              >
+                {boardLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                <div className="space-y-3">
+                  <div className="cue-surface rounded p-3">
+                    <div className="font-semibold mb-2">會員 · 歷史最高單杆</div>
+                    {memberHighest.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
+                    {memberHighest.length > 0 && (
+                      <div className="space-y-1 text-sm">
+                        {memberHighest.map((r: any, idx: number) => (
+                          <div key={r.memberId || idx} className="flex items-center justify-between gap-3">
+                            <div className="truncate">{idx + 1}. {r.member?.name || '會員'}</div>
+                            <div className="font-semibold">{r.points}</div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          <div className="cue-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="cue-zh-title">龍虎榜</div>
-              <div className="flex items-center gap-2 text-sm">
-                <div className="cue-muted">月份</div>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(e) => setMonth(e.target.value)}
-                  className="cue-input rounded px-3 py-2"
-                />
-              </div>
-            </div>
-            {boardLoading && <div className="mt-2 text-sm cue-muted">讀取中…</div>}
-            <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="cue-surface rounded p-3">
-                <div className="font-semibold mb-2">會員 · 歷史最高單杆</div>
-                {memberHighest.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
-                {memberHighest.length > 0 && (
-                  <div className="space-y-1 text-sm">
-                    {memberHighest.map((r: any, idx: number) => (
-                      <div key={r.memberId || idx} className="flex items-center justify-between gap-3">
-                        <div className="truncate">{idx + 1}. {r.member?.name || '會員'}</div>
-                        <div className="font-semibold">{r.points}</div>
+                  <div className="cue-surface rounded p-3">
+                    <div className="font-semibold mb-2">會員 · 本月累計</div>
+                    {memberMonthly.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
+                    {memberMonthly.length > 0 && (
+                      <div className="space-y-1 text-sm">
+                        {memberMonthly.map((r: any, idx: number) => (
+                          <div key={r.memberId || idx} className="flex items-center justify-between gap-3">
+                            <div className="truncate">{idx + 1}. {r.member?.name || '會員'}</div>
+                            <div className="font-semibold">{r.points}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="cue-surface rounded p-3">
-                <div className="font-semibold mb-2">會員 · 本月累計</div>
-                {memberMonthly.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
-                {memberMonthly.length > 0 && (
-                  <div className="space-y-1 text-sm">
-                    {memberMonthly.map((r: any, idx: number) => (
-                      <div key={r.memberId || idx} className="flex items-center justify-between gap-3">
-                        <div className="truncate">{idx + 1}. {r.member?.name || '會員'}</div>
-                        <div className="font-semibold">{r.points}</div>
+                  <div className="cue-surface rounded p-3">
+                    <div className="font-semibold mb-2">場館 · 歷史最高單杆</div>
+                    {clubHighest.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
+                    {clubHighest.length > 0 && (
+                      <div className="space-y-1 text-sm">
+                        {clubHighest.map((r: any, idx: number) => (
+                          <div key={r.clubId || idx} className="flex items-center justify-between gap-3">
+                            <div className="truncate">{idx + 1}. {r.club?.name || '場館'}</div>
+                            <div className="font-semibold">{r.points}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="cue-surface rounded p-3">
-                <div className="font-semibold mb-2">場館 · 歷史最高單杆</div>
-                {clubHighest.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
-                {clubHighest.length > 0 && (
-                  <div className="space-y-1 text-sm">
-                    {clubHighest.map((r: any, idx: number) => (
-                      <div key={r.clubId || idx} className="flex items-center justify-between gap-3">
-                        <div className="truncate">{idx + 1}. {r.club?.name || '場館'}</div>
-                        <div className="font-semibold">{r.points}</div>
+                  <div className="cue-surface rounded p-3">
+                    <div className="font-semibold mb-2">場館 · 本月累計</div>
+                    {clubMonthly.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
+                    {clubMonthly.length > 0 && (
+                      <div className="space-y-1 text-sm">
+                        {clubMonthly.map((r: any, idx: number) => (
+                          <div key={r.clubId || idx} className="flex items-center justify-between gap-3">
+                            <div className="truncate">{idx + 1}. {r.club?.name || '場館'}</div>
+                            <div className="font-semibold">{r.points}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              </PageSection>
 
-              <div className="cue-surface rounded p-3">
-                <div className="font-semibold mb-2">場館 · 本月累計</div>
-                {clubMonthly.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
-                {clubMonthly.length > 0 && (
-                  <div className="space-y-1 text-sm">
-                    {clubMonthly.map((r: any, idx: number) => (
-                      <div key={r.clubId || idx} className="flex items-center justify-between gap-3">
-                        <div className="truncate">{idx + 1}. {r.club?.name || '場館'}</div>
-                        <div className="font-semibold">{r.points}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <PageSection title="快速入口">
+                <div className="grid grid-cols-2 gap-2">
+                  <a href="/members/login" className="cue-button px-4 py-2 rounded text-center">會員登入</a>
+                  <a href="/venue/login" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 text-center">場館登入</a>
+                  <a href="/members/register" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 text-center">註冊</a>
+                  <a href="/me" className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 text-center">個人</a>
+                </div>
+              </PageSection>
             </div>
           </div>
         </div>
