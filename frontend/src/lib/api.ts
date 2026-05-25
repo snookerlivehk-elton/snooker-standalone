@@ -610,16 +610,28 @@ export async function loginGoogle(
   apiUrl: string,
   credential: string,
 ) {
-  const res = await fetch(`${apiUrl}/api/auth/google`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ credential }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `登入失敗 (${res.status})`);
+  const payload = JSON.stringify({ credential });
+  const tryPost = async (url: string) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    return res;
+  };
+
+  const primary = await tryPost(`${apiUrl}/api/auth/google`);
+  if (primary.ok) return primary.json();
+
+  if (primary.status === 404) {
+    const fallback = await tryPost(`${apiUrl}/auth/google`);
+    if (fallback.ok) return fallback.json();
+    const err = await fallback.json().catch(() => ({}));
+    throw new Error(err.error || `登入失敗 (${fallback.status})`);
   }
-  return res.json(); // { ok, id, member: {...} }
+
+  const err = await primary.json().catch(() => ({}));
+  throw new Error(err.error || `登入失敗 (${primary.status})`);
 }
 
 export async function getMember(
