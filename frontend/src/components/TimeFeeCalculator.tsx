@@ -9,6 +9,8 @@ type Props = {
 };
 
 function toFiniteNumber(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
@@ -45,8 +47,7 @@ export default function TimeFeeCalculator({
   const frames = useMemo(() => {
     const n = toFiniteNumber(framesRaw);
     if (n == null) return null;
-    const i = Math.floor(n);
-    return i >= 1 ? i : null;
+    return n > 0 ? n : null;
   }, [framesRaw]);
 
   const computed = useMemo(() => {
@@ -77,8 +78,8 @@ export default function TimeFeeCalculator({
           <div className="text-xs cue-muted">總局數</div>
           <input
             type="number"
-            step="1"
-            min={1}
+            step="0.5"
+            min={0.1}
             value={framesRaw}
             onChange={(e) => setFramesRaw(e.target.value)}
             className="w-full px-3 py-2 rounded cue-input"
@@ -151,4 +152,3 @@ export default function TimeFeeCalculator({
     </div>
   );
 }
-
