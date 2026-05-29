@@ -1,6 +1,20 @@
-CREATE TYPE IF NOT EXISTS "TableSessionStatus" AS ENUM ('ACTIVE','ENDED','CANCELLED');
-CREATE TYPE IF NOT EXISTS "TableSessionEndSource" AS ENUM ('MEMBER','OPERATOR');
-CREATE TYPE IF NOT EXISTS "TableSessionConfirmAction" AS ENUM ('START','END');
+DO $$
+BEGIN
+  CREATE TYPE "TableSessionStatus" AS ENUM ('ACTIVE','ENDED','CANCELLED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE TYPE "TableSessionEndSource" AS ENUM ('MEMBER','OPERATOR');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE TYPE "TableSessionConfirmAction" AS ENUM ('START','END');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "TableQrToken" (
   "id" TEXT NOT NULL,
@@ -109,4 +123,3 @@ BEGIN
     ADD CONSTRAINT "TableSession_endedByOperatorId_fkey" FOREIGN KEY ("endedByOperatorId") REFERENCES "Member"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-
