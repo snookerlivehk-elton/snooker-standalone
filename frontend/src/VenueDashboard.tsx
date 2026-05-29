@@ -162,7 +162,7 @@ const VenueDashboard: React.FC = () => {
     URL.revokeObjectURL(url);
   }, []);
 
-  const downloadSvgAsPng = useCallback(async (svg: SVGSVGElement, filename: string) => {
+  const downloadSvgAsPng = useCallback(async (svg: SVGSVGElement, filename: string, title?: string) => {
     const xml = new XMLSerializer().serializeToString(svg);
     const svgBlob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`], { type: 'image/svg+xml;charset=utf-8' });
     const svgUrl = URL.createObjectURL(svgBlob);
@@ -175,14 +175,54 @@ const VenueDashboard: React.FC = () => {
         img.onerror = () => reject(new Error('image load failed'));
       });
       const size = 1024;
+      const titleHeight = title ? 180 : 0;
       const canvas = document.createElement('canvas');
       canvas.width = size;
-      canvas.height = size;
+      canvas.height = size + titleHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('canvas not supported');
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, size, size);
-      ctx.drawImage(img, 0, 0, size, size);
+      ctx.fillRect(0, 0, size, size + titleHeight);
+      if (title) {
+        const text = String(title).trim();
+        const maxWidth = size - 80;
+        const centerX = size / 2;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000000';
+
+        let fontSize = 64;
+        const minFontSize = 28;
+        const fitFont = (s: number) => {
+          ctx.font = `700 ${s}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+        };
+        fitFont(fontSize);
+        while (fontSize > minFontSize && ctx.measureText(text).width > maxWidth) {
+          fontSize -= 2;
+          fitFont(fontSize);
+        }
+
+        const drawOneLine = () => {
+          const y = titleHeight / 2;
+          ctx.fillText(text, centerX, y);
+        };
+
+        if (ctx.measureText(text).width <= maxWidth || fontSize > minFontSize) {
+          drawOneLine();
+        } else {
+          const mid = Math.max(1, Math.floor(text.length / 2));
+          const a = text.slice(0, mid).trim();
+          const b = text.slice(mid).trim();
+          fitFont(42);
+          const lineHeight = 56;
+          const y1 = (titleHeight / 2) - (lineHeight / 2);
+          const y2 = (titleHeight / 2) + (lineHeight / 2);
+          ctx.fillText(a, centerX, y1);
+          ctx.fillText(b, centerX, y2);
+        }
+      }
+
+      ctx.drawImage(img, 0, titleHeight, size, size);
       const pngUrl = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = pngUrl;
@@ -1303,7 +1343,7 @@ const VenueDashboard: React.FC = () => {
                                     const el = document.getElementById(`table-qr-svg-${t.id}`) as any;
                                     if (!el) throw new Error('找不到 QR');
                                     const fn = `table-${safeFilePart(t.name)}-qr.png`;
-                                    await downloadSvgAsPng(el, fn);
+                                    await downloadSvgAsPng(el, fn, t.name);
                                   } catch (e: any) {
                                     setToast(e?.message || '下載失敗');
                                     setTimeout(() => setToast(null), 3000);
