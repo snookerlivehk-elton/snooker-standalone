@@ -143,6 +143,58 @@ const VenueDashboard: React.FC = () => {
     a.remove();
   }, [clubProfile?.id]);
 
+  const safeFilePart = (raw: any) => {
+    const s = String(raw || '').trim();
+    const out = s.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    return out || 'qr';
+  };
+
+  const downloadSvgElement = useCallback((svg: SVGSVGElement, filename: string) => {
+    const xml = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const downloadSvgAsPng = useCallback(async (svg: SVGSVGElement, filename: string) => {
+    const xml = new XMLSerializer().serializeToString(svg);
+    const svgBlob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = svgUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('image load failed'));
+      });
+      const size = 1024;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas not supported');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const pngUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = pngUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+  }, []);
+
   const weekDays = useMemo(() => ([
     { n: 1, label: '一' },
     { n: 2, label: '二' },
@@ -1203,7 +1255,14 @@ const VenueDashboard: React.FC = () => {
                         {t.qrToken?.token ? (
                           <div className="flex items-center gap-2">
                             <div className="bg-white p-1 rounded">
-                              <QRCodeSVG value={new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString()} size={48} fgColor="#000000" bgColor="#FFFFFF" includeMargin />
+                              <QRCodeSVG
+                                id={`table-qr-svg-${t.id}`}
+                                value={new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString()}
+                                size={48}
+                                fgColor="#000000"
+                                bgColor="#FFFFFF"
+                                includeMargin
+                              />
                             </div>
                             <div className="flex flex-col gap-1">
                               <button
@@ -1224,7 +1283,47 @@ const VenueDashboard: React.FC = () => {
                                 className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
                                 onClick={async () => {
                                   try {
+                                    const el = document.getElementById(`table-qr-svg-${t.id}`) as any;
+                                    if (!el) throw new Error('找不到 QR');
+                                    const fn = `table-${safeFilePart(t.name)}-qr.svg`;
+                                    downloadSvgElement(el, fn);
+                                  } catch (e: any) {
+                                    setToast(e?.message || '下載失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  }
+                                }}
+                              >
+                                下載SVG
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                                onClick={async () => {
+                                  try {
+                                    const el = document.getElementById(`table-qr-svg-${t.id}`) as any;
+                                    if (!el) throw new Error('找不到 QR');
+                                    const fn = `table-${safeFilePart(t.name)}-qr.png`;
+                                    await downloadSvgAsPng(el, fn);
+                                  } catch (e: any) {
+                                    setToast(e?.message || '下載失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  }
+                                }}
+                              >
+                                下載PNG
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                                onClick={async () => {
+                                  try {
                                     if (!window.confirm('確定要更換此球枱 QR？更換後舊 QR 將失效。')) return;
+                                    const ans = window.prompt(`為避免誤按，請輸入球枱名稱以確認更換：\n${t.name}`);
+                                    if (String(ans || '').trim() !== String(t.name || '').trim()) {
+                                      setToast('已取消更換');
+                                      setTimeout(() => setToast(null), 2000);
+                                      return;
+                                    }
                                     await rotateClubTableQr(API_URL, operatorId, t.id);
                                     setToast('已更換 QR');
                                     setTimeout(() => setToast(null), 2000);
