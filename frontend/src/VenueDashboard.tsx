@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -81,6 +81,19 @@ const VenueDashboard: React.FC = () => {
   const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
 
+  const [pointsConfig, setPointsConfig] = useState<any>(null);
+  const [pointsBalances, setPointsBalances] = useState<any[]>([]);
+  const [pointsLedger, setPointsLedger] = useState<any[]>([]);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsSaving, setPointsSaving] = useState(false);
+  const [pointsCurrency, setPointsCurrency] = useState('HKD');
+  const [pointsPerCurrency, setPointsPerCurrency] = useState('1');
+  const [pointsRoundingMinutes, setPointsRoundingMinutes] = useState('15');
+  const [pointsMinBillableMinutes, setPointsMinBillableMinutes] = useState('0');
+  const [pointsAdjustMemberId, setPointsAdjustMemberId] = useState('');
+  const [pointsAdjustDelta, setPointsAdjustDelta] = useState('');
+  const [pointsAdjustReason, setPointsAdjustReason] = useState('');
+
   const operatorId = session.id;
   const operatorName = session.name || session.email;
   const isOperator = session.role === 'ADMIN' || session.role === 'OPERATOR';
@@ -90,6 +103,7 @@ const VenueDashboard: React.FC = () => {
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
   const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
+  const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
@@ -228,6 +242,32 @@ const VenueDashboard: React.FC = () => {
     }
   }, [operatorId, clubProfile?.id, breakFilterMonth, breakFilterMember, leaderMonth]);
 
+  const loadPointsData = useCallback(async () => {
+    if (!operatorId || !isOperator) return;
+    if (!pointsEnabled) return;
+    setPointsLoading(true);
+    try {
+      const [cfg, balances, ledger] = await Promise.all([
+        getClubPointsConfig(API_URL, operatorId),
+        getClubPointsBalances(API_URL, operatorId),
+        getClubPointsLedger(API_URL, operatorId, { limit: 50 }),
+      ]);
+      setPointsConfig(cfg);
+      setPointsBalances(Array.isArray(balances) ? balances : []);
+      setPointsLedger(Array.isArray(ledger) ? ledger : []);
+      setPointsCurrency(String(cfg?.currencyCode || 'HKD'));
+      setPointsPerCurrency(String(cfg?.pointsPerCurrency ?? '1'));
+      setPointsRoundingMinutes(String(cfg?.roundingMinutes ?? 15));
+      setPointsMinBillableMinutes(String(cfg?.minBillableMinutes ?? 0));
+      if (!pointsAdjustMemberId && Array.isArray(balances) && balances[0]?.memberId) setPointsAdjustMemberId(String(balances[0].memberId));
+    } catch (err: any) {
+      setToast(err?.message || '載入積分資料失敗');
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setPointsLoading(false);
+    }
+  }, [operatorId, isOperator, pointsEnabled, pointsAdjustMemberId]);
+
   useEffect(() => {
     if (!operatorId || !isOperator) {
       navigate('/venue/login');
@@ -242,6 +282,12 @@ const VenueDashboard: React.FC = () => {
     if (!clubProfile?.id) return;
     loadBreakData();
   }, [operatorId, isOperator, clubProfile?.id, loadBreakData]);
+
+  useEffect(() => {
+    if (!operatorId || !isOperator) return;
+    if (!pointsEnabled) return;
+    loadPointsData();
+  }, [operatorId, isOperator, pointsEnabled, loadPointsData]);
 
   const handleCreateRoom = async () => {
     if (creating) return;
@@ -505,6 +551,190 @@ const VenueDashboard: React.FC = () => {
              </div>
           )}
         </div>
+
+        {pointsEnabled ? (
+        <div className="glass rounded-xl p-4 md:p-6">
+          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
+            <h2 className="text-xl font-bold">消費積分</h2>
+            <button onClick={loadPointsData} className="text-sm accent-blue hover:underline">重新整理</button>
+          </div>
+
+          {pointsLoading ? (
+            <div className="cue-muted">載入中...</div>
+          ) : (
+            <div className="grid gap-6">
+              <div>
+                <div className="font-semibold mb-2">積分設定（每場館自訂）</div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">貨幣代碼</label>
+                    <input value={pointsCurrency} onChange={(e) => setPointsCurrency(e.target.value.toUpperCase())} className="w-full px-3 py-2 rounded cue-input" placeholder="HKD" />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">每 1 貨幣可抵扣積分</label>
+                    <input value={pointsPerCurrency} onChange={(e) => setPointsPerCurrency(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="1" />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">每 X 分鐘進位</label>
+                    <input value={pointsRoundingMinutes} onChange={(e) => setPointsRoundingMinutes(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="15" />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">最低計費分鐘</label>
+                    <input value={pointsMinBillableMinutes} onChange={(e) => setPointsMinBillableMinutes(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="0" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded cue-button hover:brightness-95 text-white"
+                    disabled={pointsSaving}
+                    onClick={async () => {
+                      if (pointsSaving) return;
+                      setPointsSaving(true);
+                      try {
+                        const payload = {
+                          currencyCode: String(pointsCurrency || 'HKD').trim().toUpperCase(),
+                          pointsPerCurrency: Number(pointsPerCurrency),
+                          roundingMinutes: Number(pointsRoundingMinutes),
+                          minBillableMinutes: Number(pointsMinBillableMinutes),
+                        };
+                        await updateClubPointsConfig(API_URL, operatorId, payload as any);
+                        setToast('已更新積分設定');
+                        setTimeout(() => setToast(null), 2000);
+                        await loadPointsData();
+                      } catch (e: any) {
+                        setToast(e?.message || '更新失敗');
+                        setTimeout(() => setToast(null), 3000);
+                      } finally {
+                        setPointsSaving(false);
+                      }
+                    }}
+                  >
+                    {pointsSaving ? '儲存中...' : '儲存設定'}
+                  </button>
+                  <div className="text-xs cue-muted">
+                    結算時會先按「每 X 分鐘進位」計算分鐘數，再按兌換規則轉為扣分。
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="font-semibold mb-2">會員積分加減</div>
+                <div className="grid md:grid-cols-4 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1 cue-muted">會員</label>
+                    <select value={pointsAdjustMemberId} onChange={(e) => setPointsAdjustMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
+                      <option value="">選擇會員</option>
+                      {pointsBalances.map((r: any) => (
+                        <option key={r.memberId} value={r.memberId}>
+                          {(r.member?.name || r.member?.email || r.memberId) + `（${r.balance ?? 0}）`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">加減分（可負數）</label>
+                    <input value={pointsAdjustDelta} onChange={(e) => setPointsAdjustDelta(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：100 或 -50" />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">原因</label>
+                    <input value={pointsAdjustReason} onChange={(e) => setPointsAdjustReason(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：台費抵扣 / 充值" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded cue-button hover:brightness-95 text-white"
+                    onClick={async () => {
+                      try {
+                        if (!pointsAdjustMemberId) throw new Error('請先選擇會員');
+                        const delta = Math.floor(Number(pointsAdjustDelta));
+                        if (!Number.isFinite(delta) || delta === 0) throw new Error('請輸入有效加減分');
+                        if (!String(pointsAdjustReason || '').trim()) throw new Error('請輸入原因');
+                        await adjustClubMemberPoints(API_URL, operatorId, {
+                          memberId: pointsAdjustMemberId,
+                          deltaPoints: delta,
+                          reason: String(pointsAdjustReason).trim(),
+                        });
+                        setPointsAdjustDelta('');
+                        setPointsAdjustReason('');
+                        setToast('已更新積分');
+                        setTimeout(() => setToast(null), 2000);
+                        await loadPointsData();
+                      } catch (e: any) {
+                        setToast(e?.message || '更新失敗');
+                        setTimeout(() => setToast(null), 3000);
+                      }
+                    }}
+                  >
+                    確認更新
+                  </button>
+                  <div className="text-xs cue-muted mt-1">建議以正數代表加分，負數代表扣分。</div>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <div className="font-semibold mb-2">會員餘額</div>
+                  {pointsBalances.length === 0 ? (
+                    <div className="cue-muted">暫無資料</div>
+                  ) : (
+                    <div className="overflow-x-auto -mx-2 px-2">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="cue-muted border-b cue-border">
+                            <th className="py-2 px-3">會員</th>
+                            <th className="py-2 px-3">餘額</th>
+                            <th className="py-2 px-3">更新</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pointsBalances.map((r: any) => (
+                            <tr key={r.memberId} className="border-b cue-border hover:brightness-95">
+                              <td className="py-2 px-3">{r.member?.name || r.member?.email || '-'}</td>
+                              <td className="py-2 px-3 font-semibold">{r.balance ?? 0}</td>
+                              <td className="py-2 px-3 text-xs cue-muted">{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="font-semibold mb-2">最近 50 筆流水</div>
+                  {pointsLedger.length === 0 ? (
+                    <div className="cue-muted">暫無資料</div>
+                  ) : (
+                    <div className="overflow-x-auto -mx-2 px-2">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="cue-muted border-b cue-border">
+                            <th className="py-2 px-3">時間</th>
+                            <th className="py-2 px-3">會員</th>
+                            <th className="py-2 px-3">變動</th>
+                            <th className="py-2 px-3">原因</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pointsLedger.map((r: any) => (
+                            <tr key={r.id} className="border-b cue-border hover:brightness-95">
+                              <td className="py-2 px-3 text-xs cue-muted">{r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}</td>
+                              <td className="py-2 px-3 text-sm">{r.member?.name || r.member?.email || '-'}</td>
+                              <td className="py-2 px-3 font-semibold">{r.deltaPoints > 0 ? `+${r.deltaPoints}` : r.deltaPoints}</td>
+                              <td className="py-2 px-3 text-sm">{r.reason}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        ) : null}
 
         {highbreakEnabled ? (
         <div className="glass rounded-xl p-4 md:p-6">

@@ -69,6 +69,7 @@ router.use(async (req, res, next) => {
     else if (p.startsWith('/breaks') || p.includes('/leaderboard/')) key = 'highbreak';
     else if (p.startsWith('/live-announcements')) key = 'live';
     else if (p.startsWith('/tables') || p.startsWith('/pricing') || p.startsWith('/reservations')) key = 'booking';
+    else if (p.startsWith('/points')) key = 'points';
     if (!key) return next();
     const ok = await isFeatureEnabled(key);
     if (!ok) return res.status(403).json({ error: 'feature_disabled', feature: key });
@@ -635,6 +636,131 @@ router.get('/:clubId/leaderboard/monthly', async (req, res) => {
         member: map.get(g.member_id) || { id: g.member_id, name: '-', email: null, member_code: null },
         totalPoints: g._sum.points || 0,
     })));
+});
+
+router.get('/points/config', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const row = await prisma.clubPointsConfig.findUnique({ where: { clubId } });
+    res.json(row || { clubId, currencyCode: 'HKD', pointsPerCurrency: '1', roundingMinutes: 15, minBillableMinutes: 0 });
+});
+
+router.put('/points/config', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const payload = req.body || {};
+    const currencyCode = String(payload.currencyCode || 'HKD').trim().toUpperCase();
+    const pointsPerCurrencyRaw = payload.pointsPerCurrency;
+    const roundingMinutesRaw = payload.roundingMinutes;
+    const minBillableMinutesRaw = payload.minBillableMinutes;
+    if (!/^[A-Z]{3}$/.test(currencyCode)) return res.status(400).json({ error: 'currencyCode invalid' });
+    const ppc = Number(pointsPerCurrencyRaw);
+    if (!Number.isFinite(ppc) || ppc <= 0) return res.status(400).json({ error: 'pointsPerCurrency invalid' });
+    const roundingMinutes = Math.floor(Number(roundingMinutesRaw));
+    if (!Number.isFinite(roundingMinutes) || roundingMinutes < 1 || roundingMinutes > 180) return res.status(400).json({ error: 'roundingMinutes invalid' });
+    const minBillableMinutes = Math.floor(Number(minBillableMinutesRaw));
+    if (!Number.isFinite(minBillableMinutes) || minBillableMinutes < 0 || minBillableMinutes > 720) return res.status(400).json({ error: 'minBillableMinutes invalid' });
+    const existing = await prisma.clubPointsConfig.findUnique({ where: { clubId }, select: { id: true } });
+    const row = await prisma.clubPointsConfig.upsert({
+        where: { clubId },
+        update: { currencyCode, pointsPerCurrency: String(ppc), roundingMinutes, minBillableMinutes },
+        create: { id: existing?.id || randomUUID(), clubId, currencyCode, pointsPerCurrency: String(ppc), roundingMinutes, minBillableMinutes },
+    });
+    res.json(row);
+});
+
+router.get('/points/balances', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const memberships = await prisma.clubMember.findMany({
+        where: { clubId },
+        include: { member: { select: { id: true, name: true, email: true, member_code: true } } },
+        orderBy: [{ joinedAt: 'desc' }],
+    });
+    const ids = memberships.map((m: any) => m.memberId);
+    const balances = ids.length === 0 ? [] : await prisma.pointsBalance.findMany({
+        where: { clubId, memberId: { in: ids } },
+        select: { memberId: true, balance: true, updatedAt: true },
+    });
+    const map = new Map(balances.map(b => [b.memberId, b]));
+    res.json(memberships.map((m: any) => {
+        const b = map.get(m.memberId);
+        return {
+            member: m.member,
+            memberId: m.memberId,
+            balance: b?.balance ?? 0,
+            updatedAt: b?.updatedAt ?? null,
+        };
+    }));
+});
+
+router.get('/points/ledger', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(200, Math.max(1, Number(limitRaw || 50) || 50));
+    const memberId = req.query.memberId == null ? '' : String(req.query.memberId).trim();
+    const where: any = { clubId };
+    if (memberId) where.memberId = memberId;
+    const rows = await prisma.pointsLedger.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        take: limit,
+        include: {
+            member: { select: { id: true, name: true, email: true, member_code: true } },
+            createdBy: { select: { id: true, name: true, email: true } },
+        }
+    });
+    res.json(rows);
+});
+
+router.post('/points/adjust', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const payload = req.body || {};
+    const targetMemberId = String(payload.memberId || '').trim();
+    const delta = Math.floor(Number(payload.deltaPoints));
+    const reason = String(payload.reason || '').trim();
+    if (!targetMemberId) return res.status(400).json({ error: 'memberId required' });
+    if (!Number.isFinite(delta) || delta === 0) return res.status(400).json({ error: 'deltaPoints invalid' });
+    if (!reason) return res.status(400).json({ error: 'reason required' });
+    const membership = await prisma.clubMember.findUnique({
+        where: { clubId_memberId: { clubId, memberId: targetMemberId } }
+    });
+    if (!membership) return res.status(400).json({ error: 'Member not in club' });
+    const ledgerId = randomUUID();
+    const now = new Date();
+    const result = await prisma.$transaction(async (tx) => {
+        await tx.pointsLedger.create({
+            data: {
+                id: ledgerId,
+                clubId,
+                memberId: targetMemberId,
+                deltaPoints: delta,
+                reason,
+                createdByMemberId: member.id,
+                createdAt: now,
+            }
+        });
+        const bal = await tx.pointsBalance.upsert({
+            where: { clubId_memberId: { clubId, memberId: targetMemberId } },
+            update: { balance: { increment: delta } },
+            create: { id: randomUUID(), clubId, memberId: targetMemberId, balance: delta },
+            select: { balance: true, updatedAt: true },
+        });
+        return bal;
+    });
+    res.json({ ok: true, memberId: targetMemberId, deltaPoints: delta, balance: result.balance, updatedAt: result.updatedAt });
 });
 
 router.get('/tables/my', async (req, res) => {

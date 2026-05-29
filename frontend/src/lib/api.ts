@@ -220,6 +220,80 @@ export async function updateAdminFeatures(
   return res.json() as Promise<{ ok: true; features: Record<string, boolean> }>;
 }
 
+export async function getClubPointsConfig(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/points/config`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取積分設定失敗');
+  }
+  return res.json();
+}
+
+export async function updateClubPointsConfig(
+  apiUrl: string,
+  memberId: string,
+  payload: { currencyCode: string; pointsPerCurrency: number; roundingMinutes: number; minBillableMinutes: number }
+) {
+  const res = await fetch(`${apiUrl}/api/club/points/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新積分設定失敗');
+  }
+  return res.json();
+}
+
+export async function getClubPointsBalances(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/points/balances`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取會員積分失敗');
+  }
+  return res.json();
+}
+
+export async function getClubPointsLedger(apiUrl: string, memberId: string, params?: { limit?: number; memberId?: string }) {
+  const sp = new URLSearchParams();
+  if (params?.limit != null) sp.set('limit', String(params.limit));
+  if (params?.memberId) sp.set('memberId', params.memberId);
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/points/ledger${qs ? `?${qs}` : ''}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取積分流水失敗');
+  }
+  return res.json();
+}
+
+export async function adjustClubMemberPoints(
+  apiUrl: string,
+  memberId: string,
+  payload: { memberId: string; deltaPoints: number; reason: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/points/adjust`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '積分調整失敗');
+  }
+  return res.json();
+}
+
 export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));

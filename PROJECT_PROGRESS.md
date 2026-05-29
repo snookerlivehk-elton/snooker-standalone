@@ -194,25 +194,32 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - `backend npm run build` 已通過
 - `frontend npm run build` 已通過
 
-## 下一步：Phase 1（消費積分核心，為掃碼結算作前置）
+## Phase 1（消費積分核心，為掃碼結算作前置）
 
-建議拆成「資料模型」→「場館後台可管理」→「會員可查看」三步交付：
+### 已完成（2026-06-29）
 
 1) 資料模型（Prisma migration）
-- `ClubPointsConfig`（每場館自訂：兌換規則、每 X 分鐘進位、最低消費等）
-- `PointsLedger`（積分流水：clubId、memberId、delta、reason、refType/refId、createdAt）
-- `PointsBalance`（可選，用於快速查詢；或每次由 ledger 聚合計算）
+- `ClubPointsConfig`：每場館自訂（貨幣代碼、兌換、每 X 分鐘進位、最低計費分鐘）
+- `PointsLedger`：積分流水
+- `PointsBalance`：會員餘額快取（避免每次聚合 ledger）
+- migration：`backend/prisma/migrations/20260629000001_add_points_core/migration.sql`
 
-2) 場館後台（VenueDashboard）
-- 編輯 `ClubPointsConfig`
-- 為會員加/減積分（寫入 ledger）
-- 顯示會員積分結餘與近期流水（先做最近 100 筆）
+2) 後端 API（受 `points` feature flag 控制）
+- 位置：`backend/routes/club.ts`
+- `GET /api/club/points/config`
+- `PUT /api/club/points/config`
+- `GET /api/club/points/balances`
+- `GET /api/club/points/ledger?limit=50`
+- `POST /api/club/points/adjust`（場館手動加減分）
 
-3) 會員主頁（Me / MemberProfile）
-- 顯示個人積分結餘 + 流水（可按場館 filter）
+3) 場館後台 UI（受 `points` feature flag 控制）
+- 位置：`frontend/src/VenueDashboard.tsx`
+- 內容：積分設定、會員加減分、餘額列表、最近 50 筆流水
 
-Feature flag 建議：
-- 以上 UI/API 全部受 `points` 控制（未開通時隱藏或顯示「未開通」）
+### 尚未完成（留待下一步）
+
+- 會員主頁顯示個人積分（按球會 filter、查看流水）
+- Phase 2 掃碼結算接入：結算時計費→換算扣分→寫入 PointsLedger/Balance（並需二次確認流程）
 
 ## 下一步：Phase 2（掃碼起鐘 / 落鐘 / 自動結算）
 
