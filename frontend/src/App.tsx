@@ -25,7 +25,8 @@ import Me from './Me';
 import Onboarding from './Onboarding';
 import AndroidGuide from './AndroidGuide';
 import HomePage from './HomePage';
-import { GOOGLE_CLIENT_ID } from './config';
+import { API_URL, GOOGLE_CLIENT_ID } from './config';
+import { FeatureKey, useFeatureEnabled } from './lib/features';
 
 // Force frontend redeploy
 function LogoutButton() {
@@ -74,11 +75,21 @@ function LogoutButton() {
   );
 }
 
+function FeatureGate({ feature, children }: { feature: FeatureKey; children: React.ReactElement }) {
+  const { loading, enabled } = useFeatureEnabled(API_URL, feature);
+  if (loading) {
+    return <div className="min-h-screen brand-page p-8">載入中...</div>;
+  }
+  if (!enabled) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+}
+
+
 function App() {
   const [gameState, setGameState] = useState<State | null>(null);
-
   const handleStartMatch = (settings: any) => {
-    // 以物件參數建立 State，避免建構子參數數量錯誤
     const newGameState = new State({
       playersInfo: settings.playersInfo,
       settings: settings.settings,
@@ -95,12 +106,12 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
-        <Route path="/rooms" element={<Rooms />} />
-        <Route path="/me" element={<Me />} />
+        <Route path="/rooms" element={<FeatureGate feature="scoring"><Rooms /></FeatureGate>} />
+        <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
         <Route path="/android" element={<AndroidGuide />} />
         <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
-        <Route path="/admin/breaks" element={<AdminAuth><AdminBreaks /></AdminAuth>} />
+        <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
         <Route path="/members/login" element={<MemberLogin mode="member" />} />
@@ -108,16 +119,16 @@ function App() {
         <Route path="/operator/dashboard" element={<Navigate to="/venue/dashboard" replace />} />
         <Route path="/venue/login" element={<MemberLogin mode="venue" />} />
         <Route path="/member/:id" element={<MemberProfile />} />
-        <Route path="/venue/dashboard" element={<VenueDashboard />} />
+        <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ClubPublicPage />} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
-        <Route path="/admin/matches" element={<AdminAuth><AdminMatches /></AdminAuth>} />
+        <Route path="/admin/matches" element={<AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
-        <Route path="/room/:roomId" element={<Scoreboard gameState={gameState} setGameState={setGameState} />} />
-        <Route path="/room/:roomId/setup" element={<Setup onStartMatch={handleStartMatch} />} />
-        <Route path="/room/:roomId/live" element={<LiveView />} />
-        <Route path="/room/:roomId/overlay" element={<Overlay />} />
+        <Route path="/room/:roomId" element={<FeatureGate feature="scoring"><Scoreboard gameState={gameState} setGameState={setGameState} /></FeatureGate>} />
+        <Route path="/room/:roomId/setup" element={<FeatureGate feature="scoring"><Setup onStartMatch={handleStartMatch} /></FeatureGate>} />
+        <Route path="/room/:roomId/live" element={<FeatureGate feature="live"><LiveView /></FeatureGate>} />
+        <Route path="/room/:roomId/overlay" element={<FeatureGate feature="scoring"><Overlay /></FeatureGate>} />
         {/* Fallback: any unknown route goes to Admin */}
         <Route path="*" element={<Navigate to="/members/login" replace />} />
       </Routes>
@@ -126,3 +137,4 @@ function App() {
 }
 
 export default App;
+

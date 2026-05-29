@@ -4,6 +4,7 @@ import { API_URL, SOCKET_URL } from './config';
 import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
+import { useFeatureEnabled } from './lib/features';
 
 type PricingRule = {
   daysOfWeek?: number[];
@@ -83,6 +84,12 @@ const VenueDashboard: React.FC = () => {
   const operatorId = session.id;
   const operatorName = session.name || session.email;
   const isOperator = session.role === 'ADMIN' || session.role === 'OPERATOR';
+
+  const { enabled: bookingEnabled } = useFeatureEnabled(API_URL, 'booking');
+  const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
+  const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
+  const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
+  const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
@@ -499,6 +506,7 @@ const VenueDashboard: React.FC = () => {
           )}
         </div>
 
+        {highbreakEnabled ? (
         <div className="glass rounded-xl p-4 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">單杆紀錄</h2>
@@ -734,7 +742,14 @@ const VenueDashboard: React.FC = () => {
             )}
           </div>
         </div>
+        ) : (
+        <div className="glass rounded-xl p-4 md:p-6">
+          <div className="text-xl font-bold mb-2">單杆紀錄</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
 
+        {bookingEnabled ? (
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
           <div className="cue-surface rounded-lg p-4 mb-6">
@@ -1270,8 +1285,14 @@ const VenueDashboard: React.FC = () => {
             )}
           </div>
         </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">預約管理</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
 
-        {/* Broadcast Message */}
+        {liveEnabled ? (
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽直播通告</h2>
           <div className="grid gap-3 md:grid-cols-6">
@@ -1384,7 +1405,14 @@ const VenueDashboard: React.FC = () => {
             )}
           </div>
         </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">比賽直播通告</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
 
+        {clubMessagesEnabled ? (
         <div className="glass rounded-xl p-6">
            <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">發送場館訊息</h2>
            <div className="space-y-4">
@@ -1431,6 +1459,12 @@ const VenueDashboard: React.FC = () => {
               </button>
            </div>
         </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">發送場館訊息</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
 
         {/* Edit Profile */}
         <div className="glass rounded-xl p-6">
@@ -1494,7 +1528,7 @@ const VenueDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Active Rooms Management */}
+        {scoringEnabled ? (
         <div className="glass rounded-xl p-6">
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">進行中的房間</h2>
@@ -1570,8 +1604,14 @@ const VenueDashboard: React.FC = () => {
             </div>
           )}
         </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">進行中的房間</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
 
-        {/* Historical Room Records */}
+        {scoringEnabled ? (
         <div className="glass rounded-xl p-6">
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">歷史房間記錄</h2>
@@ -1675,6 +1715,12 @@ const VenueDashboard: React.FC = () => {
             </div>
           )}
         </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">歷史房間記錄</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
       </div>
     </div>
   );

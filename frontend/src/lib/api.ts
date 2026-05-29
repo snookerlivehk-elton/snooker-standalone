@@ -190,6 +190,36 @@ export async function updateSiteNotice(
   return res.json();
 }
 
+export async function getAdminFeatures(apiUrl: string, adminToken: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/features?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取功能清單失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ features: Array<{ key: string; label: string; enabled: boolean; defaultEnabled: boolean }> }>;
+}
+
+export async function updateAdminFeatures(
+  apiUrl: string,
+  adminToken: string,
+  updates: Array<{ key: string; enabled: boolean }>
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/features?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify({ updates }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新功能失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ ok: true; features: Record<string, boolean> }>;
+}
+
 export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));

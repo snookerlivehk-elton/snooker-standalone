@@ -40,6 +40,41 @@ async function requireClubAdmin(req: express.Request, res: express.Response) {
     return member;
 }
 
+const FEATURE_DEFAULTS: Record<string, boolean> = {
+    booking: true,
+    qr_session: true,
+    points: true,
+    highbreak: true,
+    tournaments: true,
+    club_messages: true,
+    club_dashboard: true,
+    system_portal: true,
+    member_portal: true,
+    scoring: true,
+    live: true,
+};
+
+async function isFeatureEnabled(key: string): Promise<boolean> {
+    try {
+        const row = await prisma.featureFlag.findUnique({ where: { key }, select: { enabled: true } });
+        if (row) return row.enabled;
+    } catch {}
+    return FEATURE_DEFAULTS[key] ?? true;
+}
+
+router.use(async (req, res, next) => {
+    const p = String(req.path || '');
+    let key: string | null = null;
+    if (p.startsWith('/messages') || p.startsWith('/broadcast')) key = 'club_messages';
+    else if (p.startsWith('/breaks') || p.includes('/leaderboard/')) key = 'highbreak';
+    else if (p.startsWith('/live-announcements')) key = 'live';
+    else if (p.startsWith('/tables') || p.startsWith('/pricing') || p.startsWith('/reservations')) key = 'booking';
+    if (!key) return next();
+    const ok = await isFeatureEnabled(key);
+    if (!ok) return res.status(403).json({ error: 'feature_disabled', feature: key });
+    next();
+});
+
 router.get('/public', async (req, res) => {
     try {
         const qRaw = req.query.q ?? req.query.keyword ?? '';

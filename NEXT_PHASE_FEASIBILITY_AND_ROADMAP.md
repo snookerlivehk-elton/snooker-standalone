@@ -2,6 +2,12 @@
 
 更新日期：2026-05-25（Asia/Hong_Kong）
 
+## 注意（2026-06-29）
+
+本文件主要覆蓋「上一輪」5 個需求（註冊/公開榜/單杆統計/比賽報名工具）。最新已確認的 1–9 大功能方向（含：功能上落架、積分、掃碼起鐘結算、預約互動升級）以及最新進度，已整合到：
+
+- `PROJECT_PROGRESS.md`（AI 交接檔）
+
 目的：整理下一階段 5 個需求的可行性、改動範圍、風險與建議排程，方便下一次 AI/協作者快速接手。
 
 ## 現況速覽（與本次 5 項需求相關）
@@ -230,4 +236,3 @@
   - Prisma migrations：`ClubTournament` / `ClubTournamentSignup`
   - 後端：create/list/delete + public list + signup endpoints
   - 前端：VenueDashboard 管理 UI + HomePage/ClubPublicPage 展示 + 快速報名
-

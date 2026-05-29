@@ -131,6 +131,52 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 const prisma = new PrismaClient();
 createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
 
+const FEATURE_CATALOG = [
+  { key: 'booking', label: '會員預約', defaultEnabled: true },
+  { key: 'qr_session', label: '掃碼起鐘及結算', defaultEnabled: true },
+  { key: 'points', label: '消費積分', defaultEnabled: true },
+  { key: 'highbreak', label: '單杆統計及排名', defaultEnabled: true },
+  { key: 'tournaments', label: '比賽報名入口', defaultEnabled: true },
+  { key: 'club_messages', label: '球會訊息', defaultEnabled: true },
+  { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
+  { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
+  { key: 'member_portal', label: '會員主頁', defaultEnabled: true },
+  { key: 'scoring', label: '計分', defaultEnabled: true },
+  { key: 'live', label: '直播', defaultEnabled: true },
+] as const;
+
+type FeatureKey = typeof FEATURE_CATALOG[number]['key'];
+
+let featureCache: { at: number; map: Record<string, boolean> } | null = null;
+
+async function getFeatureMap(): Promise<Record<string, boolean>> {
+  const now = Date.now();
+  if (featureCache && (now - featureCache.at) < 10_000) return featureCache.map;
+  const defaults: Record<string, boolean> = {};
+  for (const f of FEATURE_CATALOG) defaults[f.key] = f.defaultEnabled;
+  let rows: Array<{ key: string; enabled: boolean }> = [];
+  try {
+    rows = await prisma.featureFlag.findMany({
+      where: { key: { in: FEATURE_CATALOG.map(f => f.key) as any } },
+      select: { key: true, enabled: true },
+    });
+  } catch {}
+  const map: Record<string, boolean> = { ...defaults };
+  for (const r of rows) map[r.key] = r.enabled;
+  featureCache = { at: now, map };
+  return map;
+}
+
+function requireFeature(key: FeatureKey) {
+  return async (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      const map = await getFeatureMap();
+      if (map[key] === false) return res.status(403).json({ error: 'feature_disabled', feature: key });
+    } catch {}
+    next();
+  };
+}
+
 // Mount Club Router
 app.use('/api/club', clubRouter);
 
@@ -189,8 +235,16 @@ app.get('/health/db', async (_req, res) => {
   }
 });
 
+app.get('/api/features', async (_req, res) => {
+  const map = await getFeatureMap();
+  res.json({
+    features: map,
+    catalog: FEATURE_CATALOG,
+  });
+});
+
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
-app.post('/api/matches/strict', writeAuth, async (req, res) => {
+app.post('/api/matches/strict', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
     const { roomId, match, players, timestamps, operatorId } = req.body || {};
     if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -236,7 +290,7 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
   }
 });
 
-app.post('/api/matches/partial', writeAuth, async (req, res) => {
+app.post('/api/matches/partial', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
     const { roomId, match, players, timestamps, operatorId } = req.body || {};
     if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -336,11 +390,11 @@ const rooms: Room[] = [];
   }
 })();
 
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', requireFeature('scoring'), (req, res) => {
   res.json(rooms);
 });
 
-app.get('/rooms/:roomId/state', async (req, res) => {
+app.get('/rooms/:roomId/state', requireFeature('scoring'), async (req, res) => {
   const roomId = String(req.params.roomId);
   const room = rooms.find(r => r.id === roomId || r.code === roomId);
   let operator: any = null;
@@ -355,7 +409,7 @@ app.get('/rooms/:roomId/state', async (req, res) => {
   res.json({ roomId, state: room?.gameState ?? null, operator });
 });
 
-app.post('/rooms/:roomId/reset', async (req, res) => {
+app.post('/rooms/:roomId/reset', requireFeature('scoring'), async (req, res) => {
   const { roomId } = req.params;
   const room = rooms.find(r => r.id === roomId || r.code === roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -378,7 +432,7 @@ app.post('/rooms/:roomId/reset', async (req, res) => {
   res.json({ message: 'Room reset' });
 });
 
-app.post('/api/rooms', async (req, res) => {
+app.post('/api/rooms', requireFeature('scoring'), async (req, res) => {
   const { name, operatorId } = req.body;
   if (!name) {
     return res.status(400).json({ message: 'Room name is required' });
@@ -410,8 +464,9 @@ app.post('/api/rooms', async (req, res) => {
   res.status(201).json(newRoom);
 });
 
-app.delete('/api/rooms/:roomId', async (req, res) => {
-  const { roomId } = req.params;
+app.delete('/api/rooms/:roomId', requireFeature('scoring'), async (req, res) => {
+  const roomId = String(req.params.roomId || '');
+  if (!roomId) return res.status(400).json({ error: 'roomId required' });
   const index = rooms.findIndex(room => room.id === roomId);
   if (index !== -1) {
     rooms.splice(index, 1);
@@ -429,7 +484,7 @@ app.delete('/api/rooms/:roomId', async (req, res) => {
 });
 
 // Verification endpoints
-app.post('/api/match-verification-code', async (req, res) => {
+app.post('/api/match-verification-code', requireFeature('scoring'), async (req, res) => {
     const { email, purpose } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
     
@@ -479,7 +534,7 @@ app.post('/api/match-verification-code', async (req, res) => {
     }
 });
 
-app.post('/api/matches/start', async (req, res) => {
+app.post('/api/matches/start', requireFeature('scoring'), async (req, res) => {
     const { p1_email, p2_email, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
     
     console.log(`[StartMatch] P1: ${p1_email}, P2: ${p2_email}, Room: ${room_id}`);
@@ -559,7 +614,7 @@ app.post('/api/matches/start', async (req, res) => {
 });
 
 // Create match invites for specific member emails (operator triggers from Setup page)
-app.post('/api/matches/invite', async (req, res) => {
+app.post('/api/matches/invite', requireFeature('scoring'), async (req, res) => {
   try {
     const { room_id, operator_id, emails } = req.body || {};
     if (!room_id || !Array.isArray(emails) || emails.length === 0) {
@@ -613,7 +668,7 @@ app.post('/api/matches/invite', async (req, res) => {
 });
 
 // List my invites (member inbox-style)
-app.get('/api/matches/invites/my', async (req, res) => {
+app.get('/api/matches/invites/my', requireFeature('scoring'), async (req, res) => {
   const memberId = req.headers['x-member-id'] as string;
   if (!memberId) return res.status(401).json({ error: 'Unauthorized' });
   try {
@@ -637,7 +692,7 @@ app.get('/api/matches/invites/my', async (req, res) => {
 });
 
 // Accept invite (member confirms to join match)
-app.post('/api/matches/invites/accept', async (req, res) => {
+app.post('/api/matches/invites/accept', requireFeature('scoring'), async (req, res) => {
   try {
     const memberId = req.headers['x-member-id'] as string | undefined;
     const { token } = req.body || {};
@@ -696,6 +751,37 @@ function adminAuth(req: express.Request, res: express.Response, next: express.Ne
   }
   next();
 }
+
+app.get('/api/admin/features', adminAuth, async (_req, res) => {
+  const map = await getFeatureMap();
+  const rows = FEATURE_CATALOG.map((f) => ({
+    key: f.key,
+    label: f.label,
+    enabled: map[f.key],
+    defaultEnabled: f.defaultEnabled,
+  }));
+  res.json({ features: rows });
+});
+
+app.put('/api/admin/features', adminAuth, async (req, res) => {
+  const updates = (req.body || {}).updates;
+  if (!Array.isArray(updates)) return res.status(400).json({ error: 'updates_required' });
+  const allowed = new Set(FEATURE_CATALOG.map((f) => f.key));
+  const normalized = updates
+    .map((u: any) => ({ key: String(u?.key || '').trim(), enabled: !!u?.enabled }))
+    .filter((u: any) => allowed.has(u.key as any));
+  const unique = new Map<string, boolean>();
+  for (const u of normalized) unique.set(u.key, u.enabled);
+  const items = Array.from(unique.entries());
+  await prisma.$transaction(items.map(([key, enabled]) => prisma.featureFlag.upsert({
+    where: { key },
+    update: { enabled },
+    create: { key, enabled },
+  })));
+  featureCache = null;
+  const map = await getFeatureMap();
+  res.json({ ok: true, features: map });
+});
 
 // Basic write authorization for match write endpoints
 function writeAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -1188,7 +1274,7 @@ app.get('/test', (_req, res) => {
 });
 
 // Match write endpoints (create, events append, finalize)
-app.post('/api/matches', writeAuth, async (req, res) => {
+app.post('/api/matches', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
     const { roomId, match, players, timestamps } = req.body || {};
     if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -1245,7 +1331,7 @@ app.post('/api/matches', writeAuth, async (req, res) => {
 });
 
 // Append events to a match (batch)
-app.post('/api/matches/:matchId/events', writeAuth, async (req, res) => {
+app.post('/api/matches/:matchId/events', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
     const matchId = req.params.matchId;
     const { events } = req.body || {};
@@ -1278,7 +1364,7 @@ app.post('/api/matches/:matchId/events', writeAuth, async (req, res) => {
 });
 
 // Finalize a match: persist foul totals, stats, and winner
-app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
+app.post('/api/matches/:matchId/finalize', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
     const matchId = req.params.matchId;
     const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};

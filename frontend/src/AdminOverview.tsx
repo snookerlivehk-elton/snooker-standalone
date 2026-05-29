@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from './config';
-import { getSiteNotice, updateSiteNotice } from './lib/api';
+import { getAdminFeatures, getSiteNotice, updateAdminFeatures, updateSiteNotice } from './lib/api';
+import { clearFeatureCache } from './lib/features';
 
 const AdminOverview: React.FC = () => {
   const [data, setData] = useState<any>(null);
@@ -15,6 +16,11 @@ const AdminOverview: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
+  const [featuresLoading, setFeaturesLoading] = useState(true);
+  const [featuresError, setFeaturesError] = useState<string | null>(null);
+  const [featuresDraft, setFeaturesDraft] = useState<Array<{ key: string; label: string; enabled: boolean }>>([]);
+  const [featuresSaving, setFeaturesSaving] = useState(false);
+  const [featuresSaveResult, setFeaturesSaveResult] = useState<string | null>(null);
 
   function resolveBasePath(): string {
     const rawBase = (import.meta.env.BASE_URL || '/');
@@ -85,6 +91,21 @@ const AdminOverview: React.FC = () => {
         if (!cancelled) setNoticeError(e?.message || '讀取公告失敗');
       } finally {
         if (!cancelled) setNoticeLoading(false);
+      }
+      try {
+        if (!cancelled) {
+          setFeaturesLoading(true);
+          setFeaturesError(null);
+        }
+        const tok = resolveToken();
+        const row = await getAdminFeatures(API_URL, tok);
+        if (!cancelled) {
+          setFeaturesDraft((row?.features || []).map((f) => ({ key: f.key, label: f.label, enabled: f.enabled !== false })));
+        }
+      } catch (e: any) {
+        if (!cancelled) setFeaturesError(e?.message || '讀取功能清單失敗');
+      } finally {
+        if (!cancelled) setFeaturesLoading(false);
       }
     }
     fetchOverview();
@@ -211,6 +232,53 @@ const AdminOverview: React.FC = () => {
                 />
               </div>
               {saveResult && <div className="text-sm cue-muted">{saveResult}</div>}
+            </div>
+          )}
+        </div>
+        <div className="mt-8">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-lg font-bold">功能上落架</div>
+            <button
+              type="button"
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+              disabled={featuresSaving}
+              onClick={async () => {
+                setFeaturesSaveResult(null);
+                setFeaturesSaving(true);
+                try {
+                  const tok = resolveToken();
+                  const updates = featuresDraft.map((f) => ({ key: f.key, enabled: f.enabled }));
+                  await updateAdminFeatures(API_URL, tok, updates);
+                  clearFeatureCache();
+                  setFeaturesSaveResult('已儲存');
+                } catch (e: any) {
+                  setFeaturesSaveResult(e?.message || '儲存失敗');
+                } finally {
+                  setFeaturesSaving(false);
+                }
+              }}
+            >
+              儲存
+            </button>
+          </div>
+          {featuresLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
+          {!featuresLoading && featuresError && <div className="text-sm text-red-500 mt-2">{featuresError}</div>}
+          {!featuresLoading && !featuresError && (
+            <div className="mt-3 space-y-2">
+              {featuresDraft.map((f) => (
+                <label key={f.key} className="flex items-center justify-between gap-3 bg-black/40 border border-white/10 rounded px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">{f.label}</div>
+                    <div className="text-xs cue-muted break-all">{f.key}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={f.enabled}
+                    onChange={(e) => setFeaturesDraft((s) => s.map((x) => x.key === f.key ? { ...x, enabled: e.target.checked } : x))}
+                  />
+                </label>
+              ))}
+              {featuresSaveResult && <div className="text-sm cue-muted mt-2">{featuresSaveResult}</div>}
             </div>
           )}
         </div>
