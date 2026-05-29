@@ -40,7 +40,7 @@
 - 最終啟動輸出有 `Listening on 0.0.0.0:<PORT>`（`<PORT>` 為 Railway 注入）。
 
 ## 5. 綁定自訂網域（如有）
-- 開啟 `Settings → Domains`，綁定 `snookerhk.live`（如需 `www` 一併綁定）。
+- 開啟 `Settings → Domains`，綁定 `api.snookerhk.live`（Backend 建議用子網域；Frontend 維持 `snookerhk.live` / `www.snookerhk.live`）。
 - 依 UI 顯示的 DNS 指示建立記錄（根域可能需要 CNAME flattening 或平台提供的 A/AAAA）。
 - 等待憑證簽發完成（顯示 Active/綠色鎖）。
 
@@ -54,13 +54,15 @@ curl.exe -i https://snooker-standalone-backend-production.up.railway.app/admin/o
 
 自訂網域（憑證完成後）：
 ```
-curl.exe -i -v https://snookerhk.live/health
+curl.exe -i -v https://api.snookerhk.live/health
+curl.exe -i https://api.snookerhk.live/health/db
+curl.exe -i https://api.snookerhk.live/api/features
 ```
 
 也可直接執行腳本：
 ```
 & .\snooker-standalone\scripts\verify-backend.ps1 -BackendUrl "https://<你的後端>.up.railway.app"
-& .\snooker-standalone\scripts\ops-verify.ps1 -BackendSubdomainUrl "https://<你的後端>.up.railway.app" -BackendCustomUrl "https://snookerhk.live"
+& .\snooker-standalone\scripts\ops-verify.ps1 -BackendSubdomainUrl "https://<你的後端>.up.railway.app" -BackendCustomUrl "https://api.snookerhk.live"
 ```
 
 成功標準：所有健康端點 `200 OK`，無 `X-Railway-Fallback`；Socket 探測不再連線錯誤。

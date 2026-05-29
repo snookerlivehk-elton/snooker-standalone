@@ -125,7 +125,9 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - Frontend：檢查 `https://www.snookerhk.live/` 是否已顯示主頁（不再直去 login）
 - Backend：
   - 若 production DB 尚未有 `SiteNotice`：需跑 migration deploy
-  - 檢查 `GET /api/site/notice` 是否返回資料
+  - Backend Base URL：`https://api.snookerhk.live`
+  - 檢查 `GET https://api.snookerhk.live/api/site/notice` 是否返回資料
+  - 健康檢查：`https://api.snookerhk.live/health`、`https://api.snookerhk.live/health/db`
 
 ## 下一步候選清單（未必已確認，供後續 AI 對齊）
 

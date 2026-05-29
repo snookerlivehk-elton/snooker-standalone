@@ -22,12 +22,12 @@ Railway 設定與重部署行動手冊（snookerhk.live）
 
 驗證（完成部署後）
 - 瀏覽器直接打開（不受 CORS 限制）：
-  - `https://snookerhk.live/health`
-  - `https://snookerhk.live/health/db`
-  - `https://snookerhk.live/admin/overview?token=wwww5678`
+  - `https://api.snookerhk.live/health`
+  - `https://api.snookerhk.live/health/db`
+  - `https://api.snookerhk.live/admin/overview?token=wwww5678`
 - Windows PowerShell（位於本專案 scripts）：
-  - `& .\snooker-standalone\scripts\ops-verify.ps1 -BackendCustomUrl "https://snookerhk.live" -AdminToken "wwww5678"`
-  - （如需同時檢查 Railway 子網域）`& .\snooker-standalone\scripts\ops-verify.ps1 -BackendSubdomainUrl "https://<你的後端>.up.railway.app" -BackendCustomUrl "https://snookerhk.live" -AdminToken "wwww5678"`
+  - `& .\snooker-standalone\scripts\ops-verify.ps1 -BackendCustomUrl "https://api.snookerhk.live" -AdminToken "wwww5678"`
+  - （如需同時檢查 Railway 子網域）`& .\snooker-standalone\scripts\ops-verify.ps1 -BackendSubdomainUrl "https://<你的後端>.up.railway.app" -BackendCustomUrl "https://api.snookerhk.live" -AdminToken "wwww5678"`
 - 成功標準：所有健康端點 `200 OK`，無 `X-Railway-Fallback`；Admin 概覽返回 JSON 並顯示 `db.status: ok`。
 
 常見故障與快速修復
