@@ -250,6 +250,15 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
   - 顯示「進行中台鐘」列表與「落鐘」
   - 檔案：`frontend/src/VenueDashboard.tsx`
 
+### 部署備註（Railway / Production）
+
+- 常用域名：Frontend `https://snookerhk.live`；Backend `https://api.snookerhk.live`
+- Prisma migration 故障處理（P3009）：
+  - 事故：`20260629000002_add_table_sessions_qr` 曾在 production DB 失敗，導致 `prisma migrate deploy` 之後每次都會因 P3009 停止啟動。
+  - 根因：Postgres 不支援 `CREATE TYPE IF NOT EXISTS ...`（enum），已改為 `DO $$ BEGIN CREATE TYPE ... EXCEPTION WHEN duplicate_object THEN NULL; END $$;` 並推送到 main。
+  - 修復步驟：在 Railway DB 的 Database 頁面執行 SQL，將 `_prisma_migrations` 中該 migration 標記為 rolled back（`rolled_back_at`/`finished_at`），之後 redeploy backend 重新 apply 修正版 migration。
+  - 狀態：已於 2026-06-29 在 Railway 上完成修正，backend 可正常 redeploy。
+
 ### 驗收連結（分站）
 
 - Backend：
