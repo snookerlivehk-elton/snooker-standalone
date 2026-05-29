@@ -16,6 +16,7 @@ import AdminRegions from './AdminRegions';
 import AdminVenues from './AdminVenues';
 import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
+import TableQrPage from './TableQrPage';
 import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
 import AdminBreaks from './AdminBreaks';
@@ -121,6 +122,7 @@ function App() {
         <Route path="/member/:id" element={<MemberProfile />} />
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ClubPublicPage />} />
+        <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/admin/matches" element={<AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />

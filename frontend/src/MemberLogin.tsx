@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { GoogleLogin } from '@react-oauth/google';
 import { loginMember, loginGoogle, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
@@ -23,6 +23,16 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
   const navigate = useNavigate();
+  const location = useLocation();
+  const nextPath = useMemo(() => {
+    try {
+      const sp = new URLSearchParams(location.search || '');
+      const v = sp.get('next') || '';
+      return v.startsWith('/') ? v : '';
+    } catch {
+      return '';
+    }
+  }, [location.search]);
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +50,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
       if (mode === 'venue') {
         navigate('/venue/dashboard');
       } else {
-        navigate(`/member/${id}`);
+        navigate(nextPath || `/member/${id}`);
       }
     } catch (err: any) {
       setError(err.message || '登入失敗');
@@ -68,7 +78,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
       if (mode === 'venue') {
         navigate('/venue/dashboard');
       } else {
-        navigate(`/member/${id}`);
+        navigate(nextPath || `/member/${id}`);
       }
     } catch (err: any) {
       setError(err.message || '登入失敗');

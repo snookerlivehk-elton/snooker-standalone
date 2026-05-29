@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -51,6 +51,8 @@ const VenueDashboard: React.FC = () => {
   const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   const [allReservations, setAllReservations] = useState<any[]>([]);
+  const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   const [manualMode, setManualMode] = useState<'BLOCK' | 'MEMBER'>('BLOCK');
   const [manualTableId, setManualTableId] = useState('');
@@ -104,6 +106,7 @@ const VenueDashboard: React.FC = () => {
   const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
   const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
+  const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
@@ -195,7 +198,7 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes, sessionsRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
         getOperatorActiveRooms(API_URL, operatorId),
         getClubProfile(API_URL, operatorId).catch(() => ({})),
@@ -205,6 +208,7 @@ const VenueDashboard: React.FC = () => {
         getMyPricingSchemes(API_URL, operatorId).catch(() => []),
         getPendingReservations(API_URL, operatorId).catch(() => []),
         getClubReservations(API_URL, operatorId).catch(() => []),
+        qrEnabled ? getActiveTableSessions(API_URL, operatorId).catch(() => []) : Promise.resolve([]),
       ]);
       setMatches(matchesRes.matches || []);
       setActiveRooms(roomsRes.rooms || []);
@@ -215,12 +219,13 @@ const VenueDashboard: React.FC = () => {
       setPricing(pricingRes || []);
       setPendingReservations(pendingRes || []);
       setAllReservations(allRes || []);
+      setActiveSessions(Array.isArray(sessionsRes) ? sessionsRes : []);
     } catch (err: any) {
       setError(err.message || '無法載入資料');
     } finally {
       setLoading(false);
     }
-  }, [operatorId]);
+  }, [operatorId, qrEnabled]);
 
   const loadBreakData = useCallback(async () => {
     if (!operatorId || !clubProfile?.id) return;
@@ -982,6 +987,73 @@ const VenueDashboard: React.FC = () => {
         {bookingEnabled ? (
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
+          {qrEnabled ? (
+            <div className="cue-surface rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="font-semibold">進行中台鐘</div>
+                <button
+                  type="button"
+                  className="text-sm accent-blue hover:underline"
+                  onClick={async () => {
+                    try {
+                      setSessionsLoading(true);
+                      const rows = await getActiveTableSessions(API_URL, operatorId).catch(() => []);
+                      setActiveSessions(Array.isArray(rows) ? rows : []);
+                    } finally {
+                      setSessionsLoading(false);
+                    }
+                  }}
+                >
+                  {sessionsLoading ? '載入中...' : '重新整理'}
+                </button>
+              </div>
+              {activeSessions.length === 0 ? (
+                <div className="cue-muted text-sm">暫無進行中台鐘</div>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-2">球枱</th>
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">開始</th>
+                        <th className="py-2 px-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeSessions.map((s: any) => (
+                        <tr key={s.id} className="border-b cue-border hover:brightness-95">
+                          <td className="py-2 px-2">{s.table?.name || '-'}</td>
+                          <td className="py-2 px-2">{s.startedBy?.name || s.startedBy?.email || '-'}</td>
+                          <td className="py-2 px-2 cue-muted whitespace-nowrap">{s.startAt ? new Date(s.startAt).toLocaleString() : '-'}</td>
+                          <td className="py-2 px-2">
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs"
+                              onClick={async () => {
+                                if (!window.confirm('確定要為此台落鐘並結算？')) return;
+                                try {
+                                  await endTableSessionAsOperator(API_URL, operatorId, s.id);
+                                  setToast('已落鐘並結算');
+                                  setTimeout(() => setToast(null), 2000);
+                                  await loadData();
+                                } catch (e: any) {
+                                  setToast(e?.message || '落鐘失敗');
+                                  setTimeout(() => setToast(null), 3000);
+                                }
+                              }}
+                            >
+                              落鐘
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="cue-surface rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="font-semibold">手動預約 / 封鎖時段</div>
@@ -1115,9 +1187,9 @@ const VenueDashboard: React.FC = () => {
                 <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded cue-input" placeholder="正價/時" />
                 <button onClick={async () => {
                   if (!newTableName.trim()) return;
-                  const row = await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined, basePrice: newTableBasePrice.trim() || undefined });
-                  setTables([...tables, row]);
+                  await createTable(API_URL, operatorId, { name: newTableName.trim(), notes: newTableNotes.trim() || undefined, basePrice: newTableBasePrice.trim() || undefined });
                   setNewTableName(''); setNewTableNotes(''); setNewTableBasePrice('');
+                  await loadData();
                 }} className="px-3 py-2 rounded cue-button hover:brightness-95 text-white">新增</button>
               </div>
               <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded cue-input mb-3" placeholder="備註" />
@@ -1126,6 +1198,52 @@ const VenueDashboard: React.FC = () => {
                   <div key={t.id} className="flex items-center gap-2 cue-surface p-2 rounded">
                     <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded cue-input" />
                     <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded cue-input text-sm" placeholder="正價/時" />
+                    {qrEnabled ? (
+                      <div className="flex items-center gap-2">
+                        {t.qrToken?.token ? (
+                          <div className="flex items-center gap-2">
+                            <div className="bg-white p-1 rounded">
+                              <QRCodeSVG value={new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString()} size={48} fgColor="#000000" bgColor="#FFFFFF" includeMargin />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                                onClick={() => {
+                                  const url = new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString();
+                                  navigator.clipboard.writeText(url).then(() => {
+                                    setToast('已複製球枱 QR 連結');
+                                    setTimeout(() => setToast(null), 2000);
+                                  });
+                                }}
+                              >
+                                複製
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                                onClick={async () => {
+                                  try {
+                                    if (!window.confirm('確定要更換此球枱 QR？更換後舊 QR 將失效。')) return;
+                                    await rotateClubTableQr(API_URL, operatorId, t.id);
+                                    setToast('已更換 QR');
+                                    setTimeout(() => setToast(null), 2000);
+                                    await loadData();
+                                  } catch (e: any) {
+                                    setToast(e?.message || '更換失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  }
+                                }}
+                              >
+                                更換
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs cue-muted">無 QR</div>
+                        )}
+                      </div>
+                    ) : null}
                     <label className="text-sm flex items-center gap-1">
                       <input
                         type="checkbox"
@@ -1151,8 +1269,8 @@ const VenueDashboard: React.FC = () => {
                     <button onClick={async () => {
                       const cur = tables.find(x => x.id === t.id);
                       if (!cur) return;
-                      const updated = await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null, basePrice: cur.basePrice ?? null });
-                      setTables(prev => prev.map(x => x.id === t.id ? updated : x));
+                      await updateTable(API_URL, operatorId, t.id, { name: cur.name, active: cur.active, displayOrder: cur.displayOrder || 0, notes: cur.notes || null, basePrice: cur.basePrice ?? null });
+                      await loadData();
                     }} className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm">儲存</button>
                     <button onClick={async () => {
                       if (!window.confirm('確定要刪除此球枱？（已有預約紀錄的球枱將無法刪除，請改用停用）')) return;

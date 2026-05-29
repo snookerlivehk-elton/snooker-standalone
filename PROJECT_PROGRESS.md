@@ -221,21 +221,43 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - 會員主頁顯示個人積分（按球會 filter、查看流水）
 - Phase 2 掃碼結算接入：結算時計費→換算扣分→寫入 PointsLedger/Balance（並需二次確認流程）
 
-## 下一步：Phase 2（掃碼起鐘 / 落鐘 / 自動結算）
+## Phase 2（掃碼起鐘 / 落鐘 / 自動結算）
 
-核心概念建議獨立資料模型（避免濫用 reservation/match）：
+### 已完成（2026-06-29）
 
-- `TableSession`：startAt/endAt、startedByMemberId、endedByMemberId/endedByOperatorId、tableId、clubId、status、source(QR/MANUAL)
-- `TableQrToken`：每張枱一個固定 token（可 rotate），對應 tableId/clubId，產生 QR code
+1) 資料模型（Prisma migration）
+- `TableQrToken`：每張枱一個 token（可 rotate），用於生成 QR
+- `TableSession`：台鐘 session（起鐘/落鐘、結算結果、扣分紀錄 id）
+- `TableSessionConfirm`：二次確認用（START/END，2 分鐘有效）
+- migration：`backend/prisma/migrations/20260629000002_add_table_sessions_qr/migration.sql`
 
-行為規則（已確認）：
-- 開始：會員掃碼 + 二次確認 → 建 session
-- 結束：會員掃碼（二次確認）或場館後台落鐘 → end session
-- 計費：以每場館 `ClubPointsConfig` 的「每 X 分鐘進位」計算分鐘數，再按兌換規則換算扣分
+2) 後端 API
+- 會員掃碼（受 `qr_session` 控制；扣分同時受 `points` 控制）
+  - `GET /api/qr/table/info?token=...`
+  - `POST /api/qr/table/start-init` → `POST /api/qr/table/start-confirm`
+  - `POST /api/qr/table/end-init` → `POST /api/qr/table/end-confirm`
+- 場館後台（受 `qr_session` 控制）
+  - `POST /api/club/tables/:id/qr/rotate`
+  - `GET /api/club/sessions/active`
+  - `POST /api/club/sessions/:id/end`（場館落鐘＋結算）
 
-Feature flag 建議：
-- Session 與 QR（含後台入口/會員入口）受 `qr_session` 控制
-- 扣分動作同時受 `points` 控制（兩者都 enabled 才會真正扣分；否則只記錄時間）
+3) 前端 UI
+- 會員掃碼頁：`/qr/table/:token`（二次確認起鐘/落鐘）
+  - 檔案：`frontend/src/TableQrPage.tsx`
+  - 未登入會導去 `/members/login?next=/qr/table/:token`
+- 場館後台：
+  - 球枱列表顯示 QR、複製連結、可「更換 QR」
+  - 顯示「進行中台鐘」列表與「落鐘」
+  - 檔案：`frontend/src/VenueDashboard.tsx`
+
+### 驗收連結（分站）
+
+- Backend：
+  - `https://api.snookerhk.live/health`
+  - `https://api.snookerhk.live/api/features`
+- Frontend：
+  - 場館後台：`https://snookerhk.live/venue/dashboard`
+  - 掃碼頁：`https://snookerhk.live/qr/table/<token>`
 
 ## 本機開發（快速提示）
 

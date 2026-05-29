@@ -82,6 +82,10 @@ model Member {
   pointsLedgers PointsLedger[]
   pointsBalances PointsBalance[]
   createdPointsLedgers PointsLedger[] @relation("points_created_by")
+
+  startedTableSessions TableSession[] @relation("table_session_started_by")
+  endedTableSessionsAsMember TableSession[] @relation("table_session_ended_by_member")
+  endedTableSessionsAsOperator TableSession[] @relation("table_session_ended_by_operator")
 }
 
 model ClubProfile {
@@ -112,6 +116,9 @@ model ClubProfile {
   pointsConfig ClubPointsConfig?
   pointsLedgers PointsLedger[]
   pointsBalances PointsBalance[]
+
+  tableQrTokens TableQrToken[]
+  tableSessions TableSession[]
 }
 
 model BreakRecord {
@@ -404,7 +411,83 @@ model ClubTable {
   updatedAt     DateTime @updatedAt
   reservations  TableReservation[]
   pricingSchemes TablePricingScheme[]
+  qrToken       TableQrToken?
+  sessions      TableSession[]
   @@index([clubId, active])
+}
+
+enum TableSessionStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum TableSessionEndSource {
+  MEMBER
+  OPERATOR
+}
+
+enum TableSessionConfirmAction {
+  START
+  END
+}
+
+model TableQrToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  clubId    String
+  club      ClubProfile @relation(fields: [clubId], references: [id])
+  tableId   String   @unique
+  table     ClubTable @relation(fields: [tableId], references: [id])
+  active    Boolean  @default(true)
+  rotatedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([clubId])
+}
+
+model TableSession {
+  id               String   @id @default(uuid())
+  clubId           String
+  club             ClubProfile @relation(fields: [clubId], references: [id])
+  tableId          String
+  table            ClubTable @relation(fields: [tableId], references: [id])
+  startedByMemberId String
+  startedBy        Member   @relation("table_session_started_by", fields: [startedByMemberId], references: [id])
+  startAt          DateTime @default(now())
+  status           TableSessionStatus @default(ACTIVE)
+  endAt            DateTime?
+  endedByMemberId  String?
+  endedByMember    Member?  @relation("table_session_ended_by_member", fields: [endedByMemberId], references: [id])
+  endedByOperatorId String?
+  endedByOperator  Member?  @relation("table_session_ended_by_operator", fields: [endedByOperatorId], references: [id])
+  endSource        TableSessionEndSource?
+  billedMinutes    Int?
+  chargedAmount    Decimal?
+  chargedCurrency  String?
+  chargedPoints    Int?
+  pointsLedgerId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@index([clubId, status])
+  @@index([tableId, status])
+  @@index([startedByMemberId, startAt])
+}
+
+model TableSessionConfirm {
+  id        String   @id @default(uuid())
+  action    TableSessionConfirmAction
+  token     String
+  clubId    String
+  tableId   String
+  memberId  String
+  sessionId String?
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([memberId, createdAt])
+  @@index([token, createdAt])
+  @@index([expiresAt])
 }
 
 model TablePricingScheme {

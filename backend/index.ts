@@ -180,6 +180,286 @@ function requireFeature(key: FeatureKey) {
 // Mount Club Router
 app.use('/api/club', clubRouter);
 
+async function requireActiveMember(req: express.Request, res: express.Response) {
+  const memberId = String(req.headers['x-member-id'] || '').trim();
+  if (!memberId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  const member = await prisma.member.findUnique({
+    where: { id: memberId },
+    select: { id: true, is_enabled: true }
+  });
+  if (!member) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  if (member.is_enabled === false) {
+    res.status(403).json({ error: 'Disabled' });
+    return null;
+  }
+  return member;
+}
+
+function ceilDiv(a: number, b: number) {
+  if (b <= 0) return a;
+  return Math.floor((a + b - 1) / b);
+}
+
+function calcBilledMinutes(startAt: Date, endAt: Date, cfg: any) {
+  const diffMs = endAt.getTime() - startAt.getTime();
+  const rawMinutes = Math.max(0, Math.ceil(diffMs / 60000));
+  const roundingMinutes = Math.max(1, Math.floor(Number(cfg?.roundingMinutes ?? 15)));
+  const minBillableMinutes = Math.max(0, Math.floor(Number(cfg?.minBillableMinutes ?? 0)));
+  const rounded = ceilDiv(rawMinutes, roundingMinutes) * roundingMinutes;
+  return Math.max(rounded, minBillableMinutes);
+}
+
+function calcChargedAmount(basePrice: any, billedMinutes: number) {
+  if (basePrice == null) return null;
+  const perHour = Number(String(basePrice));
+  if (!Number.isFinite(perHour) || perHour <= 0) return null;
+  const amt = perHour * (billedMinutes / 60);
+  return Number.isFinite(amt) ? amt : null;
+}
+
+function calcChargedPoints(amount: number | null, cfg: any) {
+  if (amount == null) return 0;
+  const ppc = Number(String(cfg?.pointsPerCurrency ?? 1));
+  if (!Number.isFinite(ppc) || ppc <= 0) return 0;
+  const pts = Math.round(amount * ppc);
+  return Number.isFinite(pts) && pts > 0 ? pts : 0;
+}
+
+app.get('/api/qr/table/info', requireFeature('qr_session'), async (req, res) => {
+  try {
+    const member = await requireActiveMember(req, res);
+    if (!member) return;
+    const token = String((req.query as any).token || '').trim();
+    if (!token) return res.status(400).json({ error: 'token required' });
+    const qr = await prisma.tableQrToken.findUnique({
+      where: { token },
+      include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+    });
+    if (!qr || qr.active === false) return res.status(404).json({ error: 'Not found' });
+    if (qr.table.active === false) return res.status(409).json({ error: 'Table disabled' });
+    const session = await prisma.tableSession.findFirst({
+      where: { tableId: qr.tableId, status: 'ACTIVE', startedByMemberId: member.id },
+      orderBy: [{ startAt: 'desc' }],
+    });
+    res.json({ club: qr.club, table: qr.table, session });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/qr/table/start-init', requireFeature('qr_session'), async (req, res) => {
+  try {
+    const member = await requireActiveMember(req, res);
+    if (!member) return;
+    const token = String((req.body || {}).token || '').trim();
+    if (!token) return res.status(400).json({ error: 'token required' });
+    const qr = await prisma.tableQrToken.findUnique({
+      where: { token },
+      include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+    });
+    if (!qr || qr.active === false) return res.status(404).json({ error: 'Not found' });
+    if (qr.table.active === false) return res.status(409).json({ error: 'Table disabled' });
+    const active = await prisma.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
+    if (active) return res.status(409).json({ error: 'already_active' });
+    const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+    const confirmId = randomUUID();
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    await prisma.tableSessionConfirm.create({
+      data: {
+        id: confirmId,
+        action: 'START',
+        token,
+        clubId: qr.clubId,
+        tableId: qr.tableId,
+        memberId: member.id,
+        expiresAt,
+      }
+    });
+    res.json({
+      confirmId,
+      expiresAt,
+      club: qr.club,
+      table: qr.table,
+      pointsConfig: cfg ? { currencyCode: cfg.currencyCode, pointsPerCurrency: String(cfg.pointsPerCurrency), roundingMinutes: cfg.roundingMinutes, minBillableMinutes: cfg.minBillableMinutes } : null,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/qr/table/start-confirm', requireFeature('qr_session'), async (req, res) => {
+  try {
+    const member = await requireActiveMember(req, res);
+    if (!member) return;
+    const confirmId = String((req.body || {}).confirmId || '').trim();
+    if (!confirmId) return res.status(400).json({ error: 'confirmId required' });
+    const now = new Date();
+    const out = await prisma.$transaction(async (tx) => {
+      const c = await tx.tableSessionConfirm.findUnique({ where: { id: confirmId } });
+      if (!c) throw new Error('confirm_not_found');
+      if (c.memberId !== member.id) throw new Error('forbidden');
+      if (c.action !== 'START') throw new Error('invalid_action');
+      if (c.consumedAt) throw new Error('already_consumed');
+      if (new Date(c.expiresAt).getTime() < now.getTime()) throw new Error('expired');
+      const qr = await tx.tableQrToken.findUnique({
+        where: { token: c.token },
+        include: { table: { select: { id: true, active: true } } }
+      });
+      if (!qr || qr.active === false) throw new Error('not_found');
+      if (qr.table.active === false) throw new Error('table_disabled');
+      const active = await tx.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
+      if (active) throw new Error('already_active');
+      await tx.tableSessionConfirm.update({ where: { id: c.id }, data: { consumedAt: now } });
+      const s = await tx.tableSession.create({
+        data: { id: randomUUID(), clubId: qr.clubId, tableId: qr.tableId, startedByMemberId: member.id, startAt: now, status: 'ACTIVE' }
+      });
+      return s;
+    });
+    res.json(out);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const code = msg === 'already_active' ? 409 : msg === 'expired' ? 410 : msg === 'forbidden' ? 403 : 400;
+    res.status(code).json({ error: msg });
+  }
+});
+
+app.post('/api/qr/table/end-init', requireFeature('qr_session'), async (req, res) => {
+  try {
+    const member = await requireActiveMember(req, res);
+    if (!member) return;
+    const token = String((req.body || {}).token || '').trim();
+    if (!token) return res.status(400).json({ error: 'token required' });
+    const qr = await prisma.tableQrToken.findUnique({
+      where: { token },
+      include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+    });
+    if (!qr || qr.active === false) return res.status(404).json({ error: 'Not found' });
+    const session = await prisma.tableSession.findFirst({
+      where: { tableId: qr.tableId, status: 'ACTIVE', startedByMemberId: member.id },
+      orderBy: [{ startAt: 'desc' }],
+    });
+    if (!session) return res.status(404).json({ error: 'no_active_session' });
+    const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+    const now = new Date();
+    const billedMinutes = calcBilledMinutes(session.startAt, now, cfg);
+    const amount = calcChargedAmount(qr.table.basePrice, billedMinutes);
+    const chargedPoints = calcChargedPoints(amount, cfg);
+    const confirmId = randomUUID();
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+    await prisma.tableSessionConfirm.create({
+      data: {
+        id: confirmId,
+        action: 'END',
+        token,
+        clubId: qr.clubId,
+        tableId: qr.tableId,
+        memberId: member.id,
+        sessionId: session.id,
+        expiresAt,
+      }
+    });
+    res.json({
+      confirmId,
+      expiresAt,
+      club: qr.club,
+      table: qr.table,
+      session,
+      preview: {
+        billedMinutes,
+        chargedAmount: amount,
+        chargedCurrency: String(cfg?.currencyCode || 'HKD'),
+        chargedPoints,
+      }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, res) => {
+  try {
+    const member = await requireActiveMember(req, res);
+    if (!member) return;
+    const confirmId = String((req.body || {}).confirmId || '').trim();
+    if (!confirmId) return res.status(400).json({ error: 'confirmId required' });
+    const now = new Date();
+    const featureMap = await getFeatureMap();
+    const enablePoints = featureMap.points !== false;
+    const out = await prisma.$transaction(async (tx) => {
+      const c = await tx.tableSessionConfirm.findUnique({ where: { id: confirmId } });
+      if (!c) throw new Error('confirm_not_found');
+      if (c.memberId !== member.id) throw new Error('forbidden');
+      if (c.action !== 'END') throw new Error('invalid_action');
+      if (c.consumedAt) throw new Error('already_consumed');
+      if (new Date(c.expiresAt).getTime() < now.getTime()) throw new Error('expired');
+      if (!c.sessionId) throw new Error('invalid_session');
+      const s = await tx.tableSession.findUnique({
+        where: { id: c.sessionId },
+        include: { table: { select: { id: true, name: true, basePrice: true } } }
+      });
+      if (!s) throw new Error('not_found');
+      if (s.status !== 'ACTIVE') throw new Error('not_active');
+      if (s.startedByMemberId !== member.id) throw new Error('forbidden');
+      const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId: s.clubId } });
+      const billedMinutes = calcBilledMinutes(s.startAt, now, cfg);
+      const amount = calcChargedAmount(s.table.basePrice, billedMinutes);
+      const currency = String(cfg?.currencyCode || 'HKD');
+      const chargedPoints = enablePoints ? calcChargedPoints(amount, cfg) : 0;
+
+      await tx.tableSessionConfirm.update({ where: { id: c.id }, data: { consumedAt: now } });
+
+      let pointsLedgerId: string | null = null;
+      if (enablePoints && chargedPoints > 0) {
+        pointsLedgerId = randomUUID();
+        await tx.pointsLedger.create({
+          data: {
+            id: pointsLedgerId,
+            clubId: s.clubId,
+            memberId: member.id,
+            deltaPoints: -chargedPoints,
+            reason: `台費抵扣（${s.table.name}）`,
+            refType: 'TABLE_SESSION',
+            refId: s.id,
+            createdByMemberId: member.id,
+            createdAt: now,
+          }
+        });
+        await tx.pointsBalance.upsert({
+          where: { clubId_memberId: { clubId: s.clubId, memberId: member.id } },
+          update: { balance: { increment: -chargedPoints } },
+          create: { id: randomUUID(), clubId: s.clubId, memberId: member.id, balance: -chargedPoints },
+        });
+      }
+
+      return tx.tableSession.update({
+        where: { id: s.id },
+        data: {
+          status: 'ENDED',
+          endAt: now,
+          endedByMemberId: member.id,
+          endSource: 'MEMBER',
+          billedMinutes,
+          chargedAmount: amount == null ? null : String(amount),
+          chargedCurrency: currency,
+          chargedPoints: chargedPoints || null,
+          pointsLedgerId,
+        }
+      });
+    });
+    res.json(out);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const code = msg === 'expired' ? 410 : msg === 'forbidden' ? 403 : 400;
+    res.status(code).json({ error: msg });
+  }
+});
+
 async function resolveMemberIdentifiers(identifiers: string[]): Promise<Map<string, string>> {
   const trimmed = Array.from(
     new Set(

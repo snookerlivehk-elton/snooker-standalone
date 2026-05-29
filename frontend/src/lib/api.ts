@@ -294,6 +294,109 @@ export async function adjustClubMemberPoints(
   return res.json();
 }
 
+export async function rotateClubTableQr(apiUrl: string, memberId: string, tableId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tables/${encodeURIComponent(tableId)}/qr/rotate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新 QR 失敗');
+  }
+  return res.json();
+}
+
+export async function getActiveTableSessions(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/sessions/active`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取進行中台鐘失敗');
+  }
+  return res.json();
+}
+
+export async function endTableSessionAsOperator(apiUrl: string, memberId: string, sessionId: string) {
+  const res = await fetch(`${apiUrl}/api/club/sessions/${encodeURIComponent(sessionId)}/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '落鐘失敗');
+  }
+  return res.json();
+}
+
+export async function getQrTableInfo(apiUrl: string, memberId: string, token: string) {
+  const sp = new URLSearchParams();
+  sp.set('token', token);
+  const res = await fetch(`${apiUrl}/api/qr/table/info?${sp.toString()}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取球枱資料失敗');
+  }
+  return res.json();
+}
+
+export async function qrTableStartInit(apiUrl: string, memberId: string, token: string) {
+  const res = await fetch(`${apiUrl}/api/qr/table/start-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '起鐘失敗');
+  }
+  return res.json();
+}
+
+export async function qrTableStartConfirm(apiUrl: string, memberId: string, confirmId: string) {
+  const res = await fetch(`${apiUrl}/api/qr/table/start-confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ confirmId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '起鐘確認失敗');
+  }
+  return res.json();
+}
+
+export async function qrTableEndInit(apiUrl: string, memberId: string, token: string) {
+  const res = await fetch(`${apiUrl}/api/qr/table/end-init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '落鐘失敗');
+  }
+  return res.json();
+}
+
+export async function qrTableEndConfirm(apiUrl: string, memberId: string, confirmId: string) {
+  const res = await fetch(`${apiUrl}/api/qr/table/end-confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ confirmId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '落鐘確認失敗');
+  }
+  return res.json();
+}
+
 export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));
