@@ -1,6 +1,6 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
-更新日期：2026-06-29（Asia/Hong_Kong）
+更新日期：2026-05-31（Asia/Hong_Kong）
 
 ## 專案定位
 
@@ -53,6 +53,12 @@ SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等�
 對應 schema：`backend/prisma/schema.prisma`
 
 ## 最新階段性交付（已推送到 GitHub main）
+
+commit：`491c91d`（admin: redirect /admin to overview）
+
+- `/admin` 會導向 `/admin/overview`（新 Super Admin 手機友善 UI）
+- 保留 `/admin/legacy` 入口（舊版 PANEL；由 `/admin/overview` 的「舊版PANEL」按鈕進入）
+- 避免 `scoring` 關閉時，舊 `/admin` 因呼叫 `/api/rooms` 被 403 導致白屏
 
 commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 
