@@ -198,10 +198,10 @@ const AdminOverview: React.FC = () => {
               onClick={() => {
                 const base = resolveBasePath();
                 const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+                window.location.href = `${window.location.origin}${base}/admin/legacy${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
               }}
             >
-              返回主PANEL
+              舊版PANEL
             </button>
             <button
               type="button"

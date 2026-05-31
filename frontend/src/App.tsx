@@ -110,8 +110,9 @@ function App() {
         <Route path="/rooms" element={<FeatureGate feature="scoring"><Rooms /></FeatureGate>} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
         <Route path="/android" element={<AndroidGuide />} />
-        <Route path="/admin" element={<AdminAuth><Admin /></AdminAuth>} />
+        <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
+        <Route path="/admin/legacy" element={<AdminAuth><FeatureGate feature="scoring"><Admin /></FeatureGate></AdminAuth>} />
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
