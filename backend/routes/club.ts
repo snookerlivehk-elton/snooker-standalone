@@ -187,15 +187,46 @@ router.post('/my-profile', async (req, res) => {
     if (!member) return;
     const memberId = member.id;
     
-    const { name, intro, address, phone, email, logoUrl, paymentInfo } = req.body;
+    const {
+        name,
+        intro,
+        address,
+        phone,
+        email,
+        logoUrl,
+        paymentInfo,
+        coverImageUrl,
+        galleryUrls,
+        facilities,
+        policies,
+    } = req.body;
+
+    const normalizeStringList = (raw: any, max: number) => {
+        const out = raw
+            .map((x: any) => String(x || '').trim())
+            .filter((x: string) => x.length > 0)
+            .slice(0, max);
+        return out;
+    };
+
+    const safeGalleryUrls = Array.isArray(galleryUrls) ? normalizeStringList(galleryUrls, 12) : undefined;
+    const safeFacilities = Array.isArray(facilities) ? normalizeStringList(facilities, 24) : undefined;
 
     try {
         console.log(`[Club] Update profile request for member ${memberId}`, req.body);
 
+        const updateData: any = { name, intro, address, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        if (safeGalleryUrls !== undefined) updateData.galleryUrls = safeGalleryUrls;
+        if (safeFacilities !== undefined) updateData.facilities = safeFacilities;
+
+        const createData: any = { memberId, name, intro, address, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        if (safeGalleryUrls !== undefined) createData.galleryUrls = safeGalleryUrls;
+        if (safeFacilities !== undefined) createData.facilities = safeFacilities;
+
         const club = await prisma.clubProfile.upsert({
             where: { memberId },
-            update: { name, intro, address, phone, email, logoUrl, paymentInfo },
-            create: { memberId, name, intro, address, phone, email, logoUrl, paymentInfo },
+            update: updateData,
+            create: createData,
         });
         
         res.json(club);

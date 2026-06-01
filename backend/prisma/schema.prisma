@@ -100,6 +100,10 @@ model ClubProfile {
   email       String?
   logoUrl     String?
   paymentInfo String?
+  coverImageUrl String?
+  galleryUrls Json?
+  facilities  Json?
+  policies    String?
   
   members     ClubMember[]
   messages    ClubMessage[]

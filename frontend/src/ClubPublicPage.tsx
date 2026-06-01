@@ -5,6 +5,7 @@ import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getA
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
+import Tabs from './components/Tabs';
 
 function normalizeVideoHref(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -39,6 +40,7 @@ const ClubPublicPage: React.FC = () => {
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'leader' | 'contact'>('info');
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -302,154 +304,244 @@ const ClubPublicPage: React.FC = () => {
     return raw;
   })();
 
+  const coverSrc = (() => {
+    const raw = String((club as any)?.coverImageUrl || (club as any)?.cover_image_url || '').trim();
+    const fallback = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
+    const picked = raw || fallback;
+    if (!picked) return null;
+    if (/^data:/i.test(picked)) return picked;
+    if (/^https?:\/\//i.test(picked)) return picked;
+    if (picked.startsWith('/')) return `${API_URL}${picked}`;
+    return picked;
+  })();
+
+  const galleryUrls = useMemo(() => {
+    const raw = (club as any)?.galleryUrls;
+    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+    return [];
+  }, [club]);
+
+  const facilities = useMemo(() => {
+    const raw = (club as any)?.facilities;
+    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+    return [];
+  }, [club]);
+
   return (
     <div className="brand-page min-h-screen flex flex-col">
       <TopBarPublic title={String((club as any)?.name || '場館')} />
-      <main className="flex-1 px-4 pt-4 pb-24">
-        <div className="max-w-2xl mx-auto">
-          <div className="cue-card p-5 sm:p-6">
-            <div className="flex justify-center mb-5">
-              <div className="bg-white p-3 rounded-xl w-[230px] h-[230px] flex items-center justify-center">
-                {logoSrc ? (
-                  <img
-                    src={logoSrc}
-                    alt="Club Logo"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    className="w-[200px] h-[200px] object-contain"
-                  />
-                ) : (
-                  <div className="w-[200px] h-[200px] rounded-xl border border-dashed border-slate-300 flex items-center justify-center text-slate-700 font-bold">
-                    未設定 LOGO
+      <main className="flex-1 pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
+        <div className="relative">
+          <div className="h-56 sm:h-72 w-full overflow-hidden">
+            {coverSrc ? (
+              <img src={coverSrc} alt="cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
+            )}
+          </div>
+          <div className="-mt-10 px-4">
+            <div className="max-w-2xl mx-auto glass rounded-xl p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {logoSrc ? (
+                      <img src={logoSrc} alt="logo" className="w-full h-full object-contain" />
+                    ) : (
+                      <div className="text-xs cue-muted">LOGO</div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xl sm:text-2xl font-extrabold accent-yellow truncate">
+                      {club.name || '未命名場館'}
+                    </div>
+                    {club.intro && (
+                      <div className="mt-1 text-sm cue-muted whitespace-pre-wrap max-h-10 overflow-hidden">
+                        {club.intro}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  {!joined ? (
+                    <button type="button" onClick={handleJoin} className="px-3 py-2 rounded cue-button font-semibold">
+                      加入
+                    </button>
+                  ) : (
+                    <div className="px-3 py-2 rounded cue-surface text-emerald-600 text-sm font-semibold">
+                      已加入
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {facilities.length > 0 && (
+                <div className="mt-3 w-full overflow-x-auto">
+                  <div className="inline-flex gap-2 min-w-full">
+                    {facilities.slice(0, 24).map((f) => (
+                      <div key={f} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs whitespace-nowrap">
+                        {f}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-4 mt-4">
+          <div className="max-w-2xl mx-auto">
+            <Tabs
+              items={[
+                { key: 'info', label: '資訊' },
+                { key: 'booking', label: '預約' },
+                { key: 'leader', label: '排行榜' },
+                { key: 'contact', label: '聯絡' },
+              ]}
+              activeKey={activeTab}
+              onChange={(k) => setActiveTab(k as any)}
+            />
+
+            {activeTab === 'info' && (
+              <div className="mt-5 space-y-6">
+                {galleryUrls.length > 0 && (
+                  <div className="cue-surface rounded-lg p-4">
+                    <div className="font-semibold text-lg mb-3">相片</div>
+                    <div className="w-full overflow-x-auto">
+                      <div className="inline-flex gap-3">
+                        {galleryUrls.slice(0, 12).map((u, idx) => (
+                          <div key={`${u}-${idx}`} className="w-40 h-28 rounded-lg overflow-hidden bg-black/30 border border-white/10 flex-shrink-0">
+                            <img src={u} alt={`gallery-${idx}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="font-semibold text-lg mb-3">波鐘計算機</div>
+                  <TimeFeeCalculator title="波鐘計算機" />
+                </div>
+
+                {String((club as any)?.policies || '').trim() && (
+                  <div className="cue-surface rounded-lg p-4">
+                    <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">政策</div>
+                    <div className="text-sm cue-muted whitespace-pre-wrap">{String((club as any)?.policies || '')}</div>
                   </div>
                 )}
               </div>
-            </div>
+            )}
 
-            {!joined ? (
-              <button
-                onClick={handleJoin}
-                className="w-full cue-button py-3 rounded-full font-bold text-lg mb-6"
-              >
-                加入場館
-              </button>
-            ) : (
-              <div className="w-full cue-surface rounded-lg p-3 text-center font-semibold text-emerald-600 mb-6">
-                已加入此場館
+            {activeTab === 'leader' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4 text-left">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">
+                    <div className="font-semibold text-lg">單杆排行榜</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs cue-muted">本月</div>
+                      <input
+                        type="month"
+                        value={leaderMonth}
+                        onChange={(e) => setLeaderMonth(e.target.value)}
+                        className="px-3 py-1.5 rounded cue-input text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {leaderError && <div className="text-sm text-red-500 mb-2">{leaderError}</div>}
+                  {leaderLoading && <div className="text-sm cue-muted mb-2">載入中...</div>}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="cue-surface-strong rounded-lg p-3">
+                      <div className="font-semibold mb-2">歷史最高單杆 Top 10</div>
+                      {leaderHighest.length === 0 ? (
+                        <div className="text-sm cue-muted">暫無資料</div>
+                      ) : (
+                        <div className="grid gap-2">
+                          {leaderHighest.slice(0, 10).map((r: any, idx: number) => (
+                            <div key={r.id || `${r.member?.id || 'm'}-${idx}`} className="flex items-center justify-between gap-3 text-sm">
+                              <div className="min-w-0">
+                                <div className="font-semibold truncate">
+                                  {idx + 1}. {r.member?.name || '-'}
+                                </div>
+                                <div className="text-xs cue-muted">
+                                  {r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}
+                                </div>
+                                {normalizeVideoHref(r.video_url) && (
+                                  <a
+                                    href={normalizeVideoHref(r.video_url) as string}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs accent-blue underline"
+                                  >
+                                    影片連結
+                                  </a>
+                                )}
+                              </div>
+                              <div className="flex-shrink-0 font-semibold accent-yellow">
+                                {r.points}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="cue-surface-strong rounded-lg p-3">
+                      <div className="font-semibold mb-2">本月累計 Top 10</div>
+                      {leaderMonthly.length === 0 ? (
+                        <div className="text-sm cue-muted">暫無資料</div>
+                      ) : (
+                        <div className="grid gap-2">
+                          {leaderMonthly.slice(0, 10).map((r: any, idx: number) => (
+                            <div key={r.member?.id || `${idx}`} className="flex items-center justify-between gap-3 text-sm">
+                              <div className="min-w-0 font-semibold truncate">
+                                {idx + 1}. {r.member?.name || '-'}
+                              </div>
+                              <div className="flex-shrink-0 font-semibold text-emerald-600">
+                                {r.totalPoints}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold accent-yellow text-center">
-              {club.name || '未命名場館'}
-            </h1>
+            {activeTab === 'contact' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4 text-left">
+                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">聯絡資訊</div>
+                  <div className="grid gap-2 text-sm">
+                    {club.address && (
+                      <div><span className="cue-muted">地址：</span>{club.address}</div>
+                    )}
+                    {club.phone && (
+                      <div><span className="cue-muted">電話：</span>{club.phone}</div>
+                    )}
+                    {club.email && (
+                      <div><span className="cue-muted">Email：</span>{club.email}</div>
+                    )}
+                  </div>
+                </div>
 
-            {club.intro && (
-              <p className="mt-3 text-sm sm:text-base cue-muted whitespace-pre-wrap text-center">
-                {club.intro}
-              </p>
+                {club.paymentInfo && (
+                  <div className="cue-surface rounded-lg p-4 text-left">
+                    <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">付款方式</div>
+                    <div className="text-sm cue-muted whitespace-pre-wrap">{String(club.paymentInfo)}</div>
+                  </div>
+                )}
+              </div>
             )}
 
-            <div className="mt-6">
-              <TimeFeeCalculator title="波鐘計算機" />
-            </div>
-
-            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">
-                <div className="font-semibold text-lg">單杆排行榜</div>
-                <div className="flex items-center gap-2">
-                  <div className="text-xs cue-muted">本月</div>
-                  <input
-                    type="month"
-                    value={leaderMonth}
-                    onChange={(e) => setLeaderMonth(e.target.value)}
-                    className="px-3 py-1.5 rounded cue-input text-sm"
-                  />
-                </div>
-              </div>
-
-              {leaderError && <div className="text-sm text-red-500 mb-2">{leaderError}</div>}
-              {leaderLoading && <div className="text-sm cue-muted mb-2">載入中...</div>}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="cue-surface-strong rounded-lg p-3">
-                  <div className="font-semibold mb-2">歷史最高單杆 Top 10</div>
-                  {leaderHighest.length === 0 ? (
-                    <div className="text-sm cue-muted">暫無資料</div>
-                  ) : (
-                    <div className="grid gap-2">
-                      {leaderHighest.slice(0, 10).map((r: any, idx: number) => (
-                        <div key={r.id || `${r.member?.id || 'm'}-${idx}`} className="flex items-center justify-between gap-3 text-sm">
-                          <div className="min-w-0">
-                            <div className="font-semibold truncate">
-                              {idx + 1}. {r.member?.name || '-'}
-                            </div>
-                            <div className="text-xs cue-muted">
-                              {r.recorded_at ? new Date(r.recorded_at).toLocaleDateString() : '-'}
-                            </div>
-                            {normalizeVideoHref(r.video_url) && (
-                              <a
-                                href={normalizeVideoHref(r.video_url) as string}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs accent-blue underline"
-                              >
-                                影片連結
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 font-semibold accent-yellow">
-                            {r.points}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="cue-surface-strong rounded-lg p-3">
-                  <div className="font-semibold mb-2">本月累計 Top 10</div>
-                  {leaderMonthly.length === 0 ? (
-                    <div className="text-sm cue-muted">暫無資料</div>
-                  ) : (
-                    <div className="grid gap-2">
-                      {leaderMonthly.slice(0, 10).map((r: any, idx: number) => (
-                        <div key={r.member?.id || `${idx}`} className="flex items-center justify-between gap-3 text-sm">
-                          <div className="min-w-0 font-semibold truncate">
-                            {idx + 1}. {r.member?.name || '-'}
-                          </div>
-                          <div className="flex-shrink-0 font-semibold text-emerald-600">
-                            {r.totalPoints}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
-              <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">聯絡資訊</div>
-              <div className="grid gap-2 text-sm">
-                {club.address && (
-                  <div><span className="cue-muted">地址：</span>{club.address}</div>
-                )}
-                {club.phone && (
-                  <div><span className="cue-muted">電話：</span>{club.phone}</div>
-                )}
-                {club.email && (
-                  <div><span className="cue-muted">Email：</span>{club.email}</div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
-              <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">預約</div>
-              {club.paymentInfo && (
-                <div className="mb-3 cue-surface-strong rounded-lg p-3 text-sm whitespace-pre-wrap">
-                  <div className="font-semibold accent-yellow mb-1">付款方式</div>
-                  <div className="cue-muted">{String(club.paymentInfo)}</div>
-                </div>
-              )}
+            {activeTab === 'booking' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4 text-left">
+                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">預約</div>
 
               {!session.id ? (
                 <div className="text-sm cue-muted">
@@ -562,10 +654,10 @@ const ClubPublicPage: React.FC = () => {
                   </button>
                 </>
               )}
-            </div>
+                </div>
 
-            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
-              <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">當日時間表</div>
+                <div className="cue-surface rounded-lg p-4 text-left">
+                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">當日時間表</div>
               {!selTable || !date ? (
                 <div className="text-sm cue-muted">請先選擇球枱及日期，即可查看該日已預約/空閒時段。</div>
               ) : availLoading ? (
@@ -614,10 +706,10 @@ const ClubPublicPage: React.FC = () => {
                   </div>
                 </>
               )}
-            </div>
+                </div>
 
-            <div className="mt-6 cue-surface rounded-lg p-4 text-left">
-              <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">我的預約（此場館）</div>
+                <div className="cue-surface rounded-lg p-4 text-left">
+                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">我的預約（此場館）</div>
               {!session.id ? (
                 <div className="text-sm cue-muted">需登入才能查看。</div>
               ) : myResLoading ? (
@@ -686,7 +778,9 @@ const ClubPublicPage: React.FC = () => {
                   );
                 })()
               )}
-            </div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 text-center">
               <Link to="/me" className="accent-blue underline">回首頁</Link>

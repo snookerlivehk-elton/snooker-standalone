@@ -5,6 +5,7 @@ import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateM
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
+import Tabs from './components/Tabs';
 
 type PricingRule = {
   daysOfWeek?: number[];
@@ -108,6 +109,31 @@ const VenueDashboard: React.FC = () => {
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
   const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
 
+  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring'>('home');
+
+  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring' {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const t = String(params.get('tab') || '').trim();
+      if (t === 'home' || t === 'booking' || t === 'qr' || t === 'points' || t === 'highbreak' || t === 'content' || t === 'scoring') return t;
+      return (localStorage.getItem('venueDashboardTab') as any) || 'home';
+    } catch {
+      return 'home';
+    }
+  }
+
+  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring') {
+    setActiveTab(t);
+    try {
+      localStorage.setItem('venueDashboardTab', t);
+    } catch {}
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', t);
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  }
+
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
   const joinUrl = clubProfile?.id ? new URL(`/club/${clubProfile.id}`, window.location.origin).toString() : '';
@@ -148,6 +174,14 @@ const VenueDashboard: React.FC = () => {
     const out = s.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
     return out || 'qr';
   };
+
+  const parseLines = useCallback((raw: string, max: number) => {
+    return String(raw || '')
+      .split('\n')
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+      .slice(0, max);
+  }, []);
 
   const downloadSvgElement = useCallback((svg: SVGSVGElement, filename: string) => {
     const xml = new XMLSerializer().serializeToString(svg);
@@ -375,6 +409,10 @@ const VenueDashboard: React.FC = () => {
   }, [operatorId, isOperator, navigate, loadData]);
 
   useEffect(() => {
+    setActiveTab(resolveTab());
+  }, []);
+
+  useEffect(() => {
     if (!operatorId || !isOperator) return;
     if (!clubProfile?.id) return;
     loadBreakData();
@@ -448,6 +486,22 @@ const VenueDashboard: React.FC = () => {
           </button>
         </div>
 
+        <div className="glass rounded-xl p-3 sm:p-4">
+          <Tabs
+            items={[
+              { key: 'home', label: '主頁編輯' },
+              { key: 'booking', label: '預約/球枱' },
+              { key: 'qr', label: '掃碼起鐘' },
+              { key: 'points', label: '積分' },
+              { key: 'highbreak', label: '單杆' },
+              { key: 'content', label: '訊息/直播' },
+              { key: 'scoring', label: '計分/房間' },
+            ]}
+            activeKey={activeTab}
+            onChange={(k) => updateTab(k as any)}
+          />
+        </div>
+
         {error && (
           <div className="cue-surface p-3 rounded-lg text-red-600">
             {error}
@@ -460,6 +514,8 @@ const VenueDashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'home' && (
+        <>
         {/* Club Profile Management */}
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">場館資料管理</h2>
@@ -524,6 +580,94 @@ const VenueDashboard: React.FC = () => {
                  placeholder="例如：到場以現金/轉數快付款；需預付訂金..."
                />
             </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 cue-muted">封面圖 URL（Cover Image）</label>
+               <input
+                 value={clubProfile.coverImageUrl || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, coverImageUrl: e.target.value })} 
+                 className="w-full px-3 py-2 rounded cue-input"
+                 placeholder="https://..."
+               />
+               <div className="text-xs cue-muted mt-1">建議比例 16:9 或 4:3，會用於場館主頁頂部大圖。</div>
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 cue-muted">相簿（每行一張圖片 URL，最多 12 張）</label>
+               <textarea
+                 value={Array.isArray(clubProfile.galleryUrls) ? clubProfile.galleryUrls.join('\n') : ''}
+                 onChange={(e) => setClubProfile({ ...clubProfile, galleryUrls: parseLines(e.target.value, 12) })}
+                 className="w-full px-3 py-2 rounded cue-input h-24"
+                 placeholder="https://...jpg"
+               />
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 cue-muted">設施（每行一項，最多 24 項）</label>
+               <textarea
+                 value={Array.isArray(clubProfile.facilities) ? clubProfile.facilities.join('\n') : ''}
+                 onChange={(e) => setClubProfile({ ...clubProfile, facilities: parseLines(e.target.value, 24) })}
+                 className="w-full px-3 py-2 rounded cue-input h-24"
+                 placeholder="例如：免費泊車\n淋浴\n家庭房"
+               />
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 cue-muted">政策（文字，可多行）</label>
+               <textarea
+                 value={clubProfile.policies || ''}
+                 onChange={(e) => setClubProfile({ ...clubProfile, policies: e.target.value })}
+                 className="w-full px-3 py-2 rounded cue-input h-24"
+                 placeholder="例如：\n- 請準時到場\n- 禁止吸煙\n- 取消預約需提前 2 小時"
+               />
+            </div>
+          </div>
+
+          <div className="mt-6 cue-surface rounded-lg p-4">
+            <div className="font-semibold mb-3">主頁預覽</div>
+            <div className="relative overflow-hidden rounded-xl border border-white/10">
+              <div className="h-36 sm:h-44 bg-black/30">
+                {(clubProfile.coverImageUrl || clubProfile.logoUrl) ? (
+                  <img src={String(clubProfile.coverImageUrl || clubProfile.logoUrl)} alt="cover" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
+                )}
+              </div>
+              <div className="-mt-8 px-3 pb-3">
+                <div className="glass rounded-xl p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex items-start gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {clubProfile.logoUrl ? (
+                          <img src={String(clubProfile.logoUrl)} alt="logo" className="w-full h-full object-contain" />
+                        ) : (
+                          <div className="text-xs cue-muted">LOGO</div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-extrabold accent-yellow truncate">{clubProfile.name || '未命名場館'}</div>
+                        {clubProfile.intro && <div className="text-xs cue-muted whitespace-pre-wrap max-h-10 overflow-hidden mt-1">{clubProfile.intro}</div>}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 px-3 py-2 rounded cue-button text-sm font-semibold">加入</div>
+                  </div>
+                  {Array.isArray(clubProfile.facilities) && clubProfile.facilities.length > 0 && (
+                    <div className="mt-3 w-full overflow-x-auto">
+                      <div className="inline-flex gap-2 min-w-full">
+                        {clubProfile.facilities.slice(0, 24).map((f: any) => (
+                          <div key={String(f)} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs whitespace-nowrap">
+                            {String(f)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {clubProfile.id && (
+              <div className="mt-3 flex flex-wrap gap-3 items-center">
+                <Link to={`/club/${clubProfile.id}`} target="_blank" className="accent-blue underline text-sm">
+                  以新視覺預覽公開頁面
+                </Link>
+              </div>
+            )}
           </div>
           
           <div className="mt-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -649,7 +793,171 @@ const VenueDashboard: React.FC = () => {
           )}
         </div>
 
-        {pointsEnabled ? (
+        </>
+        )}
+
+        {activeTab === 'qr' && (
+        qrEnabled ? (
+        <>
+          <div className="glass rounded-xl p-6">
+            <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+              <div className="text-xl font-bold">掃碼起鐘</div>
+              <button
+                type="button"
+                className="text-sm accent-blue hover:underline"
+                onClick={async () => {
+                  try {
+                    setSessionsLoading(true);
+                    const rows = await getActiveTableSessions(API_URL, operatorId).catch(() => []);
+                    setActiveSessions(Array.isArray(rows) ? rows : []);
+                  } finally {
+                    setSessionsLoading(false);
+                  }
+                }}
+              >
+                {sessionsLoading ? '載入中...' : '重新整理'}
+              </button>
+            </div>
+            {activeSessions.length === 0 ? (
+              <div className="cue-muted text-sm">暫無進行中台鐘</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-2">球枱</th>
+                      <th className="py-2 px-2">會員</th>
+                      <th className="py-2 px-2">開始</th>
+                      <th className="py-2 px-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeSessions.map((s: any) => (
+                      <tr key={s.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-2">{s.table?.name || '-'}</td>
+                        <td className="py-2 px-2">{s.startedBy?.name || s.startedBy?.email || '-'}</td>
+                        <td className="py-2 px-2 cue-muted whitespace-nowrap">{s.startAt ? new Date(s.startAt).toLocaleString() : '-'}</td>
+                        <td className="py-2 px-2">
+                          <button
+                            type="button"
+                            className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs"
+                            onClick={async () => {
+                              if (!window.confirm('確定要為此台落鐘並結算？')) return;
+                              try {
+                                await endTableSessionAsOperator(API_URL, operatorId, s.id);
+                                setToast('已落鐘並結算');
+                                setTimeout(() => setToast(null), 2000);
+                                await loadData();
+                              } catch (e: any) {
+                                setToast(e?.message || '落鐘失敗');
+                                setTimeout(() => setToast(null), 3000);
+                              }
+                            }}
+                          >
+                            落鐘
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="glass rounded-xl p-6">
+            <div className="text-xl font-bold mb-4 border-b cue-border pb-2">球枱 QR</div>
+            {tables.length === 0 ? (
+              <div className="cue-muted text-sm">暫無球枱</div>
+            ) : (
+              <div className="space-y-2">
+                {tables.map((t) => (
+                  <div key={t.id} className="cue-surface p-3 rounded flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">{t.name}</div>
+                      <div className="text-xs cue-muted">{t.qrToken?.token ? '已生成 QR' : '未有 QR'}</div>
+                    </div>
+                    {t.qrToken?.token ? (
+                      <div className="flex items-center gap-2">
+                        <div className="bg-white p-1 rounded">
+                          <QRCodeSVG
+                            id={`table-qr-svg-${t.id}`}
+                            value={new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString()}
+                            size={56}
+                            fgColor="#000000"
+                            bgColor="#FFFFFF"
+                            includeMargin
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                            onClick={() => {
+                              const url = new URL(`${rawBase}/qr/table/${t.qrToken.token}`, window.location.origin).toString();
+                              navigator.clipboard.writeText(url).then(() => {
+                                setToast('已複製球枱 QR 連結');
+                                setTimeout(() => setToast(null), 2000);
+                              });
+                            }}
+                          >
+                            複製
+                          </button>
+                          <button
+                            type="button"
+                            className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                            onClick={async () => {
+                              try {
+                                const el = document.getElementById(`table-qr-svg-${t.id}`) as any;
+                                if (!el) throw new Error('找不到 QR');
+                                const fn = `table-${safeFilePart(t.name)}-qr.svg`;
+                                downloadSvgElement(el, fn);
+                              } catch (e: any) {
+                                setToast(e?.message || '下載失敗');
+                                setTimeout(() => setToast(null), 3000);
+                              }
+                            }}
+                          >
+                            SVG
+                          </button>
+                          <button
+                            type="button"
+                            className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-xs"
+                            onClick={async () => {
+                              try {
+                                const el = document.getElementById(`table-qr-svg-${t.id}`) as any;
+                                if (!el) throw new Error('找不到 QR');
+                                const fn = `table-${safeFilePart(t.name)}-qr.png`;
+                                await downloadSvgAsPng(el, fn, t.name);
+                              } catch (e: any) {
+                                setToast(e?.message || '下載失敗');
+                                setTimeout(() => setToast(null), 3000);
+                              }
+                            }}
+                          >
+                            PNG
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs cue-muted">—</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">掃碼起鐘</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )
+        )}
+
+        {activeTab === 'points' && (
+        pointsEnabled ? (
         <div className="glass rounded-xl p-4 md:p-6">
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">消費積分</h2>
@@ -831,9 +1139,16 @@ const VenueDashboard: React.FC = () => {
             </div>
           )}
         </div>
-        ) : null}
+        ) : (
+        <div className="glass rounded-xl p-4 md:p-6">
+          <div className="text-xl font-bold mb-2">消費積分</div>
+          <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )
+        )}
 
-        {highbreakEnabled ? (
+        {activeTab === 'highbreak' && (
+        highbreakEnabled ? (
         <div className="glass rounded-xl p-4 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">單杆紀錄</h2>
@@ -1074,9 +1389,11 @@ const VenueDashboard: React.FC = () => {
           <div className="text-xl font-bold mb-2">單杆紀錄</div>
           <div className="cue-muted text-sm">此功能未開通</div>
         </div>
+        )
         )}
 
-        {bookingEnabled ? (
+        {activeTab === 'booking' && (
+        bookingEnabled ? (
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
           {qrEnabled ? (
@@ -1777,8 +2094,11 @@ const VenueDashboard: React.FC = () => {
           <div className="text-xl font-bold mb-2">預約管理</div>
           <div className="cue-muted text-sm">此功能未開通</div>
         </div>
+        )
         )}
 
+        {activeTab === 'content' && (
+        <>
         {liveEnabled ? (
         <div className="glass rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽直播通告</h2>
@@ -1952,7 +2272,11 @@ const VenueDashboard: React.FC = () => {
           <div className="cue-muted text-sm">此功能未開通</div>
         </div>
         )}
+        </>
+        )}
 
+        {activeTab === 'home' && (
+        <>
         {/* Edit Profile */}
         <div className="glass rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-3">帳戶設定</h3>
@@ -2014,8 +2338,11 @@ const VenueDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+        </>
+        )}
 
-        {scoringEnabled ? (
+        {activeTab === 'scoring' && (
+        scoringEnabled ? (
         <div className="glass rounded-xl p-6">
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">進行中的房間</h2>
@@ -2096,6 +2423,7 @@ const VenueDashboard: React.FC = () => {
           <div className="text-xl font-bold mb-2">進行中的房間</div>
           <div className="cue-muted text-sm">此功能未開通</div>
         </div>
+        )
         )}
 
         {scoringEnabled ? (
