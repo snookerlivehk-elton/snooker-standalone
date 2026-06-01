@@ -60,6 +60,11 @@ commit：`491c91d`（admin: redirect /admin to overview）
 - 保留 `/admin/legacy` 入口（舊版 PANEL；由 `/admin/overview` 的「舊版PANEL」按鈕進入）
 - 避免 `scoring` 關閉時，舊 `/admin` 因呼叫 `/api/rooms` 被 403 導致白屏
 
+更新：`/admin/legacy`（舊版後台）UI 排版對齊新後台
+
+- `/admin/legacy` UI 重做：改用 Tabs + 卡片化區塊，排版對齊 `/admin/overview`（手機可用）
+- 分頁：Rooms / Simple Mode / 建立房間 / 管理頁入口
+
 commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 
 ### 前端：真正主頁（/）
