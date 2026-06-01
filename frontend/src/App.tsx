@@ -52,7 +52,7 @@ function LogoutButton() {
   }, [theme]);
 
   return (
-    <div className="fixed right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-2">
+    <div className="fixed right-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-2">
       <button
         type="button"
         className="px-3 py-2 rounded cue-surface-strong text-sm font-semibold hover:brightness-95"
