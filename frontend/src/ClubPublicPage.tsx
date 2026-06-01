@@ -46,6 +46,18 @@ const ClubPublicPage: React.FC = () => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
 
+  const galleryUrls = useMemo(() => {
+    const raw = (club as any)?.galleryUrls;
+    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+    return [];
+  }, [club]);
+
+  const facilities = useMemo(() => {
+    const raw = (club as any)?.facilities;
+    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
+    return [];
+  }, [club]);
+
   const pad2 = useCallback((n: number) => String(n).padStart(2, '0'), []);
   const minDate = useMemo(() => {
     const d = new Date();
@@ -314,18 +326,6 @@ const ClubPublicPage: React.FC = () => {
     if (picked.startsWith('/')) return `${API_URL}${picked}`;
     return picked;
   })();
-
-  const galleryUrls = useMemo(() => {
-    const raw = (club as any)?.galleryUrls;
-    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
-    return [];
-  }, [club]);
-
-  const facilities = useMemo(() => {
-    const raw = (club as any)?.facilities;
-    if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
-    return [];
-  }, [club]);
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
