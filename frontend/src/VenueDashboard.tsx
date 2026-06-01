@@ -2343,198 +2343,194 @@ const VenueDashboard: React.FC = () => {
 
         {activeTab === 'scoring' && (
         scoringEnabled ? (
-        <div className="glass rounded-xl p-6">
-          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
-            <h2 className="text-xl font-bold">進行中的房間</h2>
-            <span className="text-sm cue-muted">
-              {activeRooms.length} / 5
-            </span>
-          </div>
-          
-          <p className="cue-muted mb-6 text-sm">
-            您最多可以同時建立 5 個進行中的房間。建立後請使用下方連結進行設置或分享。
-          </p>
-
-          <button
-            onClick={handleCreateRoom}
-            disabled={creating || activeRooms.length >= 5}
-            className={`w-full py-3 rounded-lg font-bold mb-8 transition-colors ${
-              creating || activeRooms.length >= 5
-                ? 'cue-surface-strong cursor-not-allowed cue-muted'
-                : 'brand-button hover:brightness-95 text-black'
-            }`}
-          >
-            {creating ? '建立中...' : activeRooms.length >= 5 ? '已達房間上限' : '建立新房間'}
-          </button>
-
-          {activeRooms.length > 0 ? (
-            <div className="space-y-4">
-              {activeRooms.map((room) => (
-                <div key={room.id} className="cue-surface p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="cue-surface-strong px-3 py-1 rounded font-mono accent-yellow font-bold">
-                      {room.code}
+        <>
+          <div className="glass rounded-xl p-6">
+            <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
+              <h2 className="text-xl font-bold">進行中的房間</h2>
+              <span className="text-sm cue-muted">
+                {activeRooms.length} / 5
+              </span>
+            </div>
+            
+            <p className="cue-muted mb-6 text-sm">
+              您最多可以同時建立 5 個進行中的房間。建立後請使用下方連結進行設置或分享。
+            </p>
+  
+            <button
+              onClick={handleCreateRoom}
+              disabled={creating || activeRooms.length >= 5}
+              className={`w-full py-3 rounded-lg font-bold mb-8 transition-colors ${
+                creating || activeRooms.length >= 5
+                  ? 'cue-surface-strong cursor-not-allowed cue-muted'
+                  : 'brand-button hover:brightness-95 text-black'
+              }`}
+            >
+              {creating ? '建立中...' : activeRooms.length >= 5 ? '已達房間上限' : '建立新房間'}
+            </button>
+  
+            {activeRooms.length > 0 ? (
+              <div className="space-y-4">
+                {activeRooms.map((room) => (
+                  <div key={room.id} className="cue-surface p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="cue-surface-strong px-3 py-1 rounded font-mono accent-yellow font-bold">
+                        {room.code}
+                      </div>
+                      <div className="text-lg font-semibold">{room.name}</div>
                     </div>
-                    <div className="text-lg font-semibold">{room.name}</div>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <button
+                        onClick={() => copyLink(`/room/${room.code}/setup`)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
+                      >
+                        Copy Setup
+                      </button>
+                      <button
+                        onClick={() => copyLink(`/room/${room.code}/live`)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-medium transition-colors"
+                      >
+                        Copy Live
+                      </button>
+                      <button
+                        onClick={() => copyLink(`/room/${room.code}/overlay`)}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors"
+                      >
+                        Copy Overlay
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRoom(room.id)}
+                        disabled={deletingId === room.id}
+                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                          deletingId === room.id
+                            ? 'cue-surface-strong cursor-not-allowed cue-muted'
+                            : 'bg-red-600 hover:bg-red-700 text-white'
+                        }`}
+                      >
+                        {deletingId === room.id ? '...' : '刪除'}
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <button
-                      onClick={() => copyLink(`/room/${room.code}/setup`)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
-                    >
-                      Copy Setup
-                    </button>
-                    <button
-                      onClick={() => copyLink(`/room/${room.code}/live`)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-medium transition-colors"
-                    >
-                      Copy Live
-                    </button>
-                    <button
-                      onClick={() => copyLink(`/room/${room.code}/overlay`)}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors"
-                    >
-                      Copy Overlay
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRoom(room.id)}
-                      disabled={deletingId === room.id}
-                      className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                        deletingId === room.id
-                          ? 'cue-surface-strong cursor-not-allowed cue-muted'
-                          : 'bg-red-600 hover:bg-red-700 text-white'
-                      }`}
-                    >
-                      {deletingId === room.id ? '...' : '刪除'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            ) : (
+              <div className="text-center cue-muted py-8 cue-surface rounded-lg border border-dashed cue-border">
+                目前沒有進行中的房間
+              </div>
+            )}
+          </div>
+
+          <details className="glass rounded-xl p-6">
+            <summary className="cursor-pointer text-xl font-bold">歷史房間記錄（可展開）</summary>
+            <div className="mt-4 flex justify-end">
+              <button 
+                type="button"
+                onClick={loadData}
+                className="text-sm cue-surface-strong hover:brightness-95 px-3 py-1 rounded transition-colors"
+              >
+                重新整理
+              </button>
             </div>
-          ) : (
-            <div className="text-center cue-muted py-8 cue-surface rounded-lg border border-dashed cue-border">
-              目前沒有進行中的房間
-            </div>
-          )}
-        </div>
+
+            {loading && matches.length === 0 ? (
+              <div className="text-center py-8">載入中...</div>
+            ) : matches.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">尚無記錄</div>
+            ) : (
+              <div className="overflow-x-auto mt-3">
+                <table className="w-full text-sm text-left whitespace-nowrap">
+                  <thead className="cue-muted border-b cue-border">
+                    <tr>
+                      <th className="py-3 px-4">日期</th>
+                      <th className="py-3 px-4">房間/比賽代碼</th>
+                      <th className="py-3 px-4">比賽名稱</th>
+                      <th className="py-3 px-4">球手資料</th>
+                      <th className="py-3 px-4 text-center">比分</th>
+                      <th className="py-3 px-4">結果</th>
+                      <th className="py-3 px-4">用時</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {matches.map((m) => {
+                      const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
+                      const duration = m.durationSeconds 
+                        ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒` 
+                        : '-';
+                      
+                      return (
+                        <tr key={m.id} className="hover:brightness-95 transition-colors">
+                          <td className="py-3 px-4 align-top">{dateStr}</td>
+                          <td className="py-3 px-4 align-top">
+                            <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
+                              {m.matchCode || '-'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 align-top">
+                            <div className="font-medium">{m.matchName}</div>
+                            {m.framesRequired > 1 && (
+                              <div className="text-xs text-gray-500 mt-0.5">{m.framesRequired} 局決</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 align-top">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{m.p0.name}</span>
+                                {m.p0.handicap !== 0 && (
+                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
+                                    {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
+                                  </span>
+                                )}
+                                {m.p0.maxBreak > 0 && (
+                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
+                                    單杆: {m.p0.maxBreak}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{m.p1.name}</span>
+                                {m.p1.handicap !== 0 && (
+                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
+                                    {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
+                                  </span>
+                                )}
+                                {m.p1.maxBreak > 0 && (
+                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
+                                    單杆: {m.p1.maxBreak}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center font-bold text-lg align-top">
+                            {m.p0.score} - {m.p1.score}
+                          </td>
+                          <td className="py-3 px-4 align-top">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              m.result === 'In Progress' 
+                                ? 'bg-yellow-900 text-yellow-200' 
+                                : 'bg-green-900 text-green-200'
+                            }`}>
+                              {m.result}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 align-top text-gray-400">
+                            {duration}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </details>
+        </>
         ) : (
         <div className="glass rounded-xl p-6">
           <div className="text-xl font-bold mb-2">進行中的房間</div>
           <div className="cue-muted text-sm">此功能未開通</div>
         </div>
         )
-        )}
-
-        {scoringEnabled ? (
-        <div className="glass rounded-xl p-6">
-          <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
-            <h2 className="text-xl font-bold">歷史房間記錄</h2>
-            <button 
-              onClick={loadData}
-              className="text-sm cue-surface-strong hover:brightness-95 px-3 py-1 rounded transition-colors"
-            >
-              重新整理
-            </button>
-          </div>
-
-          {loading && matches.length === 0 ? (
-            <div className="text-center py-8">載入中...</div>
-          ) : matches.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">尚無記錄</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="cue-muted border-b cue-border">
-                  <tr>
-                    <th className="py-3 px-4">日期</th>
-                    <th className="py-3 px-4">房間/比賽代碼</th>
-                    <th className="py-3 px-4">比賽名稱</th>
-                    <th className="py-3 px-4">球手資料</th>
-                    <th className="py-3 px-4 text-center">比分</th>
-                    <th className="py-3 px-4">結果</th>
-                    <th className="py-3 px-4">用時</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {matches.map((m) => {
-                    const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
-                    const duration = m.durationSeconds 
-                      ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒` 
-                      : '-';
-                    
-                    return (
-                      <tr key={m.id} className="hover:brightness-95 transition-colors">
-                        <td className="py-3 px-4 align-top">{dateStr}</td>
-                        <td className="py-3 px-4 align-top">
-                          <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
-                            {m.matchCode || '-'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 align-top">
-                          <div className="font-medium">{m.matchName}</div>
-                          {m.framesRequired > 1 && (
-                            <div className="text-xs text-gray-500 mt-0.5">{m.framesRequired} 局決</div>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 align-top">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{m.p0.name}</span>
-                              {m.p0.handicap !== 0 && (
-                                <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                  {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
-                                </span>
-                              )}
-                              {m.p0.maxBreak > 0 && (
-                                <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                  單杆: {m.p0.maxBreak}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{m.p1.name}</span>
-                              {m.p1.handicap !== 0 && (
-                                <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                  {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
-                                </span>
-                              )}
-                              {m.p1.maxBreak > 0 && (
-                                <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                  單杆: {m.p1.maxBreak}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center font-bold text-lg align-top">
-                          {m.p0.score} - {m.p1.score}
-                        </td>
-                        <td className="py-3 px-4 align-top">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            m.result === 'In Progress' 
-                              ? 'bg-yellow-900 text-yellow-200' 
-                              : 'bg-green-900 text-green-200'
-                          }`}>
-                            {m.result}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 align-top text-gray-400">
-                          {duration}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        ) : (
-        <div className="glass rounded-xl p-6">
-          <div className="text-xl font-bold mb-2">歷史房間記錄</div>
-          <div className="cue-muted text-sm">此功能未開通</div>
-        </div>
         )}
       </div>
     </div>
