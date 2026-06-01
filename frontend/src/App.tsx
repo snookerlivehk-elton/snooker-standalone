@@ -52,7 +52,7 @@ function LogoutButton() {
   }, [theme]);
 
   return (
-    <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
+    <div className="fixed right-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-2">
       <button
         type="button"
         className="px-3 py-2 rounded cue-surface-strong text-sm font-semibold hover:brightness-95"
@@ -60,18 +60,6 @@ function LogoutButton() {
       >
         {theme === 'dark' ? '日間' : '夜間'}
       </button>
-      {hasSession && (
-        <button
-          type="button"
-          className="px-3 py-2 rounded cue-surface-strong text-sm font-semibold hover:brightness-95"
-          onClick={() => {
-            localStorage.removeItem('memberSession');
-            navigate('/members/login');
-          }}
-        >
-          登出
-        </button>
-      )}
     </div>
   );
 }
