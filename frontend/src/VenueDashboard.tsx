@@ -175,6 +175,16 @@ const VenueDashboard: React.FC = () => {
     return out || 'qr';
   };
 
+  const normalizeImageSrc = useCallback((raw: any) => {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^data:/i.test(s)) return s;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return `https:${s}`;
+    if (s.startsWith('/')) return `${API_URL.replace(/\/$/, '')}${s}`;
+    return `https://${s}`;
+  }, []);
+
   const parseLines = useCallback((raw: string, max: number) => {
     return String(raw || '')
       .split('\n')
@@ -622,12 +632,16 @@ const VenueDashboard: React.FC = () => {
           <div className="mt-6 cue-surface rounded-lg p-4">
             <div className="font-semibold mb-3">主頁預覽</div>
             <div className="relative overflow-hidden rounded-xl border border-white/10">
-              <div className="h-36 sm:h-44 bg-black/30">
+              <div className="relative h-36 sm:h-44 bg-black/30 overflow-hidden">
+                <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
                 {(clubProfile.coverImageUrl || clubProfile.logoUrl) ? (
-                  <img src={String(clubProfile.coverImageUrl || clubProfile.logoUrl)} alt="cover" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
-                )}
+                  <img
+                    src={normalizeImageSrc(clubProfile.coverImageUrl || clubProfile.logoUrl)}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : null}
               </div>
               <div className="-mt-8 px-3 pb-3">
                 <div className="glass rounded-xl p-3">
@@ -635,7 +649,23 @@ const VenueDashboard: React.FC = () => {
                     <div className="min-w-0 flex items-start gap-3">
                       <div className="w-12 h-12 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {clubProfile.logoUrl ? (
-                          <img src={String(clubProfile.logoUrl)} alt="logo" className="w-full h-full object-contain" />
+                          <>
+                            <div className="text-xs cue-muted">LOGO</div>
+                            <img
+                              src={normalizeImageSrc(clubProfile.logoUrl)}
+                              alt=""
+                              className="w-full h-full object-contain"
+                              onLoad={(e) => {
+                                try {
+                                  const el = e.currentTarget;
+                                  const box = el.parentElement;
+                                  const t = box?.querySelector('div');
+                                  if (t) (t as HTMLElement).style.display = 'none';
+                                } catch {}
+                              }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          </>
                         ) : (
                           <div className="text-xs cue-muted">LOGO</div>
                         )}
