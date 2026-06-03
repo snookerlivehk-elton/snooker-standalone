@@ -191,6 +191,7 @@ router.post('/my-profile', async (req, res) => {
         name,
         intro,
         address,
+        mapUrl,
         phone,
         email,
         logoUrl,
@@ -215,11 +216,11 @@ router.post('/my-profile', async (req, res) => {
     try {
         console.log(`[Club] Update profile request for member ${memberId}`, req.body);
 
-        const updateData: any = { name, intro, address, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        const updateData: any = { name, intro, address, mapUrl, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
         if (safeGalleryUrls !== undefined) updateData.galleryUrls = safeGalleryUrls;
         if (safeFacilities !== undefined) updateData.facilities = safeFacilities;
 
-        const createData: any = { memberId, name, intro, address, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        const createData: any = { memberId, name, intro, address, mapUrl, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
         if (safeGalleryUrls !== undefined) createData.galleryUrls = safeGalleryUrls;
         if (safeFacilities !== undefined) createData.facilities = safeFacilities;
 

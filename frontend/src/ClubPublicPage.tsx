@@ -119,6 +119,8 @@ const ClubPublicPage: React.FC = () => {
   }, [heroImages.length]);
 
   const mapHref = useMemo(() => {
+    const raw = String((club as any)?.mapUrl || (club as any)?.map_url || '').trim();
+    if (raw) return normalizeVideoHref(raw);
     const addr = String((club as any)?.address || '').trim();
     if (!addr) return null;
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;

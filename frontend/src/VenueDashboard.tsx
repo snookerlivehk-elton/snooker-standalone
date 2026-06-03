@@ -185,6 +185,36 @@ const VenueDashboard: React.FC = () => {
     return `https://${s}`;
   }, []);
 
+  const resizeImageFileToDataUrl = useCallback(async (file: File, opts: { maxW: number; maxH: number; type: 'image/jpeg' | 'image/png'; quality?: number }) => {
+    const { maxW, maxH, type, quality } = opts;
+    const blobUrl = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = blobUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('image load failed'));
+      });
+      const sw = img.naturalWidth || img.width || 1;
+      const sh = img.naturalHeight || img.height || 1;
+      const scale = Math.min(1, maxW / sw, maxH / sh);
+      const tw = Math.max(1, Math.round(sw * scale));
+      const th = Math.max(1, Math.round(sh * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = tw;
+      canvas.height = th;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas not supported');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, tw, th);
+      return canvas.toDataURL(type, type === 'image/jpeg' ? (quality ?? 0.82) : undefined);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  }, []);
+
   const parseLines = useCallback((raw: string, max: number) => {
     return String(raw || '')
       .split('\n')
@@ -192,6 +222,30 @@ const VenueDashboard: React.FC = () => {
       .filter((x) => x.length > 0)
       .slice(0, max);
   }, []);
+
+  const getGalleryArray = useCallback((raw: any) => {
+    return Array.isArray(raw) ? raw.map((x: any) => String(x || '').trim()).filter(Boolean) : [];
+  }, []);
+
+  const removeGalleryAt = useCallback((idx: number) => {
+    setClubProfile((prev: any) => {
+      const list = getGalleryArray(prev?.galleryUrls);
+      const next = list.filter((_, i) => i !== idx);
+      return { ...prev, galleryUrls: next };
+    });
+  }, [getGalleryArray]);
+
+  const setGalleryAsCover = useCallback((idx: number) => {
+    setClubProfile((prev: any) => {
+      const list = getGalleryArray(prev?.galleryUrls);
+      const picked = list[idx] || '';
+      if (!picked) return prev;
+      const rest = list.filter((_, i) => i !== idx);
+      const oldCover = String(prev?.coverImageUrl || '').trim();
+      const nextGallery = oldCover ? [oldCover, ...rest] : rest;
+      return { ...prev, coverImageUrl: picked, galleryUrls: nextGallery.slice(0, 12) };
+    });
+  }, [getGalleryArray]);
 
   const downloadSvgElement = useCallback((svg: SVGSVGElement, filename: string) => {
     const xml = new XMLSerializer().serializeToString(svg);
@@ -573,13 +627,60 @@ const VenueDashboard: React.FC = () => {
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 cue-muted">Logo URL</label>
-               <input 
-                 value={clubProfile.logoUrl || ''} 
-                 onChange={(e) => setClubProfile({ ...clubProfile, logoUrl: e.target.value })} 
-                 className="w-full px-3 py-2 rounded cue-input" 
-                 placeholder="https://..."
+               <label className="block text-sm mb-1 cue-muted">Google Map URL（可選）</label>
+               <input
+                 value={clubProfile.mapUrl || ''} 
+                 onChange={(e) => setClubProfile({ ...clubProfile, mapUrl: e.target.value })} 
+                 className="w-full px-3 py-2 rounded cue-input"
+                 placeholder="https://maps.app.goo.gl/... 或 https://www.google.com/maps/..."
                />
+               <div className="text-xs cue-muted mt-1">如留空，公開頁會用「地址」自動生成地圖搜尋連結。</div>
+            </div>
+            <div className="md:col-span-2">
+               <label className="block text-sm mb-1 cue-muted">LOGO（上傳圖片）</label>
+               <div className="flex flex-col gap-2">
+                 <input
+                   type="file"
+                   accept="image/*"
+                   onChange={async (e) => {
+                     const f = e.target.files?.[0];
+                     e.currentTarget.value = '';
+                     if (!f) return;
+                     try {
+                       const dataUrl = await resizeImageFileToDataUrl(f, { maxW: 512, maxH: 512, type: 'image/png' });
+                       setClubProfile((prev: any) => ({ ...prev, logoUrl: dataUrl }));
+                       setToast('LOGO 已加入（會自動縮放）');
+                       setTimeout(() => setToast(null), 2000);
+                     } catch {
+                       setToast('LOGO 圖片處理失敗');
+                       setTimeout(() => setToast(null), 3000);
+                     }
+                   }}
+                   className="w-full px-3 py-2 rounded cue-input"
+                 />
+                 <div className="text-xs cue-muted">建議：512×512px（或更大正方形），PNG/JPG 均可；系統會自動縮放至 512px。</div>
+                 {clubProfile.logoUrl ? (
+                   <div className="flex items-center gap-3">
+                     <div className="w-14 h-14 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
+                       <img src={normalizeImageSrc(clubProfile.logoUrl)} alt="" className="w-full h-full object-contain" />
+                     </div>
+                     <button type="button" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm" onClick={() => setClubProfile((p: any) => ({ ...p, logoUrl: '' }))}>
+                       移除 LOGO
+                     </button>
+                   </div>
+                 ) : null}
+                 <details className="mt-1">
+                   <summary className="text-xs cue-muted cursor-pointer select-none">進階：使用 URL</summary>
+                   <div className="mt-2">
+                     <input
+                       value={clubProfile.logoUrl || ''}
+                       onChange={(e) => setClubProfile({ ...clubProfile, logoUrl: e.target.value })}
+                       className="w-full px-3 py-2 rounded cue-input"
+                       placeholder="https://..."
+                     />
+                   </div>
+                 </details>
+               </div>
             </div>
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 cue-muted">付款方式說明（預約用）</label>
@@ -591,23 +692,107 @@ const VenueDashboard: React.FC = () => {
                />
             </div>
             <div className="md:col-span-2">
-               <label className="block text-sm mb-1 cue-muted">封面圖 URL（Cover Image）</label>
-               <input
-                 value={clubProfile.coverImageUrl || ''} 
-                 onChange={(e) => setClubProfile({ ...clubProfile, coverImageUrl: e.target.value })} 
-                 className="w-full px-3 py-2 rounded cue-input"
-                 placeholder="https://..."
-               />
-               <div className="text-xs cue-muted mt-1">建議比例 16:9 或 4:3，會用於場館主頁頂部大圖。</div>
-            </div>
-            <div className="md:col-span-2">
-               <label className="block text-sm mb-1 cue-muted">相簿（每行一張圖片 URL，最多 12 張）</label>
-               <textarea
-                 value={Array.isArray(clubProfile.galleryUrls) ? clubProfile.galleryUrls.join('\n') : ''}
-                 onChange={(e) => setClubProfile({ ...clubProfile, galleryUrls: parseLines(e.target.value, 12) })}
-                 className="w-full px-3 py-2 rounded cue-input h-24"
-                 placeholder="https://...jpg"
-               />
+               <label className="block text-sm mb-1 cue-muted">場館頁頂部輪播相片（上傳）</label>
+               <div className="flex flex-col gap-2">
+                 <input
+                   type="file"
+                   accept="image/*"
+                   multiple
+                   onChange={async (e) => {
+                     const files = Array.from(e.target.files || []);
+                     e.currentTarget.value = '';
+                     if (files.length === 0) return;
+                     try {
+                       const processed: string[] = [];
+                       for (const f of files.slice(0, 12)) {
+                         const dataUrl = await resizeImageFileToDataUrl(f, { maxW: 1600, maxH: 900, type: 'image/jpeg', quality: 0.82 });
+                         processed.push(dataUrl);
+                       }
+                       setClubProfile((prev: any) => {
+                         const curCover = String(prev?.coverImageUrl || '').trim();
+                         const curGallery = getGalleryArray(prev?.galleryUrls);
+                         let cover = curCover;
+                         let gallery = curGallery.slice();
+                         if (!cover && processed.length > 0) {
+                           cover = processed[0];
+                           gallery = [...gallery, ...processed.slice(1)];
+                         } else {
+                           gallery = [...gallery, ...processed];
+                         }
+                         gallery = gallery.filter(Boolean).slice(0, 12);
+                         return { ...prev, coverImageUrl: cover, galleryUrls: gallery };
+                       });
+                       setToast('輪播相片已加入（會自動縮放/壓縮）');
+                       setTimeout(() => setToast(null), 2000);
+                     } catch {
+                       setToast('輪播相片處理失敗');
+                       setTimeout(() => setToast(null), 3000);
+                     }
+                   }}
+                   className="w-full px-3 py-2 rounded cue-input"
+                 />
+                 <div className="text-xs cue-muted">建議：1600×900px（16:9）或 1200×675px；系統會自動縮放至最長邊 1600px（JPEG）。</div>
+                 <div className="grid gap-3">
+                   <div className="cue-surface-strong rounded-lg p-3">
+                     <div className="flex items-center justify-between gap-3">
+                       <div className="font-semibold">封面（輪播第一張）</div>
+                       {clubProfile.coverImageUrl ? (
+                         <button type="button" className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs" onClick={() => setClubProfile((p: any) => ({ ...p, coverImageUrl: '' }))}>
+                           移除封面
+                         </button>
+                       ) : null}
+                     </div>
+                     {clubProfile.coverImageUrl ? (
+                       <div className="mt-2 rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                         <img src={normalizeImageSrc(clubProfile.coverImageUrl)} alt="" className="w-full h-40 object-cover" />
+                       </div>
+                     ) : (
+                       <div className="mt-2 text-sm cue-muted">（未設定）</div>
+                     )}
+                   </div>
+                   <div className="cue-surface-strong rounded-lg p-3">
+                     <div className="font-semibold">相簿（輪播其餘圖片，最多 12 張）</div>
+                     {getGalleryArray(clubProfile.galleryUrls).length > 0 ? (
+                       <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                         {getGalleryArray(clubProfile.galleryUrls).slice(0, 12).map((u: string, idx: number) => (
+                           <div key={`${u}-${idx}`} className="rounded-lg overflow-hidden border border-white/10 bg-black/30">
+                             <img src={normalizeImageSrc(u)} alt="" className="w-full h-24 object-cover" />
+                             <div className="p-2 flex gap-2">
+                               <button type="button" className="flex-1 px-2 py-1 rounded cue-surface hover:brightness-95 text-xs" onClick={() => setGalleryAsCover(idx)}>
+                                 設為封面
+                               </button>
+                               <button type="button" className="px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs" onClick={() => removeGalleryAt(idx)}>
+                                 刪除
+                               </button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="mt-2 text-sm cue-muted">（暫無）</div>
+                     )}
+                   </div>
+                 </div>
+                 <details className="mt-1">
+                   <summary className="text-xs cue-muted cursor-pointer select-none">進階：使用 URL</summary>
+                   <div className="mt-2 grid gap-2">
+                     <label className="block text-xs cue-muted">封面圖 URL（Cover Image）</label>
+                     <input
+                       value={clubProfile.coverImageUrl || ''} 
+                       onChange={(e) => setClubProfile({ ...clubProfile, coverImageUrl: e.target.value })} 
+                       className="w-full px-3 py-2 rounded cue-input"
+                       placeholder="https://..."
+                     />
+                     <label className="block text-xs cue-muted">相簿（每行一張圖片 URL，最多 12 張）</label>
+                     <textarea
+                       value={Array.isArray(clubProfile.galleryUrls) ? clubProfile.galleryUrls.join('\n') : ''}
+                       onChange={(e) => setClubProfile({ ...clubProfile, galleryUrls: parseLines(e.target.value, 12) })}
+                       className="w-full px-3 py-2 rounded cue-input h-24"
+                       placeholder="https://...jpg"
+                     />
+                   </div>
+                 </details>
+               </div>
             </div>
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 cue-muted">設施（每行一項，最多 24 項）</label>

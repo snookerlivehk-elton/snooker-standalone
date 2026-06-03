@@ -1,0 +1,1 @@
+ALTER TABLE "ClubProfile" ADD COLUMN IF NOT EXISTS "mapUrl" TEXT;
