@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { API_URL } from './config';
 import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly, getMyJoinedClubs } from './lib/api';
 import TopBarPublic from './components/TopBarPublic';
-import BottomNavPublic from './components/BottomNavPublic';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import Tabs from './components/Tabs';
 
@@ -40,7 +39,7 @@ const ClubPublicPage: React.FC = () => {
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'leader' | 'contact'>('info');
+  const [activeTab, setActiveTab] = useState<'booking' | 'leader' | 'info' | 'contact'>('booking');
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -56,6 +55,69 @@ const ClubPublicPage: React.FC = () => {
     const raw = (club as any)?.facilities;
     if (Array.isArray(raw)) return raw.map((x) => String(x || '').trim()).filter(Boolean);
     return [];
+  }, [club]);
+
+  const normalizeImageSrc = useCallback((raw: any) => {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    if (/^data:/i.test(s)) return s;
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return `https:${s}`;
+    if (s.startsWith('/')) return `${API_URL.replace(/\/$/, '')}${s}`;
+    return `https://${s}`;
+  }, []);
+
+  const logoSrc = useMemo(() => {
+    const raw = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
+    return normalizeImageSrc(raw);
+  }, [club, normalizeImageSrc]);
+
+  const coverSrc = useMemo(() => {
+    const raw = String((club as any)?.coverImageUrl || (club as any)?.cover_image_url || '').trim();
+    const fallback = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
+    return normalizeImageSrc(raw || fallback);
+  }, [club, normalizeImageSrc]);
+
+  const heroImages = useMemo(() => {
+    const list: string[] = [];
+    if (coverSrc) list.push(coverSrc);
+    for (const u of galleryUrls) {
+      const n = normalizeImageSrc(u);
+      if (n) list.push(n);
+    }
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const u of list) {
+      if (seen.has(u)) continue;
+      seen.add(u);
+      out.push(u);
+    }
+    return out.slice(0, 12);
+  }, [coverSrc, galleryUrls, normalizeImageSrc]);
+
+  const heroRef = useRef<HTMLDivElement | null>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+
+  useEffect(() => {
+    setHeroIndex(0);
+    try {
+      if (heroRef.current) heroRef.current.scrollLeft = 0;
+    } catch {}
+  }, [clubId, heroImages.length]);
+
+  const onHeroScroll = useCallback(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const w = el.clientWidth || 1;
+    const idx = Math.round((el.scrollLeft || 0) / w);
+    const maxIdx = Math.max(0, heroImages.length - 1);
+    setHeroIndex(Math.min(Math.max(idx, 0), maxIdx));
+  }, [heroImages.length]);
+
+  const mapHref = useMemo(() => {
+    const addr = String((club as any)?.address || '').trim();
+    if (!addr) return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
   }, [club]);
 
   const pad2 = useCallback((n: number) => String(n).padStart(2, '0'), []);
@@ -307,51 +369,65 @@ const ClubPublicPage: React.FC = () => {
   if (error) return <div className="brand-page p-6 text-center text-red-500">錯誤：{error}</div>;
   if (!club) return <div className="brand-page p-6 text-center cue-muted">找不到場館</div>;
 
-  const logoSrc = (() => {
-    const raw = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
-    if (!raw) return null;
-    if (/^data:/i.test(raw)) return raw;
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (raw.startsWith('/')) return `${API_URL}${raw}`;
-    return raw;
-  })();
-
-  const coverSrc = (() => {
-    const raw = String((club as any)?.coverImageUrl || (club as any)?.cover_image_url || '').trim();
-    const fallback = String((club as any)?.logoUrl || (club as any)?.logo_url || '').trim();
-    const picked = raw || fallback;
-    if (!picked) return null;
-    if (/^data:/i.test(picked)) return picked;
-    if (/^https?:\/\//i.test(picked)) return picked;
-    if (picked.startsWith('/')) return `${API_URL}${picked}`;
-    return picked;
-  })();
-
   return (
-    <div className="brand-page min-h-screen flex flex-col">
-      <TopBarPublic title={String((club as any)?.name || '場館')} />
-      <main className="flex-1 pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
-        <div className="relative">
-          <div className="h-56 sm:h-72 w-full overflow-hidden">
-            {coverSrc ? (
-              <img src={coverSrc} alt="cover" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
-            )}
+    <div className="brand-page h-[100dvh] flex flex-col">
+      <div className="sticky top-0 z-40">
+        <TopBarPublic title="場館" />
+        <div className="bg-[var(--glass-bg)] border-b border-[var(--glass-border)] backdrop-blur">
+          <div className="px-4 pt-3">
+            <div className="max-w-2xl mx-auto">
+              <div className="relative rounded-xl overflow-hidden border border-white/10">
+                <div
+                  ref={heroRef}
+                  onScroll={onHeroScroll}
+                  className="w-full overflow-x-auto flex snap-x snap-mandatory scroll-smooth"
+                  style={{ scrollbarWidth: 'none' } as any}
+                >
+                  {(heroImages.length > 0 ? heroImages : ['']).map((src, idx) => (
+                    <div key={`${src || 'fallback'}-${idx}`} className="w-full flex-shrink-0 snap-center">
+                      <div className="h-[22vh] min-h-[140px] max-h-[260px] w-full bg-gradient-to-br from-slate-800 to-slate-950">
+                        {src ? (
+                          <img
+                            src={src}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                  {(heroImages.length > 0 ? heroImages : ['']).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-1.5 w-1.5 rounded-full ${idx === heroIndex ? 'bg-white' : 'bg-white/40'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="-mt-10 px-4">
-            <div className="max-w-2xl mx-auto glass rounded-xl p-4 sm:p-5">
+
+          <div className="px-4 pt-3 pb-4">
+            <div className="max-w-2xl mx-auto">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex items-start gap-3">
-                  <div className="w-14 h-14 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-white/90 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {logoSrc ? (
-                      <img src={logoSrc} alt="logo" className="w-full h-full object-contain" />
+                      <img
+                        src={logoSrc}
+                        alt=""
+                        className="w-full h-full object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
                     ) : (
                       <div className="text-xs cue-muted">LOGO</div>
                     )}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xl sm:text-2xl font-extrabold accent-yellow truncate">
+                    <div className="text-xl sm:text-2xl font-extrabold truncate">
                       {club.name || '未命名場館'}
                     </div>
                     {club.intro && (
@@ -374,11 +450,40 @@ const ClubPublicPage: React.FC = () => {
                 </div>
               </div>
 
+              <div className="mt-3 grid gap-1.5 text-sm cue-muted">
+                {(club as any)?.address ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs cue-muted">地址</div>
+                      <div className="text-sm text-white/90 whitespace-pre-wrap">{String((club as any)?.address || '')}</div>
+                    </div>
+                    {mapHref && (
+                      <a
+                        href={mapHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold flex-shrink-0"
+                      >
+                        地圖
+                      </a>
+                    )}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {(club as any)?.phone ? (
+                    <div><span className="text-xs cue-muted">電話：</span><span className="text-white/90">{String((club as any)?.phone || '')}</span></div>
+                  ) : null}
+                  {(club as any)?.email ? (
+                    <div><span className="text-xs cue-muted">Email：</span><span className="text-white/90">{String((club as any)?.email || '')}</span></div>
+                  ) : null}
+                </div>
+              </div>
+
               {facilities.length > 0 && (
                 <div className="mt-3 w-full overflow-x-auto">
                   <div className="inline-flex gap-2 min-w-full">
                     {facilities.slice(0, 24).map((f) => (
-                      <div key={f} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs whitespace-nowrap">
+                      <div key={f} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs whitespace-nowrap text-white/90">
                         {f}
                       </div>
                     ))}
@@ -388,19 +493,20 @@ const ClubPublicPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="px-4 mt-4">
-          <div className="max-w-2xl mx-auto">
-            <Tabs
-              items={[
-                { key: 'info', label: '資訊' },
-                { key: 'booking', label: '預約' },
-                { key: 'leader', label: '排行榜' },
-                { key: 'contact', label: '聯絡' },
-              ]}
-              activeKey={activeTab}
-              onChange={(k) => setActiveTab(k as any)}
-            />
+      <main className="flex-1 overflow-y-auto px-4 py-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+        <div className="max-w-2xl mx-auto">
+          <Tabs
+            items={[
+              { key: 'booking', label: '訂台' },
+              { key: 'leader', label: '排行榜' },
+              { key: 'info', label: '資訊' },
+              { key: 'contact', label: '聯絡' },
+            ]}
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as any)}
+          />
 
             {activeTab === 'info' && (
               <div className="mt-5 space-y-6">
@@ -409,11 +515,20 @@ const ClubPublicPage: React.FC = () => {
                     <div className="font-semibold text-lg mb-3">相片</div>
                     <div className="w-full overflow-x-auto">
                       <div className="inline-flex gap-3">
-                        {galleryUrls.slice(0, 12).map((u, idx) => (
-                          <div key={`${u}-${idx}`} className="w-40 h-28 rounded-lg overflow-hidden bg-black/30 border border-white/10 flex-shrink-0">
-                            <img src={u} alt={`gallery-${idx}`} className="w-full h-full object-cover" />
-                          </div>
-                        ))}
+                        {galleryUrls.slice(0, 12).map((u, idx) => {
+                          const src = normalizeImageSrc(u);
+                          if (!src) return null;
+                          return (
+                            <div key={`${src}-${idx}`} className="w-40 h-28 rounded-lg overflow-hidden bg-black/30 border border-white/10 flex-shrink-0">
+                              <img
+                                src={src}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -541,7 +656,7 @@ const ClubPublicPage: React.FC = () => {
             {activeTab === 'booking' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4 text-left">
-                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">預約</div>
+                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">訂台</div>
 
               {!session.id ? (
                 <div className="text-sm cue-muted">
@@ -786,9 +901,7 @@ const ClubPublicPage: React.FC = () => {
               <Link to="/me" className="accent-blue underline">回首頁</Link>
             </div>
           </div>
-        </div>
       </main>
-      <BottomNavPublic />
     </div>
   );
 };
