@@ -1189,7 +1189,8 @@ router.get('/:clubId/pricing', async (req, res) => {
             return { ...scheme, effectivePricePerHour: effective };
         })
         .filter(Boolean);
-    res.json(applicable);
+    const combos = computeComboPlans(s, e, base as any[], tid);
+    res.json([...(applicable as any[]), ...(combos as any[])]);
 });
 
 router.get('/:clubId/availability', async (req, res) => {
@@ -1292,13 +1293,11 @@ function normalizeRulesJson(rulesJson: any): any[] | null {
 function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | null) {
     if (scheme.active !== true) return false;
     if (scheme.tableId && tableId && scheme.tableId !== tableId) return false;
-    // Only support same-day windows for now
-    if (s.toDateString() !== e.toDateString()) return false;
     try {
         const rules = normalizeRulesJson(scheme.rulesJson);
         if (rules == null) return false;
         if (rules.length === 0) return { ok: true, pricePerHour: null };
-        const dow = ((s.getDay() + 6) % 7) + 1; // Make Monday=1 ... Sunday=7
+        const dow = ((s.getDay() + 6) % 7) + 1; // Monday=1 ... Sunday=7
         for (const r of rules) {
             const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
             if (days.length > 0 && !days.includes(dow)) continue;
@@ -1306,6 +1305,7 @@ function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | nu
             const { h: eh, m: em } = parseHHMM(r.end || '23:59');
             const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
             const re = new Date(s); re.setHours(eh, em, 0, 0);
+            if (re.getTime() <= rs.getTime()) re.setDate(re.getDate() + 1);
             if (s >= rs && e <= re) {
                 const pricePerHour = r.pricePerHour != null ? toFiniteNumber(r.pricePerHour) : null;
                 return { ok: true, pricePerHour };
@@ -1313,6 +1313,136 @@ function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | nu
         }
     } catch {}
     return false;
+}
+
+function getSchemeUnitPriceForSegment(scheme: any, s: Date, e: Date, tableId?: string | null) {
+    const applicable = isSchemeApplicable(scheme, s, e, tableId);
+    if (!applicable || !(applicable as any).ok) return null;
+    const rulePrice = (applicable as any).pricePerHour != null ? toFiniteNumber((applicable as any).pricePerHour) : null;
+    const schemePrice = scheme.price != null ? toFiniteNumber(scheme.price as any) : null;
+    return rulePrice ?? schemePrice ?? null;
+}
+
+function computeBreakpointsForRange(s: Date, e: Date, schemes: any[]) {
+    const pts = new Set<number>();
+    pts.add(s.getTime());
+    pts.add(e.getTime());
+    for (const scheme of schemes) {
+        try {
+            const rules = normalizeRulesJson((scheme as any).rulesJson);
+            if (!rules) continue;
+            const dow = ((s.getDay() + 6) % 7) + 1;
+            for (const r of rules) {
+                const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
+                if (days.length > 0 && !days.includes(dow)) continue;
+                const { h: sh, m: sm } = parseHHMM(r.start || '00:00');
+                const { h: eh, m: em } = parseHHMM(r.end || '23:59');
+                const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
+                const re = new Date(s); re.setHours(eh, em, 0, 0);
+                if (re.getTime() <= rs.getTime()) re.setDate(re.getDate() + 1);
+                pts.add(rs.getTime());
+                pts.add(re.getTime());
+            }
+        } catch {}
+    }
+    const sorted = Array.from(pts).sort((a, b) => a - b);
+    const within = sorted.filter((t) => t >= s.getTime() && t <= e.getTime());
+    if (within.length === 0) return [s.getTime(), e.getTime()];
+    if (within[0] !== s.getTime()) within.unshift(s.getTime());
+    if (within[within.length - 1] !== e.getTime()) within.push(e.getTime());
+    return within;
+}
+
+function computeComboPlans(s: Date, e: Date, schemes: any[], tableId?: string | null) {
+    const totalHours = (e.getTime() - s.getTime()) / (60 * 60 * 1000);
+    if (!(totalHours > 0)) return [];
+
+    const breakpoints = computeBreakpointsForRange(s, e, schemes);
+    const segments: Array<{ start: Date; end: Date; hours: number }> = [];
+    for (let i = 0; i < breakpoints.length - 1; i++) {
+        const a = breakpoints[i]!;
+        const b = breakpoints[i + 1]!;
+        if (!(b > a)) continue;
+        const segStart = new Date(a);
+        const segEnd = new Date(b);
+        const h = (b - a) / (60 * 60 * 1000);
+        if (h <= 0) continue;
+        if (segStart < s || segEnd > e) continue;
+        segments.push({ start: segStart, end: segEnd, hours: h });
+    }
+    if (segments.length <= 1) return [];
+    if (segments.length > 8) return [];
+
+    const schemeById = new Map<string, any>();
+    for (const sc of schemes) schemeById.set(String(sc.id), sc);
+
+    const optionsPerSegment = segments.map((seg) => {
+        const opts: Array<{ schemeId: string; unitPrice: number }> = [];
+        for (const sc of schemes) {
+            const unit = getSchemeUnitPriceForSegment(sc, seg.start, seg.end, tableId);
+            if (unit == null) continue;
+            opts.push({ schemeId: String(sc.id), unitPrice: unit });
+        }
+        opts.sort((a, b) => a.unitPrice - b.unitPrice);
+        return opts.slice(0, 12);
+    });
+    if (optionsPerSegment.some((opts) => opts.length === 0)) return [];
+
+    const bestByKey = new Map<string, { schemeIds: string[]; total: number }>();
+
+    const rec = (
+        idx: number,
+        assignment: string[],
+        durations: Map<string, number>,
+        total: number,
+    ) => {
+        if (idx >= segments.length) {
+            const used = Array.from(new Set(assignment));
+            if (used.length < 2) return;
+            for (const sid of used) {
+                const sc = schemeById.get(sid);
+                if (!sc) return;
+                const minH = getSchemeMinHours((sc as any).rulesJson);
+                const dur = durations.get(sid) || 0;
+                const h = dur / (60 * 60 * 1000);
+                if (minH != null && h + 1e-9 < minH) return;
+            }
+            const key = used.slice().sort().join('+');
+            const prev = bestByKey.get(key);
+            if (!prev || total + 1e-9 < prev.total) {
+                bestByKey.set(key, { schemeIds: used.slice().sort(), total });
+            }
+            return;
+        }
+        const seg = segments[idx]!;
+        const opts = optionsPerSegment[idx] || [];
+        for (const opt of opts) {
+            const nextAssignment = assignment.concat(opt.schemeId);
+            const nextDurations = new Map(durations);
+            nextDurations.set(opt.schemeId, (nextDurations.get(opt.schemeId) || 0) + (seg.end.getTime() - seg.start.getTime()));
+            rec(idx + 1, nextAssignment, nextDurations, total + opt.unitPrice * seg.hours);
+        }
+    };
+    rec(0, [], new Map(), 0);
+
+    const out = Array.from(bestByKey.values())
+        .sort((a, b) => a.total - b.total)
+        .slice(0, 10)
+        .map((x) => {
+            const title = x.schemeIds.map((sid) => String((schemeById.get(sid) as any)?.title || sid)).join(' + ');
+            const avg = x.total / totalHours;
+            return {
+                id: `combo:${x.schemeIds.join('+')}`,
+                title: `組合：${title}`,
+                description: '分段計算',
+                active: true,
+                tableId: tableId || null,
+                rulesJson: { combo: true, schemeIds: x.schemeIds },
+                minHours: null,
+                effectivePricePerHour: Number.isFinite(avg) ? avg : null,
+            };
+        });
+    return out;
 }
 
 router.post('/:clubId/reservations', async (req, res) => {
@@ -1339,16 +1469,34 @@ router.post('/:clubId/reservations', async (req, res) => {
     let schemeMinHours: number | null = null;
     if (schemeId) {
         const sid = String(schemeId);
-        const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
-        if (!scheme || scheme.clubId !== clubId) return res.status(400).json({ error: 'Pricing scheme not found' });
-        const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
-        if (!applicable || !(applicable as any).ok) return res.status(400).json({ error: '方案不適用於此時段' });
-        schemeMinHours = getSchemeMinHours((scheme as any).rulesJson);
-        const rulePrice = (applicable as any).pricePerHour != null ? toFiniteNumber((applicable as any).pricePerHour) : null;
-        const schemePrice = scheme.price != null ? toFiniteNumber(scheme.price as any) : null;
-        unitPrice = rulePrice ?? schemePrice;
-        if (unitPrice == null) return res.status(400).json({ error: '方案未設定價錢' });
-        data.pricingSchemeId = sid;
+        if (/^combo:/i.test(sid)) {
+            const raw = sid.split(':', 2)[1] || '';
+            const parts = raw.split('+').map((x) => x.trim()).filter(Boolean);
+            const unique = Array.from(new Set(parts));
+            if (unique.length < 2) return res.status(400).json({ error: 'Invalid combo scheme' });
+            const schemes = await prisma.tablePricingScheme.findMany({ where: { id: { in: unique } } });
+            if (schemes.length !== unique.length) return res.status(400).json({ error: 'Pricing scheme not found' });
+            if (schemes.some((sc) => sc.clubId !== clubId || sc.active !== true)) return res.status(400).json({ error: '方案不適用於此時段' });
+            const canonical = unique.slice().sort().join('+');
+            const plans = computeComboPlans(s, e, schemes as any[], table.id);
+            const chosen = (plans as any[]).find((p) => String(p?.id || '') === `combo:${canonical}`);
+            const hours = (e.getTime() - s.getTime()) / (60 * 60 * 1000);
+            const avg = chosen?.effectivePricePerHour != null ? toFiniteNumber(chosen.effectivePricePerHour) : null;
+            unitPrice = avg;
+            if (unitPrice == null || !(hours > 0)) return res.status(400).json({ error: '方案不適用於此時段' });
+            schemeMinHours = null;
+        } else {
+            const scheme = await prisma.tablePricingScheme.findUnique({ where: { id: sid } });
+            if (!scheme || scheme.clubId !== clubId) return res.status(400).json({ error: 'Pricing scheme not found' });
+            const applicable = isSchemeApplicable(scheme as any, s, e, table.id);
+            if (!applicable || !(applicable as any).ok) return res.status(400).json({ error: '方案不適用於此時段' });
+            schemeMinHours = getSchemeMinHours((scheme as any).rulesJson);
+            const rulePrice = (applicable as any).pricePerHour != null ? toFiniteNumber((applicable as any).pricePerHour) : null;
+            const schemePrice = scheme.price != null ? toFiniteNumber(scheme.price as any) : null;
+            unitPrice = rulePrice ?? schemePrice;
+            if (unitPrice == null) return res.status(400).json({ error: '方案未設定價錢' });
+            data.pricingSchemeId = sid;
+        }
     }
     if (unitPrice == null) {
         unitPrice = table.basePrice != null ? toFiniteNumber(table.basePrice as any) : null;
