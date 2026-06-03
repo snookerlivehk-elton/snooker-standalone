@@ -9,20 +9,42 @@ const MemberRegister: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'email' | 'google'>('email');
+  const [activeTab, setActiveTab] = useState<'email' | 'phone' | 'google'>('email');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState('+852');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
 
   const tabs = useMemo(() => {
     return [
       { key: 'email', label: 'Email 註冊' },
+      { key: 'phone', label: '手機註冊' },
       { key: 'google', label: 'Google 登入' },
     ];
+  }, []);
+
+  const phoneOptions = useMemo(() => {
+    return [
+      { value: '+852', label: '香港 +852' },
+      { value: '+853', label: '澳門 +853' },
+      { value: '+86', label: '中國 +86' },
+    ];
+  }, []);
+
+  const normalizePhoneE164 = useMemo(() => {
+    return (country: string, number: string) => {
+      const c = String(country || '').trim();
+      const n = String(number || '').trim().replace(/[()\s\-\.]/g, '');
+      const raw = `${c}${n}`.replace(/[()\s\-\.]/g, '').replace(/^00/, '+');
+      const out = raw.startsWith('+') ? raw : `+${raw}`;
+      if (!/^\+\d{6,20}$/.test(out)) return '';
+      return out;
+    };
   }, []);
 
   const onGoogleSuccess = async (credentialResponse: any) => {
@@ -71,6 +93,42 @@ const MemberRegister: React.FC = () => {
       const role = result?.role || result?.member?.role;
       if (!id) throw new Error('登入失敗');
       localStorage.setItem('memberSession', JSON.stringify({ email: em, id, role }));
+      navigate(`/member/${id}`);
+    } catch (err: any) {
+      setError(err?.message || '註冊失敗');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onPhoneRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password !== confirmPassword) {
+      setError('兩次密碼輸入不一致');
+      return;
+    }
+    const phoneE164 = normalizePhoneE164(phoneCountry, phoneNumber);
+    if (!phoneE164) {
+      setError('手機號碼格式不正確');
+      return;
+    }
+    setLoading(true);
+    try {
+      await registerMember(API_URL, {
+        name: name.trim(),
+        password,
+        phoneCountry,
+        phoneNumber,
+        phone: phoneE164,
+        birthDate: birthDate.trim() || undefined,
+      });
+
+      const result = await loginMember(API_URL, { identifier: phoneE164, password });
+      const id = result?.id || result?.member?.id;
+      const role = result?.role || result?.member?.role;
+      if (!id) throw new Error('登入失敗');
+      localStorage.setItem('memberSession', JSON.stringify({ email: '', phone: phoneE164, id, role }));
       navigate(`/member/${id}`);
     } catch (err: any) {
       setError(err?.message || '註冊失敗');
@@ -152,6 +210,84 @@ const MemberRegister: React.FC = () => {
                   className="w-full px-3 py-2 rounded cue-input"
                 />
               </div>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 rounded cue-button disabled:opacity-50 font-bold"
+            >
+              {loading ? '提交中...' : '註冊並登入'}
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'phone' && (
+          <form onSubmit={onPhoneRegister} className="mt-5 grid gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">姓名</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 rounded cue-input"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-1">
+                <label className="block text-sm font-medium mb-1">地區</label>
+                <select
+                  value={phoneCountry}
+                  onChange={(e) => setPhoneCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                >
+                  {phoneOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">手機號碼</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  placeholder="例如 91234567"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">密碼</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded cue-input"
+                required
+              />
+              <div className="mt-1 text-xs cue-muted">至少 8 字元，需含英文字母與數字</div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">確認密碼</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 rounded cue-input"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">出生日期（選填）</label>
+              <input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="w-full px-3 py-2 rounded cue-input"
+              />
             </div>
             <button
               type="submit"

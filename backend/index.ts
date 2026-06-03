@@ -2210,6 +2210,8 @@ app.post('/api/members/register', async (req, res) => {
       name?: string;
       password?: string;
       phone?: string;
+      phoneCountry?: string;
+      phoneNumber?: string;
       birthDate?: string;
       clubName?: string;
     };
@@ -2218,15 +2220,22 @@ app.post('/api/members/register', async (req, res) => {
     const name = String(payload.name || '').trim();
     const password = String(payload.password || '');
     const phone = payload.phone ? String(payload.phone).trim() : undefined;
+    const phoneE164 = normalizePhoneE164({
+      ...(payload.phoneCountry ? { country: String(payload.phoneCountry).trim() } : {}),
+      ...(payload.phoneNumber ? { number: String(payload.phoneNumber).trim() } : {}),
+    });
     const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
 
-    if (!email || !name) {
-      return res.status(400).json({ error: 'email 與 name 為必填' });
+    if (!name) {
+      return res.status(400).json({ error: 'name 為必填' });
     }
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if (!emailOk) {
+    const emailOk = email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) : false;
+    if (email && !emailOk) {
       return res.status(400).json({ error: 'email 格式不正確' });
+    }
+    if (!email && !phoneE164) {
+      return res.status(400).json({ error: '請輸入 email 或 手機號碼' });
     }
 
     const hasPassword = password.length > 0;
@@ -2245,9 +2254,17 @@ app.post('/api/members/register', async (req, res) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const existsEmail = await tx.member.findFirst({ where: { email } });
-      if (existsEmail) {
-        throw new Error('email 已存在');
+      if (email) {
+        const existsEmail = await tx.member.findFirst({ where: { email } });
+        if (existsEmail) {
+          throw new Error('email 已存在');
+        }
+      }
+      if (phoneE164) {
+        const existsPhone = await tx.member.findFirst({ where: { phone_e164: phoneE164 } });
+        if (existsPhone) {
+          throw new Error('手機號碼已存在');
+        }
       }
 
       let memberCode: string | null = null;
@@ -2273,9 +2290,12 @@ app.post('/api/members/register', async (req, res) => {
         data: {
           id: randomUUID(),
           name,
-          email,
+          email: email || null,
           district_code: null,
           phone: phone ?? null,
+          phone_country: payload.phoneCountry ? String(payload.phoneCountry).trim() : null,
+          phone_number: payload.phoneNumber ? String(payload.phoneNumber).trim() : null,
+          phone_e164: phoneE164 || null,
           club_name: clubName ?? null,
           birth_date: birthDate ?? null,
           member_code: memberCode,
@@ -2316,13 +2336,26 @@ app.post('/api/members/register', async (req, res) => {
     res.status(201).json({ id: result.id, memberCode: result.memberCode });
   } catch (err: any) {
     const msg = String(err?.message || err);
-    const status = msg.includes('email 已存在') ? 409 : 500;
+    const status = msg.includes('已存在') ? 409 : 500;
     res.status(status).json({ error: msg });
   }
 });
 
 function makeSalt(): string {
   return randomBytes(16).toString('hex');
+}
+
+function normalizePhoneE164(input: { country?: string; number?: string } | string): string {
+  const raw = typeof input === 'string' ? input : `${String(input.country || '')}${String(input.number || '')}`;
+  const s0 = String(raw || '').trim();
+  if (!s0) return '';
+  let s = s0.replace(/[()\s\-\.]/g, '');
+  s = s.replace(/^00/, '+');
+  if (!s.startsWith('+')) {
+    s = `+${s}`;
+  }
+  if (!/^\+\d{6,20}$/.test(s)) return '';
+  return s;
 }
 
 function generateEmailCode(): string {
@@ -2754,13 +2787,32 @@ app.post('/api/auth/google', async (req, res) => {
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
   try {
-    const { email, password } = (req.body || {}) as { email?: string; password?: string };
-    const em = String(email || '').trim();
-    const pw = String(password || '');
-    if (!em || !pw) {
-      return res.status(400).json({ error: '缺少 email 或 password' });
+    const body = (req.body || {}) as { email?: string; identifier?: string; phoneE164?: string; phoneCountry?: string; phoneNumber?: string; password?: string };
+    const idRaw = String((body.identifier || body.email || '') || '').trim().normalize('NFKC');
+    const pw = String(body.password || '');
+    if (!idRaw || !pw) {
+      return res.status(400).json({ error: '缺少帳號或密碼' });
     }
-    const m = await prisma.member.findUnique({ where: { email: em } });
+    const isEmail = idRaw.includes('@');
+    const email = isEmail ? idRaw.toLowerCase() : '';
+    const phoneE164 = !isEmail
+      ? (() => {
+          if (body.phoneE164) return normalizePhoneE164(String(body.phoneE164));
+          if (body.phoneCountry || body.phoneNumber) {
+            return normalizePhoneE164({
+              ...(body.phoneCountry ? { country: String(body.phoneCountry) } : {}),
+              ...(body.phoneNumber ? { number: String(body.phoneNumber) } : {}),
+            });
+          }
+          return normalizePhoneE164(idRaw);
+        })()
+      : '';
+    if (!isEmail && !phoneE164) {
+      return res.status(400).json({ error: '手機號碼格式不正確' });
+    }
+    const m = isEmail
+      ? await prisma.member.findUnique({ where: { email } })
+      : await prisma.member.findUnique({ where: { phone_e164: phoneE164 } });
     if (!m) return res.status(404).json({ error: '會員不存在' });
     const mh = (m as any).password_hash as string | undefined;
     const ms = (m as any).password_salt as string | undefined;

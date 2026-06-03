@@ -911,8 +911,10 @@ export async function registerMember(
   apiUrl: string,
   data: {
     name: string;
-    email: string;
     password: string;
+    email?: string;
+    phoneCountry?: string;
+    phoneNumber?: string;
     phone?: string;
     clubName?: string;
     birthDate?: string;
@@ -932,7 +934,7 @@ export async function registerMember(
 
 export async function loginMember(
   apiUrl: string,
-  creds: { email: string; password: string },
+  creds: { email?: string; identifier?: string; phoneE164?: string; phoneCountry?: string; phoneNumber?: string; password: string },
 ) {
   const res = await fetch(`${apiUrl}/api/members/login`, {
     method: 'POST',

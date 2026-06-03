@@ -45,6 +45,10 @@ model Member {
   // region_code  String?
   district_code String?
   phone        String?
+  phone_country String?
+  phone_number  String?
+  phone_e164    String?     @unique
+  phone_verified_at DateTime?
   club_name    String?
   birth_date   DateTime?
   is_guest     Boolean      @default(false)
