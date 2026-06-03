@@ -116,10 +116,13 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ strict: false }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ strict: false, limit: '50mb' }));
 app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   // Handle JSON parse errors from body-parser
+  if (err && (err as any).type === 'entity.too.large') {
+    return res.status(413).json({ error: 'payload_too_large' });
+  }
   if (err instanceof SyntaxError && 'body' in err && (err as any).status === 400) {
     console.error('JSON Parse Error:', err.message);
     return res.status(400).json({ error: 'Invalid JSON payload' });
