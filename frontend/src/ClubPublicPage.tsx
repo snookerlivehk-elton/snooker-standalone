@@ -442,6 +442,17 @@ const ClubPublicPage: React.FC = () => {
           pointerEvents: 'auto',
         }}
       >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (isLoggedIn) nav('/me');
+              else nav(`/members/login?redirect=${encodeURIComponent('/me')}`);
+            }}
+            className="px-3 py-2 rounded-full cue-surface-strong hover:brightness-95 text-sm font-semibold"
+          >
+            會員
+          </button>
         {isLoggedIn ? (
           <button
             type="button"
@@ -462,6 +473,7 @@ const ClubPublicPage: React.FC = () => {
             登入
           </button>
         )}
+        </div>
       </div>
 
       <div style={{ paddingTop: 'env(safe-area-inset-top)' }}>
