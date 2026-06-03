@@ -372,7 +372,7 @@ const ClubPublicPage: React.FC = () => {
   if (!club) return <div className="brand-page p-6 text-center cue-muted">找不到場館</div>;
 
   return (
-    <div className="brand-page h-[100dvh] flex flex-col">
+    <div className="brand-page min-h-[100dvh]">
       <div
         className="fixed z-50 right-4"
         style={{
@@ -402,7 +402,7 @@ const ClubPublicPage: React.FC = () => {
         )}
       </div>
 
-      <div className="sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="bg-[var(--glass-bg)] border-b border-[var(--glass-border)] backdrop-blur">
           <div className="px-4 pt-3">
             <div className="max-w-2xl mx-auto">
@@ -525,7 +525,7 @@ const ClubPublicPage: React.FC = () => {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto px-4 py-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+      <main className="px-4 py-4" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
         <div className="max-w-2xl mx-auto">
           <Tabs
             items={[
