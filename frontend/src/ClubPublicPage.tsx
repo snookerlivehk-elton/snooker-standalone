@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly, getMyJoinedClubs } from './lib/api';
-import TopBarPublic from './components/TopBarPublic';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import Tabs from './components/Tabs';
 
@@ -16,6 +15,8 @@ function normalizeVideoHref(raw: any): string | null {
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
+  const nav = useNavigate();
+  const loc = useLocation();
   const [club, setClub] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,7 @@ const ClubPublicPage: React.FC = () => {
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
+  const isLoggedIn = !!(session && (session as any).id);
 
   const galleryUrls = useMemo(() => {
     const raw = (club as any)?.galleryUrls;
@@ -371,8 +373,36 @@ const ClubPublicPage: React.FC = () => {
 
   return (
     <div className="brand-page h-[100dvh] flex flex-col">
-      <div className="sticky top-0 z-40">
-        <TopBarPublic title="場館" />
+      <div
+        className="fixed z-50 right-4"
+        style={{
+          top: 'calc(0.75rem + env(safe-area-inset-top))',
+          pointerEvents: 'auto',
+        }}
+      >
+        {isLoggedIn ? (
+          <button
+            type="button"
+            onClick={() => {
+              try { localStorage.removeItem('memberSession'); } catch {}
+              nav(`/members/login?redirect=${encodeURIComponent(loc.pathname + loc.search)}`);
+            }}
+            className="px-3 py-2 rounded-full cue-surface-strong hover:brightness-95 text-sm font-semibold"
+          >
+            登出
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => nav(`/members/login?redirect=${encodeURIComponent(loc.pathname + loc.search)}`)}
+            className="px-3 py-2 rounded-full cue-button text-sm font-semibold"
+          >
+            登入
+          </button>
+        )}
+      </div>
+
+      <div className="sticky top-0 z-40" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="bg-[var(--glass-bg)] border-b border-[var(--glass-border)] backdrop-blur">
           <div className="px-4 pt-3">
             <div className="max-w-2xl mx-auto">
