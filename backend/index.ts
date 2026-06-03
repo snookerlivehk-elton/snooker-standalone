@@ -2208,6 +2208,7 @@ app.post('/api/members/register', async (req, res) => {
     const payload = (req.body || {}) as {
       email?: string;
       name?: string;
+      password?: string;
       phone?: string;
       birthDate?: string;
       clubName?: string;
@@ -2215,6 +2216,7 @@ app.post('/api/members/register', async (req, res) => {
 
     const email = String(payload.email || '').trim().normalize('NFKC');
     const name = String(payload.name || '').trim();
+    const password = String(payload.password || '');
     const phone = payload.phone ? String(payload.phone).trim() : undefined;
     const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
@@ -2225,6 +2227,16 @@ app.post('/api/members/register', async (req, res) => {
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
       return res.status(400).json({ error: 'email 格式不正確' });
+    }
+
+    const hasPassword = password.length > 0;
+    if (hasPassword) {
+      const pwLenOk = password.length >= 8;
+      const pwHasNum = /\d/.test(password);
+      const pwHasAlpha = /[A-Za-z]/.test(password);
+      if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+        return res.status(400).json({ error: '密碼不符合規則（至少8字元，需含英文字母與數字）' });
+      }
     }
 
     const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
@@ -2248,6 +2260,15 @@ app.post('/api/members/register', async (req, res) => {
         }
       }
 
+      const salt = hasPassword ? makeSalt() : null;
+      const digest = hasPassword
+        ? (() => {
+            const h = createHash('sha256');
+            h.update(String(salt) + password);
+            return h.digest('hex');
+          })()
+        : null;
+
       const created = await tx.member.create({
         data: {
           id: randomUUID(),
@@ -2259,6 +2280,9 @@ app.post('/api/members/register', async (req, res) => {
           birth_date: birthDate ?? null,
           member_code: memberCode,
           membership_expires_at: null,
+          password_salt: salt,
+          password_hash: digest,
+          password_updated_at: hasPassword ? new Date() : null,
         },
       });
       return { id: created.id, memberCode }; // token empty

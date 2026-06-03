@@ -913,8 +913,6 @@ export async function registerMember(
     name: string;
     email: string;
     password: string;
-    regionCode: string;
-    districtCode: string;
     phone?: string;
     clubName?: string;
     birthDate?: string;
