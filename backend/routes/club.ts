@@ -1290,23 +1290,83 @@ function normalizeRulesJson(rulesJson: any): any[] | null {
     if (rulesJson && typeof rulesJson === 'object' && Array.isArray((rulesJson as any).rules)) return (rulesJson as any).rules;
     return null;
 }
+function hkParts(d: Date) {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        weekday: 'short',
+    });
+    const parts = fmt.formatToParts(d);
+    const pick = (type: string) => parts.find((p) => p.type === type)?.value || '';
+    const year = Number(pick('year'));
+    const month = Number(pick('month'));
+    const day = Number(pick('day'));
+    const hour = Number(pick('hour'));
+    const minute = Number(pick('minute'));
+    const weekday = pick('weekday');
+    return { year, month, day, hour, minute, weekday };
+}
+function hkDayKey(d: Date) {
+    const p = hkParts(d);
+    const y = Number.isFinite(p.year) ? p.year : 0;
+    const m = Number.isFinite(p.month) ? p.month : 0;
+    const dd = Number.isFinite(p.day) ? p.day : 0;
+    return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+function hkDow(d: Date) {
+    const w = hkParts(d).weekday;
+    if (w === 'Mon') return 1;
+    if (w === 'Tue') return 2;
+    if (w === 'Wed') return 3;
+    if (w === 'Thu') return 4;
+    if (w === 'Fri') return 5;
+    if (w === 'Sat') return 6;
+    if (w === 'Sun') return 7;
+    return 1;
+}
+function hkMinuteOfDay(d: Date) {
+    const p = hkParts(d);
+    const h = Number.isFinite(p.hour) ? p.hour : 0;
+    const m = Number.isFinite(p.minute) ? p.minute : 0;
+    return h * 60 + m;
+}
+function hkMidnightUtcFromInstant(d: Date) {
+    const p = hkParts(d);
+    const y = Number.isFinite(p.year) ? p.year : 1970;
+    const m = Number.isFinite(p.month) ? p.month : 1;
+    const dd = Number.isFinite(p.day) ? p.day : 1;
+    const utc = Date.UTC(y, m - 1, dd, 0, 0, 0, 0);
+    return new Date(utc - 8 * 60 * 60 * 1000);
+}
 function isSchemeApplicable(scheme: any, s: Date, e: Date, tableId?: string | null) {
     if (scheme.active !== true) return false;
     if (scheme.tableId && tableId && scheme.tableId !== tableId) return false;
     try {
+        const dayKeyStart = hkDayKey(s);
+        const endMinus1 = new Date(e.getTime() - 1);
+        const dayKeyEnd = hkDayKey(endMinus1);
+        if (dayKeyStart !== dayKeyEnd) return false;
         const rules = normalizeRulesJson(scheme.rulesJson);
         if (rules == null) return false;
         if (rules.length === 0) return { ok: true, pricePerHour: null };
-        const dow = ((s.getDay() + 6) % 7) + 1; // Monday=1 ... Sunday=7
+        const dow = hkDow(s);
+        const startMin = hkMinuteOfDay(s);
+        const endMin = hkMinuteOfDay(e);
+        if (!(endMin > startMin)) return false;
         for (const r of rules) {
             const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
             if (days.length > 0 && !days.includes(dow)) continue;
             const { h: sh, m: sm } = parseHHMM(r.start || '00:00');
             const { h: eh, m: em } = parseHHMM(r.end || '23:59');
-            const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
-            const re = new Date(s); re.setHours(eh, em, 0, 0);
-            if (re.getTime() <= rs.getTime()) re.setDate(re.getDate() + 1);
-            if (s >= rs && e <= re) {
+            let winStart = sh * 60 + sm;
+            let winEnd = eh * 60 + em;
+            if (winEnd <= winStart) winEnd += 24 * 60;
+            if (startMin >= winStart && endMin <= winEnd) {
                 const pricePerHour = r.pricePerHour != null ? toFiniteNumber(r.pricePerHour) : null;
                 return { ok: true, pricePerHour };
             }
@@ -1331,17 +1391,18 @@ function computeBreakpointsForRange(s: Date, e: Date, schemes: any[]) {
         try {
             const rules = normalizeRulesJson((scheme as any).rulesJson);
             if (!rules) continue;
-            const dow = ((s.getDay() + 6) % 7) + 1;
+            const dow = hkDow(s);
+            const baseMidnightUtc = hkMidnightUtcFromInstant(s).getTime();
             for (const r of rules) {
                 const days: number[] = Array.isArray(r.daysOfWeek) ? r.daysOfWeek : [];
                 if (days.length > 0 && !days.includes(dow)) continue;
                 const { h: sh, m: sm } = parseHHMM(r.start || '00:00');
                 const { h: eh, m: em } = parseHHMM(r.end || '23:59');
-                const rs = new Date(s); rs.setHours(sh, sm, 0, 0);
-                const re = new Date(s); re.setHours(eh, em, 0, 0);
-                if (re.getTime() <= rs.getTime()) re.setDate(re.getDate() + 1);
-                pts.add(rs.getTime());
-                pts.add(re.getTime());
+                let winStart = sh * 60 + sm;
+                let winEnd = eh * 60 + em;
+                if (winEnd <= winStart) winEnd += 24 * 60;
+                pts.add(baseMidnightUtc + winStart * 60 * 1000);
+                pts.add(baseMidnightUtc + winEnd * 60 * 1000);
             }
         } catch {}
     }
