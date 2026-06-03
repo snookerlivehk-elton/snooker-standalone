@@ -34,6 +34,8 @@ const ClubPublicPage: React.FC = () => {
   const [myReservations, setMyReservations] = useState<any[]>([]);
   const [myResLoading, setMyResLoading] = useState(false);
   const [myResError, setMyResError] = useState<string | null>(null);
+  const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  const [submitModal, setSubmitModal] = useState<{ open: boolean; quote: number | null }>({ open: false, quote: null });
 
   const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
@@ -127,6 +129,10 @@ const ClubPublicPage: React.FC = () => {
     const d = new Date();
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }, [pad2]);
+
+  useEffect(() => {
+    if (!date) setDate(minDate);
+  }, [date, minDate]);
 
   const selectedStartAt = useMemo(() => {
     if (!date || !start) return null;
@@ -258,7 +264,7 @@ const ClubPublicPage: React.FC = () => {
   }, [clubId, leaderMonth]);
 
   useEffect(() => {
-    if (!clubId || !selTable || !date || !start || !hours) {
+    if (!clubId || !selTable || !date || !start || !hours || selectedHours.length === 0) {
       setSchemes([]);
       return;
     }
@@ -273,7 +279,7 @@ const ClubPublicPage: React.FC = () => {
     getPublicPricing(API_URL, clubId, selTable, s.toISOString(), e.toISOString())
       .then(setSchemes)
       .catch(() => setSchemes([]));
-  }, [clubId, selTable, date, start, hours, isPastStartTime]);
+  }, [clubId, selTable, date, start, hours, isPastStartTime, selectedHours.length]);
 
   useEffect(() => {
     if (!clubId || !selTable || !date) {
@@ -303,6 +309,20 @@ const ClubPublicPage: React.FC = () => {
   useEffect(() => {
     if (selScheme && !schemes.some(s => s.id === selScheme)) setSelScheme('');
   }, [schemes, selScheme]);
+
+  useEffect(() => {
+    setSelectedHours([]);
+    setStart('10:00');
+    setHours(1);
+    setSelScheme('');
+    setSchemes([]);
+  }, [clubId, selTable, date]);
+
+  useEffect(() => {
+    if (!selTable && Array.isArray(tables) && tables.length > 0) {
+      setSelTable(String(tables[0]?.id || ''));
+    }
+  }, [tables, selTable]);
 
   const fmtMoney = useCallback((n: number) => new Intl.NumberFormat('zh-HK', { maximumFractionDigits: 2 }).format(n), []);
   const reservationTag = useCallback((r: any) => {
@@ -370,6 +390,46 @@ const ClubPublicPage: React.FC = () => {
   if (loading) return <div className="brand-page p-6 text-center cue-muted">載入中...</div>;
   if (error) return <div className="brand-page p-6 text-center text-red-500">錯誤：{error}</div>;
   if (!club) return <div className="brand-page p-6 text-center cue-muted">找不到場館</div>;
+
+  const toggleHour = (hour: number) => {
+    setSelectedHours((prev) => {
+      const list = Array.isArray(prev) ? prev.slice() : [];
+      const has = list.includes(hour);
+      let next: number[] = [];
+      if (has) {
+        next = list.filter((h) => h !== hour).sort((a, b) => a - b);
+      } else {
+        if (list.length === 0) {
+          next = [hour];
+        } else {
+          const sorted = list.slice().sort((a, b) => a - b);
+          const minH = sorted[0];
+          const maxH = sorted[sorted.length - 1];
+          if (hour === minH - 1 || hour === maxH + 1) next = [...sorted, hour].sort((a, b) => a - b);
+          else next = [hour];
+        }
+      }
+
+      if (next.length > 0) {
+        for (let i = 1; i < next.length; i++) {
+          if (next[i] !== next[i - 1] + 1) {
+            next = [hour];
+            break;
+          }
+        }
+      }
+
+      if (next.length > 0) {
+        const minH = next[0];
+        setStart(`${pad2(minH)}:00`);
+        setHours(next.length);
+      } else {
+        setHours(1);
+      }
+      setSelScheme('');
+      return next;
+    });
+  };
 
   return (
     <div className="brand-page min-h-[100dvh]">
@@ -686,171 +746,201 @@ const ClubPublicPage: React.FC = () => {
             {activeTab === 'booking' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4 text-left">
-                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">訂台</div>
-
-              {!session.id ? (
-                <div className="text-sm cue-muted">
-                  需登入才能預約。<a href="/members/login" className="accent-yellow underline">登入</a>
-                </div>
-              ) : (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2 mb-3">
-                    <label className="grid gap-1">
-                      <div className="text-xs cue-muted">球枱</div>
-                      <select value={selTable} onChange={(e) => setSelTable(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
-                        <option value="">請選擇</option>
-                        {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
-                    </label>
-                    <label className="grid gap-1">
-                      <div className="text-xs cue-muted">日期</div>
-                      <input type="date" value={date} min={minDate} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
-                    </label>
-                    <label className="grid gap-1">
-                      <div className="text-xs cue-muted">開始時間</div>
-                      <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
-                    </label>
-                    <label className="grid gap-1">
-                      <div className="text-xs cue-muted">時數</div>
-                      <input type="number" min={1} step={1} value={hours} onChange={(e) => setHours(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} className="w-full px-3 py-2 rounded cue-input" />
-                    </label>
-                    <label className="grid gap-1 sm:col-span-2">
-                      <div className="text-xs cue-muted">優惠方案</div>
-                      <select value={selScheme} onChange={(e) => setSelScheme(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
-                        <option value="">一般</option>
-                        {schemes.map(s => {
-                          const perHour = Number((s as any).effectivePricePerHour ?? (s as any).price);
-                          const mh = Number((s as any).minHours ?? (s as any).rulesJson?.minHours ?? (s as any).rulesJson?.minQuantityHours);
-                          const minText = Number.isFinite(mh) && mh >= 1 ? `（最少${Math.floor(mh)}小時）` : '';
-                          const label = Number.isFinite(perHour) ? `${s.title} · $${fmtMoney(perHour)}/小時${minText}` : `${s.title} · 未設定價錢${minText}`;
-                          return <option key={s.id} value={s.id} disabled={!Number.isFinite(perHour)}>{label}</option>;
-                        })}
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="cue-surface-strong rounded-lg p-3 mb-3">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <div className="cue-muted">每小時</div>
-                      <div className="font-semibold">
-                        {unitPricePerHour == null ? '未設定' : `$${fmtMoney(unitPricePerHour)}`}
-                        <span className="ml-2 cue-muted font-normal">
-                          {selScheme ? (selectedScheme ? `（${selectedScheme.title}）` : '') : '（正價）'}
-                        </span>
-                      </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-3 pb-3 border-b cue-border">
+                    <div className="font-semibold text-lg">當日時間表</div>
+                    <div className="grid gap-2 sm:flex sm:items-center sm:gap-2">
+                      <label className="grid gap-1">
+                        <div className="text-xs cue-muted">日期</div>
+                        <input type="date" value={date} min={minDate} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 rounded cue-input text-sm" />
+                      </label>
+                      <label className="grid gap-1">
+                        <div className="text-xs cue-muted">球枱</div>
+                        <select value={selTable} onChange={(e) => setSelTable(e.target.value)} className="w-full px-3 py-2 rounded cue-input text-sm">
+                          <option value="">請選擇</option>
+                          {tables.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                      </label>
                     </div>
-                    <div className="flex items-center justify-between gap-3 text-sm mt-1">
-                      <div className="cue-muted">總價</div>
-                      <div className="font-semibold">{totalPrice == null ? '—' : `$${fmtMoney(totalPrice)}`}</div>
+                  </div>
+
+                  {!session.id ? (
+                    <div className="text-sm cue-muted mb-3">
+                      需登入才能預約。<a href="/members/login" className="accent-yellow underline">登入</a>
                     </div>
-                    {unitPricePerHour == null && (
-                      <div className="mt-2 text-xs text-red-500">
-                        此球枱未設定正價，且此時段沒有可用方案／方案價錢未設定，暫時無法提交預約。
-                      </div>
-                    )}
-                    {unitPricePerHour != null && schemes.length === 0 && (
-                      <div className="mt-2 text-xs cue-muted">
-                        此時段沒有可用方案，將以正價計算。
-                      </div>
-                    )}
-                    {minHoursNotMet && (
-                      <div className="mt-2 text-xs text-red-500">
-                        此方案需最少購買 {schemeMinHours} 小時。
-                      </div>
-                    )}
-                    {isPastStartTime && (
-                      <div className="mt-2 text-xs text-red-500">
-                        不能預約已過去的時間，請選擇將來的日期/時間。
-                      </div>
-                    )}
-                  </div>
+                  ) : null}
 
-                  <button
-                    onClick={async () => {
-                      if (!selTable || !date || !start) { alert('請選擇球枱/日期/時間'); return; }
-                      if (unitPricePerHour == null) { alert('此時段未設定價錢，無法預約'); return; }
-                      if (minHoursNotMet) { alert(`此方案需最少購買 ${schemeMinHours} 小時`); return; }
-                      if (!selectedStartAt || !selectedEndAt) { alert('時間格式不正確'); return; }
-                      if (selectedStartAt.getTime() < Date.now() - 60_000) { alert('不能預約已過去的時間'); return; }
-                      try {
-                        const created = await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: selectedStartAt.toISOString(), endAt: selectedEndAt.toISOString(), quantityHours: hours, schemeId: selScheme || undefined });
-                        const quote = created?.priceQuote != null ? Number(created.priceQuote) : null;
-                        const quoteText = Number.isFinite(quote) ? `\n報價：$${fmtMoney(quote as number)}` : '';
-                        alert(`已送出，待場館確認${quoteText}`);
-                        try {
-                          const from = new Date(date);
-                          from.setHours(0, 0, 0, 0);
-                          const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
-                          const [rows, myRows] = await Promise.all([
-                            getAvailability(API_URL, club.id, from.toISOString(), to.toISOString(), selTable),
-                            getMyReservations(API_URL, club.id, session.id),
-                          ]);
-                          setDayReservations(Array.isArray(rows) ? rows : []);
-                          setMyReservations(Array.isArray(myRows) ? myRows : []);
-                        } catch {}
-                      } catch (err: any) {
-                        alert(err.message || '預約失敗');
-                      }
-                    }}
-                    disabled={unitPricePerHour == null || minHoursNotMet || isPastStartTime}
-                    className="w-full cue-button py-2.5 rounded-lg font-semibold disabled:opacity-60"
-                  >
-                    送出預約
-                  </button>
-                </>
-              )}
-                </div>
-
-                <div className="cue-surface rounded-lg p-4 text-left">
-                  <div className="font-semibold text-lg mb-3 pb-2 border-b cue-border">當日時間表</div>
-              {!selTable || !date ? (
-                <div className="text-sm cue-muted">請先選擇球枱及日期，即可查看該日已預約/空閒時段。</div>
-              ) : availLoading ? (
-                <div className="text-sm cue-muted">載入中...</div>
-              ) : availError ? (
-                <div className="text-sm text-red-500">{availError}</div>
-              ) : (
-                <>
-                  <div className="text-xs cue-muted mb-3">按空閒時段可自動填入「開始時間」。紅色=已預約，綠色=空閒。</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {daySlotButtons.map((b) => {
-                      const disabled = b.busy || b.isPast;
-                      const cls = b.busy
-                        ? 'bg-red-700 text-white'
-                        : b.isPast
-                          ? 'cue-surface-strong cue-muted'
-                          : 'bg-emerald-700 text-white hover:brightness-95';
-                      return (
-                        <button
-                          key={b.hour}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => setStart(b.label)}
-                          className={`px-2 py-2 rounded-lg text-sm border cue-border ${cls} disabled:opacity-80`}
-                        >
-                          {b.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-3 text-xs cue-muted">
-                    已預約時段：
-                    {Array.isArray(dayReservations) && dayReservations.length > 0 ? (
-                      <div className="mt-2 grid gap-2">
-                        {dayReservations.map((r: any) => {
-                          const s = new Date(String(r?.startAt));
-                          const e = new Date(String(r?.endAt));
-                          const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
-                          const label = ok ? `${pad2(s.getHours())}:${pad2(s.getMinutes())} - ${pad2(e.getHours())}:${pad2(e.getMinutes())}` : '—';
-                          return <div key={r.id} className="cue-surface-strong rounded-lg px-3 py-2">{label}</div>;
+                  {!selTable || !date ? (
+                    <div className="text-sm cue-muted">請先選擇日期及球枱，即可查看該日已預約/空閒時段。</div>
+                  ) : availLoading ? (
+                    <div className="text-sm cue-muted">載入中...</div>
+                  ) : availError ? (
+                    <div className="text-sm text-red-500">{availError}</div>
+                  ) : (
+                    <>
+                      <div className="text-xs cue-muted mb-3">綠色=空閒、紅色=已預約、藍色=已選擇（可連續選多格，例如 3 小時就選 3 格）。</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {daySlotButtons.map((b) => {
+                          const isSelected = selectedHours.includes(b.hour);
+                          const disabled = b.busy || b.isPast;
+                          const cls = disabled
+                            ? (b.busy ? 'bg-red-700 text-white' : 'cue-surface-strong cue-muted')
+                            : (isSelected ? 'bg-sky-600 text-white hover:brightness-95' : 'bg-emerald-700 text-white hover:brightness-95');
+                          return (
+                            <button
+                              key={b.hour}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => toggleHour(b.hour)}
+                              className={`px-2 py-2 rounded-lg text-sm border cue-border ${cls} disabled:opacity-80`}
+                            >
+                              {b.label}
+                            </button>
+                          );
                         })}
                       </div>
-                    ) : (
-                      <span className="ml-2">（暫無）</span>
-                    )}
-                  </div>
-                </>
-              )}
+
+                      <div className="mt-3 cue-surface-strong rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <div className="cue-muted">已選時段</div>
+                          <div className="font-semibold">
+                            {selectedStartAt && selectedEndAt && selectedHours.length > 0
+                              ? `${pad2(selectedStartAt.getHours())}:${pad2(selectedStartAt.getMinutes())} - ${pad2(selectedEndAt.getHours())}:${pad2(selectedEndAt.getMinutes())}（${selectedHours.length}小時）`
+                              : '（未選擇）'}
+                          </div>
+                        </div>
+                        {isPastStartTime && selectedHours.length > 0 && (
+                          <div className="mt-2 text-xs text-red-500">
+                            不能預約已過去的時間，請選擇將來的日期/時間。
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedHours.length > 0 && (
+                        <div className="mt-3 cue-surface-strong rounded-lg p-3">
+                          <div className="font-semibold mb-2">優惠方案</div>
+                          <div className="grid gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelScheme('')}
+                              className={`px-3 py-2 rounded-lg text-sm border cue-border text-left ${!selScheme ? 'bg-white/10' : 'cue-surface'}`}
+                            >
+                              一般（正價）
+                            </button>
+                            {schemes.map((s) => {
+                              const perHour = Number((s as any).effectivePricePerHour ?? (s as any).price);
+                              const mh = Number((s as any).minHours ?? (s as any).rulesJson?.minHours ?? (s as any).rulesJson?.minQuantityHours);
+                              const minText = Number.isFinite(mh) && mh >= 1 ? `（最少${Math.floor(mh)}小時）` : '';
+                              const disabled = !Number.isFinite(perHour);
+                              const active = selScheme === s.id;
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => setSelScheme(s.id)}
+                                  className={`px-3 py-2 rounded-lg text-sm border cue-border text-left ${active ? 'bg-white/10' : 'cue-surface'} disabled:opacity-60`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="font-semibold">{s.title}{minText}</div>
+                                    <div className="font-semibold">{Number.isFinite(perHour) ? `$${fmtMoney(perHour)}/小時` : '未設定'}</div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {unitPricePerHour != null && schemes.length === 0 && (
+                            <div className="mt-2 text-xs cue-muted">
+                              此時段沒有可用方案，將以正價計算。
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-3 cue-surface-strong rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <div className="cue-muted">每小時</div>
+                          <div className="font-semibold">
+                            {unitPricePerHour == null ? '未設定' : `$${fmtMoney(unitPricePerHour)}`}
+                            <span className="ml-2 cue-muted font-normal">
+                              {selScheme ? (selectedScheme ? `（${selectedScheme.title}）` : '') : '（正價）'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm mt-1">
+                          <div className="cue-muted">總價</div>
+                          <div className="font-semibold">{totalPrice == null ? '—' : `$${fmtMoney(totalPrice)}`}</div>
+                        </div>
+                        {unitPricePerHour == null && selectedHours.length > 0 && (
+                          <div className="mt-2 text-xs text-red-500">
+                            此球枱未設定正價，且此時段沒有可用方案／方案價錢未設定，暫時無法提交預約。
+                          </div>
+                        )}
+                        {minHoursNotMet && (
+                          <div className="mt-2 text-xs text-red-500">
+                            此方案需最少購買 {schemeMinHours} 小時。
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!session.id) {
+                            window.location.href = '/members/login?redirect=' + encodeURIComponent(window.location.pathname);
+                            return;
+                          }
+                          if (!selTable || !date || selectedHours.length === 0) { alert('請選擇球枱/日期/時間'); return; }
+                          if (unitPricePerHour == null) { alert('此時段未設定價錢，無法預約'); return; }
+                          if (minHoursNotMet) { alert(`此方案需最少購買 ${schemeMinHours} 小時`); return; }
+                          if (!selectedStartAt || !selectedEndAt) { alert('時間格式不正確'); return; }
+                          if (selectedStartAt.getTime() < Date.now() - 60_000) { alert('不能預約已過去的時間'); return; }
+                          try {
+                            const created = await createReservation(API_URL, club.id, session.id, { tableId: selTable, startAt: selectedStartAt.toISOString(), endAt: selectedEndAt.toISOString(), quantityHours: selectedHours.length, schemeId: selScheme || undefined });
+                            const quote = created?.priceQuote != null ? Number(created.priceQuote) : null;
+                            setSubmitModal({ open: true, quote: Number.isFinite(quote) ? (quote as number) : null });
+                            setSelectedHours([]);
+                            setSelScheme('');
+                            try {
+                              const from = new Date(date);
+                              from.setHours(0, 0, 0, 0);
+                              const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+                              const [rows, myRows] = await Promise.all([
+                                getAvailability(API_URL, club.id, from.toISOString(), to.toISOString(), selTable),
+                                getMyReservations(API_URL, club.id, session.id),
+                              ]);
+                              setDayReservations(Array.isArray(rows) ? rows : []);
+                              setMyReservations(Array.isArray(myRows) ? myRows : []);
+                            } catch {}
+                          } catch (err: any) {
+                            alert(err.message || '預約失敗');
+                          }
+                        }}
+                        disabled={selectedHours.length === 0 || unitPricePerHour == null || minHoursNotMet || isPastStartTime}
+                        className="mt-3 w-full cue-button py-2.5 rounded-lg font-semibold disabled:opacity-60"
+                      >
+                        確認預訂
+                      </button>
+
+                      <details className="mt-3">
+                        <summary className="text-xs cue-muted cursor-pointer select-none">已預約時段（清單）</summary>
+                        <div className="mt-2 text-xs cue-muted">
+                          {Array.isArray(dayReservations) && dayReservations.length > 0 ? (
+                            <div className="mt-2 grid gap-2">
+                              {dayReservations.map((r: any) => {
+                                const s = new Date(String(r?.startAt));
+                                const e = new Date(String(r?.endAt));
+                                const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
+                                const label = ok ? `${pad2(s.getHours())}:${pad2(s.getMinutes())} - ${pad2(e.getHours())}:${pad2(e.getMinutes())}` : '—';
+                                return <div key={r.id} className="cue-surface-strong rounded-lg px-3 py-2">{label}</div>;
+                              })}
+                            </div>
+                          ) : (
+                            <div className="mt-2">（暫無）</div>
+                          )}
+                        </div>
+                      </details>
+                    </>
+                  )}
                 </div>
 
                 <div className="cue-surface rounded-lg p-4 text-left">
@@ -932,6 +1022,29 @@ const ClubPublicPage: React.FC = () => {
             </div>
           </div>
       </main>
+
+      {submitModal.open && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+          <div className="w-full max-w-md cue-surface rounded-xl border cue-border p-4">
+            <div className="font-extrabold text-lg">已發送預約</div>
+            <div className="mt-2 text-sm cue-muted">
+              已提交至場館，等待確認。
+              {submitModal.quote != null ? `（報價：$${fmtMoney(submitModal.quote)}）` : ''}
+            </div>
+            {String((club as any)?.paymentInfo || '').trim() && (
+              <div className="mt-3 cue-surface-strong rounded-lg p-3">
+                <div className="font-semibold mb-1">付款方法</div>
+                <div className="text-sm cue-muted whitespace-pre-wrap">{String((club as any)?.paymentInfo || '')}</div>
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button type="button" className="px-4 py-2 rounded cue-button font-semibold" onClick={() => setSubmitModal({ open: false, quote: null })}>
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
