@@ -1036,7 +1036,7 @@ const ClubPublicPage: React.FC = () => {
       </main>
 
       {submitModal.open && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.78)' }}>
           <div className="w-full max-w-md cue-surface rounded-xl border cue-border p-4">
             <div className="font-extrabold text-lg">已發送預約</div>
             <div className="mt-2 text-sm cue-muted">
