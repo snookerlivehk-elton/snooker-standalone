@@ -955,9 +955,17 @@ const ClubPublicPage: React.FC = () => {
                 (() => {
                   const list = Array.isArray(myReservations) ? myReservations : [];
                   if (list.length === 0) return <div className="text-sm cue-muted">（暫無）</div>;
+                  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                  const recent = list
+                    .filter((r: any) => {
+                      const s = new Date(String(r?.startAt));
+                      return Number.isFinite(s.getTime()) && s.getTime() >= cutoff;
+                    })
+                    .slice(0, 5);
+                  const display = recent.length > 0 ? recent : list.slice(0, 5);
                   return (
                     <div className="grid gap-2">
-                      {list.slice(0, 50).map((r: any) => {
+                      {display.map((r: any) => {
                         const s = new Date(String(r?.startAt));
                         const e = new Date(String(r?.endAt));
                         const ok = Number.isFinite(s.getTime()) && Number.isFinite(e.getTime());
@@ -970,12 +978,12 @@ const ClubPublicPage: React.FC = () => {
                         const status = String(r?.status || '').toUpperCase();
                         const canCancel = status !== 'CANCELLED' && (!Number.isFinite(s.getTime()) || s.getTime() >= Date.now() - 60_000);
                         return (
-                          <div key={r.id} className="cue-surface-strong rounded-lg p-3">
+                          <div key={r.id} className="cue-surface-strong rounded-lg px-3 py-2">
                             <div className="flex items-center justify-between gap-3">
                               <div className="font-semibold truncate">{tableName || '球枱'}</div>
                               <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: tag.bg, color: tag.fg }}>{tag.label}</span>
                             </div>
-                            <div className="text-sm cue-muted mt-1">{ymd} · {time}{quoteText ? ` · ${quoteText}` : ''}</div>
+                            <div className="text-xs cue-muted mt-0.5">{ymd} · {time}{quoteText ? ` · ${quoteText}` : ''}</div>
                             <div className="mt-2 flex justify-end">
                               <button
                                 type="button"
@@ -1008,7 +1016,9 @@ const ClubPublicPage: React.FC = () => {
                           </div>
                         );
                       })}
-                      {list.length > 50 && <div className="text-xs cue-muted">只顯示最近 50 筆</div>}
+                      {recent.length === 0 && list.length > display.length && (
+                        <div className="text-xs cue-muted">近 1 個月沒有預約紀錄，已改為顯示最近 {display.length} 筆</div>
+                      )}
                     </div>
                   );
                 })()
