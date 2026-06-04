@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { listAdminMatches } from './lib/api';
 
@@ -112,9 +113,9 @@ const AdminMatches: React.FC = () => {
         <div className="glass rounded-xl p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="accent-yellow text-xl font-bold">管理員：比賽列表</h2>
           <div className="flex flex-wrap gap-2">
-            <a href="/admin/overview" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm">
+            <Link to="/admin/overview" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm">
               系統概覽
-            </a>
+            </Link>
             <button
               onClick={() => {
                 const tok = localStorage.getItem('adminToken') || '';

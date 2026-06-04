@@ -1426,12 +1426,9 @@ const ClubPublicPage: React.FC = () => {
                   ) : null}
 
                   {showSystemPortalEntry ? (
-                    <a
-                      href="/admin/overview"
-                      className="mb-3 block w-full rounded-lg px-4 py-2 text-center font-semibold cue-button"
-                    >
+                    <Link to="/admin/overview" className="mb-3 block w-full rounded-lg px-4 py-2 text-center font-semibold cue-button">
                       系統主頁
-                    </a>
+                    </Link>
                   ) : null}
 
                   {!selTable || !date ? (

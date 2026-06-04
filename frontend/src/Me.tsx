@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
 import {
@@ -982,12 +983,9 @@ const Me: React.FC = () => {
                   )}
                   {showSystemPortalEntry && (
                     <div className="mt-3">
-                      <a
-                        href="/admin/overview"
-                        className="block w-full px-4 py-2 rounded cue-button text-center font-semibold"
-                      >
+                      <Link to="/admin/overview" className="block w-full px-4 py-2 rounded cue-button text-center font-semibold">
                         系統主頁
-                      </a>
+                      </Link>
                     </div>
                   )}
                   <div className="mt-3">
