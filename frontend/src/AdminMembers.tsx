@@ -117,7 +117,34 @@ const AdminMembers: React.FC = () => {
       setConfirmDeleteId(null);
     } catch (err: any) {
       console.error('Failed to delete member', err);
-      setError(err?.message || '刪除會員失敗');
+      const msg = String(err?.message || '刪除會員失敗');
+      const suggestsPurge = msg.includes('purge=1') || msg.includes('永久刪除');
+      if (suggestsPurge) {
+        const label = String(m.member_code || '').trim();
+        const name = String(m.name || '').trim();
+        const display = name || label || id;
+        const ok = window.confirm(
+          `此帳戶已有關聯資料。\n\n是否改用「永久刪除（連同相關資料）」方式刪除「${display}」？\n\n此操作不可復原。`
+        );
+        if (ok) {
+          try {
+            await deleteMember(API_URL, adminToken, id, { purge: true });
+            try {
+              const res = await listMembers(API_URL, adminToken);
+              setMembers(res.members || []);
+            } catch {}
+            setConfirmDeleteId(null);
+            setError(null);
+            return;
+          } catch (e2: any) {
+            const msg2 = String(e2?.message || '刪除會員失敗');
+            setError(msg2);
+            setConfirmDeleteId(null);
+            return;
+          }
+        }
+      }
+      setError(msg);
       setConfirmDeleteId(null);
     }
   }

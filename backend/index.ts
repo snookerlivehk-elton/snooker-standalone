@@ -3625,6 +3625,7 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
 
         await prisma.$transaction(async (tx) => {
           if (clubId) {
+            await tx.tableSessionConfirm.deleteMany({ where: { clubId } });
             await tx.tournamentSignup.deleteMany({ where: { tournament: { clubId } } });
             await tx.tournament.deleteMany({ where: { clubId } });
             await tx.liveAnnouncement.deleteMany({ where: { clubId } });
@@ -3645,9 +3646,14 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
           await tx.clubMember.deleteMany({ where: { memberId: id } });
           await tx.tournamentSignup.deleteMany({ where: { memberId: id } });
           await tx.liveAnnouncement.deleteMany({ where: { createdByMemberId: id } });
+          await tx.tableSessionConfirm.deleteMany({ where: { memberId: id } });
           await tx.tableReservation.deleteMany({ where: { memberId: id } });
           await tx.pointsLedger.deleteMany({ where: { memberId: id } });
+          await tx.pointsLedger.deleteMany({ where: { createdByMemberId: id } });
           await tx.pointsBalance.deleteMany({ where: { memberId: id } });
+          await tx.tableSession.deleteMany({ where: { startedByMemberId: id } });
+          await tx.tableSession.deleteMany({ where: { endedByMemberId: id } });
+          await tx.tableSession.deleteMany({ where: { endedByOperatorId: id } });
           await tx.breakRecord.deleteMany({ where: { member_id: id } });
           await tx.breakRecord.deleteMany({ where: { created_by_member_id: id } });
           await tx.event.deleteMany({ where: { player_member_id: id } });
