@@ -24,7 +24,8 @@ const Me: React.FC = () => {
   const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'matches' | 'clubs' | 'live' | 'settings'>('clubs');
+  const [activeTab, setActiveTab] = useState<'matches' | 'clubs' | 'live' | 'history' | 'settings'>('clubs');
+  const [settingsView, setSettingsView] = useState<'root' | 'profile'>('root');
 
   const displayName = useMemo(() => String(profile?.name || 'Member'), [profile?.name]);
   const avatarText = useMemo(() => {
@@ -81,6 +82,10 @@ const Me: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (activeTab !== 'settings') setSettingsView('root');
+  }, [activeTab]);
+
   return (
     <div className="brand-page min-h-screen flex flex-col">
       <main
@@ -134,6 +139,7 @@ const Me: React.FC = () => {
                   { key: 'matches', label: '比賽' },
                   { key: 'clubs', label: '場館' },
                   { key: 'live', label: '直播' },
+                  { key: 'history', label: '歷史記錄' },
                   { key: 'settings', label: '設定' },
                 ]}
                 activeKey={activeTab}
@@ -230,9 +236,13 @@ const Me: React.FC = () => {
                 <div className="cue-surface rounded-lg p-4">
                   <div className="font-semibold text-lg mb-2">設定</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <a href={`/member/${memberId}`} className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsView('profile')}
+                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold text-left"
+                    >
                       個人資料
-                    </a>
+                    </button>
                     <a href="/members/login" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
                       切換帳號
                     </a>
@@ -249,6 +259,41 @@ const Me: React.FC = () => {
                   </div>
                 </div>
 
+                {settingsView === 'profile' && (
+                  <div className="cue-surface rounded-lg p-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="font-semibold text-lg">個人資料</div>
+                      <button
+                        type="button"
+                        onClick={() => setSettingsView('root')}
+                        className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                      >
+                        返回
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                        <div className="text-sm cue-muted">姓名</div>
+                        <div className="text-sm font-semibold text-right">{String(profile?.name || '')}</div>
+                      </div>
+                      <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                        <div className="text-sm cue-muted">電郵</div>
+                        <div className="text-sm font-semibold text-right">{String(profile?.email || session?.email || '')}</div>
+                      </div>
+                      {!!(profile?.phone_e164 || profile?.phoneE164) && (
+                        <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                          <div className="text-sm cue-muted">手機</div>
+                          <div className="text-sm font-semibold text-right">{String(profile?.phone_e164 || profile?.phoneE164 || '')}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!!memberId && activeTab === 'history' && (
+              <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
                   <div className="font-semibold text-lg mb-2">歷史記錄</div>
                   <div className="space-y-3">
@@ -259,7 +304,7 @@ const Me: React.FC = () => {
                         {!loading && matches.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
                         {!loading && matches.length > 0 && (
                           <div className="space-y-2">
-                            {matches.slice(0, 5).map((m, idx) => (
+                            {matches.slice(0, 20).map((m, idx) => (
                               <div key={m.id || idx} className="cue-surface rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="font-semibold truncate">{m.opponentName || '對手'}</div>
@@ -268,6 +313,7 @@ const Me: React.FC = () => {
                                 <div className="flex-shrink-0 font-semibold accent-yellow">{m.score || '-'}</div>
                               </div>
                             ))}
+                            {matches.length > 20 && <div className="text-xs cue-muted">只顯示最近 20 筆</div>}
                           </div>
                         )}
                       </div>
@@ -280,7 +326,7 @@ const Me: React.FC = () => {
                         {!clubsLoading && joinedClubs.length === 0 && <div className="text-sm cue-muted">暫未加入任何場館</div>}
                         {!clubsLoading && joinedClubs.length > 0 && (
                           <div className="space-y-2">
-                            {joinedClubs.slice(0, 5).map((r: any, idx: number) => {
+                            {joinedClubs.slice(0, 20).map((r: any, idx: number) => {
                               const c = r?.club || {};
                               const id = String(r?.clubId || c?.id || '');
                               return (
@@ -294,6 +340,7 @@ const Me: React.FC = () => {
                                 </a>
                               );
                             })}
+                            {joinedClubs.length > 20 && <div className="text-xs cue-muted">只顯示最近 20 筆</div>}
                           </div>
                         )}
                       </div>
