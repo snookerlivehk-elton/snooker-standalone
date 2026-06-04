@@ -10,7 +10,10 @@ import {
   getMyInvites,
   getMyJoinedClubs,
   getPublicLiveAnnouncements,
+  getSiteAds,
   getSiteNotice,
+  listMemberDistricts,
+  listMemberRegions,
   hideClubMessages,
   markClubMessageRead,
   updateMemberSelf,
@@ -61,11 +64,18 @@ const Me: React.FC = () => {
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [siteNotice, setSiteNotice] = useState<any>(null);
   const [siteNoticeLoading, setSiteNoticeLoading] = useState(false);
+  const [siteAd, setSiteAd] = useState<any>(null);
+  const [siteAdOpen, setSiteAdOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'clubs' | 'messages' | 'history' | 'settings'>('clubs');
   const [editMode, setEditMode] = useState(false);
   const [editPhone, setEditPhone] = useState('');
   const [editBirthDate, setEditBirthDate] = useState('');
+  const [editRegionCode, setEditRegionCode] = useState('');
+  const [editDistrictCode, setEditDistrictCode] = useState('');
+  const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
+  const [districts, setDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [locLoading, setLocLoading] = useState(false);
   const [editNewPassword, setEditNewPassword] = useState('');
   const [editNewPassword2, setEditNewPassword2] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -135,6 +145,8 @@ const Me: React.FC = () => {
   useEffect(() => {
     if (!memberId || !profile) return;
     setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
+    setEditRegionCode(String(profile?.region_code ?? profile?.regionCode ?? '') || '');
+    setEditDistrictCode(String(profile?.district_code ?? profile?.districtCode ?? '') || '');
     const bd = profile?.birthDate ?? profile?.birth_date;
     if (bd) {
       const d = new Date(bd);
@@ -145,6 +157,80 @@ const Me: React.FC = () => {
       }
     }
   }, [memberId, profile]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getSiteAds(API_URL, 'member');
+        const ad = Array.isArray((res as any)?.ads) ? (res as any).ads[0] : null;
+        if (!mounted) return;
+        setSiteAd(ad || null);
+        if (!ad) return;
+        const key = `siteAdSeen:member`;
+        let prev: any = null;
+        try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+        const now = Date.now();
+        const prevUpdatedAt = String(prev?.updatedAt || '');
+        const prevSeenAt = Number(prev?.seenAt || 0) || 0;
+        const currUpdatedAt = String(ad?.updatedAt || '');
+        const cooldownMs = 24 * 60 * 60 * 1000;
+        const shouldOpen = !prev || prevUpdatedAt !== currUpdatedAt || (now - prevSeenAt) > cooldownMs;
+        if (shouldOpen) {
+          setSiteAdOpen(true);
+          try { localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: now })); } catch {}
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!siteAdOpen) return;
+    const t = window.setTimeout(() => setSiteAdOpen(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [siteAdOpen, siteAd?.updatedAt]);
+
+  useEffect(() => {
+    if (activeTab !== 'settings') return;
+    let mounted = true;
+    setLocLoading(true);
+    listMemberRegions(API_URL)
+      .then((json) => {
+        if (!mounted) return;
+        const rs = Array.isArray((json as any)?.regions) ? (json as any).regions : [];
+        setRegions(rs);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'settings') return;
+    let mounted = true;
+    if (!editRegionCode) {
+      setDistricts([]);
+      setEditDistrictCode('');
+      return () => { mounted = false; };
+    }
+    setLocLoading(true);
+    listMemberDistricts(API_URL, editRegionCode)
+      .then((json) => {
+        if (!mounted) return;
+        const ds = Array.isArray((json as any)?.districts) ? (json as any).districts : [];
+        setDistricts(ds);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [activeTab, editRegionCode]);
 
   useEffect(() => {
     let mounted = true;
@@ -611,6 +697,32 @@ const Me: React.FC = () => {
 
         <div className="px-4 mt-4">
           <div className="max-w-2xl mx-auto">
+            {!!memberId && siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
+              <div className="cue-surface rounded-lg p-3 mb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <a
+                    href={normalizeHttpUrl(siteAd.linkUrl) || String(siteAd.linkUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block flex-1 min-w-0"
+                  >
+                    <img
+                      src={String(siteAd.imageUrl)}
+                      alt=""
+                      className="w-full rounded-lg object-cover max-h-[30vh]"
+                      onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                    />
+                  </a>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    onClick={() => setSiteAdOpen(false)}
+                  >
+                    收起
+                  </button>
+                </div>
+              </div>
+            )}
             {!!memberId && (
               <Tabs
                 items={[
@@ -921,6 +1033,60 @@ const Me: React.FC = () => {
                         </div>
                       )}
                     </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">地方</div>
+                      {editMode ? (
+                        <select
+                          value={editRegionCode}
+                          onChange={(e) => setEditRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                          className="w-64 max-w-[65%] px-3 py-2 rounded cue-surface text-sm"
+                          disabled={locLoading}
+                        >
+                          <option value="">（不設定）</option>
+                          {regions.map((r) => (
+                            <option key={r.code3} value={r.code3}>
+                              {r.name} ({r.code3})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {(() => {
+                            const code = String(profile?.region_code ?? profile?.regionCode ?? '') || '';
+                            if (!code) return '—';
+                            const hit = regions.find((x) => x.code3 === code);
+                            return hit ? `${hit.name} (${hit.code3})` : code;
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">分區</div>
+                      {editMode ? (
+                        <select
+                          value={editDistrictCode}
+                          onChange={(e) => setEditDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                          className="w-64 max-w-[65%] px-3 py-2 rounded cue-surface text-sm"
+                          disabled={locLoading || !editRegionCode}
+                        >
+                          <option value="">{editRegionCode ? '請選擇分區' : '請先選地方'}</option>
+                          {districts.map((d) => (
+                            <option key={`${d.regionCode || editRegionCode}-${d.code3}`} value={d.code3}>
+                              {d.name} ({d.code3})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {(() => {
+                            const code = String(profile?.district_code ?? profile?.districtCode ?? '') || '';
+                            if (!code) return '—';
+                            const hit = districts.find((x) => x.code3 === code);
+                            return hit ? `${hit.name} (${hit.code3})` : code;
+                          })()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {toast && <div className="mt-3 text-sm cue-muted">{toast}</div>}
                   {editMode && (
@@ -932,9 +1098,16 @@ const Me: React.FC = () => {
                           if (!memberId) return;
                           try {
                             setSavingProfile(true);
+                            const rc = String(editRegionCode || '').trim().toUpperCase();
+                            const dc = String(editDistrictCode || '').trim().toUpperCase();
+                            if ((rc && !dc) || (!rc && dc)) {
+                              throw new Error('請同時選擇地方及分區');
+                            }
                             const res = await updateMemberSelf(API_URL, memberId, {
                               phone: String(editPhone || '').trim(),
                               birthDate: String(editBirthDate || '').trim(),
+                              regionCode: rc ? rc : null,
+                              districtCode: dc ? dc : null,
                             });
                             const next = (res as any)?.member ?? res;
                             setProfile(next);
@@ -964,6 +1137,8 @@ const Me: React.FC = () => {
                           setEditMode(false);
                           setToast(null);
                           setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
+                          setEditRegionCode(String(profile?.region_code ?? profile?.regionCode ?? '') || '');
+                          setEditDistrictCode(String(profile?.district_code ?? profile?.districtCode ?? '') || '');
                           setEditBirthDate('');
                           const bd = profile?.birthDate ?? profile?.birth_date;
                           if (bd) {

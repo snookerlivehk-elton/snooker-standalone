@@ -10,6 +10,7 @@ import {
   getLeaderboardMembersMonthly,
   getPublicClubs,
   getPublicLiveAnnouncements,
+  getSiteAds,
   getSiteNotice,
 } from './lib/api';
 
@@ -65,11 +66,47 @@ const HomePage: React.FC = () => {
   const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
 
+  const [siteAd, setSiteAd] = useState<any>(null);
+  const [siteAdOpen, setSiteAdOpen] = useState(false);
+
   const [memberHighest, setMemberHighest] = useState<any[]>([]);
   const [memberMonthly, setMemberMonthly] = useState<any[]>([]);
   const [clubHighest, setClubHighest] = useState<any[]>([]);
   const [clubMonthly, setClubMonthly] = useState<any[]>([]);
   const [boardLoading, setBoardLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getSiteAds(API_URL, 'system');
+        const ad = Array.isArray((res as any)?.ads) ? (res as any).ads[0] : null;
+        if (!mounted) return;
+        setSiteAd(ad || null);
+        if (!ad) return;
+        const key = `siteAdSeen:system`;
+        let prev: any = null;
+        try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+        const now = Date.now();
+        const prevUpdatedAt = String(prev?.updatedAt || '');
+        const prevSeenAt = Number(prev?.seenAt || 0) || 0;
+        const currUpdatedAt = String(ad?.updatedAt || '');
+        const cooldownMs = 24 * 60 * 60 * 1000;
+        const shouldOpen = !prev || prevUpdatedAt !== currUpdatedAt || (now - prevSeenAt) > cooldownMs;
+        if (shouldOpen) {
+          setSiteAdOpen(true);
+          try { localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: now })); } catch {}
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!siteAdOpen) return;
+    const t = window.setTimeout(() => setSiteAdOpen(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [siteAdOpen, siteAd?.updatedAt]);
 
   useEffect(() => {
     let mounted = true;
@@ -156,6 +193,32 @@ const HomePage: React.FC = () => {
       <TopBarPublic title="SnookerHK Live" showBack={false} />
       <main className="flex-1 px-4 pt-4 pb-20">
         <div className="max-w-6xl mx-auto space-y-4">
+          {siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
+            <div className="cue-surface rounded-lg p-3">
+              <div className="flex items-start justify-between gap-3">
+                <a
+                  href={normalizeHttpUrl(siteAd.linkUrl) || String(siteAd.linkUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block flex-1 min-w-0"
+                >
+                  <img
+                    src={String(siteAd.imageUrl)}
+                    alt=""
+                    className="w-full rounded-lg object-cover max-h-[32vh]"
+                    onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                  />
+                </a>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  onClick={() => setSiteAdOpen(false)}
+                >
+                  收起
+                </button>
+              </div>
+            </div>
+          )}
           <div
             className="cue-card overflow-hidden"
             style={{

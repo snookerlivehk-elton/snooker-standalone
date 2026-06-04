@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { API_URL } from './config';
-import { loginGoogle, loginMember, registerMember } from './lib/api';
+import { listMemberDistricts, listMemberRegions, loginGoogle, loginMember, registerMember } from './lib/api';
 import Tabs from './components/Tabs';
 
 const MemberRegister: React.FC = () => {
@@ -19,6 +19,11 @@ const MemberRegister: React.FC = () => {
   const [phoneCountry, setPhoneCountry] = useState('+852');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [regionCode, setRegionCode] = useState('');
+  const [districtCode, setDistrictCode] = useState('');
+  const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
+  const [districts, setDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [locLoading, setLocLoading] = useState(false);
 
   const tabs = useMemo(() => {
     return [
@@ -46,6 +51,51 @@ const MemberRegister: React.FC = () => {
       return out;
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    setLocLoading(true);
+    listMemberRegions(API_URL)
+      .then((json) => {
+        if (!mounted) return;
+        const rs = Array.isArray(json?.regions) ? json.regions : [];
+        setRegions(rs);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!regionCode) {
+      setDistricts([]);
+      setDistrictCode('');
+      return () => {
+        mounted = false;
+      };
+    }
+    setLocLoading(true);
+    listMemberDistricts(API_URL, regionCode)
+      .then((json) => {
+        if (!mounted) return;
+        const ds = Array.isArray(json?.districts) ? json.districts : [];
+        setDistricts(ds);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [regionCode]);
 
   const onGoogleSuccess = async (credentialResponse: any) => {
     setError(null);
@@ -77,6 +127,10 @@ const MemberRegister: React.FC = () => {
       setError('兩次密碼輸入不一致');
       return;
     }
+    if (!regionCode || !districtCode) {
+      setError('請選擇地方及分區');
+      return;
+    }
     setLoading(true);
     try {
       const em = email.trim().toLowerCase();
@@ -86,6 +140,8 @@ const MemberRegister: React.FC = () => {
         password,
         phone: phone.trim() || undefined,
         birthDate: birthDate.trim() || undefined,
+        regionCode,
+        districtCode,
       });
 
       const result = await loginMember(API_URL, { email: em, password });
@@ -108,6 +164,10 @@ const MemberRegister: React.FC = () => {
       setError('兩次密碼輸入不一致');
       return;
     }
+    if (!regionCode || !districtCode) {
+      setError('請選擇地方及分區');
+      return;
+    }
     const phoneE164 = normalizePhoneE164(phoneCountry, phoneNumber);
     if (!phoneE164) {
       setError('手機號碼格式不正確');
@@ -122,6 +182,8 @@ const MemberRegister: React.FC = () => {
         phoneNumber,
         phone: phoneE164,
         birthDate: birthDate.trim() || undefined,
+        regionCode,
+        districtCode,
       });
 
       const result = await loginMember(API_URL, { identifier: phoneE164, password });
@@ -211,6 +273,42 @@ const MemberRegister: React.FC = () => {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">地方</label>
+                <select
+                  value={regionCode}
+                  onChange={(e) => setRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  disabled={locLoading || regions.length === 0}
+                  required
+                >
+                  <option value="">{locLoading ? '載入中...' : '請選擇地方'}</option>
+                  {regions.map((r) => (
+                    <option key={r.code3} value={r.code3}>
+                      {r.code3} — {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">分區</label>
+                <select
+                  value={districtCode}
+                  onChange={(e) => setDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  disabled={!regionCode || locLoading || districts.length === 0}
+                  required
+                >
+                  <option value="">{!regionCode ? '請先選擇地方' : (locLoading ? '載入中...' : '請選擇分區')}</option>
+                  {districts.map((d) => (
+                    <option key={d.code3} value={d.code3}>
+                      {d.code3} — {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <button
               type="submit"
               disabled={loading}
@@ -288,6 +386,42 @@ const MemberRegister: React.FC = () => {
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="w-full px-3 py-2 rounded cue-input"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">地方</label>
+                <select
+                  value={regionCode}
+                  onChange={(e) => setRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  disabled={locLoading || regions.length === 0}
+                  required
+                >
+                  <option value="">{locLoading ? '載入中...' : '請選擇地方'}</option>
+                  {regions.map((r) => (
+                    <option key={r.code3} value={r.code3}>
+                      {r.code3} — {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">分區</label>
+                <select
+                  value={districtCode}
+                  onChange={(e) => setDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  disabled={!regionCode || locLoading || districts.length === 0}
+                  required
+                >
+                  <option value="">{!regionCode ? '請先選擇地方' : (locLoading ? '載入中...' : '請選擇分區')}</option>
+                  {districts.map((d) => (
+                    <option key={d.code3} value={d.code3}>
+                      {d.code3} — {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <button
               type="submit"

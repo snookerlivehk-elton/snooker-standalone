@@ -1,14 +1,65 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { API_URL } from './config';
+import { listMemberDistricts, listMemberRegions } from './lib/api';
 
 const MemberRegisterSimple: React.FC = () => {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [regionCode, setRegionCode] = useState('');
+  const [districtCode, setDistrictCode] = useState('');
+  const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
+  const [districts, setDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [locLoading, setLocLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: string; memberCode: string | null } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLocLoading(true);
+    listMemberRegions(API_URL)
+      .then((json) => {
+        if (!mounted) return;
+        const rs = Array.isArray(json?.regions) ? json.regions : [];
+        setRegions(rs);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!regionCode) {
+      setDistricts([]);
+      setDistrictCode('');
+      return () => {
+        mounted = false;
+      };
+    }
+    setLocLoading(true);
+    listMemberDistricts(API_URL, regionCode)
+      .then((json) => {
+        if (!mounted) return;
+        const ds = Array.isArray(json?.districts) ? json.districts : [];
+        setDistricts(ds);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setLocLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [regionCode]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +69,16 @@ const MemberRegisterSimple: React.FC = () => {
       if (!email.trim() || !name.trim()) {
         throw new Error('請輸入 Email 與 姓名');
       }
+      if (!regionCode || !districtCode) {
+        throw new Error('請選擇地方及分區');
+      }
       const payload = {
         email: email.trim().toLowerCase(),
         name: name.trim(),
         phone: phone.trim() || undefined,
         birthDate: birthDate.trim() || undefined,
+        regionCode,
+        districtCode,
       };
       const res = await fetch(`${API_URL.replace(/\/$/, '')}/api/members/register`, {
         method: 'POST',
@@ -63,6 +119,42 @@ const MemberRegisterSimple: React.FC = () => {
           <div>
               <label className="block text-sm mb-1">出生日期（選填）</label>
               <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"/>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm mb-1">地方</label>
+              <select
+                value={regionCode}
+                onChange={(e) => setRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                disabled={locLoading || regions.length === 0}
+                required
+              >
+                <option value="">{locLoading ? '載入中...' : '請選擇地方'}</option>
+                {regions.map((r) => (
+                  <option key={r.code3} value={r.code3}>
+                    {r.code3} — {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">分區</label>
+              <select
+                value={districtCode}
+                onChange={(e) => setDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600"
+                disabled={!regionCode || locLoading || districts.length === 0}
+                required
+              >
+                <option value="">{!regionCode ? '請先選擇地方' : (locLoading ? '載入中...' : '請選擇分區')}</option>
+                {districts.map((d) => (
+                  <option key={d.code3} value={d.code3}>
+                    {d.code3} — {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex justify-end">
             <button type="submit" disabled={loading} className="px-4 py-2 rounded brand-button text-black disabled:opacity-50">{loading ? '提交中...' : '註冊'}</button>

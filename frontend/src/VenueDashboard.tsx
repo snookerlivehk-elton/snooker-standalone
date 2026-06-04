@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -36,6 +36,13 @@ const VenueDashboard: React.FC = () => {
   const [memberRatingDraft, setMemberRatingDraft] = useState<Record<string, string>>({});
   const [memberSavingId, setMemberSavingId] = useState<string>('');
   const [memberRemovingId, setMemberRemovingId] = useState<string>('');
+  const [memberLocOpen, setMemberLocOpen] = useState(false);
+  const [memberLocMemberId, setMemberLocMemberId] = useState('');
+  const [memberLocRegionCode, setMemberLocRegionCode] = useState('');
+  const [memberLocDistrictCode, setMemberLocDistrictCode] = useState('');
+  const [memberLocRegions, setMemberLocRegions] = useState<Array<{ code3: string; name: string }>>([]);
+  const [memberLocDistricts, setMemberLocDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [memberLocLoading, setMemberLocLoading] = useState(false);
   const [msgTitle, setMsgTitle] = useState('');
   const [msgContent, setMsgContent] = useState('');
   const [clubMsgs, setClubMsgs] = useState<any[]>([]);
@@ -167,6 +174,47 @@ const VenueDashboard: React.FC = () => {
       window.history.replaceState({}, '', url.toString());
     } catch {}
   }
+
+  useEffect(() => {
+    if (!memberLocOpen) return;
+    let mounted = true;
+    setMemberLocLoading(true);
+    listMemberRegions(API_URL)
+      .then((json) => {
+        if (!mounted) return;
+        const rs = Array.isArray((json as any)?.regions) ? (json as any).regions : [];
+        setMemberLocRegions(rs);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setMemberLocLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [memberLocOpen]);
+
+  useEffect(() => {
+    if (!memberLocOpen) return;
+    let mounted = true;
+    if (!memberLocRegionCode) {
+      setMemberLocDistricts([]);
+      setMemberLocDistrictCode('');
+      return () => { mounted = false; };
+    }
+    setMemberLocLoading(true);
+    listMemberDistricts(API_URL, memberLocRegionCode)
+      .then((json) => {
+        if (!mounted) return;
+        const ds = Array.isArray((json as any)?.districts) ? (json as any).districts : [];
+        setMemberLocDistricts(ds);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        setMemberLocLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [memberLocOpen, memberLocRegionCode]);
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const baseUrl = `${window.location.origin}${rawBase}`;
@@ -1191,7 +1239,10 @@ const VenueDashboard: React.FC = () => {
                          <th className="py-2 px-3">名稱</th>
                          <th className="py-2 px-3">Email</th>
                          <th className="py-2 px-3">電話</th>
+                                 <th className="py-2 px-3">地方</th>
+                                 <th className="py-2 px-3">分區</th>
                          <th className="py-2 px-3">加入時間</th>
+                                 <th className="py-2 px-3">操作</th>
                       </tr>
                    </thead>
                    <tbody>
@@ -1200,7 +1251,25 @@ const VenueDashboard: React.FC = () => {
                             <td className="py-2 px-3">{cm.member?.name || '-'}</td>
                             <td className="py-2 px-3 text-sm cue-muted">{cm.member?.email || '-'}</td>
                             <td className="py-2 px-3 text-sm">{cm.member?.phone || '-'}</td>
+                                    <td className="py-2 px-3 text-sm">{String(cm.member?.region_code ?? cm.member?.regionCode ?? '-') || '-'}</td>
+                                    <td className="py-2 px-3 text-sm">{String(cm.member?.district_code ?? cm.member?.districtCode ?? '-') || '-'}</td>
                             <td className="py-2 px-3 text-sm cue-muted">{new Date(cm.joinedAt).toLocaleDateString()}</td>
+                                    <td className="py-2 px-3">
+                                      <button
+                                        type="button"
+                                        className="px-3 py-1.5 rounded text-xs font-semibold cue-surface-strong hover:brightness-95"
+                                        onClick={() => {
+                                          const memId = String(cm.member?.id || cm.memberId || '').trim();
+                                          if (!memId) return;
+                                          setMemberLocMemberId(memId);
+                                          setMemberLocRegionCode(String(cm.member?.region_code ?? cm.member?.regionCode ?? '') || '');
+                                          setMemberLocDistrictCode(String(cm.member?.district_code ?? cm.member?.districtCode ?? '') || '');
+                                          setMemberLocOpen(true);
+                                        }}
+                                      >
+                                        更改地方/分區
+                                      </button>
+                                    </td>
                          </tr>
                       ))}
                    </tbody>
@@ -1208,6 +1277,98 @@ const VenueDashboard: React.FC = () => {
              </div>
           )}
         </div>
+
+        {memberLocOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+            <div className="absolute inset-0 bg-black/60" onClick={() => setMemberLocOpen(false)} />
+            <div className="relative w-full max-w-lg glass rounded-xl p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-lg font-bold">更改會員地方／分區</div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  onClick={() => setMemberLocOpen(false)}
+                >
+                  關閉
+                </button>
+              </div>
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="text-sm cue-muted mb-1">地方</div>
+                  <select
+                    value={memberLocRegionCode}
+                    onChange={(e) => setMemberLocRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                    className="w-full cue-input rounded px-3 py-2 text-sm"
+                    disabled={memberLocLoading}
+                  >
+                    <option value="">（不設定）</option>
+                    {memberLocRegions.map((r) => (
+                      <option key={r.code3} value={r.code3}>
+                        {r.name} ({r.code3})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="text-sm cue-muted mb-1">分區</div>
+                  <select
+                    value={memberLocDistrictCode}
+                    onChange={(e) => setMemberLocDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                    className="w-full cue-input rounded px-3 py-2 text-sm"
+                    disabled={memberLocLoading || !memberLocRegionCode}
+                  >
+                    <option value="">{memberLocRegionCode ? '請選擇分區' : '請先選地方'}</option>
+                    {memberLocDistricts.map((d) => (
+                      <option key={`${d.regionCode || memberLocRegionCode}-${d.code3}`} value={d.code3}>
+                        {d.name} ({d.code3})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className={`w-full px-4 py-2 rounded font-semibold ${memberLocLoading ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                  disabled={memberLocLoading}
+                  onClick={async () => {
+                    const memId = String(memberLocMemberId || '').trim();
+                    if (!memId) return;
+                    const rc = String(memberLocRegionCode || '').trim().toUpperCase();
+                    const dc = String(memberLocDistrictCode || '').trim().toUpperCase();
+                    if ((rc && !dc) || (!rc && dc)) {
+                      setToast('請同時選擇地方及分區');
+                      setTimeout(() => setToast(null), 2500);
+                      return;
+                    }
+                    try {
+                      setMemberLocLoading(true);
+                      const res = await updateMemberSelf(API_URL, memId, { regionCode: rc ? rc : null, districtCode: dc ? dc : null });
+                      const nextMember = (res as any)?.member ?? res;
+                      setClubMembers((prev) =>
+                        Array.isArray(prev)
+                          ? prev.map((x: any) =>
+                              String(x?.member?.id || x?.memberId || '') === memId
+                                ? { ...x, member: { ...(x.member || {}), ...(nextMember || {}) } }
+                                : x,
+                            )
+                          : prev,
+                      );
+                      setToast('已更新地方/分區');
+                      setTimeout(() => setToast(null), 2000);
+                      setMemberLocOpen(false);
+                    } catch (e: any) {
+                      setToast(e?.message || '更新失敗');
+                      setTimeout(() => setToast(null), 3000);
+                    } finally {
+                      setMemberLocLoading(false);
+                    }
+                  }}
+                >
+                  儲存
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         </>
         )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from './config';
-import { getAdminFeatures, getSiteNotice, updateAdminFeatures, updateSiteNotice } from './lib/api';
+import { getAdminFeatures, getAdminSiteAds, getSiteNotice, updateAdminFeatures, updateAdminSiteAd, updateSiteNotice } from './lib/api';
 import { clearFeatureCache } from './lib/features';
 import Tabs from './components/Tabs';
 
@@ -23,6 +23,15 @@ const AdminOverview: React.FC = () => {
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [featuresSaveResult, setFeaturesSaveResult] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'system' | 'venue' | 'member' | 'competition'>('system');
+  const [adsLoading, setAdsLoading] = useState(true);
+  const [adsError, setAdsError] = useState<string | null>(null);
+  const [adsSaving, setAdsSaving] = useState(false);
+  const [adsSaveResult, setAdsSaveResult] = useState<string | null>(null);
+  const [adsDraft, setAdsDraft] = useState<Record<string, { enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>>({
+    system: { enabled: true, imageUrl: '', linkUrl: '' },
+    venue: { enabled: true, imageUrl: '', linkUrl: '' },
+    member: { enabled: true, imageUrl: '', linkUrl: '' },
+  });
 
   function resolveBasePath(): string {
     const rawBase = (import.meta.env.BASE_URL || '/');
@@ -101,6 +110,40 @@ const AdminOverview: React.FC = () => {
     }
   }
 
+  async function saveAd(placement: 'system' | 'venue' | 'member') {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      const draft = adsDraft[placement] || { enabled: true, imageUrl: '', linkUrl: '' };
+      const imageUrl = String(draft.imageUrl || '').trim();
+      const linkUrl = String(draft.linkUrl || '').trim();
+      await updateAdminSiteAd(API_URL, tok, placement, {
+        enabled: !!draft.enabled,
+        imageUrl: imageUrl ? imageUrl : null,
+        linkUrl: linkUrl ? linkUrl : null,
+      });
+      const row = await getAdminSiteAds(API_URL, tok);
+      const next: any = { ...adsDraft };
+      for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
+        const id = String(a?.id || '').trim();
+        if (!id) continue;
+        next[id] = {
+          enabled: a?.enabled !== false,
+          imageUrl: String(a?.imageUrl || ''),
+          linkUrl: String(a?.linkUrl || ''),
+          updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
+        };
+      }
+      setAdsDraft(next);
+      setAdsSaveResult('已儲存');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '儲存失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function fetchOverview() {
@@ -165,6 +208,35 @@ const AdminOverview: React.FC = () => {
         if (!cancelled) setFeaturesError(e?.message || '讀取功能清單失敗');
       } finally {
         if (!cancelled) setFeaturesLoading(false);
+      }
+
+      try {
+        if (!cancelled) {
+          setAdsLoading(true);
+          setAdsError(null);
+        }
+        const tok = resolveToken();
+        const row = await getAdminSiteAds(API_URL, tok);
+        const next: any = {
+          system: { enabled: true, imageUrl: '', linkUrl: '' },
+          venue: { enabled: true, imageUrl: '', linkUrl: '' },
+          member: { enabled: true, imageUrl: '', linkUrl: '' },
+        };
+        for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
+          const id = String(a?.id || '').trim();
+          if (!id) continue;
+          next[id] = {
+            enabled: a?.enabled !== false,
+            imageUrl: String(a?.imageUrl || ''),
+            linkUrl: String(a?.linkUrl || ''),
+            updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
+          };
+        }
+        if (!cancelled) setAdsDraft(next);
+      } catch (e: any) {
+        if (!cancelled) setAdsError(e?.message || '讀取廣告設定失敗');
+      } finally {
+        if (!cancelled) setAdsLoading(false);
       }
     }
     fetchOverview();
@@ -289,6 +361,63 @@ const AdminOverview: React.FC = () => {
               )}
               {featuresSaveResult && <div className="text-sm cue-muted mt-2">{featuresSaveResult}</div>}
             </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-lg font-bold">主頁廣告位（系統）</div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  disabled={adsSaving}
+                  onClick={() => saveAd('system')}
+                >
+                  儲存
+                </button>
+              </div>
+              {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
+              {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
+              {!adsLoading && !adsError && (
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={adsDraft.system?.enabled !== false}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), enabled: e.target.checked } }))}
+                    />
+                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                  </label>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
+                    <input
+                      value={adsDraft.system?.imageUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), imageUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://.../banner.jpg"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
+                    <input
+                      value={adsDraft.system?.linkUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), linkUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  {!!adsDraft.system?.imageUrl && (
+                    <div className="cue-surface rounded-lg p-2">
+                      <img
+                        src={String(adsDraft.system.imageUrl)}
+                        alt=""
+                        className="w-full rounded object-cover max-h-[30vh]"
+                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -326,6 +455,63 @@ const AdminOverview: React.FC = () => {
                 </div>
               )}
               {featuresSaveResult && <div className="text-sm cue-muted mt-2">{featuresSaveResult}</div>}
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-lg font-bold">主頁廣告位（場館）</div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  disabled={adsSaving}
+                  onClick={() => saveAd('venue')}
+                >
+                  儲存
+                </button>
+              </div>
+              {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
+              {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
+              {!adsLoading && !adsError && (
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={adsDraft.venue?.enabled !== false}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), enabled: e.target.checked } }))}
+                    />
+                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                  </label>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
+                    <input
+                      value={adsDraft.venue?.imageUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), imageUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://.../banner.jpg"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
+                    <input
+                      value={adsDraft.venue?.linkUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), linkUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  {!!adsDraft.venue?.imageUrl && (
+                    <div className="cue-surface rounded-lg p-2">
+                      <img
+                        src={String(adsDraft.venue.imageUrl)}
+                        alt=""
+                        className="w-full rounded object-cover max-h-[30vh]"
+                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -391,6 +577,63 @@ const AdminOverview: React.FC = () => {
                     />
                   </div>
                   {saveResult && <div className="text-sm cue-muted">{saveResult}</div>}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-lg font-bold">主頁廣告位（會員）</div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  disabled={adsSaving}
+                  onClick={() => saveAd('member')}
+                >
+                  儲存
+                </button>
+              </div>
+              {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
+              {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
+              {!adsLoading && !adsError && (
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={adsDraft.member?.enabled !== false}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), enabled: e.target.checked } }))}
+                    />
+                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                  </label>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
+                    <input
+                      value={adsDraft.member?.imageUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), imageUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://.../banner.jpg"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
+                    <input
+                      value={adsDraft.member?.linkUrl || ''}
+                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), linkUrl: e.target.value } }))}
+                      className="w-full cue-input rounded px-3 py-2 text-sm"
+                      placeholder="https://..."
+                    />
+                  </div>
+                  {!!adsDraft.member?.imageUrl && (
+                    <div className="cue-surface rounded-lg p-2">
+                      <img
+                        src={String(adsDraft.member.imageUrl)}
+                        alt=""
+                        className="w-full rounded object-cover max-h-[30vh]"
+                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
             </div>

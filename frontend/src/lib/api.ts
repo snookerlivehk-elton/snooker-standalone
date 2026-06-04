@@ -1215,6 +1215,8 @@ export async function registerMember(
     phone?: string;
     clubName?: string;
     birthDate?: string;
+    regionCode?: string;
+    districtCode?: string;
   },
 ) {
   const res = await fetch(`${apiUrl}/api/members/register`, {
@@ -1389,9 +1391,13 @@ export async function updateMember(
   data: {
     name?: string;
     email?: string | null;
+    region_code?: string | null;
+    regionCode?: string | null;
     member_code?: string | null;
     phone?: string | null;
     birthDate?: string | null;
+    district_code?: string | null;
+    districtCode?: string | null;
     role?: string | null;
     clubName?: string | null;
     is_enabled?: boolean | null;
@@ -1410,7 +1416,7 @@ export async function updateMember(
 export async function updateMemberSelf(
   apiUrl: string,
   id: string,
-  data: { phone?: string; birthDate?: string; clubName?: string; password?: string }
+  data: { phone?: string; birthDate?: string; clubName?: string; password?: string; regionCode?: string | null; districtCode?: string | null }
 ) {
   const res = await fetch(`${apiUrl}/api/members/${id}`, {
     method: 'PUT',
@@ -1418,6 +1424,36 @@ export async function updateMemberSelf(
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`更新個人資料失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function getSiteAds(apiUrl: string, placement?: 'system' | 'venue' | 'member') {
+  const qs = placement ? `?placement=${encodeURIComponent(placement)}` : '';
+  const res = await fetch(`${apiUrl}/api/site-ads${qs}`);
+  if (!res.ok) throw new Error(`取得廣告失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function getAdminSiteAds(apiUrl: string, adminToken: string) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ads`, {
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) throw new Error(`取得廣告管理資料失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function updateAdminSiteAd(
+  apiUrl: string,
+  adminToken: string,
+  placement: 'system' | 'venue' | 'member',
+  payload: { enabled?: boolean; imageUrl?: string | null; linkUrl?: string | null },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ads/${placement}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`更新廣告失敗 (${res.status})`);
   return res.json();
 }
 
@@ -1651,6 +1687,8 @@ export async function registerMemberWithCode(
     phone?: string;
     clubName?: string;
     birthDate?: string;
+    regionCode?: string;
+    districtCode?: string;
   },
 ) {
   const res = await fetch(`${apiUrl}/api/members/register-with-code`, {

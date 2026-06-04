@@ -1066,6 +1066,66 @@ app.put('/api/admin/features', adminAuth, async (req, res) => {
   res.json({ ok: true, features: map });
 });
 
+app.get('/api/site-ads', async (req, res) => {
+  try {
+    const placement = String((req.query.placement as string) || '').trim().toLowerCase();
+    const where: any = { enabled: true };
+    if (placement) where.id = placement;
+    const rows = await prisma.siteAd.findMany({ where, orderBy: { updatedAt: 'desc' } });
+    const out = rows
+      .map((r) => ({
+        placement: r.id,
+        enabled: r.enabled,
+        imageUrl: r.imageUrl,
+        linkUrl: r.linkUrl,
+        updatedAt: r.updatedAt,
+      }))
+      .filter((r) => r.enabled && r.imageUrl && r.linkUrl);
+    res.json({ ads: out });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/admin/site-ads', adminAuth, async (_req, res) => {
+  try {
+    const placements = ['system', 'venue', 'member'];
+    await prisma.$transaction(
+      placements.map((id) =>
+        prisma.siteAd.upsert({
+          where: { id },
+          update: {},
+          create: { id, enabled: true, imageUrl: null, linkUrl: null },
+        }),
+      ),
+    );
+    const ads = await prisma.siteAd.findMany({ orderBy: { id: 'asc' } });
+    res.json({ ads });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.put('/api/admin/site-ads/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim().toLowerCase();
+    if (!id) return res.status(400).json({ error: 'placement_required' });
+    if (!['system', 'venue', 'member'].includes(id)) return res.status(400).json({ error: 'placement_invalid' });
+    const body = (req.body || {}) as { enabled?: boolean; imageUrl?: string | null; linkUrl?: string | null };
+    const enabled = body.enabled === undefined ? undefined : Boolean(body.enabled);
+    const imageUrl = body.imageUrl === undefined ? undefined : (body.imageUrl ? String(body.imageUrl).trim() : null);
+    const linkUrl = body.linkUrl === undefined ? undefined : (body.linkUrl ? String(body.linkUrl).trim() : null);
+    const ad = await prisma.siteAd.upsert({
+      where: { id },
+      update: { ...(enabled !== undefined ? { enabled } : {}), ...(imageUrl !== undefined ? { imageUrl } : {}), ...(linkUrl !== undefined ? { linkUrl } : {}) },
+      create: { id, enabled: enabled ?? true, imageUrl: imageUrl ?? null, linkUrl: linkUrl ?? null },
+    });
+    res.json({ ad });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
 // Basic write authorization for match write endpoints
 function writeAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!WRITE_TOKEN) return next();
@@ -1306,13 +1366,31 @@ app.get('/api/member/districts', async (req, res) => {
       districts: districts.map((d) => ({
         code3: d.code3,
         name: d.name,
-        // regionCode: d.region_code,
+        regionCode: d.region_code,
       })),
     });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
 });
+
+async function normalizeAndValidateRegionDistrict(input: {
+  regionCode?: string | null;
+  districtCode?: string | null;
+}): Promise<{ regionCode: string | null; districtCode: string | null }> {
+  const region = String(input.regionCode ?? '').trim().toUpperCase();
+  const district = String(input.districtCode ?? '').trim().toUpperCase();
+  if (!region && !district) return { regionCode: null, districtCode: null };
+  if (!region || !district) throw new Error('請同時選擇地方及分區');
+  const r = await prisma.memberRegion.findUnique({ where: { code3: region }, select: { active: true } });
+  if (!r || r.active === false) throw new Error('地方無效');
+  const d = await prisma.memberDistrict.findUnique({
+    where: { region_code_code3: { region_code: region, code3: district } },
+    select: { active: true },
+  });
+  if (!d || d.active === false) throw new Error('分區無效');
+  return { regionCode: region, districtCode: district };
+}
 
 // Same-origin Member Registration page (mobile-friendly)
 app.get('/admin/register', (_req, res) => {
@@ -2217,6 +2295,8 @@ app.post('/api/members/register', async (req, res) => {
       phoneNumber?: string;
       birthDate?: string;
       clubName?: string;
+      regionCode?: string;
+      districtCode?: string;
     };
 
     const email = String(payload.email || '').trim().normalize('NFKC');
@@ -2229,6 +2309,10 @@ app.post('/api/members/register', async (req, res) => {
     });
     const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+    const regionDistrict = await normalizeAndValidateRegionDistrict({
+      regionCode: (payload as any).regionCode ?? (payload as any).region_code ?? null,
+      districtCode: (payload as any).districtCode ?? (payload as any).district_code ?? null,
+    });
 
     if (!name) {
       return res.status(400).json({ error: 'name 為必填' });
@@ -2294,7 +2378,8 @@ app.post('/api/members/register', async (req, res) => {
           id: randomUUID(),
           name,
           email: email || null,
-          district_code: null,
+          region_code: regionDistrict.regionCode,
+          district_code: regionDistrict.districtCode,
           phone: phone ?? null,
           phone_country: payload.phoneCountry ? String(payload.phoneCountry).trim() : null,
           phone_number: payload.phoneNumber ? String(payload.phoneNumber).trim() : null,
@@ -2339,7 +2424,10 @@ app.post('/api/members/register', async (req, res) => {
     res.status(201).json({ id: result.id, memberCode: result.memberCode });
   } catch (err: any) {
     const msg = String(err?.message || err);
-    const status = msg.includes('已存在') ? 409 : 500;
+    const status =
+      msg.includes('已存在') ? 409 :
+      (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 :
+      500;
     res.status(status).json({ error: msg });
   }
 });
@@ -2442,6 +2530,8 @@ app.post('/api/members/register-with-code', async (req, res) => {
       phone?: string;
       birthDate?: string;
       clubName?: string;
+      regionCode?: string;
+      districtCode?: string;
     };
     const email = String(payload.email || '').trim().normalize('NFKC');
     const code = String(payload.code || '').trim();
@@ -2450,6 +2540,10 @@ app.post('/api/members/register-with-code', async (req, res) => {
     const phone = payload.phone ? String(payload.phone).trim() : undefined;
     const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
     const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+    const regionDistrict = await normalizeAndValidateRegionDistrict({
+      regionCode: (payload as any).regionCode ?? (payload as any).region_code ?? null,
+      districtCode: (payload as any).districtCode ?? (payload as any).district_code ?? null,
+    });
     if (!email || !name || !code || !password) {
       return res.status(400).json({ error: 'email、name、驗證碼與密碼為必填' });
     }
@@ -2516,7 +2610,8 @@ app.post('/api/members/register-with-code', async (req, res) => {
           id: randomUUID(),
           name,
           email,
-          district_code: null,
+          region_code: regionDistrict.regionCode,
+          district_code: regionDistrict.districtCode,
           phone: phone ?? null,
           club_name: clubName ?? null,
           birth_date: birthDate ?? null,
@@ -2533,7 +2628,10 @@ app.post('/api/members/register-with-code', async (req, res) => {
     res.status(201).json({ id: result.id, memberCode: result.memberCode });
   } catch (err: any) {
     const msg = String(err?.message || err);
-    const status = msg.includes('email 已存在') ? 409 : 500;
+    const status =
+      msg.includes('email 已存在') ? 409 :
+      (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 :
+      500;
     res.status(status).json({ error: msg });
   }
 });
@@ -3205,7 +3303,10 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
     const body = (req.body || {}) as {
       name?: string;
       email?: string | null;
+      region_code?: string | null;
+      regionCode?: string | null;
       district_code?: string | null;
+      districtCode?: string | null;
       member_code?: string | null;
       phone?: string | null;
       birthDate?: string | null;
@@ -3224,7 +3325,13 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
     const data: any = {};
     if (body.name !== undefined) data.name = String(body.name ?? '').trim();
     if (body.email !== undefined) data.email = body.email ? String(body.email).trim() : null;
-    if (body.district_code !== undefined) data.district_code = body.district_code ? String(body.district_code).trim() : null;
+    const regionRaw = body.regionCode ?? body.region_code;
+    const districtRaw = body.districtCode ?? body.district_code;
+    if (regionRaw !== undefined || districtRaw !== undefined) {
+      const pair = await normalizeAndValidateRegionDistrict({ regionCode: regionRaw ?? null, districtCode: districtRaw ?? null });
+      data.region_code = pair.regionCode;
+      data.district_code = pair.districtCode;
+    }
     if (body.member_code !== undefined) data.member_code = body.member_code ? String(body.member_code).trim() : null;
     if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
     if (body.club_name !== undefined) data.club_name = body.club_name ? String(body.club_name).trim() : null;
@@ -3289,7 +3396,9 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
     if ((err as any)?.code === 'P2025') {
       return res.status(404).json({ error: '會員不存在' });
     }
-    res.status(500).json({ error: String(err?.message || err) });
+    const msg = String(err?.message || err);
+    const status = (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
@@ -3309,12 +3418,24 @@ app.put('/api/members/:id', async (req, res) => {
       clubName?: string;
       club_name?: string;
       password?: string;
+      regionCode?: string | null;
+      region_code?: string | null;
+      districtCode?: string | null;
+      district_code?: string | null;
     };
 
     const data: any = {};
     if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
     if (body.club_name !== undefined) data.club_name = body.club_name ? String(body.club_name).trim() : null;
     if (body.clubName !== undefined) data.club_name = body.clubName ? String(body.clubName).trim() : null;
+
+    const regionRaw = (body as any).regionCode ?? (body as any).region_code;
+    const districtRaw = (body as any).districtCode ?? (body as any).district_code;
+    if (regionRaw !== undefined || districtRaw !== undefined) {
+      const pair = await normalizeAndValidateRegionDistrict({ regionCode: regionRaw ?? null, districtCode: districtRaw ?? null });
+      data.region_code = pair.regionCode;
+      data.district_code = pair.districtCode;
+    }
 
     const bdRaw = body.birthDate ?? body.birth_date;
     if (bdRaw !== undefined) {
@@ -3348,7 +3469,9 @@ app.put('/api/members/:id', async (req, res) => {
     if ((err as any)?.code === 'P2025') {
       return res.status(404).json({ error: '會員不存在' });
     }
-    res.status(500).json({ error: String(err?.message || err) });
+    const msg = String(err?.message || err);
+    const status = (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 

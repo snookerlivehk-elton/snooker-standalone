@@ -54,7 +54,7 @@ model Member {
   name         String
   // Registration fields
   email        String?      @unique
-  // region_code  String?
+  region_code  String?
   district_code String?
   phone        String?
   phone_country String?
@@ -247,6 +247,15 @@ model SiteNotice {
   youtubeEmbedUrl String?
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
+}
+
+model SiteAd {
+  id        String   @id
+  enabled   Boolean  @default(true)
+  imageUrl  String?
+  linkUrl   String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 model FeatureFlag {
