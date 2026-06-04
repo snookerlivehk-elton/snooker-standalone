@@ -1,6 +1,6 @@
 {
-  "name": "SL18-APP",
-  "short_name": "SL18-APP",
+  "name": "CUE AIM LIVE",
+  "short_name": "CUE AIM LIVE",
   "start_url": "/?redirect=admin",
   "display": "standalone",
   "background_color": "#111827",

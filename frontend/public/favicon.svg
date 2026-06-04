@@ -1,11 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1e3a8a"/>
-      <stop offset="1" stop-color="#0ea5e9"/>
-    </linearGradient>
-  </defs>
-  <rect x="4" y="4" width="56" height="56" rx="12" fill="url(#g)"/>
-  <circle cx="32" cy="32" r="12" fill="#f43f5e"/>
-  <text x="32" y="50" font-size="12" text-anchor="middle" fill="#fff">SL18</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect x="0" y="0" width="512" height="512" fill="#000000" />
+
+  <path
+    d="M 120 195 A 170 170 0 1 1 370 350"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+  <path
+    d="M 160 205 A 130 130 0 1 1 342 330"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="18"
+    stroke-linecap="round"
+    opacity="0.9"
+  />
+
+  <circle cx="388" cy="170" r="36" fill="#E60012" />
+
+  <line
+    x1="120"
+    y1="330"
+    x2="420"
+    y2="215"
+    stroke="#FFFFFF"
+    stroke-width="26"
+    stroke-linecap="round"
+  />
+  <line
+    x1="145"
+    y1="321"
+    x2="410"
+    y2="220"
+    stroke="#000000"
+    stroke-width="6"
+    stroke-linecap="round"
+    opacity="0.35"
+  />
+
+  <text
+    x="256"
+    y="420"
+    fill="#FFFFFF"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="88"
+    font-weight="800"
+    text-anchor="middle"
+    letter-spacing="2"
+  >
+    CUE AIM
+  </text>
+  <text
+    x="256"
+    y="490"
+    fill="#E60012"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="96"
+    font-weight="900"
+    text-anchor="middle"
+    letter-spacing="6"
+  >
+    LIVE
+  </text>
 </svg>
