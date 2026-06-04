@@ -1085,6 +1085,9 @@ app.get('/api/site-ads', async (req, res) => {
             enabled: r.enabled,
             imageUrl: r.imageUrl,
             linkUrl: r.linkUrl,
+            displaySeconds: r.displaySeconds ?? 15,
+            minIntervalMinutes: r.minIntervalMinutes ?? 20,
+            maxIntervalMinutes: r.maxIntervalMinutes ?? 30,
             updatedAt: r.updatedAt,
         }))
             .filter((r) => r.enabled && r.imageUrl && r.linkUrl);
@@ -1100,7 +1103,7 @@ app.get('/api/admin/site-ads', adminAuth, async (_req, res) => {
         await prisma.$transaction(placements.map((id) => prisma.siteAd.upsert({
             where: { id },
             update: {},
-            create: { id, enabled: true, imageUrl: null, linkUrl: null },
+            create: { id, enabled: true, imageUrl: null, linkUrl: null, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
         })));
         const ads = await prisma.siteAd.findMany({ orderBy: { id: 'asc' } });
         res.json({ ads });
@@ -1120,10 +1123,28 @@ app.put('/api/admin/site-ads/:id', adminAuth, async (req, res) => {
         const enabled = body.enabled === undefined ? undefined : Boolean(body.enabled);
         const imageUrl = body.imageUrl === undefined ? undefined : (body.imageUrl ? String(body.imageUrl).trim() : null);
         const linkUrl = body.linkUrl === undefined ? undefined : (body.linkUrl ? String(body.linkUrl).trim() : null);
+        const dsRaw = body.displaySeconds;
+        const minRaw = body.minIntervalMinutes;
+        const maxRaw = body.maxIntervalMinutes;
+        const ds = dsRaw === undefined ? undefined : Math.max(3, Math.min(60, Number(dsRaw)));
+        const minM = minRaw === undefined ? undefined : Math.max(1, Math.min(24 * 60, Number(minRaw)));
+        const maxM = maxRaw === undefined ? undefined : Math.max(1, Math.min(24 * 60, Number(maxRaw)));
+        if ((dsRaw !== undefined && !Number.isFinite(ds)) || (minRaw !== undefined && !Number.isFinite(minM)) || (maxRaw !== undefined && !Number.isFinite(maxM))) {
+            return res.status(400).json({ error: 'invalid_schedule' });
+        }
+        const fixedMin = minM !== undefined && maxM !== undefined ? Math.min(minM, maxM) : minM;
+        const fixedMax = minM !== undefined && maxM !== undefined ? Math.max(minM, maxM) : maxM;
         const ad = await prisma.siteAd.upsert({
             where: { id },
-            update: { ...(enabled !== undefined ? { enabled } : {}), ...(imageUrl !== undefined ? { imageUrl } : {}), ...(linkUrl !== undefined ? { linkUrl } : {}) },
-            create: { id, enabled: enabled ?? true, imageUrl: imageUrl ?? null, linkUrl: linkUrl ?? null },
+            update: {
+                ...(enabled !== undefined ? { enabled } : {}),
+                ...(imageUrl !== undefined ? { imageUrl } : {}),
+                ...(linkUrl !== undefined ? { linkUrl } : {}),
+                ...(ds !== undefined ? { displaySeconds: ds } : {}),
+                ...(fixedMin !== undefined ? { minIntervalMinutes: fixedMin } : {}),
+                ...(fixedMax !== undefined ? { maxIntervalMinutes: fixedMax } : {}),
+            },
+            create: { id, enabled: enabled ?? true, imageUrl: imageUrl ?? null, linkUrl: linkUrl ?? null, displaySeconds: ds ?? 15, minIntervalMinutes: fixedMin ?? 20, maxIntervalMinutes: fixedMax ?? 30 },
         });
         res.json({ ad });
     }

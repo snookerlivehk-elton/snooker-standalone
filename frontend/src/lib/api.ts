@@ -1446,7 +1446,7 @@ export async function updateAdminSiteAd(
   apiUrl: string,
   adminToken: string,
   placement: 'system' | 'venue' | 'member',
-  payload: { enabled?: boolean; imageUrl?: string | null; linkUrl?: string | null },
+  payload: { enabled?: boolean; imageUrl?: string | null; linkUrl?: string | null; displaySeconds?: number; minIntervalMinutes?: number; maxIntervalMinutes?: number },
 ) {
   const res = await fetch(`${apiUrl}/api/admin/site-ads/${placement}`, {
     method: 'PUT',

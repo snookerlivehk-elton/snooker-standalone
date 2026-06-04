@@ -27,10 +27,10 @@ const AdminOverview: React.FC = () => {
   const [adsError, setAdsError] = useState<string | null>(null);
   const [adsSaving, setAdsSaving] = useState(false);
   const [adsSaveResult, setAdsSaveResult] = useState<string | null>(null);
-  const [adsDraft, setAdsDraft] = useState<Record<string, { enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>>({
-    system: { enabled: true, imageUrl: '', linkUrl: '' },
-    venue: { enabled: true, imageUrl: '', linkUrl: '' },
-    member: { enabled: true, imageUrl: '', linkUrl: '' },
+  const [adsDraft, setAdsDraft] = useState<Record<string, { enabled: boolean; imageUrl: string; linkUrl: string; displaySeconds: number; minIntervalMinutes: number; maxIntervalMinutes: number; updatedAt?: string }>>({
+    system: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+    venue: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+    member: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
   });
   const systemAdFileRef = useRef<HTMLInputElement | null>(null);
   const venueAdFileRef = useRef<HTMLInputElement | null>(null);
@@ -118,13 +118,19 @@ const AdminOverview: React.FC = () => {
     setAdsSaving(true);
     try {
       const tok = resolveToken();
-      const draft = adsDraft[placement] || { enabled: true, imageUrl: '', linkUrl: '' };
+      const draft = adsDraft[placement] || { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 };
       const imageUrl = String(draft.imageUrl || '').trim();
       const linkUrl = String(draft.linkUrl || '').trim();
+      const displaySeconds = Math.max(3, Math.min(60, Number(draft.displaySeconds || 15) || 15));
+      const minIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(draft.minIntervalMinutes || 20) || 20));
+      const maxIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(draft.maxIntervalMinutes || 30) || 30));
       await updateAdminSiteAd(API_URL, tok, placement, {
         enabled: !!draft.enabled,
         imageUrl: imageUrl ? imageUrl : null,
         linkUrl: linkUrl ? linkUrl : null,
+        displaySeconds,
+        minIntervalMinutes,
+        maxIntervalMinutes,
       });
       const row = await getAdminSiteAds(API_URL, tok);
       const next: any = { ...adsDraft };
@@ -135,6 +141,9 @@ const AdminOverview: React.FC = () => {
           enabled: a?.enabled !== false,
           imageUrl: String(a?.imageUrl || ''),
           linkUrl: String(a?.linkUrl || ''),
+          displaySeconds: Number(a?.displaySeconds ?? 15) || 15,
+          minIntervalMinutes: Number(a?.minIntervalMinutes ?? 20) || 20,
+          maxIntervalMinutes: Number(a?.maxIntervalMinutes ?? 30) || 30,
           updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
         };
       }
@@ -172,7 +181,7 @@ const AdminOverview: React.FC = () => {
         setAdsDraft((s) => ({
           ...s,
           [placement]: {
-            ...(s[placement] || { enabled: true, imageUrl: '', linkUrl: '' }),
+            ...(s[placement] || { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 }),
             imageUrl: String(ad.imageUrl || ''),
             updatedAt: ad?.updatedAt ? String(ad.updatedAt) : (s[placement] as any)?.updatedAt,
           },
@@ -260,9 +269,9 @@ const AdminOverview: React.FC = () => {
         const tok = resolveToken();
         const row = await getAdminSiteAds(API_URL, tok);
         const next: any = {
-          system: { enabled: true, imageUrl: '', linkUrl: '' },
-          venue: { enabled: true, imageUrl: '', linkUrl: '' },
-          member: { enabled: true, imageUrl: '', linkUrl: '' },
+          system: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+          venue: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+          member: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
         };
         for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
           const id = String(a?.id || '').trim();
@@ -271,6 +280,9 @@ const AdminOverview: React.FC = () => {
             enabled: a?.enabled !== false,
             imageUrl: String(a?.imageUrl || ''),
             linkUrl: String(a?.linkUrl || ''),
+            displaySeconds: Number(a?.displaySeconds ?? 15) || 15,
+            minIntervalMinutes: Number(a?.minIntervalMinutes ?? 20) || 20,
+            maxIntervalMinutes: Number(a?.maxIntervalMinutes ?? 30) || 30,
             updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
           };
         }
@@ -459,6 +471,41 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://..."
                     />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-sm cue-muted mb-1">停留（秒）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.system?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={3}
+                        max={60}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.system?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.system?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
+                  </div>
                   <button
                     type="button"
                     className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
@@ -575,6 +622,41 @@ const AdminOverview: React.FC = () => {
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="https://..."
                     />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-sm cue-muted mb-1">停留（秒）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.venue?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={3}
+                        max={60}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.venue?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.venue?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -721,6 +803,41 @@ const AdminOverview: React.FC = () => {
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="https://..."
                     />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-sm cue-muted mb-1">停留（秒）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.member?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={3}
+                        max={60}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.member?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
+                    <div>
+                      <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
+                      <input
+                        type="number"
+                        value={Number(adsDraft.member?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        className="w-full cue-input rounded px-3 py-2 text-sm"
+                        min={1}
+                        max={1440}
+                      />
+                    </div>
                   </div>
                   <button
                     type="button"

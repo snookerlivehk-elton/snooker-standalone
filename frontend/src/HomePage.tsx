@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import PageSection from './components/PageSection';
@@ -68,6 +68,8 @@ const HomePage: React.FC = () => {
 
   const [siteAd, setSiteAd] = useState<any>(null);
   const [siteAdOpen, setSiteAdOpen] = useState(false);
+  const [siteAdNextAt, setSiteAdNextAt] = useState<number | null>(null);
+  const siteAdWasOpenRef = useRef(false);
 
   const [memberHighest, setMemberHighest] = useState<any[]>([]);
   const [memberMonthly, setMemberMonthly] = useState<any[]>([]);
@@ -88,25 +90,71 @@ const HomePage: React.FC = () => {
         let prev: any = null;
         try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
         const now = Date.now();
+        const currUpdatedAt = String(ad?.updatedAt || '');
         const prevUpdatedAt = String(prev?.updatedAt || '');
         const prevSeenAt = Number(prev?.seenAt || 0) || 0;
-        const currUpdatedAt = String(ad?.updatedAt || '');
-        const cooldownMs = 24 * 60 * 60 * 1000;
-        const shouldOpen = !prev || prevUpdatedAt !== currUpdatedAt || (now - prevSeenAt) > cooldownMs;
-        if (shouldOpen) {
-          setSiteAdOpen(true);
-          try { localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: now })); } catch {}
-        }
+        const prevNextAt = Number(prev?.nextAt || 0) || 0;
+
+        const minM = Math.max(1, Math.min(24 * 60, Number((ad as any)?.minIntervalMinutes ?? 20) || 20));
+        const maxM = Math.max(1, Math.min(24 * 60, Number((ad as any)?.maxIntervalMinutes ?? 30) || 30));
+        const low = Math.min(minM, maxM);
+        const high = Math.max(minM, maxM);
+        const pickMinutes = low + Math.floor(Math.random() * (high - low + 1));
+
+        let nextAt = prevNextAt || (prevSeenAt ? (prevSeenAt + pickMinutes * 60 * 1000) : 0);
+        if (!prev || prevUpdatedAt !== currUpdatedAt) nextAt = now;
+        if (!nextAt) nextAt = now;
+
+        if (mounted) setSiteAdNextAt(nextAt);
+        try { localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: prevSeenAt || 0, nextAt })); } catch {}
       } catch {}
     })();
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
+    if (!siteAd || !siteAdNextAt) return;
+    if (!siteAd?.imageUrl || !siteAd?.linkUrl) return;
+    const key = `siteAdSeen:system`;
+    const now = Date.now();
+    const delay = Math.max(0, siteAdNextAt - now);
+    const t = window.setTimeout(() => {
+      setSiteAdOpen(true);
+      try {
+        const currUpdatedAt = String(siteAd?.updatedAt || '');
+        localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: Date.now(), nextAt: siteAdNextAt }));
+      } catch {}
+    }, delay);
+    return () => window.clearTimeout(t);
+  }, [siteAd, siteAdNextAt]);
+
+  useEffect(() => {
     if (!siteAdOpen) return;
-    const t = window.setTimeout(() => setSiteAdOpen(false), 5000);
+    const key = `siteAdSeen:system`;
+    const ds = Math.max(3, Math.min(60, Number((siteAd as any)?.displaySeconds ?? 15) || 15));
+    const t = window.setTimeout(() => setSiteAdOpen(false), ds * 1000);
     return () => window.clearTimeout(t);
   }, [siteAdOpen, siteAd?.updatedAt]);
+
+  useEffect(() => {
+    const wasOpen = siteAdWasOpenRef.current;
+    siteAdWasOpenRef.current = siteAdOpen;
+    if (!siteAd) return;
+    if (!wasOpen || siteAdOpen) return;
+    const key = `siteAdSeen:system`;
+    const now = Date.now();
+    const minM = Math.max(1, Math.min(24 * 60, Number((siteAd as any)?.minIntervalMinutes ?? 20) || 20));
+    const maxM = Math.max(1, Math.min(24 * 60, Number((siteAd as any)?.maxIntervalMinutes ?? 30) || 30));
+    const low = Math.min(minM, maxM);
+    const high = Math.max(minM, maxM);
+    const pickMinutes = low + Math.floor(Math.random() * (high - low + 1));
+    const nextAt = now + pickMinutes * 60 * 1000;
+    setSiteAdNextAt(nextAt);
+    try {
+      const updatedAt = String(siteAd?.updatedAt || '');
+      localStorage.setItem(key, JSON.stringify({ updatedAt, seenAt: now, nextAt }));
+    } catch {}
+  }, [siteAdOpen, siteAd]);
 
   useEffect(() => {
     let mounted = true;

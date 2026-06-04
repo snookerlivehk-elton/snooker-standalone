@@ -250,12 +250,15 @@ model SiteNotice {
 }
 
 model SiteAd {
-  id        String   @id
-  enabled   Boolean  @default(true)
-  imageUrl  String?
-  linkUrl   String?
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+  id                String   @id
+  enabled           Boolean  @default(true)
+  imageUrl          String?
+  linkUrl           String?
+  displaySeconds    Int      @default(15)
+  minIntervalMinutes Int     @default(20)
+  maxIntervalMinutes Int     @default(30)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
 }
 
 model FeatureFlag {
