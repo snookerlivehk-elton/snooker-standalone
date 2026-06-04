@@ -1426,6 +1426,16 @@ const Me: React.FC = () => {
           </div>
         </div>
       </main>
+      <a
+        href="https://www.snookerhk.live/"
+        target="_blank"
+        rel="noreferrer"
+        className="fixed z-50 right-4 select-none px-4 py-3 rounded-full bg-amber-400 text-slate-950 font-extrabold shadow-lg ring-2 ring-amber-200 hover:brightness-95 active:brightness-90"
+        style={{ bottom: 'calc(4.75rem + env(safe-area-inset-bottom))' }}
+        aria-label="snookerhk.live首頁"
+      >
+        snookerhk.live首頁
+      </a>
       <BottomNavPublic />
     </div>
   );
