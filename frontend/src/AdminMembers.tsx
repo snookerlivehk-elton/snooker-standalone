@@ -9,6 +9,7 @@ const AdminMembers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Record<string, any>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [purgeCandidate, setPurgeCandidate] = useState<{ id: string; display: string } | null>(null);
 
   // Filters
   const [filterName, setFilterName] = useState('');
@@ -51,6 +52,37 @@ const AdminMembers: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, []);
+
+  function resolveAdminToken(): string {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tokenFromUrl = params.get('token') || '';
+      const tokenSaved = localStorage.getItem('adminToken') || '';
+      return tokenFromUrl || tokenSaved;
+    } catch {
+      return localStorage.getItem('adminToken') || '';
+    }
+  }
+
+  async function refreshMembers(adminToken: string) {
+    const res = await listMembers(API_URL, adminToken);
+    setMembers(res.members || []);
+  }
+
+  async function purgeDelete(id: string, display: string) {
+    const adminToken = resolveAdminToken();
+    if (!adminToken) {
+      setError('缺少管理員密鑰');
+      return;
+    }
+    const ok = window.confirm(`再次確認：確定要永久刪除「${display}」（連同相關資料）？\n\n此操作不可復原。`);
+    if (!ok) return;
+    await deleteMember(API_URL, adminToken, id, { purge: true });
+    await refreshMembers(adminToken);
+    setError(null);
+    setConfirmDeleteId(null);
+    setPurgeCandidate(null);
+  }
 
   function startEdit(m: any) {
     setEditing((prev) => ({ ...prev, [m.id]: { ...m } }));
@@ -109,6 +141,7 @@ const AdminMembers: React.FC = () => {
           : `再次確認：確定要永久刪除會員「${display}」？此操作不可復原。`
       );
       if (!ok) return;
+      setPurgeCandidate(null);
       await deleteMember(API_URL, adminToken, id, { purge: String(m.role || '').toUpperCase() === 'ADMIN' });
       try {
         const res = await listMembers(API_URL, adminToken);
@@ -123,6 +156,7 @@ const AdminMembers: React.FC = () => {
         const label = String(m.member_code || '').trim();
         const name = String(m.name || '').trim();
         const display = name || label || id;
+        setPurgeCandidate({ id: String(id), display });
         const ok = window.confirm(
           `此帳戶已有關聯資料。\n\n是否改用「永久刪除（連同相關資料）」方式刪除「${display}」？\n\n此操作不可復原。`
         );
@@ -135,6 +169,7 @@ const AdminMembers: React.FC = () => {
             } catch {}
             setConfirmDeleteId(null);
             setError(null);
+            setPurgeCandidate(null);
             return;
           } catch (e2: any) {
             const msg2 = String(e2?.message || '刪除會員失敗');
@@ -192,7 +227,20 @@ const AdminMembers: React.FC = () => {
 
           <div className="px-4 py-4">
             {loading && <div className="text-sm text-slate-600">載入中...</div>}
-            {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
+            {error && (
+              <div className="mt-2 space-y-2">
+                <div className="text-sm text-red-600">{error}</div>
+                {purgeCandidate && (String(error || '').includes('purge=1') || String(error || '').includes('永久刪除')) && (
+                  <button
+                    type="button"
+                    className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                    onClick={() => purgeDelete(purgeCandidate.id, purgeCandidate.display)}
+                  >
+                    以「永久刪除（含資料）」再試一次
+                  </button>
+                )}
+              </div>
+            )}
 
             {!loading && (
               <>
