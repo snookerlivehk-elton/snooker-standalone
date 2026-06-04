@@ -9,7 +9,6 @@ import LiveView from './LiveView';
 import { State } from './lib/State';
 import Overlay from './Overlay';
 import MemberRegister from './MemberRegister';
-import MemberProfile from './MemberProfile';
 import AdminMembers from './AdminMembers';
 import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
@@ -108,7 +107,7 @@ function App() {
         <Route path="/operator/login" element={<Navigate to="/venue/login" replace />} />
         <Route path="/operator/dashboard" element={<Navigate to="/venue/dashboard" replace />} />
         <Route path="/venue/login" element={<MemberLogin mode="venue" />} />
-        <Route path="/member/:id" element={<MemberProfile />} />
+        <Route path="/member/:id" element={<Navigate to="/me" replace />} />
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ClubPublicPage />} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
