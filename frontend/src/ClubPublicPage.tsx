@@ -9,6 +9,7 @@ import {
   getClubLeaderboardMonthly,
   getMyJoinedClubs,
   getMyReservations,
+  getMyClubPointsBalance,
   getPublicClubLiveAnnouncements,
   getPublicClubMessages,
   getPublicClubProfile,
@@ -101,12 +102,37 @@ const ClubPublicPage: React.FC = () => {
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
+  const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
+
+  const [myPoints, setMyPoints] = useState<{ balance: number; updatedAt: string | null } | null>(null);
+  const [myPointsLoading, setMyPointsLoading] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'messages' && !clubMessagesEnabled) setActiveTab('booking');
     if (activeTab === 'signup' && !tournamentsEnabled) setActiveTab('booking');
     if (activeTab === 'live' && !liveEnabled) setActiveTab('booking');
   }, [activeTab, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!pointsEnabled || !sessionMemberId || !club?.id) {
+        if (mounted) setMyPoints(null);
+        return;
+      }
+      setMyPointsLoading(true);
+      try {
+        const row = await getMyClubPointsBalance(API_URL, sessionMemberId, String(club.id));
+        const bal = Number((row as any)?.balance ?? 0);
+        if (mounted) setMyPoints({ balance: Number.isFinite(bal) ? bal : 0, updatedAt: (row as any)?.updatedAt ?? null });
+      } catch {
+        if (mounted) setMyPoints(null);
+      } finally {
+        if (mounted) setMyPointsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [pointsEnabled, sessionMemberId, club?.id]);
 
   const galleryUrls = useMemo(() => {
     const raw = (club as any)?.galleryUrls;
@@ -1376,6 +1402,12 @@ const ClubPublicPage: React.FC = () => {
                   {!session.id ? (
                     <div className="text-sm cue-muted mb-3">
                       需登入才能預約。<a href="/members/login" className="accent-yellow underline">登入</a>
+                    </div>
+                  ) : null}
+
+                  {session.id && pointsEnabled ? (
+                    <div className="text-sm cue-muted mb-3">
+                      我的積分（此場館）：{myPointsLoading ? '載入中...' : (myPoints ? String(myPoints.balance) : '—')}
                     </div>
                   ) : null}
 

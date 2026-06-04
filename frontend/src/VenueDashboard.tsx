@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -106,18 +106,27 @@ const VenueDashboard: React.FC = () => {
   const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
 
-  const [pointsConfig, setPointsConfig] = useState<any>(null);
-  const [pointsBalances, setPointsBalances] = useState<any[]>([]);
-  const [pointsLedger, setPointsLedger] = useState<any[]>([]);
   const [pointsLoading, setPointsLoading] = useState(false);
-  const [pointsSaving, setPointsSaving] = useState(false);
-  const [pointsCurrency, setPointsCurrency] = useState('HKD');
-  const [pointsPerCurrency, setPointsPerCurrency] = useState('1');
-  const [pointsRoundingMinutes, setPointsRoundingMinutes] = useState('15');
-  const [pointsMinBillableMinutes, setPointsMinBillableMinutes] = useState('0');
+
+  const [pointsAdjustMemberQuery, setPointsAdjustMemberQuery] = useState('');
+  const [pointsAdjustMemberOptions, setPointsAdjustMemberOptions] = useState<any[]>([]);
+  const [pointsAdjustMemberLoading, setPointsAdjustMemberLoading] = useState(false);
   const [pointsAdjustMemberId, setPointsAdjustMemberId] = useState('');
   const [pointsAdjustDelta, setPointsAdjustDelta] = useState('');
   const [pointsAdjustReason, setPointsAdjustReason] = useState('');
+
+  const [pointsBalanceQuery, setPointsBalanceQuery] = useState('');
+  const [pointsBalanceRows, setPointsBalanceRows] = useState<any[]>([]);
+  const [pointsBalanceLoading, setPointsBalanceLoading] = useState(false);
+
+  const [pointsLedgerMode, setPointsLedgerMode] = useState<'detail' | 'month'>('detail');
+  const [pointsLedgerRows, setPointsLedgerRows] = useState<any[]>([]);
+  const [pointsLedgerLoading, setPointsLedgerLoading] = useState(false);
+  const [pointsLedgerTotalDelta, setPointsLedgerTotalDelta] = useState(0);
+  const [pointsLedgerMemberId, setPointsLedgerMemberId] = useState('');
+  const [pointsLedgerFrom, setPointsLedgerFrom] = useState('');
+  const [pointsLedgerTo, setPointsLedgerTo] = useState('');
+  const [pointsLedgerMonth, setPointsLedgerMonth] = useState('');
 
   const operatorId = session.id;
   const operatorName = session.name || session.email;
@@ -465,26 +474,21 @@ const VenueDashboard: React.FC = () => {
     if (!pointsEnabled) return;
     setPointsLoading(true);
     try {
-      const [cfg, balances, ledger] = await Promise.all([
-        getClubPointsConfig(API_URL, operatorId),
-        getClubPointsBalances(API_URL, operatorId),
-        getClubPointsLedger(API_URL, operatorId, { limit: 50 }),
-      ]);
-      setPointsConfig(cfg);
-      setPointsBalances(Array.isArray(balances) ? balances : []);
-      setPointsLedger(Array.isArray(ledger) ? ledger : []);
-      setPointsCurrency(String(cfg?.currencyCode || 'HKD'));
-      setPointsPerCurrency(String(cfg?.pointsPerCurrency ?? '1'));
-      setPointsRoundingMinutes(String(cfg?.roundingMinutes ?? 15));
-      setPointsMinBillableMinutes(String(cfg?.minBillableMinutes ?? 0));
-      if (!pointsAdjustMemberId && Array.isArray(balances) && balances[0]?.memberId) setPointsAdjustMemberId(String(balances[0].memberId));
+      setPointsLedgerMode('detail');
+      const res = await getClubPointsLedger(API_URL, operatorId, { limit: 50, includeTotal: true });
+      const rows = Array.isArray((res as any)?.rows) ? (res as any).rows : (Array.isArray(res) ? res : []);
+      const totalDelta = Number((res as any)?.totalDelta ?? 0);
+      setPointsLedgerRows(rows);
+      setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
     } catch (err: any) {
       setToast(err?.message || '載入積分資料失敗');
       setTimeout(() => setToast(null), 3000);
+      setPointsLedgerRows([]);
+      setPointsLedgerTotalDelta(0);
     } finally {
       setPointsLoading(false);
     }
-  }, [operatorId, isOperator, pointsEnabled, pointsAdjustMemberId]);
+  }, [operatorId, isOperator, pointsEnabled]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) {
@@ -591,6 +595,62 @@ const VenueDashboard: React.FC = () => {
     if (!pointsEnabled) return;
     loadPointsData();
   }, [operatorId, isOperator, pointsEnabled, loadPointsData]);
+
+  useEffect(() => {
+    if (!operatorId || !isOperator) return;
+    if (!pointsEnabled) return;
+    if (activeTab !== 'points') return;
+    let mounted = true;
+    const q = String(pointsAdjustMemberQuery || '').trim();
+    if (!q) {
+      setPointsAdjustMemberOptions([]);
+      setPointsAdjustMemberLoading(false);
+      return;
+    }
+    const t = window.setTimeout(async () => {
+      setPointsAdjustMemberLoading(true);
+      try {
+        const rows = await searchClubPointsBalances(API_URL, operatorId, { q, limit: 30 });
+        if (mounted) setPointsAdjustMemberOptions(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setPointsAdjustMemberOptions([]);
+      } finally {
+        if (mounted) setPointsAdjustMemberLoading(false);
+      }
+    }, 250);
+    return () => {
+      mounted = false;
+      window.clearTimeout(t);
+    };
+  }, [activeTab, operatorId, isOperator, pointsAdjustMemberQuery, pointsEnabled]);
+
+  useEffect(() => {
+    if (!operatorId || !isOperator) return;
+    if (!pointsEnabled) return;
+    if (activeTab !== 'points') return;
+    let mounted = true;
+    const q = String(pointsBalanceQuery || '').trim();
+    if (!q) {
+      setPointsBalanceRows([]);
+      setPointsBalanceLoading(false);
+      return;
+    }
+    const t = window.setTimeout(async () => {
+      setPointsBalanceLoading(true);
+      try {
+        const rows = await searchClubPointsBalances(API_URL, operatorId, { q, limit: 50 });
+        if (mounted) setPointsBalanceRows(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setPointsBalanceRows([]);
+      } finally {
+        if (mounted) setPointsBalanceLoading(false);
+      }
+    }, 250);
+    return () => {
+      mounted = false;
+      window.clearTimeout(t);
+    };
+  }, [activeTab, operatorId, isOperator, pointsBalanceQuery, pointsEnabled]);
 
   const handleCreateRoom = async () => {
     if (creating) return;
@@ -1289,79 +1349,45 @@ const VenueDashboard: React.FC = () => {
           ) : (
             <div className="grid gap-6">
               <div>
-                <div className="font-semibold mb-2">積分設定（每場館自訂）</div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm mb-1 cue-muted">貨幣代碼</label>
-                    <input value={pointsCurrency} onChange={(e) => setPointsCurrency(e.target.value.toUpperCase())} className="w-full px-3 py-2 rounded cue-input" placeholder="HKD" />
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1 cue-muted">每 1 貨幣可抵扣積分</label>
-                    <input value={pointsPerCurrency} onChange={(e) => setPointsPerCurrency(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1 cue-muted">每 X 分鐘進位</label>
-                    <input value={pointsRoundingMinutes} onChange={(e) => setPointsRoundingMinutes(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="15" />
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1 cue-muted">最低計費分鐘</label>
-                    <input value={pointsMinBillableMinutes} onChange={(e) => setPointsMinBillableMinutes(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="0" />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded cue-button hover:brightness-95 text-white"
-                    disabled={pointsSaving}
-                    onClick={async () => {
-                      if (pointsSaving) return;
-                      setPointsSaving(true);
-                      try {
-                        const payload = {
-                          currencyCode: String(pointsCurrency || 'HKD').trim().toUpperCase(),
-                          pointsPerCurrency: Number(pointsPerCurrency),
-                          roundingMinutes: Number(pointsRoundingMinutes),
-                          minBillableMinutes: Number(pointsMinBillableMinutes),
-                        };
-                        await updateClubPointsConfig(API_URL, operatorId, payload as any);
-                        setToast('已更新積分設定');
-                        setTimeout(() => setToast(null), 2000);
-                        await loadPointsData();
-                      } catch (e: any) {
-                        setToast(e?.message || '更新失敗');
-                        setTimeout(() => setToast(null), 3000);
-                      } finally {
-                        setPointsSaving(false);
-                      }
-                    }}
-                  >
-                    {pointsSaving ? '儲存中...' : '儲存設定'}
-                  </button>
-                  <div className="text-xs cue-muted">
-                    結算時會先按「每 X 分鐘進位」計算分鐘數，再按兌換規則轉為扣分。
-                  </div>
-                </div>
-              </div>
-
-              <div>
                 <div className="font-semibold mb-2">會員積分加減</div>
-                <div className="grid md:grid-cols-4 gap-3">
-                  <div className="md:col-span-2">
+                <div className="grid gap-3 md:grid-cols-6">
+                  <div className="md:col-span-3">
+                    <label className="block text-sm mb-1 cue-muted">搜尋會員（名稱/電話/Email/會員編號）</label>
+                    <input
+                      value={pointsAdjustMemberQuery}
+                      onChange={(e) => setPointsAdjustMemberQuery(e.target.value)}
+                      className="w-full px-3 py-2 rounded cue-input"
+                      placeholder="例如：陳大文 / 9123 / abc@gmail.com / A00123"
+                    />
+                    {pointsAdjustMemberLoading ? <div className="text-xs cue-muted mt-1">搜尋中...</div> : null}
+                  </div>
+                  <div className="md:col-span-3">
                     <label className="block text-sm mb-1 cue-muted">會員</label>
                     <select value={pointsAdjustMemberId} onChange={(e) => setPointsAdjustMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
-                      <option value="">選擇會員</option>
-                      {pointsBalances.map((r: any) => (
-                        <option key={r.memberId} value={r.memberId}>
-                          {(r.member?.name || r.member?.email || r.memberId) + `（${r.balance ?? 0}）`}
-                        </option>
-                      ))}
+                      <option value="">請先搜尋並選擇</option>
+                      {pointsAdjustMemberOptions.map((r: any) => {
+                        const m = r?.member || {};
+                        const code = String(m?.member_code || '').trim();
+                        const name = String(m?.name || '').trim();
+                        const phone = String(m?.phone || m?.phone_e164 || '').trim();
+                        const email = String(m?.email || '').trim();
+                        const bal = r?.balance ?? 0;
+                        const left = `${name || email || r.memberId}${code ? ` [${code}]` : ''}`;
+                        const right = phone ? phone : (email ? email : '');
+                        const label = `${left}${right ? ` (${right})` : ''}（${bal}）`;
+                        return (
+                          <option key={r.memberId} value={r.memberId}>
+                            {label}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-sm mb-1 cue-muted">加減分（可負數）</label>
                     <input value={pointsAdjustDelta} onChange={(e) => setPointsAdjustDelta(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：100 或 -50" />
                   </div>
-                  <div>
+                  <div className="md:col-span-4">
                     <label className="block text-sm mb-1 cue-muted">原因</label>
                     <input value={pointsAdjustReason} onChange={(e) => setPointsAdjustReason(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：台費抵扣 / 充值" />
                   </div>
@@ -1385,10 +1411,24 @@ const VenueDashboard: React.FC = () => {
                         setPointsAdjustReason('');
                         setToast('已更新積分');
                         setTimeout(() => setToast(null), 2000);
-                        await loadPointsData();
+                        setPointsLedgerMode('detail');
+                        setPointsLedgerMemberId(pointsAdjustMemberId);
+                        setPointsLedgerFrom('');
+                        setPointsLedgerTo('');
+                        setPointsLedgerMonth('');
+                        try {
+                          setPointsLedgerLoading(true);
+                          const res = await getClubPointsLedger(API_URL, operatorId, { limit: 50, memberId: pointsAdjustMemberId, includeTotal: true });
+                          const rows = Array.isArray((res as any)?.rows) ? (res as any).rows : (Array.isArray(res) ? res : []);
+                          const totalDelta = Number((res as any)?.totalDelta ?? 0);
+                          setPointsLedgerRows(rows);
+                          setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
+                        } catch {}
                       } catch (e: any) {
                         setToast(e?.message || '更新失敗');
                         setTimeout(() => setToast(null), 3000);
+                      } finally {
+                        setPointsLedgerLoading(false);
                       }
                     }}
                   >
@@ -1398,38 +1438,185 @@ const VenueDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <div className="font-semibold mb-2">會員餘額</div>
-                  {pointsBalances.length === 0 ? (
-                    <div className="cue-muted">暫無資料</div>
+              <div>
+                <div className="font-semibold mb-2">會員餘額（搜尋）</div>
+                <div className="grid gap-3">
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">搜尋（名稱/電話/Email/會員編號）</label>
+                    <input
+                      value={pointsBalanceQuery}
+                      onChange={(e) => setPointsBalanceQuery(e.target.value)}
+                      className="w-full px-3 py-2 rounded cue-input"
+                      placeholder="輸入關鍵字後顯示最多 50 筆"
+                    />
+                    {pointsBalanceLoading ? <div className="text-xs cue-muted mt-1">載入中...</div> : null}
+                  </div>
+
+                  {String(pointsBalanceQuery || '').trim() && pointsBalanceRows.length === 0 && !pointsBalanceLoading ? (
+                    <div className="cue-muted text-sm">沒有結果</div>
+                  ) : pointsBalanceRows.length === 0 ? (
+                    <div className="cue-muted text-sm">輸入關鍵字以查詢指定會員（避免一次列出大量成員）。</div>
                   ) : (
                     <div className="overflow-x-auto -mx-2 px-2">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="cue-muted border-b cue-border">
                             <th className="py-2 px-3">會員</th>
+                            <th className="py-2 px-3">電話</th>
+                            <th className="py-2 px-3">Email</th>
                             <th className="py-2 px-3">餘額</th>
                             <th className="py-2 px-3">更新</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {pointsBalances.map((r: any) => (
-                            <tr key={r.memberId} className="border-b cue-border hover:brightness-95">
-                              <td className="py-2 px-3">{r.member?.name || r.member?.email || '-'}</td>
-                              <td className="py-2 px-3 font-semibold">{r.balance ?? 0}</td>
-                              <td className="py-2 px-3 text-xs cue-muted">{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '-'}</td>
-                            </tr>
-                          ))}
+                          {pointsBalanceRows.map((r: any) => {
+                            const m = r?.member || {};
+                            const code = String(m?.member_code || '').trim();
+                            const name = String(m?.name || '').trim();
+                            const phone = String(m?.phone || m?.phone_e164 || '').trim();
+                            const email = String(m?.email || '').trim();
+                            return (
+                              <tr key={r.memberId} className="border-b cue-border hover:brightness-95">
+                                <td className="py-2 px-3">{name || '-'}{code ? ` [${code}]` : ''}</td>
+                                <td className="py-2 px-3 text-sm">{phone || '-'}</td>
+                                <td className="py-2 px-3 text-sm">{email || '-'}</td>
+                                <td className="py-2 px-3 font-semibold">{r.balance ?? 0}</td>
+                                <td className="py-2 px-3 text-xs cue-muted">{r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '-'}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   )}
                 </div>
-                <div>
-                  <div className="font-semibold mb-2">最近 50 筆流水</div>
-                  {pointsLedger.length === 0 ? (
+              </div>
+
+              <div>
+                <div className="font-semibold mb-2">積分流水</div>
+                <div className="grid gap-3 md:grid-cols-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1 cue-muted">模式</label>
+                    <select value={pointsLedgerMode} onChange={(e) => setPointsLedgerMode(e.target.value as any)} className="w-full px-3 py-2 rounded cue-input">
+                      <option value="detail">明細</option>
+                      <option value="month">按月</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="block text-sm mb-1 cue-muted">會員（可選）</label>
+                    <select value={pointsLedgerMemberId} onChange={(e) => setPointsLedgerMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
+                      <option value="">全部會員</option>
+                      {pointsAdjustMemberOptions.map((r: any) => {
+                        const m = r?.member || {};
+                        const code = String(m?.member_code || '').trim();
+                        const name = String(m?.name || '').trim();
+                        const email = String(m?.email || '').trim();
+                        const label = `${name || email || r.memberId}${code ? ` [${code}]` : ''}`;
+                        return (
+                          <option key={r.memberId} value={r.memberId}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <div className="text-xs cue-muted mt-1">如要按會員篩選，可先在上方搜尋會員，然後在這裡選擇。</div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1 cue-muted">月份（可選）</label>
+                    <input type="month" value={pointsLedgerMonth} onChange={(e) => setPointsLedgerMonth(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1 cue-muted">由</label>
+                    <input type="date" value={pointsLedgerFrom} onChange={(e) => setPointsLedgerFrom(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1 cue-muted">至</label>
+                    <input type="date" value={pointsLedgerTo} onChange={(e) => setPointsLedgerTo(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+                  </div>
+                  <div className="md:col-span-6">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
+                      disabled={pointsLedgerLoading}
+                      onClick={async () => {
+                        if (pointsLedgerLoading) return;
+                        setPointsLedgerLoading(true);
+                        try {
+                          const memberId = String(pointsLedgerMemberId || '').trim() || undefined;
+                          const month = String(pointsLedgerMonth || '').trim() || undefined;
+                          const fromIso = !month && pointsLedgerFrom ? new Date(`${pointsLedgerFrom}T00:00:00`).toISOString() : undefined;
+                          const toIso = !month && pointsLedgerTo ? new Date(`${pointsLedgerTo}T23:59:59.999`).toISOString() : undefined;
+                          if (pointsLedgerMode === 'month') {
+                            const rows = await getClubPointsLedger(API_URL, operatorId, { memberId, month, from: fromIso, to: toIso, groupBy: 'month' });
+                            setPointsLedgerRows(Array.isArray(rows) ? rows : []);
+                            setPointsLedgerTotalDelta(0);
+                          } else {
+                            const res = await getClubPointsLedger(API_URL, operatorId, { limit: 200, memberId, month, from: fromIso, to: toIso, includeTotal: true });
+                            const rows = Array.isArray((res as any)?.rows) ? (res as any).rows : (Array.isArray(res) ? res : []);
+                            const totalDelta = Number((res as any)?.totalDelta ?? 0);
+                            setPointsLedgerRows(rows);
+                            setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
+                          }
+                        } catch (e: any) {
+                          setToast(e?.message || '讀取積分流水失敗');
+                          setTimeout(() => setToast(null), 3000);
+                          setPointsLedgerRows([]);
+                          setPointsLedgerTotalDelta(0);
+                        } finally {
+                          setPointsLedgerLoading(false);
+                        }
+                      }}
+                    >
+                      {pointsLedgerLoading ? '載入中...' : '搜尋'}
+                    </button>
+                  </div>
+                </div>
+
+                {pointsLedgerMode === 'detail' ? (
+                  <div className="mt-3 text-sm cue-muted">
+                    {(() => {
+                      const rows = Array.isArray(pointsLedgerRows) ? pointsLedgerRows : [];
+                      const totalPlus = rows.reduce((s: number, r: any) => {
+                        const v = Number(r?.deltaPoints ?? 0);
+                        return Number.isFinite(v) && v > 0 ? s + v : s;
+                      }, 0);
+                      return (
+                        <>
+                          總加：<span className="font-semibold">{totalPlus}</span>
+                          <span className="mx-2">｜</span>
+                          總變動：<span className="font-semibold">{pointsLedgerTotalDelta > 0 ? `+${pointsLedgerTotalDelta}` : String(pointsLedgerTotalDelta)}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : null}
+
+                <div className="mt-3">
+                  {pointsLedgerLoading ? (
+                    <div className="cue-muted">載入中...</div>
+                  ) : pointsLedgerRows.length === 0 ? (
                     <div className="cue-muted">暫無資料</div>
+                  ) : pointsLedgerMode === 'month' ? (
+                    <div className="overflow-x-auto -mx-2 px-2">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="cue-muted border-b cue-border">
+                            <th className="py-2 px-3">月份</th>
+                            <th className="py-2 px-3">筆數</th>
+                            <th className="py-2 px-3">總變動</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pointsLedgerRows.map((r: any) => (
+                            <tr key={r.month} className="border-b cue-border hover:brightness-95">
+                              <td className="py-2 px-3">{r.month}</td>
+                              <td className="py-2 px-3">{r.count ?? 0}</td>
+                              <td className="py-2 px-3 font-semibold">{Number(r.sumDelta) > 0 ? `+${r.sumDelta}` : String(r.sumDelta ?? 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   ) : (
                     <div className="overflow-x-auto -mx-2 px-2">
                       <table className="w-full text-left border-collapse">
@@ -1442,16 +1629,20 @@ const VenueDashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {pointsLedger.map((r: any) => (
+                          {pointsLedgerRows.map((r: any) => (
                             <tr key={r.id} className="border-b cue-border hover:brightness-95">
                               <td className="py-2 px-3 text-xs cue-muted">{r.createdAt ? new Date(r.createdAt).toLocaleString() : '-'}</td>
-                              <td className="py-2 px-3 text-sm">{r.member?.name || r.member?.email || '-'}</td>
+                              <td className="py-2 px-3 text-sm">
+                                {r.member?.name || r.member?.email || '-'}
+                                {r.member?.member_code ? ` [${r.member.member_code}]` : ''}
+                              </td>
                               <td className="py-2 px-3 font-semibold">{r.deltaPoints > 0 ? `+${r.deltaPoints}` : r.deltaPoints}</td>
                               <td className="py-2 px-3 text-sm">{r.reason}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                      <div className="text-xs cue-muted mt-2">最多顯示 200 筆（如需完整統計可縮窄時間範圍）。</div>
                     </div>
                   )}
                 </div>

@@ -1219,7 +1219,7 @@ router.get('/points/balances', async (req, res) => {
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const memberships = await prisma.clubMember.findMany({
         where: { clubId },
-        include: { member: { select: { id: true, name: true, email: true, member_code: true } } },
+        include: { member: { select: { id: true, name: true, email: true, member_code: true, phone: true, phone_e164: true } } },
         orderBy: [{ joinedAt: 'desc' }],
     });
     const ids = memberships.map((m: any) => m.memberId);
@@ -1239,6 +1239,63 @@ router.get('/points/balances', async (req, res) => {
     }));
 });
 
+router.get('/points/balances/search', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const q = req.query.q == null ? '' : String(req.query.q || '').trim();
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(100, Math.max(1, Number(limitRaw || 20) || 20));
+    const where: any = { clubId };
+    if (q) {
+        where.member = {
+            OR: [
+                { name: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                { member_code: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+                { phone_e164: { contains: q, mode: 'insensitive' } },
+            ],
+        };
+    }
+    const memberships = await prisma.clubMember.findMany({
+        where,
+        take: limit,
+        orderBy: [{ joinedAt: 'desc' }],
+        include: { member: { select: { id: true, name: true, email: true, member_code: true, phone: true, phone_e164: true } } },
+    });
+    const ids = memberships.map((m: any) => m.memberId);
+    const balances = ids.length === 0 ? [] : await prisma.pointsBalance.findMany({
+        where: { clubId, memberId: { in: ids } },
+        select: { memberId: true, balance: true, updatedAt: true },
+    });
+    const map = new Map(balances.map(b => [b.memberId, b]));
+    res.json(memberships.map((m: any) => {
+        const b = map.get(m.memberId);
+        return {
+            member: m.member,
+            memberId: m.memberId,
+            balance: b?.balance ?? 0,
+            updatedAt: b?.updatedAt ?? null,
+        };
+    }));
+});
+
+router.get('/points/my-balance', async (req, res) => {
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const clubId = req.query.clubId == null ? '' : String(req.query.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'clubId required' });
+    const membership = await prisma.clubMember.findUnique({ where: { clubId_memberId: { clubId, memberId: member.id } } });
+    if (!membership) return res.status(403).json({ error: 'Not in club' });
+    const bal = await prisma.pointsBalance.findUnique({
+        where: { clubId_memberId: { clubId, memberId: member.id } },
+        select: { balance: true, updatedAt: true },
+    });
+    res.json({ clubId, memberId: member.id, balance: bal?.balance ?? 0, updatedAt: bal?.updatedAt ?? null });
+});
+
 router.get('/points/ledger', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
@@ -1247,17 +1304,78 @@ router.get('/points/ledger', async (req, res) => {
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(200, Math.max(1, Number(limitRaw || 50) || 50));
     const memberId = req.query.memberId == null ? '' : String(req.query.memberId).trim();
+    const fromRaw = req.query.from == null ? '' : String(req.query.from).trim();
+    const toRaw = req.query.to == null ? '' : String(req.query.to).trim();
+    const monthRaw = req.query.month == null ? '' : String(req.query.month).trim();
+    const groupBy = req.query.groupBy == null ? '' : String(req.query.groupBy).trim();
+    const includeTotal = String(req.query.includeTotal || '').trim() === '1';
+
     const where: any = { clubId };
     if (memberId) where.memberId = memberId;
-    const rows = await prisma.pointsLedger.findMany({
-        where,
-        orderBy: [{ createdAt: 'desc' }],
-        take: limit,
-        include: {
-            member: { select: { id: true, name: true, email: true, member_code: true } },
-            createdBy: { select: { id: true, name: true, email: true } },
+
+    let from: Date | null = null;
+    let to: Date | null = null;
+    if (monthRaw && /^\d{4}-\d{2}$/.test(monthRaw)) {
+        const y = Number(monthRaw.slice(0, 4));
+        const m = Number(monthRaw.slice(5, 7));
+        if (Number.isFinite(y) && Number.isFinite(m) && m >= 1 && m <= 12) {
+            from = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+            to = new Date(Date.UTC(y, m, 1, 0, 0, 0));
         }
-    });
+    }
+    if (!from && fromRaw) {
+        const d = new Date(fromRaw);
+        if (Number.isFinite(d.getTime())) from = d;
+    }
+    if (!to && toRaw) {
+        const d = new Date(toRaw);
+        if (Number.isFinite(d.getTime())) to = d;
+    }
+    if (from || to) {
+        where.createdAt = {};
+        if (from) where.createdAt.gte = from;
+        if (to) where.createdAt.lte = to;
+    }
+
+    if (groupBy === 'month') {
+        const rows = await prisma.pointsLedger.findMany({
+            where,
+            orderBy: [{ createdAt: 'desc' }],
+            select: { createdAt: true, deltaPoints: true },
+            take: 5000,
+        });
+        const map = new Map<string, { month: string; sumDelta: number; count: number }>();
+        for (const r of rows) {
+            const d = r.createdAt instanceof Date ? r.createdAt : new Date(String((r as any).createdAt));
+            if (!Number.isFinite(d.getTime())) continue;
+            const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const cur = map.get(month) || { month, sumDelta: 0, count: 0 };
+            cur.sumDelta += Number(r.deltaPoints || 0);
+            cur.count += 1;
+            map.set(month, cur);
+        }
+        const out = Array.from(map.values()).sort((a, b) => (a.month < b.month ? 1 : -1));
+        res.json(out);
+        return;
+    }
+
+    const [rows, agg] = await Promise.all([
+        prisma.pointsLedger.findMany({
+            where,
+            orderBy: [{ createdAt: 'desc' }],
+            take: limit,
+            include: {
+                member: { select: { id: true, name: true, email: true, member_code: true, phone: true, phone_e164: true } },
+                createdBy: { select: { id: true, name: true, email: true } },
+            }
+        }),
+        includeTotal ? prisma.pointsLedger.aggregate({ where, _sum: { deltaPoints: true } }) : Promise.resolve(null as any),
+    ]);
+
+    if (includeTotal) {
+        res.json({ rows, totalDelta: agg?._sum?.deltaPoints ?? 0 });
+        return;
+    }
     res.json(rows);
 });
 

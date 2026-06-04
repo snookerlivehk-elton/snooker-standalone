@@ -286,10 +286,53 @@ export async function getClubPointsBalances(apiUrl: string, memberId: string) {
   return res.json();
 }
 
-export async function getClubPointsLedger(apiUrl: string, memberId: string, params?: { limit?: number; memberId?: string }) {
+export async function searchClubPointsBalances(
+  apiUrl: string,
+  memberId: string,
+  params?: { q?: string; limit?: number }
+) {
+  const sp = new URLSearchParams();
+  if (params?.q) sp.set('q', String(params.q));
+  if (params?.limit != null) sp.set('limit', String(params.limit));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/points/balances/search${qs ? `?${qs}` : ''}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '搜尋會員積分失敗');
+  }
+  return res.json();
+}
+
+export async function getMyClubPointsBalance(apiUrl: string, memberId: string, clubId: string) {
+  const sp = new URLSearchParams();
+  sp.set('clubId', clubId);
+  const res = await fetch(`${apiUrl}/api/club/points/my-balance?${sp.toString()}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取我的積分失敗');
+  }
+  return res.json();
+}
+
+export async function getClubPointsLedger(
+  apiUrl: string,
+  memberId: string,
+  params?: { limit?: number; memberId?: string; from?: string; to?: string; month?: string; groupBy?: 'month' | ''; includeTotal?: boolean }
+) {
   const sp = new URLSearchParams();
   if (params?.limit != null) sp.set('limit', String(params.limit));
   if (params?.memberId) sp.set('memberId', params.memberId);
+  if (params?.from) sp.set('from', params.from);
+  if (params?.to) sp.set('to', params.to);
+  if (params?.month) sp.set('month', params.month);
+  if (params?.groupBy) sp.set('groupBy', params.groupBy);
+  if (params?.includeTotal) sp.set('includeTotal', '1');
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/points/ledger${qs ? `?${qs}` : ''}`, {
     headers: { 'x-member-id': memberId },
@@ -299,7 +342,7 @@ export async function getClubPointsLedger(apiUrl: string, memberId: string, para
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '讀取積分流水失敗');
   }
-  return res.json();
+  return res.json() as Promise<any>;
 }
 
 export async function adjustClubMemberPoints(
