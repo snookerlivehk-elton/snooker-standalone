@@ -112,8 +112,92 @@ const AdminVenues: React.FC = () => {
             {error && <div className="mt-2 text-sm text-red-600">{error}</div>}
 
             {!loading && (
-              <div className="overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
-                <table className="min-w-[1100px] w-full border-collapse text-sm">
+              <>
+                <div className="grid gap-3 md:hidden">
+                  {venueMembers.map((m) => {
+                    const isEditing = Boolean(editing[m.id]);
+                    const row = editing[m.id] || m;
+                    const enabled = Boolean(row.is_enabled);
+                    const enabledCls = enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
+                    const accessDate =
+                      row.accessExpiresAt ||
+                      row.access_expires_at ||
+                      (m.access_expires_at ? new Date(m.access_expires_at).toISOString().slice(0, 10) : '');
+                    return (
+                      <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{String(m.name || '-')}</div>
+                            <div className="text-xs text-slate-500 truncate">{String(m.email || '-')}</div>
+                          </div>
+                          <div className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${enabledCls}`}>{enabled ? '啟用' : '停用'}</div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">使用限期</div>
+                            {isEditing ? (
+                              <input
+                                type="date"
+                                value={accessDate}
+                                onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), accessExpiresAt: e.target.value } }))}
+                                className="h-9 w-[60%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold">{m.access_expires_at ? new Date(m.access_expires_at).toLocaleDateString() : '-'}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">啟用</div>
+                            {isEditing ? (
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(row.is_enabled)}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
+                                />
+                                <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                              </label>
+                            ) : (
+                              <div className="font-semibold">{m.is_enabled === false ? '停用' : '啟用'}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex gap-2">
+                          {!isEditing ? (
+                            <button
+                              onClick={() => startEdit(m)}
+                              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                            >
+                              編輯
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => saveEdit(m.id)}
+                                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                              >
+                                儲存
+                              </button>
+                              <button
+                                onClick={() => cancelEdit(m.id)}
+                                className="rounded-md bg-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+                              >
+                                取消
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="mt-2 text-xs text-slate-500 font-mono break-all">{String(m.id)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden md:block overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
+                  <table className="min-w-[1100px] w-full border-collapse text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50">
                     <tr>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">ID</th>
@@ -205,7 +289,8 @@ const AdminVenues: React.FC = () => {
                     })}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -215,4 +300,3 @@ const AdminVenues: React.FC = () => {
 };
 
 export default AdminVenues;
-

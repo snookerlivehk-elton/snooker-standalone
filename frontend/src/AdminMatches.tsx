@@ -107,131 +107,168 @@ const AdminMatches: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="brand-page text-white" style={{ maxWidth: 1000, margin: '40px auto', padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }} className="accent-yellow">管理員：比賽列表</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => {
-              const tok = localStorage.getItem('adminToken') || '';
-              const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
-              window.location.href = url;
-            }}
-            style={{ padding: '6px 10px', borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none' }}
-          >
-            Admin Panel
-          </button>
+    <div className="brand-page min-h-screen text-white">
+      <div className="mx-auto w-full max-w-4xl px-4 py-6 space-y-4">
+        <div className="glass rounded-xl p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="accent-yellow text-xl font-bold">管理員：比賽列表</h2>
+          <div className="flex flex-wrap gap-2">
+            <a href="/admin/overview" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm">
+              系統概覽
+            </a>
+            <button
+              onClick={() => {
+                const tok = localStorage.getItem('adminToken') || '';
+                const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
+                window.location.href = url;
+              }}
+              className="px-3 py-2 rounded cue-button text-sm font-semibold"
+            >
+              Admin Panel
+            </button>
+          </div>
         </div>
-      </div>
-      {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 14 }}>
-          Member ID：
-          <input
-            value={memberIdFilter}
-            onChange={(e) => setMemberIdFilter(e.target.value)}
-            style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 200 }}
-            placeholder="輸入 Member ID 過濾"
-          />
-        </label>
-        <button
-          onClick={() => load(1, memberIdFilter)}
-          style={{ padding: '6px 10px', borderRadius: 6, background: '#16a34a', color: '#fff', border: 'none' }}
-        >
-          搜尋
-        </button>
-        {memberIdFilter && (
-          <button
-            onClick={() => {
-              setMemberIdFilter('');
-              load(1);
-            }}
-            style={{ padding: '6px 10px', borderRadius: 6, background: '#6b7280', color: '#fff', border: 'none' }}
-          >
-            清除
-          </button>
-        )}
-        <div style={{ marginLeft: 'auto', fontSize: 13, color: '#444' }}>
-          共 {total} 筆，比賽 ID = ROOM_ID / MATCH_ID
+
+        {error && <div className="text-sm text-red-400">{error}</div>}
+
+        <div className="glass rounded-xl p-4 space-y-3">
+          <div className="grid gap-2 sm:flex sm:items-end sm:justify-between">
+            <label className="grid gap-1 sm:w-[360px]">
+              <div className="text-xs cue-muted">Member ID（可選）</div>
+              <input
+                value={memberIdFilter}
+                onChange={(e) => setMemberIdFilter(e.target.value)}
+                className="w-full px-3 py-2 rounded cue-input text-sm"
+                placeholder="輸入 Member ID 過濾"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => load(1, memberIdFilter)} className="px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold">
+                搜尋
+              </button>
+              {memberIdFilter && (
+                <button
+                  onClick={() => {
+                    setMemberIdFilter('');
+                    load(1);
+                  }}
+                  className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="text-sm cue-muted">共 {total} 筆</div>
         </div>
-      </div>
-      {loading && <div>載入中...</div>}
-      {!loading && (
-        <>
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 900 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match ID / ROOM_ID</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Match Code</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Frames</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>Red Balls</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>球員</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>勝方</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>開始時間</th>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>結束時間</th>
-                </tr>
-              </thead>
-              <tbody>
-                {matches.map((m) => (
-                  <tr key={m.id}>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.room_id}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.name}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.match_code || '-'}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.frames_required}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{m.red_balls}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderPlayers(m)}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{renderWinner(m)}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.started_at)}</td>
-                    <td style={{ borderBottom: '1px solid #eee', padding: 6 }}>{formatDate(m.ended_at)}</td>
-                  </tr>
-                ))}
-                {matches.length === 0 && (
+
+        {loading && <div className="glass rounded-xl p-4 cue-muted">載入中...</div>}
+
+        {!loading && (
+          <>
+            <div className="grid gap-3 md:hidden">
+              {matches.map((m) => (
+                <div key={m.id} className="rounded-xl cue-surface p-4">
+                  <div className="font-semibold text-lg">{m.name}</div>
+                  <div className="mt-1 text-xs cue-muted font-mono break-all">ROOM_ID: {m.room_id}</div>
+                  <div className="mt-3 grid gap-2 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <div className="cue-muted">Match Code</div>
+                      <div className="font-semibold">{m.match_code || '-'}</div>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <div className="cue-muted">Frames</div>
+                      <div className="font-semibold">{m.frames_required}</div>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <div className="cue-muted">Red Balls</div>
+                      <div className="font-semibold">{m.red_balls}</div>
+                    </div>
+                    <div className="grid gap-1">
+                      <div className="cue-muted">球員</div>
+                      <div className="text-sm">{renderPlayers(m)}</div>
+                    </div>
+                    <div className="grid gap-1">
+                      <div className="cue-muted">勝方</div>
+                      <div className="text-sm">{renderWinner(m)}</div>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <div className="cue-muted">開始</div>
+                      <div className="text-sm">{formatDate(m.started_at)}</div>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <div className="cue-muted">結束</div>
+                      <div className="text-sm">{formatDate(m.ended_at)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {matches.length === 0 && <div className="glass rounded-xl p-4 cue-muted">無資料</div>}
+            </div>
+
+            <div className="hidden md:block overflow-auto rounded-xl border cue-border">
+              <table className="min-w-[900px] w-full border-collapse text-sm">
+                <thead className="bg-black/30">
                   <tr>
-                    <td colSpan={9} style={{ padding: 10, textAlign: 'center', color: '#666' }}>
-                      無資料
-                    </td>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">Match ID / ROOM_ID</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">名稱</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">Match Code</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">Frames</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">Red Balls</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">球員</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">勝方</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">開始時間</th>
+                    <th className="text-left border-b cue-border px-3 py-2 font-semibold cue-muted">結束時間</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: 13, color: '#444' }}>
-              第 {page} / {totalPages} 頁
+                </thead>
+                <tbody>
+                  {matches.map((m) => (
+                    <tr key={m.id} className="border-b cue-border">
+                      <td className="px-3 py-2">{m.room_id}</td>
+                      <td className="px-3 py-2">{m.name}</td>
+                      <td className="px-3 py-2">{m.match_code || '-'}</td>
+                      <td className="px-3 py-2">{m.frames_required}</td>
+                      <td className="px-3 py-2">{m.red_balls}</td>
+                      <td className="px-3 py-2">{renderPlayers(m)}</td>
+                      <td className="px-3 py-2">{renderWinner(m)}</td>
+                      <td className="px-3 py-2">{formatDate(m.started_at)}</td>
+                      <td className="px-3 py-2">{formatDate(m.ended_at)}</td>
+                    </tr>
+                  ))}
+                  {matches.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-4 text-center cue-muted">
+                        無資料
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => page > 1 && load(page - 1, memberIdFilter)}
-                disabled={page <= 1}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  border: '1px solid #ccc',
-                  background: page <= 1 ? '#e5e7eb' : '#fff',
-                  cursor: page <= 1 ? 'default' : 'pointer',
-                }}
-              >
-                上一頁
-              </button>
-              <button
-                onClick={() => page < totalPages && load(page + 1, memberIdFilter)}
-                disabled={page >= totalPages}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  border: '1px solid #ccc',
-                  background: page >= totalPages ? '#e5e7eb' : '#fff',
-                  cursor: page >= totalPages ? 'default' : 'pointer',
-                }}
-              >
-                下一頁
-              </button>
+
+            <div className="glass rounded-xl p-4 flex items-center justify-between">
+              <div className="text-sm cue-muted">
+                第 {page} / {totalPages} 頁
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => page > 1 && load(page - 1, memberIdFilter)}
+                  disabled={page <= 1}
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 disabled:opacity-60 text-sm font-semibold"
+                >
+                  上一頁
+                </button>
+                <button
+                  onClick={() => page < totalPages && load(page + 1, memberIdFilter)}
+                  disabled={page >= totalPages}
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 disabled:opacity-60 text-sm font-semibold"
+                >
+                  下一頁
+                </button>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

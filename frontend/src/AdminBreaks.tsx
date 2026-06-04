@@ -290,8 +290,145 @@ const AdminBreaks: React.FC = () => {
             {loading && <div className="text-sm text-slate-600">載入中...</div>}
 
             {!loading && (
-              <div className="overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
-                <table className="min-w-[1400px] w-full border-collapse text-sm">
+              <>
+                <div className="grid gap-3 md:hidden">
+                  {rows.map((r) => {
+                    const isEditing = Boolean(editing[r.id]);
+                    const e = editing[r.id] || {};
+                    const deleted = !!r.deleted_at;
+                    const href = normalizeHttpUrl(r.video_url);
+                    return (
+                      <div key={r.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{String(r.club?.name || '-')}</div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {String(r.member?.name || '-')}
+                              {r.member?.member_code ? `（${r.member.member_code}）` : ''}
+                            </div>
+                          </div>
+                          <div className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${deleted ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {deleted ? '已刪除' : '正常'}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid gap-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">時間</div>
+                            {isEditing ? (
+                              <input
+                                value={e.recordedAt || ''}
+                                onChange={(ev) => setEditing((p) => ({ ...p, [r.id]: { ...p[r.id], recordedAt: ev.target.value } }))}
+                                className="h-9 w-[65%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                placeholder="YYYY-MM-DDTHH:mm:ss"
+                              />
+                            ) : (
+                              <div className="font-semibold">{r.recorded_at ? new Date(r.recorded_at).toLocaleString() : '-'}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">分數</div>
+                            {isEditing ? (
+                              <input
+                                value={String(e.points ?? '')}
+                                onChange={(ev) => setEditing((p) => ({ ...p, [r.id]: { ...p[r.id], points: ev.target.value } }))}
+                                className="h-9 w-[65%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold">{r.points}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">影片</div>
+                            {isEditing ? (
+                              <input
+                                value={e.videoUrl || ''}
+                                onChange={(ev) => setEditing((p) => ({ ...p, [r.id]: { ...p[r.id], videoUrl: ev.target.value } }))}
+                                className="h-9 w-[65%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : href ? (
+                              <a href={href} target="_blank" rel="noreferrer" className="text-indigo-700 underline font-semibold">
+                                觀看
+                              </a>
+                            ) : (
+                              <div className="font-semibold">-</div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">備註</div>
+                            {isEditing ? (
+                              <input
+                                value={e.note || ''}
+                                onChange={(ev) => setEditing((p) => ({ ...p, [r.id]: { ...p[r.id], note: ev.target.value } }))}
+                                className="h-9 w-[65%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold truncate max-w-[65%]" title={String(r.note || '')}>{r.note || '-'}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {!isEditing && (
+                            <button
+                              type="button"
+                              className="rounded-md bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 transition-colors"
+                              onClick={() => startEdit(r)}
+                              disabled={loading}
+                            >
+                              編輯
+                            </button>
+                          )}
+                          {isEditing && (
+                            <>
+                              <button
+                                type="button"
+                                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                                onClick={() => saveEdit(r.id)}
+                                disabled={loading}
+                              >
+                                儲存
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-md bg-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 transition-colors"
+                                onClick={() => cancelEdit(r.id)}
+                                disabled={loading}
+                              >
+                                取消
+                              </button>
+                            </>
+                          )}
+                          {!deleted && (
+                            <button
+                              type="button"
+                              className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                              onClick={() => removeBreak(r)}
+                              disabled={loading}
+                            >
+                              刪除
+                            </button>
+                          )}
+                          {deleted && (
+                            <button
+                              type="button"
+                              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                              onClick={() => restoreBreak(r.id)}
+                              disabled={loading}
+                            >
+                              復原
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-2 text-[10px] font-mono text-slate-400 break-all">{String(r.id)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden md:block overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
+                  <table className="min-w-[1400px] w-full border-collapse text-sm">
                   <thead className="sticky top-0 z-10 bg-slate-50">
                     <tr>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">時間</th>
@@ -447,7 +584,8 @@ const AdminBreaks: React.FC = () => {
                     })}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -457,4 +595,3 @@ const AdminBreaks: React.FC = () => {
 };
 
 export default AdminBreaks;
-

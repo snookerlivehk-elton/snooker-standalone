@@ -97,10 +97,10 @@ function App() {
         <Route path="/rooms" element={<FeatureGate feature="scoring"><Rooms /></FeatureGate>} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
         <Route path="/android" element={<AndroidGuide />} />
-        <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
-        <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
-        <Route path="/admin/legacy" element={<AdminAuth><FeatureGate feature="scoring"><Admin /></FeatureGate></AdminAuth>} />
-        <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
+        <Route path="/admin" element={<FeatureGate feature="system_portal"><AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth></FeatureGate>} />
+        <Route path="/admin/overview" element={<FeatureGate feature="system_portal"><AdminAuth><AdminOverview /></AdminAuth></FeatureGate>} />
+        <Route path="/admin/legacy" element={<FeatureGate feature="system_portal"><AdminAuth><FeatureGate feature="scoring"><Admin /></FeatureGate></AdminAuth></FeatureGate>} />
+        <Route path="/admin/breaks" element={<FeatureGate feature="system_portal"><AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth></FeatureGate>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
         <Route path="/members/login" element={<MemberLogin mode="member" />} />
@@ -111,10 +111,10 @@ function App() {
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ClubPublicPage />} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
-        <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
-        <Route path="/admin/matches" element={<AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth>} />
-        <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
-        <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
+        <Route path="/admin/members" element={<FeatureGate feature="system_portal"><AdminAuth><AdminMembers /></AdminAuth></FeatureGate>} />
+        <Route path="/admin/matches" element={<FeatureGate feature="system_portal"><AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth></FeatureGate>} />
+        <Route path="/admin/regions" element={<FeatureGate feature="system_portal"><AdminAuth><AdminRegions /></AdminAuth></FeatureGate>} />
+        <Route path="/admin/venues" element={<FeatureGate feature="system_portal"><AdminAuth><AdminVenues /></AdminAuth></FeatureGate>} />
         <Route path="/room/:roomId" element={<FeatureGate feature="scoring"><Scoreboard gameState={gameState} setGameState={setGameState} /></FeatureGate>} />
         <Route path="/room/:roomId/setup" element={<FeatureGate feature="scoring"><Setup onStartMatch={handleStartMatch} /></FeatureGate>} />
         <Route path="/room/:roomId/live" element={<FeatureGate feature="live"><LiveView /></FeatureGate>} />

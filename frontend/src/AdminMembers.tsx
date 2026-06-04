@@ -211,7 +211,142 @@ const AdminMembers: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
+                <div className="mt-4 grid gap-3 md:hidden">
+                  {filteredMembers.map((m) => {
+                    const isEditing = Boolean(editing[m.id]);
+                    const row = editing[m.id] || m;
+                    const roleLabel = (row.role || m.role) === 'ADMIN' ? '場館/球會' : '普通會員';
+                    const enabledLabel = Boolean(row.is_enabled) ? '啟用' : '停用';
+                    const enabledCls = Boolean(row.is_enabled) ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
+                    const accessDate = row.accessExpiresAt || row.access_expires_at || (m.access_expires_at ? new Date(m.access_expires_at).toISOString().slice(0, 10) : '');
+                    return (
+                      <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">{String(m.name || '-')}</div>
+                            <div className="text-xs text-slate-500 truncate">{String(m.email || '-')}</div>
+                          </div>
+                          <div className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${enabledCls}`}>{enabledLabel}</div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-2 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">會員編碼</div>
+                            {isEditing ? (
+                              <input
+                                value={row.member_code || ''}
+                                onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), member_code: e.target.value } }))}
+                                className="h-9 w-[60%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold">{String(m.member_code || '-')}</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">會員等級</div>
+                            {isEditing ? (
+                              <select
+                                value={row.role || m.role || 'MEMBER'}
+                                onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), role: e.target.value } }))}
+                                className="h-9 w-[60%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              >
+                                <option value="MEMBER">普通會員</option>
+                                <option value="ADMIN">場館/球會</option>
+                              </select>
+                            ) : (
+                              <div className="font-semibold">{roleLabel}</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">電話</div>
+                            {isEditing ? (
+                              <input
+                                value={row.phone || ''}
+                                onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), phone: e.target.value } }))}
+                                className="h-9 w-[60%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold">{String(m.phone ?? '-')}</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">場館限期</div>
+                            {isEditing ? (
+                              <input
+                                type="date"
+                                disabled={String(row.role || m.role || 'MEMBER') !== 'ADMIN'}
+                                value={accessDate}
+                                onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), accessExpiresAt: e.target.value } }))}
+                                className="h-9 w-[60%] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:opacity-60 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              />
+                            ) : (
+                              <div className="font-semibold">
+                                {m.role === 'ADMIN' && m.access_expires_at ? new Date(m.access_expires_at).toLocaleDateString() : '-'}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-slate-500">啟用</div>
+                            {isEditing ? (
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(row.is_enabled)}
+                                  onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
+                                />
+                                <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                              </label>
+                            ) : (
+                              <div className="font-semibold">{m.is_enabled === false ? '停用' : '啟用'}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {!isEditing ? (
+                            <>
+                              <button
+                                onClick={() => startEdit(m)}
+                                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                              >
+                                編輯
+                              </button>
+                              <button
+                                onClick={() => removeMember(m)}
+                                className={`${confirmDeleteId === m.id ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'} rounded-md px-3 py-2 text-sm font-semibold text-white transition-colors`}
+                              >
+                                {confirmDeleteId === m.id ? '再次確認刪除' : '刪除'}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => saveEdit(m.id)}
+                                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+                              >
+                                儲存
+                              </button>
+                              <button
+                                onClick={() => cancelEdit(m.id)}
+                                className="rounded-md bg-slate-600 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+                              >
+                                取消
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="mt-2 text-xs text-slate-500 font-mono break-all">{String(m.id)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 hidden md:block overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: '70vh' }}>
                   <table className="min-w-[1280px] w-full border-collapse text-sm">
                     <thead className="sticky top-0 z-10 bg-slate-50">
                       <tr>

@@ -213,237 +213,228 @@ const AdminRegions: React.FC = () => {
   };
 
   return (
-    <div className="brand-page text-white" style={{ maxWidth: 840, margin: '40px auto', padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }} className="accent-yellow">管理員：地方 / 分區管理</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Link
-            to="/members/register"
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#6b7280',
-              color: '#fff',
-              borderRadius: '4px',
-              textDecoration: 'none',
-              fontSize: '14px'
-            }}
-          >
-            會員註冊
-          </Link>
-          <Link
-            to={`/admin/members${adminToken ? `?token=${adminToken}` : ''}`}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#4b5563',
-              color: '#fff',
-              borderRadius: '4px',
-              textDecoration: 'none',
-              fontSize: '14px'
-            }}
-          >
-            管理員：會員列表
-          </Link>
-        </div>
-      </div>
-      {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
-      {loading && <div>載入中...</div>}
-      {!loading && (
-        <>
-          <div style={{ marginBottom: 24, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>地方</h3>
-            <form onSubmit={handleSubmitRegion} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <label>
-                <span style={{ fontSize: 13 }}>代碼</span>
-                <input
-                  value={regionCode}
-                  onChange={(e) => setRegionCode(e.target.value)}
-                  style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', width: 80 }}
-                  disabled={!!editingRegionKey}
-                  placeholder="NTW"
-                />
-              </label>
-              <label>
-                <span style={{ fontSize: 13 }}>名稱</span>
-                <input
-                  value={regionName}
-                  onChange={(e) => setRegionName(e.target.value)}
-                  style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 160 }}
-                  placeholder="新界西"
-                />
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', fontSize: 13 }}>
-                <input
-                  type="checkbox"
-                  checked={regionActive}
-                  onChange={(e) => setRegionActive(e.target.checked)}
-                  style={{ marginRight: 4 }}
-                  disabled={!!editingRegionKey}
-                />
-                啟用
-              </label>
-              {editingRegionKey && (
-                <span style={{ fontSize: 12, color: '#6b7280' }}>編輯中：僅可修改名稱</span>
-              )}
-              {editingRegionKey && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingRegionKey(null);
-                    setRegionCode('');
-                    setRegionName('');
-                    setRegionActive(true);
-                  }}
-                  style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', color: '#374151' }}
-                >
-                  取消編輯
-                </button>
-              )}
-              <button type="submit" style={{ padding: '6px 12px', borderRadius: 4, border: 'none', background: '#2563eb', color: '#fff' }}>
-                儲存地方
-              </button>
-            </form>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {regions.map((r) => (
-                    <tr key={r.code3} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: 6 }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRegionCode(r.code3 || '');
-                            setRegionName(r.name || '');
-                            setRegionActive(typeof r.active === 'boolean' ? r.active : true);
-                            setEditingRegionKey(String(r.code3 || '').toUpperCase());
-                          }}
-                          style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
-                        >
-                          {r.code3}
-                        </button>
-                      </td>
-                      <td style={{ padding: 6 }}>{r.name}</td>
-                      <td style={{ padding: 6 }}>{r.active ? '是' : '否'}</td>
-                    </tr>
-                  ))}
-                  {regions.length === 0 && (
-                    <tr>
-                      <td colSpan={3} style={{ padding: 6, color: '#666' }}>尚未有地方資料</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+    <div className="brand-page min-h-screen text-white">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-4">
+        <div className="glass rounded-xl p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="accent-yellow text-xl font-bold">管理員：地方 / 分區管理</h2>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/members/register" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm">
+              會員註冊
+            </Link>
+            <Link to={`/admin/members${adminToken ? `?token=${adminToken}` : ''}`} className="px-3 py-2 rounded cue-button text-sm">
+              管理員：會員列表
+            </Link>
           </div>
-          <div style={{ padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>分區</h3>
-            <form onSubmit={handleSubmitDistrict} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <label>
-                <span style={{ fontSize: 13 }}>地方</span>
+        </div>
+
+        {error && <div className="text-sm text-red-400">{error}</div>}
+        {loading && <div className="glass rounded-xl p-4 cue-muted">載入中...</div>}
+
+        {!loading && (
+          <>
+            <div className="glass rounded-xl p-4">
+              <div className="font-semibold text-lg mb-3">地方</div>
+              <form onSubmit={handleSubmitRegion} className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
+                <label className="grid gap-1">
+                  <div className="text-xs cue-muted">代碼</div>
+                  <input
+                    value={regionCode}
+                    onChange={(e) => setRegionCode(e.target.value)}
+                    disabled={!!editingRegionKey}
+                    placeholder="NTW"
+                    className="w-full sm:w-28 px-3 py-2 rounded cue-input text-sm disabled:opacity-60"
+                  />
+                </label>
+                <label className="grid gap-1 sm:flex-1">
+                  <div className="text-xs cue-muted">名稱</div>
+                  <input
+                    value={regionName}
+                    onChange={(e) => setRegionName(e.target.value)}
+                    placeholder="新界西"
+                    className="w-full px-3 py-2 rounded cue-input text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm cue-muted">
+                  <input type="checkbox" checked={regionActive} onChange={(e) => setRegionActive(e.target.checked)} disabled={!!editingRegionKey} />
+                  啟用
+                </label>
+                {editingRegionKey && <div className="text-xs cue-muted">編輯中：僅可修改名稱</div>}
+                {editingRegionKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRegionKey(null);
+                      setRegionCode('');
+                      setRegionName('');
+                      setRegionActive(true);
+                    }}
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  >
+                    取消編輯
+                  </button>
+                )}
+                <button type="submit" className="px-4 py-2 rounded cue-button font-semibold">
+                  儲存地方
+                </button>
+              </form>
+
+              <div className="mt-3 grid gap-2 md:hidden">
+                {regions.map((r) => (
+                  <button
+                    key={r.code3}
+                    type="button"
+                    onClick={() => {
+                      setRegionCode(r.code3 || '');
+                      setRegionName(r.name || '');
+                      setRegionActive(typeof r.active === 'boolean' ? r.active : true);
+                      setEditingRegionKey(String(r.code3 || '').toUpperCase());
+                    }}
+                    className="text-left rounded-lg cue-surface p-3 hover:brightness-95"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold">{String(r.code3 || '-')}</div>
+                      <div className={`text-xs font-semibold ${r.active ? 'text-emerald-300' : 'text-red-300'}`}>{r.active ? '啟用' : '停用'}</div>
+                    </div>
+                    <div className="text-sm cue-muted mt-1">{String(r.name || '')}</div>
+                  </button>
+                ))}
+                {regions.length === 0 && <div className="text-sm cue-muted">尚未有地方資料</div>}
+              </div>
+
+              <div className="mt-3 hidden md:block overflow-auto rounded-lg border cue-border">
+                <table className="min-w-[520px] w-full border-collapse text-sm">
+                  <thead className="bg-black/30">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">代碼</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">名稱</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">啟用</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {regions.map((r) => (
+                      <tr key={r.code3} className="border-b cue-border">
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRegionCode(r.code3 || '');
+                              setRegionName(r.name || '');
+                              setRegionActive(typeof r.active === 'boolean' ? r.active : true);
+                              setEditingRegionKey(String(r.code3 || '').toUpperCase());
+                            }}
+                            className="accent-yellow underline"
+                          >
+                            {r.code3}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">{r.name}</td>
+                        <td className="px-3 py-2">{r.active ? '是' : '否'}</td>
+                      </tr>
+                    ))}
+                    {regions.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-2 cue-muted">尚未有地方資料</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="glass rounded-xl p-4">
+              <div className="font-semibold text-lg mb-3">分區</div>
+              <form onSubmit={handleSubmitDistrict} className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
+                <label className="grid gap-1">
+                  <div className="text-xs cue-muted">地方</div>
+                  <select
+                    value={districtRegionCode}
+                    onChange={(e) => setDistrictRegionCode(e.target.value)}
+                    disabled={!!editingDistrictKey}
+                    className="w-full sm:w-44 px-3 py-2 rounded cue-input text-sm disabled:opacity-60"
+                  >
+                    <option value="">選擇地方</option>
+                    {regions.map((r) => (
+                      <option key={r.code3} value={r.code3}>
+                        {r.code3} — {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <div className="text-xs cue-muted">代碼</div>
+                  <input
+                    value={districtCode}
+                    onChange={(e) => setDistrictCode(e.target.value)}
+                    disabled={!!editingDistrictKey}
+                    placeholder="YK"
+                    className="w-full sm:w-28 px-3 py-2 rounded cue-input text-sm disabled:opacity-60"
+                  />
+                </label>
+                <label className="grid gap-1 sm:flex-1">
+                  <div className="text-xs cue-muted">名稱</div>
+                  <input
+                    value={districtName}
+                    onChange={(e) => setDistrictName(e.target.value)}
+                    placeholder="元朗"
+                    className="w-full px-3 py-2 rounded cue-input text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm cue-muted">
+                  <input type="checkbox" checked={districtActive} onChange={(e) => setDistrictActive(e.target.checked)} disabled={!!editingDistrictKey} />
+                  啟用
+                </label>
+                {editingDistrictKey && <div className="text-xs cue-muted">編輯中：僅可修改名稱</div>}
+                {editingDistrictKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingDistrictKey(null);
+                      setDistrictRegionCode('');
+                      setDistrictCode('');
+                      setDistrictName('');
+                      setDistrictActive(true);
+                    }}
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  >
+                    取消編輯
+                  </button>
+                )}
+                <button type="submit" className="px-4 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold">
+                  儲存分區
+                </button>
+              </form>
+
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm cue-muted">篩選地方</div>
                 <select
-                  value={districtRegionCode}
-                  onChange={(e) => setDistrictRegionCode(e.target.value)}
-                  style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 100 }}
-                  disabled={!!editingDistrictKey}
+                  value={districtFilterRegion}
+                  onChange={(e) => setDistrictFilterRegion(e.target.value)}
+                  className="w-full sm:w-56 px-3 py-2 rounded cue-input text-sm"
                 >
-                  <option value="">選擇地方</option>
+                  <option value="">全部</option>
                   {regions.map((r) => (
                     <option key={r.code3} value={r.code3}>
                       {r.code3} — {r.name}
                     </option>
                   ))}
                 </select>
-              </label>
-              <label>
-                <span style={{ fontSize: 13 }}>代碼</span>
-                <input
-                  value={districtCode}
-                  onChange={(e) => setDistrictCode(e.target.value)}
-                  style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', width: 80 }}
-                  disabled={!!editingDistrictKey}
-                  placeholder="YK"
-                />
-              </label>
-              <label>
-                <span style={{ fontSize: 13 }}>名稱</span>
-                <input
-                  value={districtName}
-                  onChange={(e) => setDistrictName(e.target.value)}
-                  style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 160 }}
-                  placeholder="元朗"
-                />
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', fontSize: 13 }}>
-                <input
-                  type="checkbox"
-                  checked={districtActive}
-                  onChange={(e) => setDistrictActive(e.target.checked)}
-                  style={{ marginRight: 4 }}
-                  disabled={!!editingDistrictKey}
-                />
-                啟用
-              </label>
-              {editingDistrictKey && (
-                <span style={{ fontSize: 12, color: '#6b7280' }}>編輯中：僅可修改名稱</span>
-              )}
-              {editingDistrictKey && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingDistrictKey(null);
-                    setDistrictRegionCode('');
-                    setDistrictCode('');
-                    setDistrictName('');
-                    setDistrictActive(true);
-                  }}
-                  style={{ padding: '6px 12px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', color: '#374151' }}
-                >
-                  取消編輯
-                </button>
-              )}
-              <button type="submit" style={{ padding: '6px 12px', borderRadius: 4, border: 'none', background: '#16a34a', color: '#fff' }}>
-                儲存分區
-              </button>
-            </form>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13 }}>顯示地方</span>
-              <select
-                value={districtFilterRegion}
-                onChange={(e) => setDistrictFilterRegion(e.target.value)}
-                style={{ padding: 4, borderRadius: 4, border: '1px solid #ccc', minWidth: 120 }}
-              >
-                <option value="">全部</option>
-                {regions.map((r) => (
-                  <option key={r.code3} value={r.code3}>
-                    {r.code3} — {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>地方</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>代碼</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>名稱</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>啟用</th>
-                    <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: 6 }}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleDistricts.map((d) => (
-                    <tr key={`${d.region_code}-${d.code3}`} style={{ borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: 6 }}>
-                        {d.region_code}
-                      </td>
-                      <td style={{ padding: 6 }}>
+              </div>
+
+              <div className="mt-3 grid gap-2 md:hidden">
+                {visibleDistricts.map((d) => {
+                  const region = String(d.region_code || '').trim().toUpperCase();
+                  const code = String(d.code3 || '').trim().toUpperCase();
+                  const key = `${region}::${code}`;
+                  return (
+                    <div key={`${d.region_code}-${d.code3}`} className="rounded-lg cue-surface p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold">{region}-{code}</div>
+                          <div className="text-sm cue-muted truncate">{String(d.name || '')}</div>
+                        </div>
+                        <div className={`text-xs font-semibold ${d.active ? 'text-emerald-300' : 'text-red-300'}`}>{d.active ? '啟用' : '停用'}</div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -451,45 +442,86 @@ const AdminRegions: React.FC = () => {
                             setDistrictCode(d.code3 || '');
                             setDistrictName(d.name || '');
                             setDistrictActive(typeof d.active === 'boolean' ? d.active : true);
-                            setEditingDistrictKey(`${String(d.region_code || '').toUpperCase()}::${String(d.code3 || '').toUpperCase()}`);
+                            setEditingDistrictKey(key);
                           }}
-                          style={{ background: 'transparent', border: 'none', padding: 0, color: '#2563eb', cursor: 'pointer' }}
+                          className="px-3 py-2 rounded cue-button text-sm font-semibold"
                         >
-                          {d.code3}
+                          編輯
                         </button>
-                      </td>
-                      <td style={{ padding: 6 }}>{d.name}</td>
-                      <td style={{ padding: 6 }}>{d.active ? '是' : '否'}</td>
-                      <td style={{ padding: 6 }}>
                         <button
                           type="button"
                           onClick={() => handleDeleteDistrict(d)}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: 4,
-                            border: 'none',
-                            background: '#dc2626',
-                            color: '#fff',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                          }}
+                          className="px-3 py-2 rounded bg-red-700 hover:bg-red-600 text-white text-sm font-semibold"
                         >
-                          刪除
+                          {confirmDeleteDistrictKey === key ? '再次確認刪除' : '刪除'}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {visibleDistricts.length === 0 && (
+                      </div>
+                    </div>
+                  );
+                })}
+                {visibleDistricts.length === 0 && <div className="text-sm cue-muted">尚未有分區資料</div>}
+              </div>
+
+              <div className="mt-3 hidden md:block overflow-auto rounded-lg border cue-border">
+                <table className="min-w-[720px] w-full border-collapse text-sm">
+                  <thead className="bg-black/30">
                     <tr>
-                      <td colSpan={5} style={{ padding: 6, color: '#666' }}>尚未有分區資料</td>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">地方</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">代碼</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">名稱</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">啟用</th>
+                      <th className="px-3 py-2 text-left font-semibold cue-muted border-b cue-border">操作</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {visibleDistricts.map((d) => {
+                      const region = String(d.region_code || '').trim().toUpperCase();
+                      const code = String(d.code3 || '').trim().toUpperCase();
+                      const key = `${region}::${code}`;
+                      return (
+                        <tr key={`${d.region_code}-${d.code3}`} className="border-b cue-border">
+                          <td className="px-3 py-2">{d.region_code}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDistrictRegionCode(d.region_code || '');
+                                setDistrictCode(d.code3 || '');
+                                setDistrictName(d.name || '');
+                                setDistrictActive(typeof d.active === 'boolean' ? d.active : true);
+                                setEditingDistrictKey(key);
+                              }}
+                              className="accent-yellow underline"
+                            >
+                              {d.code3}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2">{d.name}</td>
+                          <td className="px-3 py-2">{d.active ? '是' : '否'}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDistrict(d)}
+                              className="px-2.5 py-1.5 rounded bg-red-700 hover:bg-red-600 text-white text-xs font-semibold"
+                            >
+                              {confirmDeleteDistrictKey === key ? '再次確認刪除' : '刪除'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {visibleDistricts.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-2 cue-muted">尚未有分區資料</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
