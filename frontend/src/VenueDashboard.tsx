@@ -74,6 +74,8 @@ const VenueDashboard: React.FC = () => {
   const [newPricingRules, setNewPricingRules] = useState<PricingRule[]>([]);
   const [pendingReservations, setPendingReservations] = useState<any[]>([]);
   const [allReservations, setAllReservations] = useState<any[]>([]);
+  const [allReservationsDate, setAllReservationsDate] = useState('');
+  const [allReservationsShowCompleted, setAllReservationsShowCompleted] = useState(false);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
@@ -374,6 +376,30 @@ const VenueDashboard: React.FC = () => {
     { n: 6, label: '六' },
     { n: 7, label: '日' },
   ]), []);
+
+  const formatLocalYmd = useCallback((d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }, []);
+
+  const filteredAllReservations = useMemo(() => {
+    const dateKey = String(allReservationsDate || '').trim();
+    return (Array.isArray(allReservations) ? allReservations : []).filter((r: any) => {
+      const status = String(r?.status || '').toUpperCase();
+      const endAt = new Date(String(r?.endAt || ''));
+      const ended = Number.isFinite(endAt.getTime()) && endAt.getTime() < Date.now() - 60_000;
+      const finished = ended || status === 'CANCELLED';
+      if (!allReservationsShowCompleted && finished) return false;
+      if (dateKey) {
+        const startAt = new Date(String(r?.startAt || ''));
+        if (!Number.isFinite(startAt.getTime())) return false;
+        if (formatLocalYmd(startAt) !== dateKey) return false;
+      }
+      return true;
+    });
+  }, [allReservations, allReservationsDate, allReservationsShowCompleted, formatLocalYmd]);
 
   const getRulesArray = (rulesJson: any): any[] => {
     if (Array.isArray(rulesJson)) return rulesJson;
@@ -2109,11 +2135,146 @@ const VenueDashboard: React.FC = () => {
               封鎖時段會直接佔用該球枱時段，網上預約會因衝突而無法提交。
             </div>
           </div>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">待確認預約</h3>
+            {pendingReservations.length === 0 ? (
+              <div className="cue-muted">暫無待確認預約</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-3">會員</th>
+                      <th className="py-2 px-3">球枱</th>
+                      <th className="py-2 px-3">時間</th>
+                      <th className="py-2 px-3">方案</th>
+                      <th className="py-2 px-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingReservations.map((r: any) => (
+                      <tr key={r.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                        <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                        <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                        <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                        <td className="py-2 px-3">
+                          <div className="flex gap-2">
+                            <button onClick={async () => {
+                              try { await confirmReservation(API_URL, operatorId, r.id); await loadData(); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                            }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
+                            <button onClick={async () => {
+                              try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                            }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="mt-6">
+            <h3 className="font-semibold mb-2">全部預約</h3>
+            <div className="grid gap-2 sm:flex sm:items-end sm:justify-between mb-3">
+              <label className="grid gap-1">
+                <div className="text-xs cue-muted">日期（可選）</div>
+                <input
+                  type="date"
+                  value={allReservationsDate}
+                  onChange={(e) => setAllReservationsDate(e.target.value)}
+                  className="w-full sm:w-56 px-3 py-2 rounded cue-input text-sm"
+                />
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm cue-muted">
+                  <input
+                    type="checkbox"
+                    checked={allReservationsShowCompleted}
+                    onChange={(e) => setAllReservationsShowCompleted(e.target.checked)}
+                  />
+                  顯示已完成/已取消
+                </label>
+                {(allReservationsDate || allReservationsShowCompleted) ? (
+                  <button
+                    type="button"
+                    onClick={() => { setAllReservationsDate(''); setAllReservationsShowCompleted(false); }}
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                  >
+                    清除
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {filteredAllReservations.length === 0 ? (
+              <div className="cue-muted">暫無預約</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-3">狀態</th>
+                      <th className="py-2 px-3">會員</th>
+                      <th className="py-2 px-3">球枱</th>
+                      <th className="py-2 px-3">時間</th>
+                      <th className="py-2 px-3">方案</th>
+                      <th className="py-2 px-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAllReservations.slice(0, 100).map((r: any) => {
+                      const status = String(r?.status || '').toUpperCase();
+                      const e = new Date(String(r?.endAt));
+                      const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+                      const tag = status === 'PENDING'
+                        ? { label: '待確認', cls: 'bg-amber-900 text-white' }
+                        : status === 'BLOCKED'
+                          ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
+                        : status === 'CONFIRMED' && ended
+                          ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
+                          : status === 'CONFIRMED'
+                            ? { label: '已確認', cls: 'bg-blue-800 text-white' }
+                            : status === 'CANCELLED'
+                              ? { label: '已取消', cls: 'cue-surface-strong cue-muted' }
+                              : { label: status || '—', cls: 'cue-surface-strong cue-muted' };
+                      const canCancel = status !== 'CANCELLED';
+                      return (
+                        <tr key={r.id} className="border-b cue-border hover:brightness-95">
+                          <td className="py-2 px-3">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
+                          </td>
+                          <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                          <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                          <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                          <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                          <td className="py-2 px-3">
+                            <button
+                              type="button"
+                              disabled={!canCancel}
+                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
+                              onClick={async () => {
+                                if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                                try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              }}
+                            >
+                              刪除
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filteredAllReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
+              </div>
+            )}
+          </div>
+          <div className="mt-6 grid gap-6">
             <div>
               <h3 className="font-semibold mb-2">球枱</h3>
-              <div className="flex gap-2 mb-3">
-                <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 px-3 py-2 rounded cue-input" placeholder="球枱名稱" />
+              <div className="flex gap-2 mb-3 flex-wrap">
+                <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 min-w-[180px] px-3 py-2 rounded cue-input" placeholder="球枱名稱" />
                 <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded cue-input" placeholder="正價/時" />
                 <button onClick={async () => {
                   if (!newTableName.trim()) return;
@@ -2125,13 +2286,13 @@ const VenueDashboard: React.FC = () => {
               <input value={newTableNotes} onChange={(e) => setNewTableNotes(e.target.value)} className="w-full px-3 py-2 rounded cue-input mb-3" placeholder="備註" />
               <div className="space-y-2">
                 {tables.map(t => (
-                  <div key={t.id} className="flex items-center gap-2 cue-surface p-2 rounded">
-                    <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 px-2 py-1 rounded cue-input" />
+                  <div key={t.id} className="flex items-center gap-2 cue-surface p-2 rounded flex-wrap">
+                    <input value={t.name} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, name: e.target.value } : x))} className="flex-1 min-w-[160px] px-2 py-1 rounded cue-input" />
                     <input value={t.basePrice ?? ''} onChange={(e) => setTables(prev => prev.map(x => x.id === t.id ? { ...x, basePrice: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded cue-input text-sm" placeholder="正價/時" />
                     {qrEnabled ? (
                       <div className="flex items-center gap-2">
                         {t.qrToken?.token ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <div className="bg-white p-1 rounded">
                               <QRCodeSVG
                                 id={`table-qr-svg-${t.id}`}
@@ -2353,8 +2514,8 @@ const VenueDashboard: React.FC = () => {
               <div className="space-y-2">
                 {pricing.map(p => (
                   <div key={p.id} className="cue-surface p-2 rounded">
-                    <div className="flex items-center gap-2 mb-2">
-                      <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 px-2 py-1 rounded cue-input" />
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <input value={p.title} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, title: e.target.value } : x))} className="flex-1 min-w-[160px] px-2 py-1 rounded cue-input" />
                       <input value={p.price ?? ''} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, price: e.target.value } : x))} type="number" step="0.01" className="w-28 px-2 py-1 rounded cue-input text-sm" placeholder="價目" />
                       <input
                         value={getMinHours(p.rulesJson) ?? ''}
@@ -2503,111 +2664,6 @@ const VenueDashboard: React.FC = () => {
                 ))}
               </div>
             </div>
-          </div>
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2">待確認預約</h3>
-            {pendingReservations.length === 0 ? (
-              <div className="cue-muted">暫無待確認預約</div>
-            ) : (
-              <div className="overflow-x-auto -mx-2 px-2">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="cue-muted border-b cue-border">
-                      <th className="py-2 px-3">會員</th>
-                      <th className="py-2 px-3">球枱</th>
-                      <th className="py-2 px-3">時間</th>
-                      <th className="py-2 px-3">方案</th>
-                      <th className="py-2 px-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingReservations.map((r: any) => (
-                      <tr key={r.id} className="border-b cue-border hover:brightness-95">
-                        <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
-                        <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                        <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
-                        <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex gap-2">
-                            <button onClick={async () => {
-                              try { await confirmReservation(API_URL, operatorId, r.id); await loadData(); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                            }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
-                            <button onClick={async () => {
-                              try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                            }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2">全部預約</h3>
-            {allReservations.length === 0 ? (
-              <div className="cue-muted">暫無預約</div>
-            ) : (
-              <div className="overflow-x-auto -mx-2 px-2">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="cue-muted border-b cue-border">
-                      <th className="py-2 px-3">狀態</th>
-                      <th className="py-2 px-3">會員</th>
-                      <th className="py-2 px-3">球枱</th>
-                      <th className="py-2 px-3">時間</th>
-                      <th className="py-2 px-3">方案</th>
-                      <th className="py-2 px-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allReservations.slice(0, 100).map((r: any) => {
-                      const status = String(r?.status || '').toUpperCase();
-                      const e = new Date(String(r?.endAt));
-                      const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
-                      const tag = status === 'PENDING'
-                        ? { label: '待確認', cls: 'bg-amber-900 text-white' }
-                        : status === 'BLOCKED'
-                          ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
-                        : status === 'CONFIRMED' && ended
-                          ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
-                          : status === 'CONFIRMED'
-                            ? { label: '已確認', cls: 'bg-blue-800 text-white' }
-                            : status === 'CANCELLED'
-                              ? { label: '已取消', cls: 'cue-surface-strong cue-muted' }
-                              : { label: status || '—', cls: 'cue-surface-strong cue-muted' };
-                      const canCancel = status !== 'CANCELLED';
-                      return (
-                        <tr key={r.id} className="border-b cue-border hover:brightness-95">
-                          <td className="py-2 px-3">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
-                          </td>
-                          <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
-                          <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                          <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
-                          <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
-                          <td className="py-2 px-3">
-                            <button
-                              type="button"
-                              disabled={!canCancel}
-                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
-                              onClick={async () => {
-                                if (!confirm('確定要刪除此預約（取消）嗎？')) return;
-                                try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                              }}
-                            >
-                              刪除
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {allReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
-              </div>
-            )}
           </div>
         </div>
         ) : (
