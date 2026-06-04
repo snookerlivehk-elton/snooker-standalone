@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from './config';
-import { getAdminFeatures, getAdminSiteAds, getSiteNotice, updateAdminFeatures, updateAdminSiteAd, updateSiteNotice } from './lib/api';
+import { getAdminFeatures, getAdminSiteAds, getSiteNotice, updateAdminFeatures, updateAdminSiteAd, updateSiteNotice, uploadAdminSiteAdImage } from './lib/api';
 import { clearFeatureCache } from './lib/features';
 import Tabs from './components/Tabs';
 
@@ -139,6 +139,45 @@ const AdminOverview: React.FC = () => {
       setAdsSaveResult('已儲存');
     } catch (e: any) {
       setAdsSaveResult(e?.message || '儲存失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('讀取圖片失敗'));
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadAdImage(placement: 'system' | 'venue' | 'member', file: File) {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await uploadAdminSiteAdImage(API_URL, tok, placement, {
+        filename: file.name,
+        contentType: file.type,
+        dataUrl,
+      });
+      const ad = (res as any)?.ad;
+      if (ad?.imageUrl) {
+        setAdsDraft((s) => ({
+          ...s,
+          [placement]: {
+            ...(s[placement] || { enabled: true, imageUrl: '', linkUrl: '' }),
+            imageUrl: String(ad.imageUrl || ''),
+            updatedAt: ad?.updatedAt ? String(ad.updatedAt) : (s[placement] as any)?.updatedAt,
+          },
+        }));
+      }
+      setAdsSaveResult('已上載圖片');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '上載失敗');
     } finally {
       setAdsSaving(false);
     }
@@ -394,6 +433,18 @@ const AdminOverview: React.FC = () => {
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="https://.../banner.jpg"
                     />
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="mt-2 block w-full text-sm"
+                      disabled={adsSaving}
+                      onChange={(e) => {
+                        const f = e.currentTarget.files?.[0];
+                        e.currentTarget.value = '';
+                        if (!f) return;
+                        uploadAdImage('system', f);
+                      }}
+                    />
                   </div>
                   <div>
                     <div className="text-sm cue-muted mb-1">跳轉連結</div>
@@ -488,6 +539,18 @@ const AdminOverview: React.FC = () => {
                       onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), imageUrl: e.target.value } }))}
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="https://.../banner.jpg"
+                    />
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="mt-2 block w-full text-sm"
+                      disabled={adsSaving}
+                      onChange={(e) => {
+                        const f = e.currentTarget.files?.[0];
+                        e.currentTarget.value = '';
+                        if (!f) return;
+                        uploadAdImage('venue', f);
+                      }}
                     />
                   </div>
                   <div>
@@ -612,6 +675,18 @@ const AdminOverview: React.FC = () => {
                       onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), imageUrl: e.target.value } }))}
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="https://.../banner.jpg"
+                    />
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="mt-2 block w-full text-sm"
+                      disabled={adsSaving}
+                      onChange={(e) => {
+                        const f = e.currentTarget.files?.[0];
+                        e.currentTarget.value = '';
+                        if (!f) return;
+                        uploadAdImage('member', f);
+                      }}
                     />
                   </div>
                   <div>

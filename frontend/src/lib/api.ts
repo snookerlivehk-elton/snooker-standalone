@@ -1457,6 +1457,24 @@ export async function updateAdminSiteAd(
   return res.json();
 }
 
+export async function uploadAdminSiteAdImage(
+  apiUrl: string,
+  adminToken: string,
+  placement: 'system' | 'venue' | 'member',
+  payload: { filename?: string; contentType?: string; dataUrl: string },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ads/${placement}/image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `上載圖片失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function deleteMember(apiUrl: string, adminToken: string, id: string | number) {
   const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
     method: 'DELETE',

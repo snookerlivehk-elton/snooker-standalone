@@ -8,6 +8,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
@@ -90,6 +91,9 @@ const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
 const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'site-ads';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
   ? ['*']
@@ -1035,6 +1039,15 @@ function adminAuth(req: express.Request, res: express.Response, next: express.Ne
   next();
 }
 
+function requireSupabaseAdmin() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('缺少 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY，未能啟用後台上載功能');
+  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
 app.get('/api/admin/features', adminAuth, async (_req, res) => {
   const map = await getFeatureMap();
   const rows = FEATURE_CATALOG.map((f) => ({
@@ -1123,6 +1136,74 @@ app.put('/api/admin/site-ads/:id', adminAuth, async (req, res) => {
     res.json({ ad });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/site-ads/:id/image', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim().toLowerCase();
+    if (!id) return res.status(400).json({ error: 'placement_required' });
+    if (!['system', 'venue', 'member'].includes(id)) return res.status(400).json({ error: 'placement_invalid' });
+
+    const body = (req.body || {}) as { filename?: string; contentType?: string; base64?: string; dataUrl?: string };
+    let contentType = String(body.contentType || '').trim().toLowerCase();
+    let base64 = String(body.base64 || '').trim();
+    const filename = String(body.filename || '').trim();
+    const dataUrl = String(body.dataUrl || '').trim();
+
+    if (dataUrl) {
+      const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) return res.status(400).json({ error: 'data_url_invalid' });
+      contentType = String(m[1] || '').trim().toLowerCase();
+      base64 = String(m[2] || '').trim();
+    }
+
+    if (!base64) return res.status(400).json({ error: 'base64_required' });
+
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowed.has(contentType)) return res.status(400).json({ error: 'image_type_not_allowed' });
+
+    const buf = Buffer.from(base64, 'base64');
+    if (!buf || buf.length === 0) return res.status(400).json({ error: 'image_decode_failed' });
+    const maxBytes = 3 * 1024 * 1024;
+    if (buf.length > maxBytes) return res.status(413).json({ error: 'image_too_large' });
+
+    let ext = '';
+    if (contentType === 'image/jpeg') ext = 'jpg';
+    if (contentType === 'image/png') ext = 'png';
+    if (contentType === 'image/webp') ext = 'webp';
+    if (!ext && filename) {
+      const lower = filename.toLowerCase();
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) ext = 'jpg';
+      else if (lower.endsWith('.png')) ext = 'png';
+      else if (lower.endsWith('.webp')) ext = 'webp';
+    }
+    if (!ext) return res.status(400).json({ error: 'image_ext_unknown' });
+
+    const supabase = requireSupabaseAdmin();
+    const objectPath = `site-ads/${id}/${Date.now()}-${randomUUID()}.${ext}`;
+
+    const up = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(objectPath, buf, {
+      contentType,
+      upsert: false,
+      cacheControl: '31536000',
+    });
+    if (up.error) return res.status(500).json({ error: `upload_failed: ${up.error.message}` });
+
+    const pub = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(objectPath);
+    const imageUrl = String((pub as any)?.data?.publicUrl || '').trim();
+    if (!imageUrl) return res.status(500).json({ error: 'public_url_failed' });
+
+    const ad = await prisma.siteAd.upsert({
+      where: { id },
+      update: { imageUrl },
+      create: { id, enabled: true, imageUrl, linkUrl: null },
+    });
+    res.json({ ad });
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    const status = msg.includes('SUPABASE_URL') ? 400 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 

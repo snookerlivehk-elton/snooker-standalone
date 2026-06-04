@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { PrismaClient } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
@@ -77,6 +78,9 @@ const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
 const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'site-ads';
 // 支援多來源：以逗號分隔，例如 "http://localhost:5173,http://localhost:5174"
 const corsOrigins = corsOriginRaw === '*'
     ? ['*']
@@ -1028,6 +1032,14 @@ function adminAuth(req, res, next) {
     }
     next();
 }
+function requireSupabaseAdmin() {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('缺少 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY，未能啟用後台上載功能');
+    }
+    return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+}
 app.get('/api/admin/features', adminAuth, async (_req, res) => {
     const map = await getFeatureMap();
     const rows = FEATURE_CATALOG.map((f) => ({
@@ -1058,6 +1070,139 @@ app.put('/api/admin/features', adminAuth, async (req, res) => {
     featureCache = null;
     const map = await getFeatureMap();
     res.json({ ok: true, features: map });
+});
+app.get('/api/site-ads', async (req, res) => {
+    try {
+        const placement = String(req.query.placement || '').trim().toLowerCase();
+        const where = { enabled: true };
+        if (placement)
+            where.id = placement;
+        const rows = await prisma.siteAd.findMany({ where, orderBy: { updatedAt: 'desc' } });
+        const out = rows
+            .map((r) => ({
+            placement: r.id,
+            enabled: r.enabled,
+            imageUrl: r.imageUrl,
+            linkUrl: r.linkUrl,
+            updatedAt: r.updatedAt,
+        }))
+            .filter((r) => r.enabled && r.imageUrl && r.linkUrl);
+        res.json({ ads: out });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.get('/api/admin/site-ads', adminAuth, async (_req, res) => {
+    try {
+        const placements = ['system', 'venue', 'member'];
+        await prisma.$transaction(placements.map((id) => prisma.siteAd.upsert({
+            where: { id },
+            update: {},
+            create: { id, enabled: true, imageUrl: null, linkUrl: null },
+        })));
+        const ads = await prisma.siteAd.findMany({ orderBy: { id: 'asc' } });
+        res.json({ ads });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.put('/api/admin/site-ads/:id', adminAuth, async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim().toLowerCase();
+        if (!id)
+            return res.status(400).json({ error: 'placement_required' });
+        if (!['system', 'venue', 'member'].includes(id))
+            return res.status(400).json({ error: 'placement_invalid' });
+        const body = (req.body || {});
+        const enabled = body.enabled === undefined ? undefined : Boolean(body.enabled);
+        const imageUrl = body.imageUrl === undefined ? undefined : (body.imageUrl ? String(body.imageUrl).trim() : null);
+        const linkUrl = body.linkUrl === undefined ? undefined : (body.linkUrl ? String(body.linkUrl).trim() : null);
+        const ad = await prisma.siteAd.upsert({
+            where: { id },
+            update: { ...(enabled !== undefined ? { enabled } : {}), ...(imageUrl !== undefined ? { imageUrl } : {}), ...(linkUrl !== undefined ? { linkUrl } : {}) },
+            create: { id, enabled: enabled ?? true, imageUrl: imageUrl ?? null, linkUrl: linkUrl ?? null },
+        });
+        res.json({ ad });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.post('/api/admin/site-ads/:id/image', adminAuth, async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim().toLowerCase();
+        if (!id)
+            return res.status(400).json({ error: 'placement_required' });
+        if (!['system', 'venue', 'member'].includes(id))
+            return res.status(400).json({ error: 'placement_invalid' });
+        const body = (req.body || {});
+        let contentType = String(body.contentType || '').trim().toLowerCase();
+        let base64 = String(body.base64 || '').trim();
+        const filename = String(body.filename || '').trim();
+        const dataUrl = String(body.dataUrl || '').trim();
+        if (dataUrl) {
+            const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (!m)
+                return res.status(400).json({ error: 'data_url_invalid' });
+            contentType = String(m[1] || '').trim().toLowerCase();
+            base64 = String(m[2] || '').trim();
+        }
+        if (!base64)
+            return res.status(400).json({ error: 'base64_required' });
+        const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+        if (!allowed.has(contentType))
+            return res.status(400).json({ error: 'image_type_not_allowed' });
+        const buf = Buffer.from(base64, 'base64');
+        if (!buf || buf.length === 0)
+            return res.status(400).json({ error: 'image_decode_failed' });
+        const maxBytes = 3 * 1024 * 1024;
+        if (buf.length > maxBytes)
+            return res.status(413).json({ error: 'image_too_large' });
+        let ext = '';
+        if (contentType === 'image/jpeg')
+            ext = 'jpg';
+        if (contentType === 'image/png')
+            ext = 'png';
+        if (contentType === 'image/webp')
+            ext = 'webp';
+        if (!ext && filename) {
+            const lower = filename.toLowerCase();
+            if (lower.endsWith('.jpg') || lower.endsWith('.jpeg'))
+                ext = 'jpg';
+            else if (lower.endsWith('.png'))
+                ext = 'png';
+            else if (lower.endsWith('.webp'))
+                ext = 'webp';
+        }
+        if (!ext)
+            return res.status(400).json({ error: 'image_ext_unknown' });
+        const supabase = requireSupabaseAdmin();
+        const objectPath = `site-ads/${id}/${Date.now()}-${randomUUID()}.${ext}`;
+        const up = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(objectPath, buf, {
+            contentType,
+            upsert: false,
+            cacheControl: '31536000',
+        });
+        if (up.error)
+            return res.status(500).json({ error: `upload_failed: ${up.error.message}` });
+        const pub = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(objectPath);
+        const imageUrl = String(pub?.data?.publicUrl || '').trim();
+        if (!imageUrl)
+            return res.status(500).json({ error: 'public_url_failed' });
+        const ad = await prisma.siteAd.upsert({
+            where: { id },
+            update: { imageUrl },
+            create: { id, enabled: true, imageUrl, linkUrl: null },
+        });
+        res.json({ ad });
+    }
+    catch (err) {
+        const msg = String(err?.message || err);
+        const status = msg.includes('SUPABASE_URL') ? 400 : 500;
+        res.status(status).json({ error: msg });
+    }
 });
 // Basic write authorization for match write endpoints
 function writeAuth(req, res, next) {
@@ -1295,7 +1440,7 @@ app.get('/api/member/districts', async (req, res) => {
             districts: districts.map((d) => ({
                 code3: d.code3,
                 name: d.name,
-                // regionCode: d.region_code,
+                regionCode: d.region_code,
             })),
         });
     }
@@ -1303,6 +1448,24 @@ app.get('/api/member/districts', async (req, res) => {
         res.status(500).json({ error: String(err?.message || err) });
     }
 });
+async function normalizeAndValidateRegionDistrict(input) {
+    const region = String(input.regionCode ?? '').trim().toUpperCase();
+    const district = String(input.districtCode ?? '').trim().toUpperCase();
+    if (!region && !district)
+        return { regionCode: null, districtCode: null };
+    if (!region || !district)
+        throw new Error('請同時選擇地方及分區');
+    const r = await prisma.memberRegion.findUnique({ where: { code3: region }, select: { active: true } });
+    if (!r || r.active === false)
+        throw new Error('地方無效');
+    const d = await prisma.memberDistrict.findUnique({
+        where: { region_code_code3: { region_code: region, code3: district } },
+        select: { active: true },
+    });
+    if (!d || d.active === false)
+        throw new Error('分區無效');
+    return { regionCode: region, districtCode: district };
+}
 // Same-origin Member Registration page (mobile-friendly)
 app.get('/admin/register', (_req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -2174,6 +2337,10 @@ app.post('/api/members/register', async (req, res) => {
         });
         const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
         const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+        const regionDistrict = await normalizeAndValidateRegionDistrict({
+            regionCode: payload.regionCode ?? payload.region_code ?? null,
+            districtCode: payload.districtCode ?? payload.district_code ?? null,
+        });
         if (!name) {
             return res.status(400).json({ error: 'name 為必填' });
         }
@@ -2232,7 +2399,8 @@ app.post('/api/members/register', async (req, res) => {
                     id: randomUUID(),
                     name,
                     email: email || null,
-                    district_code: null,
+                    region_code: regionDistrict.regionCode,
+                    district_code: regionDistrict.districtCode,
                     phone: phone ?? null,
                     phone_country: payload.phoneCountry ? String(payload.phoneCountry).trim() : null,
                     phone_number: payload.phoneNumber ? String(payload.phoneNumber).trim() : null,
@@ -2276,7 +2444,9 @@ app.post('/api/members/register', async (req, res) => {
     }
     catch (err) {
         const msg = String(err?.message || err);
-        const status = msg.includes('已存在') ? 409 : 500;
+        const status = msg.includes('已存在') ? 409 :
+            (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 :
+                500;
         res.status(status).json({ error: msg });
     }
 });
@@ -2378,6 +2548,10 @@ app.post('/api/members/register-with-code', async (req, res) => {
         const phone = payload.phone ? String(payload.phone).trim() : undefined;
         const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
         const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
+        const regionDistrict = await normalizeAndValidateRegionDistrict({
+            regionCode: payload.regionCode ?? payload.region_code ?? null,
+            districtCode: payload.districtCode ?? payload.district_code ?? null,
+        });
         if (!email || !name || !code || !password) {
             return res.status(400).json({ error: 'email、name、驗證碼與密碼為必填' });
         }
@@ -2444,7 +2618,8 @@ app.post('/api/members/register-with-code', async (req, res) => {
                     id: randomUUID(),
                     name,
                     email,
-                    district_code: null,
+                    region_code: regionDistrict.regionCode,
+                    district_code: regionDistrict.districtCode,
                     phone: phone ?? null,
                     club_name: clubName ?? null,
                     birth_date: birthDate ?? null,
@@ -2462,7 +2637,9 @@ app.post('/api/members/register-with-code', async (req, res) => {
     }
     catch (err) {
         const msg = String(err?.message || err);
-        const status = msg.includes('email 已存在') ? 409 : 500;
+        const status = msg.includes('email 已存在') ? 409 :
+            (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 :
+                500;
         res.status(status).json({ error: msg });
     }
 });
@@ -3120,8 +3297,13 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
             data.name = String(body.name ?? '').trim();
         if (body.email !== undefined)
             data.email = body.email ? String(body.email).trim() : null;
-        if (body.district_code !== undefined)
-            data.district_code = body.district_code ? String(body.district_code).trim() : null;
+        const regionRaw = body.regionCode ?? body.region_code;
+        const districtRaw = body.districtCode ?? body.district_code;
+        if (regionRaw !== undefined || districtRaw !== undefined) {
+            const pair = await normalizeAndValidateRegionDistrict({ regionCode: regionRaw ?? null, districtCode: districtRaw ?? null });
+            data.region_code = pair.regionCode;
+            data.district_code = pair.districtCode;
+        }
         if (body.member_code !== undefined)
             data.member_code = body.member_code ? String(body.member_code).trim() : null;
         if (body.phone !== undefined)
@@ -3189,7 +3371,9 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
         if (err?.code === 'P2025') {
             return res.status(404).json({ error: '會員不存在' });
         }
-        res.status(500).json({ error: String(err?.message || err) });
+        const msg = String(err?.message || err);
+        const status = (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 : 500;
+        res.status(status).json({ error: msg });
     }
 });
 // Member: self-update (no admin token required, but allows limited fields)
@@ -3208,6 +3392,13 @@ app.put('/api/members/:id', async (req, res) => {
             data.club_name = body.club_name ? String(body.club_name).trim() : null;
         if (body.clubName !== undefined)
             data.club_name = body.clubName ? String(body.clubName).trim() : null;
+        const regionRaw = body.regionCode ?? body.region_code;
+        const districtRaw = body.districtCode ?? body.district_code;
+        if (regionRaw !== undefined || districtRaw !== undefined) {
+            const pair = await normalizeAndValidateRegionDistrict({ regionCode: regionRaw ?? null, districtCode: districtRaw ?? null });
+            data.region_code = pair.regionCode;
+            data.district_code = pair.districtCode;
+        }
         const bdRaw = body.birthDate ?? body.birth_date;
         if (bdRaw !== undefined) {
             if (!bdRaw) {
@@ -3240,7 +3431,9 @@ app.put('/api/members/:id', async (req, res) => {
         if (err?.code === 'P2025') {
             return res.status(404).json({ error: '會員不存在' });
         }
-        res.status(500).json({ error: String(err?.message || err) });
+        const msg = String(err?.message || err);
+        const status = (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 : 500;
+        res.status(status).json({ error: msg });
     }
 });
 // Admin: delete member (requires admin token)
