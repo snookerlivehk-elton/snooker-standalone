@@ -305,6 +305,7 @@ model ClubMember {
   clubId    String
   memberId  String
   joinedAt  DateTime @default(now())
+  rating    Int      @default(0)
   
   club      ClubProfile @relation(fields: [clubId], references: [id])
   member    Member      @relation(fields: [memberId], references: [id])

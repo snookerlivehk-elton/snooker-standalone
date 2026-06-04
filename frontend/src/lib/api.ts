@@ -88,6 +88,31 @@ export async function getClubMembers(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function updateClubMemberRating(apiUrl: string, memberId: string, clubMemberId: string, rating: number) {
+  const res = await fetch(`${apiUrl}/api/club/my-members/${encodeURIComponent(clubMemberId)}/rating`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ rating }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新評分失敗');
+  }
+  return res.json();
+}
+
+export async function removeClubMember(apiUrl: string, memberId: string, clubMemberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/my-members/${encodeURIComponent(clubMemberId)}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '移除會員資格失敗');
+  }
+  return res.json();
+}
+
 export async function createClubBreak(
   apiUrl: string,
   memberId: string,

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -32,6 +32,10 @@ const VenueDashboard: React.FC = () => {
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [clubProfile, setClubProfile] = useState<any>({});
   const [clubMembers, setClubMembers] = useState<any[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberRatingDraft, setMemberRatingDraft] = useState<Record<string, string>>({});
+  const [memberSavingId, setMemberSavingId] = useState<string>('');
+  const [memberRemovingId, setMemberRemovingId] = useState<string>('');
   const [msgTitle, setMsgTitle] = useState('');
   const [msgContent, setMsgContent] = useState('');
   const [clubMsgs, setClubMsgs] = useState<any[]>([]);
@@ -128,20 +132,20 @@ const VenueDashboard: React.FC = () => {
   const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
 
-  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring'>('home');
 
-  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring' {
+  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring' {
     try {
       const params = new URLSearchParams(window.location.search);
       const t = String(params.get('tab') || '').trim();
-      if (t === 'home' || t === 'booking' || t === 'qr' || t === 'points' || t === 'highbreak' || t === 'content' || t === 'scoring') return t;
+      if (t === 'home' || t === 'booking' || t === 'qr' || t === 'points' || t === 'highbreak' || t === 'content' || t === 'members' || t === 'scoring') return t;
       return (localStorage.getItem('venueDashboardTab') as any) || 'home';
     } catch {
       return 'home';
     }
   }
 
-  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring') {
+  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring') {
     setActiveTab(t);
     try {
       localStorage.setItem('venueDashboardTab', t);
@@ -659,6 +663,7 @@ const VenueDashboard: React.FC = () => {
               { key: 'points', label: '積分' },
               { key: 'highbreak', label: '單杆' },
               { key: 'content', label: '訊息/直播' },
+              { key: 'members', label: '會員管理' },
               { key: 'scoring', label: '計分/房間' },
             ]}
             activeKey={activeTab}
@@ -3065,6 +3070,175 @@ const VenueDashboard: React.FC = () => {
         </div>
         )}
         </>
+        )}
+
+        {activeTab === 'members' && (
+          <div className="glass rounded-xl p-6">
+            <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+              <div className="text-xl font-bold">會員管理</div>
+              <button
+                type="button"
+                className="px-4 py-2 rounded cue-surface hover:brightness-95 font-semibold"
+                onClick={async () => {
+                  if (!operatorId) return;
+                  try {
+                    const rows = await getClubMembers(API_URL, operatorId).catch(() => []);
+                    setClubMembers(Array.isArray(rows) ? rows : []);
+                    setToast('已更新會員列表');
+                    setTimeout(() => setToast(null), 2000);
+                  } catch (e: any) {
+                    setToast(e?.message || '更新失敗');
+                    setTimeout(() => setToast(null), 3000);
+                  }
+                }}
+              >
+                重新整理
+              </button>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3 mb-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm mb-1 cue-muted">搜尋（名稱 / 電話 / Email / 會員編號）</label>
+                <input
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  placeholder="輸入關鍵字..."
+                />
+              </div>
+              <div className="md:col-span-1">
+                <div className="text-sm cue-muted mb-1">會員數</div>
+                <div className="font-semibold">{Array.isArray(clubMembers) ? clubMembers.length : 0}</div>
+              </div>
+            </div>
+
+            {(() => {
+              const kw = memberSearch.trim().toLowerCase();
+              const rows = Array.isArray(clubMembers) ? clubMembers : [];
+              const filtered = !kw ? rows : rows.filter((r: any) => {
+                const m = r?.member || {};
+                const hay = [
+                  String(m?.member_code || ''),
+                  String(m?.name || ''),
+                  String(m?.phone || m?.phone_e164 || ''),
+                  String(m?.email || ''),
+                ].join(' ').toLowerCase();
+                return hay.includes(kw);
+              });
+              return (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-2">會員編號</th>
+                        <th className="py-2 px-2">名稱</th>
+                        <th className="py-2 px-2">電話</th>
+                        <th className="py-2 px-2">Email</th>
+                        <th className="py-2 px-2">評分</th>
+                        <th className="py-2 px-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.slice(0, 500).map((r: any) => {
+                        const id = String(r?.id || '');
+                        const m = r?.member || {};
+                        const code = String(m?.member_code || '').trim() || '—';
+                        const name = String(m?.name || '').trim() || '—';
+                        const phone = String(m?.phone || m?.phone_e164 || '').trim() || '—';
+                        const email = String(m?.email || '').trim() || '—';
+                        const rating = Number(r?.rating ?? 0);
+                        const draft = memberRatingDraft[id];
+                        const inputValue = draft != null ? draft : String(Number.isFinite(rating) ? rating : 0);
+                        return (
+                          <tr key={id} className="border-b cue-border hover:brightness-95">
+                            <td className="py-2 px-2 font-semibold whitespace-nowrap">{code}</td>
+                            <td className="py-2 px-2">{name}</td>
+                            <td className="py-2 px-2 cue-muted whitespace-nowrap">{phone}</td>
+                            <td className="py-2 px-2 cue-muted">{email}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  value={inputValue}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setMemberRatingDraft((prev) => ({ ...(prev || {}), [id]: v }));
+                                  }}
+                                  className="w-24 px-3 py-1.5 rounded cue-input"
+                                  inputMode="numeric"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={memberSavingId === id}
+                                  className={`px-3 py-1.5 rounded text-sm font-semibold ${memberSavingId === id ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                                  onClick={async () => {
+                                    if (!operatorId) return;
+                                    const raw = (memberRatingDraft[id] ?? String(rating)).trim();
+                                    const n = Number(raw);
+                                    if (!Number.isFinite(n)) {
+                                      setToast('評分必須為整數（可負數）');
+                                      setTimeout(() => setToast(null), 2500);
+                                      return;
+                                    }
+                                    const v = Math.trunc(n);
+                                    setMemberSavingId(id);
+                                    try {
+                                      await updateClubMemberRating(API_URL, operatorId, id, v);
+                                      setClubMembers((prev) => (Array.isArray(prev) ? prev.map((x: any) => (String(x?.id || '') === id ? { ...x, rating: v } : x)) : prev));
+                                      setMemberRatingDraft((prev) => {
+                                        const next = { ...(prev || {}) };
+                                        delete next[id];
+                                        return next;
+                                      });
+                                      setToast('已更新評分');
+                                      setTimeout(() => setToast(null), 2000);
+                                    } catch (e: any) {
+                                      setToast(e?.message || '更新失敗');
+                                      setTimeout(() => setToast(null), 3000);
+                                    } finally {
+                                      setMemberSavingId('');
+                                    }
+                                  }}
+                                >
+                                  儲存
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2">
+                              <button
+                                type="button"
+                                disabled={memberRemovingId === id}
+                                className={`px-3 py-1.5 rounded text-sm font-semibold ${memberRemovingId === id ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                                onClick={async () => {
+                                  if (!operatorId) return;
+                                  if (!confirm('確定要移除該會員在本場館之會員資格？')) return;
+                                  if (!confirm('再次確認：移除後該會員將不再屬於本場館會員')) return;
+                                  setMemberRemovingId(id);
+                                  try {
+                                    await removeClubMember(API_URL, operatorId, id);
+                                    setClubMembers((prev) => (Array.isArray(prev) ? prev.filter((x: any) => String(x?.id || '') !== id) : prev));
+                                    setToast('已移除會員資格');
+                                    setTimeout(() => setToast(null), 2000);
+                                  } catch (e: any) {
+                                    setToast(e?.message || '移除失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  } finally {
+                                    setMemberRemovingId('');
+                                  }
+                                }}
+                              >
+                                移除
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {filtered.length > 500 && <div className="text-xs cue-muted mt-2">只顯示前 500 筆</div>}
+                </div>
+              );
+            })()}
+          </div>
         )}
 
         {activeTab === 'home' && (
