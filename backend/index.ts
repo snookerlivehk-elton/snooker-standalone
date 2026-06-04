@@ -7,7 +7,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
@@ -3625,6 +3625,9 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
 
         await prisma.$transaction(async (tx) => {
           if (clubId) {
+            await tx.$executeRaw(
+              Prisma.sql`DELETE FROM "ClubMessageRead" WHERE "messageId" IN (SELECT "id" FROM "ClubMessage" WHERE "clubId" = ${clubId})`
+            );
             await tx.tableSessionConfirm.deleteMany({ where: { clubId } });
             await tx.tournamentSignup.deleteMany({ where: { tournament: { clubId } } });
             await tx.tournament.deleteMany({ where: { clubId } });
@@ -3641,6 +3644,14 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
             await tx.clubTable.deleteMany({ where: { clubId } });
             await tx.clubMember.deleteMany({ where: { clubId } });
             await tx.clubProfile.deleteMany({ where: { id: clubId } });
+          }
+
+          await tx.$executeRaw(Prisma.sql`DELETE FROM "ClubMessageRead" WHERE "memberId" = ${id}`);
+          await tx.$executeRaw(Prisma.sql`DELETE FROM "MatchInvite" WHERE "memberId" = ${id} OR "operatorId" = ${id}`);
+          if (roomIds.length) {
+            await tx.$executeRaw(
+              Prisma.sql`DELETE FROM "MatchInvite" WHERE "roomId" IN (${Prisma.join(roomIds)})`
+            );
           }
 
           await tx.clubMember.deleteMany({ where: { memberId: id } });
@@ -3676,6 +3687,11 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
         return res.status(404).json({ error: '會員不存在' });
       }
       if ((err as any)?.code === 'P2003') {
+        if (purge) {
+          const meta = (err as any)?.meta;
+          const field = meta?.field_name ? String(meta.field_name) : '';
+          return res.status(400).json({ error: `永久刪除失敗：仍有外鍵關聯未清理${field ? `（${field}）` : ''}` });
+        }
         return res.status(400).json({ error: '會員已有關聯資料（例如比賽/場館/預約），無法直接刪除。若要連同相關資料永久刪除，請使用 purge=1' });
       }
       throw err;
