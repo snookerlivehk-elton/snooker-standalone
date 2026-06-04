@@ -25,7 +25,6 @@ const Me: React.FC = () => {
   const [liveLoading, setLiveLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'matches' | 'clubs' | 'live' | 'history' | 'settings'>('clubs');
-  const [settingsView, setSettingsView] = useState<'root' | 'profile'>('root');
 
   const displayName = useMemo(() => String(profile?.name || 'Member'), [profile?.name]);
   const avatarText = useMemo(() => {
@@ -81,10 +80,6 @@ const Me: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    if (activeTab !== 'settings') setSettingsView('root');
-  }, [activeTab]);
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
@@ -234,61 +229,88 @@ const Me: React.FC = () => {
             {!!memberId && activeTab === 'settings' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-2">設定</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSettingsView('profile')}
-                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold text-left"
-                    >
-                      個人資料
-                    </button>
-                    <a href="/members/login" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
-                      切換帳號
-                    </a>
+                  <div className="font-semibold text-lg mb-2">會員資料</div>
+                  <div className="space-y-2">
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">ID</div>
+                      <div className="text-sm font-semibold text-right">{String(memberId || '-')}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">姓名</div>
+                      <div className="text-sm font-semibold text-right">{String(profile?.name || '-')}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">Email</div>
+                      <div className="text-sm font-semibold text-right">{String(profile?.email || session?.email || '-')}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">會員編碼</div>
+                      <div className="text-sm font-semibold text-right">{String(profile?.member_code || profile?.memberCode || '無')}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">建立時間</div>
+                      <div className="text-sm font-semibold text-right">
+                        {profile?.created_at
+                          ? new Date(profile.created_at).toLocaleString()
+                          : profile?.createdAt
+                            ? new Date(profile.createdAt).toLocaleString()
+                            : '-'}
+                      </div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">電話</div>
+                      <div className="text-sm font-semibold text-right">
+                        {(() => {
+                          try {
+                            const key = String(profile?.email || memberId || '');
+                            const raw = localStorage.getItem('memberOptional') || '{}';
+                            const store = JSON.parse(raw);
+                            const opt = store[key] || {};
+                            const v = String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? opt.phone ?? '') || '-';
+                            return v || '-';
+                          } catch {
+                            return String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '-') || '-';
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">出生日期</div>
+                      <div className="text-sm font-semibold text-right">
+                        {(() => {
+                          try {
+                            const key = String(profile?.email || memberId || '');
+                            const raw = localStorage.getItem('memberOptional') || '{}';
+                            const store = JSON.parse(raw);
+                            const opt = store[key] || {};
+                            const v = String(profile?.birthDate ?? profile?.birth_date ?? opt.birthDate ?? '') || '-';
+                            return v || '-';
+                          } catch {
+                            return String(profile?.birthDate ?? profile?.birth_date ?? '-') || '-';
+                          }
+                        })()}
+                      </div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">所屬球會</div>
+                      <div className="text-sm font-semibold text-right">
+                        {String(profile?.club_name || profile?.clubName || profile?.club?.name || '未設定')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3">
                     <button
                       type="button"
                       onClick={() => {
                         try { localStorage.removeItem('memberSession'); } catch {}
                         window.location.href = '/me';
                       }}
-                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold text-left"
+                      className="w-full px-4 py-2 rounded bg-red-700 hover:bg-red-600 text-white font-semibold"
                     >
                       登出
                     </button>
                   </div>
                 </div>
-
-                {settingsView === 'profile' && (
-                  <div className="cue-surface rounded-lg p-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <div className="font-semibold text-lg">個人資料</div>
-                      <button
-                        type="button"
-                        onClick={() => setSettingsView('root')}
-                        className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                      >
-                        返回
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
-                        <div className="text-sm cue-muted">姓名</div>
-                        <div className="text-sm font-semibold text-right">{String(profile?.name || '')}</div>
-                      </div>
-                      <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
-                        <div className="text-sm cue-muted">電郵</div>
-                        <div className="text-sm font-semibold text-right">{String(profile?.email || session?.email || '')}</div>
-                      </div>
-                      {!!(profile?.phone_e164 || profile?.phoneE164) && (
-                        <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
-                          <div className="text-sm cue-muted">手機</div>
-                          <div className="text-sm font-semibold text-right">{String(profile?.phone_e164 || profile?.phoneE164 || '')}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
