@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -34,6 +34,9 @@ const VenueDashboard: React.FC = () => {
   const [clubMembers, setClubMembers] = useState<any[]>([]);
   const [msgTitle, setMsgTitle] = useState('');
   const [msgContent, setMsgContent] = useState('');
+  const [clubMsgs, setClubMsgs] = useState<any[]>([]);
+  const [clubMsgsLoading, setClubMsgsLoading] = useState(false);
+  const [editingClubMsgId, setEditingClubMsgId] = useState<string>('');
   const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
   const [liveTitle, setLiveTitle] = useState('');
   const [liveDate, setLiveDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -45,6 +48,7 @@ const VenueDashboard: React.FC = () => {
   const [tournamentsLoading, setTournamentsLoading] = useState(false);
   const [tournamentTitle, setTournamentTitle] = useState('');
   const [tournamentDesc, setTournamentDesc] = useState('');
+  const [tournamentGuide, setTournamentGuide] = useState('');
   const [tournamentCapacity, setTournamentCapacity] = useState('32');
   const [tournamentStartsAt, setTournamentStartsAt] = useState('');
   const [tournamentDeadline, setTournamentDeadline] = useState('');
@@ -52,6 +56,8 @@ const VenueDashboard: React.FC = () => {
   const [tournamentSelectedId, setTournamentSelectedId] = useState<string>('');
   const [tournamentSignups, setTournamentSignups] = useState<any[]>([]);
   const [tournamentSignupsLoading, setTournamentSignupsLoading] = useState(false);
+  const [tournamentConfirmed, setTournamentConfirmed] = useState<any[]>([]);
+  const [tournamentConfirmedLoading, setTournamentConfirmedLoading] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newTableNotes, setNewTableNotes] = useState('');
@@ -516,22 +522,55 @@ const VenueDashboard: React.FC = () => {
       if (!tournamentsEnabled) return;
       if (!tournamentSelectedId) {
         if (mounted) setTournamentSignups([]);
+        if (mounted) setTournamentConfirmed([]);
         return;
       }
       setTournamentSignupsLoading(true);
+      setTournamentConfirmedLoading(true);
       try {
-        const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING');
-        if (mounted) setTournamentSignups(Array.isArray(rows) ? rows : []);
+        const [pendingRows, confirmedRows] = await Promise.all([
+          getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []),
+          getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'CONFIRMED').catch(() => []),
+        ]);
+        if (mounted) setTournamentSignups(Array.isArray(pendingRows) ? pendingRows : []);
+        if (mounted) setTournamentConfirmed(Array.isArray(confirmedRows) ? confirmedRows : []);
       } catch (e: any) {
         if (mounted) setTournamentSignups([]);
+        if (mounted) setTournamentConfirmed([]);
         setToast(e?.message || '載入報名名單失敗');
         setTimeout(() => setToast(null), 3000);
       } finally {
         if (mounted) setTournamentSignupsLoading(false);
+        if (mounted) setTournamentConfirmedLoading(false);
       }
     })();
     return () => { mounted = false; };
   }, [operatorId, tournamentSelectedId, tournamentsEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!operatorId) return;
+      if (activeTab !== 'content') return;
+      if (!clubMessagesEnabled) {
+        if (mounted) setClubMsgs([]);
+        if (mounted) setClubMsgsLoading(false);
+        return;
+      }
+      setClubMsgsLoading(true);
+      try {
+        const rows = await getClubMessagesManage(API_URL, operatorId, 80);
+        if (mounted) setClubMsgs(Array.isArray(rows) ? rows : []);
+      } catch (e: any) {
+        if (mounted) setClubMsgs([]);
+        setToast(e?.message || '載入場館訊息失敗');
+        setTimeout(() => setToast(null), 3000);
+      } finally {
+        if (mounted) setClubMsgsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeTab, clubMessagesEnabled, operatorId]);
 
   useEffect(() => {
     setActiveTab(resolveTab());
@@ -2547,28 +2586,113 @@ const VenueDashboard: React.FC = () => {
                  />
               </div>
               <button
-                 onClick={async () => {
-                    if (!msgTitle || !msgContent) {
-                       setToast('請填寫標題和內容');
-                       setTimeout(() => setToast(null), 2000);
-                       return;
+                onClick={async () => {
+                  if (!msgContent.trim()) {
+                    setToast('請填寫內容');
+                    setTimeout(() => setToast(null), 2000);
+                    return;
+                  }
+                  try {
+                    if (!operatorId) return;
+                    if (editingClubMsgId) {
+                      await updateClubMessageManage(API_URL, operatorId, editingClubMsgId, { title: msgTitle.trim() || null, content: msgContent });
+                      setToast('已更新訊息');
+                    } else {
+                      if (!msgTitle.trim()) {
+                        setToast('請填寫標題');
+                        setTimeout(() => setToast(null), 2000);
+                        return;
+                      }
+                      await broadcastClubMessage(API_URL, operatorId, msgTitle, msgContent);
+                      setToast('訊息已發送');
                     }
-                    try {
-                       if (!operatorId) return;
-                       await broadcastClubMessage(API_URL, operatorId, msgTitle, msgContent);
-                       setToast('訊息已發送');
-                       setMsgTitle('');
-                       setMsgContent('');
-                       setTimeout(() => setToast(null), 3000);
-                    } catch (err: any) {
-                       setToast(err.message || '發送失敗');
-                       setTimeout(() => setToast(null), 3000);
-                    }
-                 }}
-                 className="px-4 py-2 rounded brand-button text-black transition-colors"
+                    setMsgTitle('');
+                    setMsgContent('');
+                    setEditingClubMsgId('');
+                    setTimeout(() => setToast(null), 3000);
+                    const rows = await getClubMessagesManage(API_URL, operatorId, 80).catch(() => []);
+                    setClubMsgs(Array.isArray(rows) ? rows : []);
+                  } catch (err: any) {
+                    setToast(err.message || '操作失敗');
+                    setTimeout(() => setToast(null), 3000);
+                  }
+                }}
+                className="px-4 py-2 rounded brand-button text-black transition-colors"
               >
-                 發送訊息
+                {editingClubMsgId ? '更新訊息' : '發送訊息'}
               </button>
+           </div>
+           <div className="mt-4">
+             {clubMsgsLoading ? (
+               <div className="text-sm cue-muted">載入中...</div>
+             ) : clubMsgs.length === 0 ? (
+               <div className="text-sm cue-muted">暫無已發送訊息</div>
+             ) : (
+               <div className="overflow-x-auto -mx-2 px-2">
+                 <table className="w-full text-left border-collapse text-sm">
+                   <thead>
+                     <tr className="cue-muted border-b cue-border">
+                       <th className="py-2 px-2">日期時間</th>
+                       <th className="py-2 px-2">標題</th>
+                       <th className="py-2 px-2">內容</th>
+                       <th className="py-2 px-2">操作</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {clubMsgs.slice(0, 80).map((m: any) => (
+                       <tr key={String(m?.id || '')} className="border-b cue-border hover:brightness-95">
+                         <td className="py-2 px-2 cue-muted whitespace-nowrap">{m?.createdAt ? new Date(m.createdAt).toLocaleString() : '-'}</td>
+                         <td className="py-2 px-2 font-semibold">{String(m?.title || '-')}</td>
+                         <td className="py-2 px-2 cue-muted">
+                           <div className="max-w-[420px] truncate">{String(m?.content || '')}</div>
+                         </td>
+                         <td className="py-2 px-2">
+                           <div className="flex gap-2">
+                             <button
+                               type="button"
+                               className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                               onClick={() => {
+                                 setEditingClubMsgId(String(m.id));
+                                 setMsgTitle(String(m?.title || ''));
+                                 setMsgContent(String(m?.content || ''));
+                               }}
+                             >
+                               編輯
+                             </button>
+                             <button
+                               type="button"
+                               className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                               onClick={async () => {
+                                 if (!operatorId) return;
+                                 if (!confirm('確定要刪除此訊息？')) return;
+                                 try {
+                                   await deleteClubMessageManage(API_URL, operatorId, String(m.id));
+                                   const rows = await getClubMessagesManage(API_URL, operatorId, 80).catch(() => []);
+                                   setClubMsgs(Array.isArray(rows) ? rows : []);
+                                   if (editingClubMsgId && String(m.id) === editingClubMsgId) {
+                                     setEditingClubMsgId('');
+                                     setMsgTitle('');
+                                     setMsgContent('');
+                                   }
+                                   setToast('已刪除');
+                                   setTimeout(() => setToast(null), 2000);
+                                 } catch (e: any) {
+                                   setToast(e?.message || '刪除失敗');
+                                   setTimeout(() => setToast(null), 3000);
+                                 }
+                               }}
+                             >
+                               刪除
+                             </button>
+                           </div>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+                 {clubMsgs.length > 80 && <div className="text-xs cue-muted mt-2">只顯示最近 80 筆</div>}
+               </div>
+             )}
            </div>
         </div>
         ) : (
@@ -2603,6 +2727,10 @@ const VenueDashboard: React.FC = () => {
               <label className="block text-sm mb-1 cue-muted">比賽詳情</label>
               <textarea value={tournamentDesc} onChange={(e) => setTournamentDesc(e.target.value)} className="w-full px-3 py-2 rounded cue-input h-24" placeholder="輸入比賽詳情..." />
             </div>
+            <div className="md:col-span-6">
+              <label className="block text-sm mb-1 cue-muted">報名指引 / 流程（會員確認彈窗顯示）</label>
+              <textarea value={tournamentGuide} onChange={(e) => setTournamentGuide(e.target.value)} className="w-full px-3 py-2 rounded cue-input h-24" placeholder="例如：已提交報名，待場館確認；確認後請於 X 日前到場繳費..."/>
+            </div>
             <div className="md:col-span-6 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -2621,13 +2749,14 @@ const VenueDashboard: React.FC = () => {
                     if (tournamentDeadline && !Number.isFinite(new Date(`${tournamentDeadline}T23:59:59`).getTime())) throw new Error('截止日期格式不正確');
                     setTournamentCreating(true);
                     if (tournamentSelectedId) {
-                      await updateClubTournament(API_URL, operatorId, tournamentSelectedId, { title, description: tournamentDesc, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
+                      await updateClubTournament(API_URL, operatorId, tournamentSelectedId, { title, description: tournamentDesc, signupGuide: tournamentGuide, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
                       setToast('已更新比賽');
                     } else {
-                      await createClubTournament(API_URL, operatorId, { title, description: tournamentDesc, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
+                      await createClubTournament(API_URL, operatorId, { title, description: tournamentDesc, signupGuide: tournamentGuide, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
                       setToast('已建立比賽（草稿）');
                       setTournamentTitle('');
                       setTournamentDesc('');
+                      setTournamentGuide('');
                       setTournamentCapacity('32');
                       setTournamentDeadline('');
                       setTournamentStartsAt('');
@@ -2652,10 +2781,12 @@ const VenueDashboard: React.FC = () => {
                   setTournamentSelectedId('');
                   setTournamentTitle('');
                   setTournamentDesc('');
+                  setTournamentGuide('');
                   setTournamentCapacity('32');
                   setTournamentDeadline('');
                   setTournamentStartsAt('');
                   setTournamentSignups([]);
+                  setTournamentConfirmed([]);
                 }}
               >
                 清除
@@ -2700,7 +2831,9 @@ const VenueDashboard: React.FC = () => {
                     {tournaments.slice(0, 200).map((t: any) => {
                       const id = String(t?.id || '');
                       const status = String(t?.status || '').toUpperCase();
-                      const cap = t?.capacity != null ? String(t.capacity) : '-';
+                      const capN = Number(t?.capacity ?? 0);
+                      const confirmedN = Number(t?.confirmedCount ?? 0);
+                      const cap = capN > 0 ? `${confirmedN}/${capN}` : '-';
                       const closes = t?.signupClosesAt ? new Date(t.signupClosesAt).toLocaleDateString() : '-';
                       const isSelected = tournamentSelectedId && id === tournamentSelectedId;
                       return (
@@ -2717,10 +2850,11 @@ const VenueDashboard: React.FC = () => {
                               <button
                                 type="button"
                                 className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
-                                onClick={async () => {
+                                onClick={() => {
                                   setTournamentSelectedId(id);
                                   setTournamentTitle(String(t?.title || ''));
                                   setTournamentDesc(String(t?.description || ''));
+                                  setTournamentGuide(String(t?.signupGuide || ''));
                                   setTournamentCapacity(String(t?.capacity ?? 32));
                                   setTournamentDeadline(t?.signupClosesAt ? String(t.signupClosesAt).slice(0, 10) : '');
                                   if (t?.startsAt) {
@@ -2738,12 +2872,6 @@ const VenueDashboard: React.FC = () => {
                                   } else {
                                     setTournamentStartsAt('');
                                   }
-                                  try {
-                                    setTournamentSignupsLoading(true);
-                                    const rows = await getTournamentSignups(API_URL, operatorId, id, 'PENDING');
-                                    setTournamentSignups(Array.isArray(rows) ? rows : []);
-                                  } catch {}
-                                  setTournamentSignupsLoading(false);
                                 }}
                               >
                                 {isSelected ? '已選擇' : '選擇'}
@@ -2837,8 +2965,14 @@ const VenueDashboard: React.FC = () => {
                                     if (!confirm('確定要確認此報名？')) return;
                                     try {
                                       await confirmTournamentSignup(API_URL, operatorId, tournamentSelectedId, sid);
-                                      const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []);
-                                      setTournamentSignups(Array.isArray(rows) ? rows : []);
+                                      const [pendingRows, confirmedRows] = await Promise.all([
+                                        getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []),
+                                        getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'CONFIRMED').catch(() => []),
+                                      ]);
+                                      setTournamentSignups(Array.isArray(pendingRows) ? pendingRows : []);
+                                      setTournamentConfirmed(Array.isArray(confirmedRows) ? confirmedRows : []);
+                                      const list = await getMyClubTournaments(API_URL, operatorId).catch(() => []);
+                                      setTournaments(Array.isArray(list) ? list : []);
                                       setToast('已確認');
                                       setTimeout(() => setToast(null), 2000);
                                     } catch (e: any) {
@@ -2856,8 +2990,14 @@ const VenueDashboard: React.FC = () => {
                                     if (!confirm('確定要取消此報名？')) return;
                                     try {
                                       await cancelTournamentSignup(API_URL, operatorId, tournamentSelectedId, sid);
-                                      const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []);
-                                      setTournamentSignups(Array.isArray(rows) ? rows : []);
+                                      const [pendingRows, confirmedRows] = await Promise.all([
+                                        getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []),
+                                        getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'CONFIRMED').catch(() => []),
+                                      ]);
+                                      setTournamentSignups(Array.isArray(pendingRows) ? pendingRows : []);
+                                      setTournamentConfirmed(Array.isArray(confirmedRows) ? confirmedRows : []);
+                                      const list = await getMyClubTournaments(API_URL, operatorId).catch(() => []);
+                                      setTournaments(Array.isArray(list) ? list : []);
                                       setToast('已取消');
                                       setTimeout(() => setToast(null), 2000);
                                     } catch (e: any) {
@@ -2870,6 +3010,44 @@ const VenueDashboard: React.FC = () => {
                                 </button>
                               </div>
                             </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tournamentSelectedId && (
+            <div className="mt-4 cue-surface-strong rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="font-semibold">已成功報名（已確認）</div>
+                <div className="text-xs cue-muted">{tournamentConfirmedLoading ? '讀取中…' : `${tournamentConfirmed.length} / ${Number(tournamentCapacity || 0) || 32}`}</div>
+              </div>
+              {tournamentConfirmedLoading ? (
+                <div className="text-sm cue-muted">讀取中…</div>
+              ) : tournamentConfirmed.length === 0 ? (
+                <div className="text-sm cue-muted">暫無已確認報名</div>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">確認時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournamentConfirmed.slice(0, 200).map((s: any) => {
+                        const sid = String(s?.id || '');
+                        const m = s?.member || {};
+                        const who = [String(m?.member_code || '無').trim(), String(m?.name || '').trim()].filter(Boolean).join(' ');
+                        return (
+                          <tr key={sid} className="border-b cue-border hover:brightness-95">
+                            <td className="py-2 px-2 font-semibold">{who || '-'}</td>
+                            <td className="py-2 px-2 cue-muted whitespace-nowrap">{s?.updatedAt ? new Date(s.updatedAt).toLocaleString() : (s?.createdAt ? new Date(s.createdAt).toLocaleString() : '-')}</td>
                           </tr>
                         );
                       })}

@@ -90,7 +90,7 @@ const ClubPublicPage: React.FC = () => {
   const [tournamentsLoading, setTournamentsLoading] = useState(false);
   const [tournamentOpen, setTournamentOpen] = useState<any>(null);
   const [tournamentOpenLoading, setTournamentOpenLoading] = useState(false);
-  const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string }>({ open: false, title: '' });
+  const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string; guide: string }>({ open: false, title: '', guide: '' });
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
@@ -1156,7 +1156,7 @@ const ClubPublicPage: React.FC = () => {
                               const res = await signupTournament(API_URL, clubId, sessionMemberId, String(tournamentOpen.id));
                               const ok = !!(res && (res as any).ok);
                               if (!ok) throw new Error('報名失敗');
-                              setTournamentSubmitModal({ open: true, title: String(tournamentOpen?.title || '比賽') });
+                              setTournamentSubmitModal({ open: true, title: String(tournamentOpen?.title || '比賽'), guide: String(tournamentOpen?.signupGuide || '') });
                               try {
                                 const rows = await getPublicClubTournaments(API_URL, clubId, sessionMemberId || undefined);
                                 setTournaments(Array.isArray(rows) ? rows : []);
@@ -1191,14 +1191,14 @@ const ClubPublicPage: React.FC = () => {
                       <div className="mt-2 text-sm cue-muted">
                         已提交至場館，等待確認。{tournamentSubmitModal.title ? `（${tournamentSubmitModal.title}）` : ''}
                       </div>
-                      {String((club as any)?.paymentInfo || '').trim() && (
+                      {String(tournamentSubmitModal.guide || '').trim() && (
                         <div className="mt-3 cue-surface-strong rounded-lg p-3">
-                          <div className="font-semibold mb-1">付款方法</div>
-                          <div className="text-sm cue-muted whitespace-pre-wrap">{String((club as any)?.paymentInfo || '')}</div>
+                          <div className="font-semibold mb-1">報名指引 / 流程</div>
+                          <div className="text-sm cue-muted whitespace-pre-wrap">{String(tournamentSubmitModal.guide || '')}</div>
                         </div>
                       )}
                       <div className="mt-4 flex justify-end">
-                        <button type="button" className="px-4 py-2 rounded cue-button font-semibold" onClick={() => setTournamentSubmitModal({ open: false, title: '' })}>
+                        <button type="button" className="px-4 py-2 rounded cue-button font-semibold" onClick={() => setTournamentSubmitModal({ open: false, title: '', guide: '' })}>
                           知道了
                         </button>
                       </div>

@@ -322,7 +322,8 @@ router.post('/broadcast', async (req, res) => {
             data: {
                 clubId: club.id,
                 title,
-                content
+                content,
+                deletedAt: null,
             }
         });
         res.json(message);
@@ -433,7 +434,27 @@ router.get('/tournaments', async (req, res) => {
             orderBy: [{ createdAt: 'desc' }],
             take: 200,
         });
-        res.json(rows);
+        const ids = rows.map((r) => r.id);
+        const counts = ids.length > 0
+            ? await prisma.tournamentSignup.groupBy({
+                by: ['tournamentId', 'status'],
+                where: { tournamentId: { in: ids }, status: { in: ['PENDING', 'CONFIRMED'] } },
+                _count: { _all: true },
+            })
+            : [];
+        const map = new Map<string, { pending: number; confirmed: number }>();
+        for (const c of counts) {
+            const tid = String((c as any).tournamentId);
+            const st = String((c as any).status);
+            const cur = map.get(tid) || { pending: 0, confirmed: 0 };
+            if (st === 'PENDING') cur.pending = (c as any)._count._all;
+            if (st === 'CONFIRMED') cur.confirmed = (c as any)._count._all;
+            map.set(tid, cur);
+        }
+        res.json(rows.map((t) => {
+            const c = map.get(t.id) || { pending: 0, confirmed: 0 };
+            return { ...t, pendingCount: c.pending, confirmedCount: c.confirmed, signupCount: c.pending + c.confirmed };
+        }));
     } catch (e) {
         res.status(500).json({ error: String(e) });
     }
@@ -447,6 +468,7 @@ router.post('/tournaments', async (req, res) => {
     const payload = req.body || {};
     const title = String(payload.title || '').trim();
     const description = payload.description == null ? null : String(payload.description).trim() || null;
+    const signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
     const capacity = Number(payload.capacity ?? 32);
     const startsAtRaw = payload.startsAt;
     const signupClosesAtRaw = payload.signupClosesAt ?? payload.deadline;
@@ -464,6 +486,7 @@ router.post('/tournaments', async (req, res) => {
                 status: 'DRAFT',
                 title,
                 description,
+                signupGuide,
                 capacity: cap,
                 startsAt,
                 signupClosesAt,
@@ -486,6 +509,7 @@ router.put('/tournaments/:id', async (req, res) => {
     const patch: any = {};
     if (payload.title != null) patch.title = String(payload.title || '').trim();
     if (payload.description !== undefined) patch.description = payload.description == null ? null : String(payload.description).trim() || null;
+    if (payload.signupGuide !== undefined) patch.signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
     if (payload.capacity != null) {
         const n = Number(payload.capacity);
         if (!Number.isFinite(n)) return res.status(400).json({ error: 'capacity invalid' });
@@ -780,7 +804,7 @@ router.get('/messages', async (req, res) => {
         if (clubIds.length === 0) return res.json([]);
 
         const messages = await prisma.clubMessage.findMany({
-            where: { clubId: { in: clubIds } },
+            where: { clubId: { in: clubIds }, deletedAt: null },
             orderBy: { createdAt: 'desc' },
             include: { club: { select: { name: true, logoUrl: true } } }
         });
@@ -820,7 +844,7 @@ router.get('/messages/:id', async (req, res) => {
             where: { id },
             include: { club: { select: { name: true, logoUrl: true } } }
         });
-        if (!message) return res.status(404).json({ error: 'Not found' });
+        if (!message || (message as any).deletedAt != null) return res.status(404).json({ error: 'Not found' });
         let read = false;
         try {
             const rows: any[] = await prisma.$queryRawUnsafe(
@@ -908,6 +932,7 @@ router.get('/:clubId/messages/public', async (req, res) => {
         const rows = await prisma.clubMessage.findMany({
             where: {
                 clubId,
+                deletedAt: null,
                 NOT: [
                     { title: '新預約待確認' },
                 ],
@@ -917,6 +942,67 @@ router.get('/:clubId/messages/public', async (req, res) => {
         });
         const filtered = rows.filter((m) => !isSystemClubMessageTitle((m as any).title));
         res.json(filtered);
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+router.get('/club-messages', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(200, Math.max(1, Number(limitRaw || 50) || 50));
+    try {
+        const rows = await prisma.clubMessage.findMany({
+            where: { clubId, deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+        const filtered = rows.filter((m) => !isSystemClubMessageTitle((m as any).title));
+        res.json(filtered);
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+router.put('/club-messages/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const payload = req.body || {};
+    const patch: any = {};
+    if (payload.title !== undefined) patch.title = payload.title == null ? null : String(payload.title || '').trim() || null;
+    if (payload.content !== undefined) patch.content = String(payload.content || '').trim();
+    try {
+        const row = await prisma.clubMessage.findUnique({ where: { id } });
+        if (!row || row.clubId !== clubId || row.deletedAt != null) return res.status(404).json({ error: 'Not found' });
+        if (isSystemClubMessageTitle((row as any).title)) return res.status(400).json({ error: '不可編輯系統訊息' });
+        if (patch.content != null && !patch.content) return res.status(400).json({ error: 'content required' });
+        const updated = await prisma.clubMessage.update({ where: { id }, data: patch });
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+router.delete('/club-messages/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+    try {
+        const row = await prisma.clubMessage.findUnique({ where: { id } });
+        if (!row || row.clubId !== clubId || row.deletedAt != null) return res.status(404).json({ error: 'Not found' });
+        if (isSystemClubMessageTitle((row as any).title)) return res.status(400).json({ error: '不可刪除系統訊息' });
+        const updated = await prisma.clubMessage.update({ where: { id }, data: { deletedAt: new Date() } });
+        res.json(updated);
     } catch (e) {
         res.status(500).json({ error: String(e) });
     }

@@ -479,6 +479,49 @@ export async function broadcastClubMessage(apiUrl: string, memberId: string, tit
   return res.json();
 }
 
+export async function getClubMessagesManage(apiUrl: string, memberId: string, limit?: number) {
+  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
+  const res = await fetch(`${apiUrl}/api/club/club-messages${q}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館訊息失敗');
+  }
+  return res.json();
+}
+
+export async function updateClubMessageManage(
+  apiUrl: string,
+  memberId: string,
+  id: string,
+  payload: { title?: string | null; content?: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/club-messages/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新場館訊息失敗');
+  }
+  return res.json();
+}
+
+export async function deleteClubMessageManage(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/club-messages/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '刪除場館訊息失敗');
+  }
+  return res.json();
+}
+
 export async function createLiveAnnouncement(
   apiUrl: string,
   memberId: string,
@@ -645,7 +688,7 @@ export async function getMyClubTournaments(apiUrl: string, memberId: string) {
 export async function createClubTournament(
   apiUrl: string,
   memberId: string,
-  payload: { title: string; description?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: { title: string; description?: string | null; signupGuide?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments`, {
     method: 'POST',
@@ -663,7 +706,7 @@ export async function updateClubTournament(
   apiUrl: string,
   memberId: string,
   id: string,
-  payload: { title?: string; description?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: { title?: string; description?: string | null; signupGuide?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}`, {
     method: 'PUT',
