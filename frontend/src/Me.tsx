@@ -25,7 +25,7 @@ const Me: React.FC = () => {
   const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'matches' | 'clubs' | 'live'>('info');
+  const [activeTab, setActiveTab] = useState<'matches' | 'clubs' | 'live' | 'settings'>('clubs');
 
   const displayName = useMemo(() => String(profile?.name || 'Member'), [profile?.name]);
   const avatarText = useMemo(() => {
@@ -116,11 +116,6 @@ const Me: React.FC = () => {
                       <div className="text-sm cue-muted truncate">{profile?.email || session?.email}</div>
                     </div>
                   </div>
-                  <div className="flex-shrink-0">
-                    <a href={`/member/${memberId}`} className="px-3 py-2 rounded cue-button font-semibold">
-                      查看詳情
-                    </a>
-                  </div>
                 </div>
               )}
             </div>
@@ -132,30 +127,14 @@ const Me: React.FC = () => {
             {!!memberId && (
               <Tabs
                 items={[
-                  { key: 'info', label: '資訊' },
                   { key: 'matches', label: '比賽' },
                   { key: 'clubs', label: '場館' },
                   { key: 'live', label: '直播' },
+                  { key: 'settings', label: '設定' },
                 ]}
                 activeKey={activeTab}
                 onChange={(k) => setActiveTab(k as any)}
               />
-            )}
-
-            {!!memberId && activeTab === 'info' && (
-              <div className="mt-5 space-y-6">
-                <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-2">快速入口</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <a href={`/member/${memberId}`} className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
-                      個人資料
-                    </a>
-                    <a href="/members/login" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
-                      切換帳號
-                    </a>
-                  </div>
-                </div>
-              </div>
             )}
 
             {!!memberId && activeTab === 'matches' && (
@@ -238,6 +217,84 @@ const Me: React.FC = () => {
                       {liveAnnouncements.length > 20 && <div className="text-xs cue-muted">只顯示最近 20 筆</div>}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {!!memberId && activeTab === 'settings' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="font-semibold text-lg mb-2">設定</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href={`/member/${memberId}`} className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
+                      個人資料
+                    </a>
+                    <a href="/members/login" className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold">
+                      切換帳號
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try { localStorage.removeItem('memberSession'); } catch {}
+                        window.location.href = '/me';
+                      }}
+                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold text-left"
+                    >
+                      登出
+                    </button>
+                  </div>
+                </div>
+
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="font-semibold text-lg mb-2">歷史記錄</div>
+                  <div className="space-y-3">
+                    <details className="cue-surface-strong rounded-lg px-3 py-2">
+                      <summary className="cursor-pointer font-semibold">最近比賽</summary>
+                      <div className="mt-2 space-y-2">
+                        {loading && <div className="text-sm cue-muted">讀取中…</div>}
+                        {!loading && matches.length === 0 && <div className="text-sm cue-muted">暫無資料</div>}
+                        {!loading && matches.length > 0 && (
+                          <div className="space-y-2">
+                            {matches.slice(0, 5).map((m, idx) => (
+                              <div key={m.id || idx} className="cue-surface rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-semibold truncate">{m.opponentName || '對手'}</div>
+                                  <div className="text-xs cue-muted mt-1">{m.duration || ''}</div>
+                                </div>
+                                <div className="flex-shrink-0 font-semibold accent-yellow">{m.score || '-'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </details>
+
+                    <details className="cue-surface-strong rounded-lg px-3 py-2">
+                      <summary className="cursor-pointer font-semibold">已加入場館</summary>
+                      <div className="mt-2 space-y-2">
+                        {clubsLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                        {!clubsLoading && joinedClubs.length === 0 && <div className="text-sm cue-muted">暫未加入任何場館</div>}
+                        {!clubsLoading && joinedClubs.length > 0 && (
+                          <div className="space-y-2">
+                            {joinedClubs.slice(0, 5).map((r: any, idx: number) => {
+                              const c = r?.club || {};
+                              const id = String(r?.clubId || c?.id || '');
+                              return (
+                                <a
+                                  key={r.id || `${id}-${idx}`}
+                                  href={id ? `/club/${id}` : '#'}
+                                  className="block cue-surface rounded-lg px-3 py-2 hover:brightness-95"
+                                >
+                                  <div className="font-semibold truncate">{c?.name || '場館'}</div>
+                                  <div className="text-xs cue-muted mt-1 truncate">{c?.address || ''}</div>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </div>
             )}
