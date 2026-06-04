@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import TopBarPublic from './components/TopBarPublic';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
 import { getMember, getMemberMatches, getMyJoinedClubs, getPublicLiveAnnouncements } from './lib/api';
@@ -84,8 +83,13 @@ const Me: React.FC = () => {
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
-      <TopBarPublic title={memberId ? displayName : '個人'} />
-      <main className="flex-1 pb-24" style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}>
+      <main
+        className="flex-1 pb-24"
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))',
+        }}
+      >
         <div className="relative">
           <div className="h-40 sm:h-56 w-full overflow-hidden">
             <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-950" />
