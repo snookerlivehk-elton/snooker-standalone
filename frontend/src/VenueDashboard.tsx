@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -40,6 +40,7 @@ const VenueDashboard: React.FC = () => {
   const [liveTime, setLiveTime] = useState(() => `${String(new Date().getHours()).padStart(2, '0')}:00`);
   const [liveUrl, setLiveUrl] = useState('');
   const [liveCreating, setLiveCreating] = useState(false);
+  const [editingLiveId, setEditingLiveId] = useState<string>('');
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [tournamentsLoading, setTournamentsLoading] = useState(false);
   const [tournamentTitle, setTournamentTitle] = useState('');
@@ -2411,11 +2412,17 @@ const VenueDashboard: React.FC = () => {
                     const d = new Date(`${liveDate}T${liveTime}:00`);
                     if (!Number.isFinite(d.getTime())) throw new Error('日期/時間格式不正確');
                     setLiveCreating(true);
-                    await createLiveAnnouncement(API_URL, operatorId, { title: t, startsAt: d.toISOString(), liveUrl: u });
-                    setToast('已發佈直播通告');
+                    if (editingLiveId) {
+                      await updateLiveAnnouncement(API_URL, operatorId, editingLiveId, { title: t, startsAt: d.toISOString(), liveUrl: u });
+                      setToast('已更新直播通告');
+                    } else {
+                      await createLiveAnnouncement(API_URL, operatorId, { title: t, startsAt: d.toISOString(), liveUrl: u });
+                      setToast('已發佈直播通告');
+                    }
                     setTimeout(() => setToast(null), 2000);
                     setLiveTitle('');
                     setLiveUrl('');
+                    setEditingLiveId('');
                     await loadData();
                   } catch (e: any) {
                     setToast(e?.message || '發佈失敗');
@@ -2425,7 +2432,7 @@ const VenueDashboard: React.FC = () => {
                   }
                 }}
               >
-                {liveCreating ? '發佈中…' : '發佈'}
+                {liveCreating ? '處理中…' : (editingLiveId ? '更新' : '發佈')}
               </button>
             </div>
           </div>
@@ -2459,24 +2466,47 @@ const VenueDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="py-2 px-2">
-                          <button
-                            type="button"
-                            className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
-                            onClick={async () => {
-                              if (!confirm('確定要刪除此直播通告？')) return;
-                              try {
-                                await deleteLiveAnnouncement(API_URL, operatorId, String(it.id));
-                                await loadData();
-                                setToast('已刪除');
-                                setTimeout(() => setToast(null), 2000);
-                              } catch (e: any) {
-                                setToast(e?.message || '刪除失敗');
-                                setTimeout(() => setToast(null), 3000);
-                              }
-                            }}
-                          >
-                            刪除
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                              onClick={() => {
+                                setEditingLiveId(String(it.id));
+                                setLiveTitle(String(it.title || ''));
+                                setLiveUrl(String(it.liveUrl || ''));
+                                const d = it.startsAt ? new Date(String(it.startsAt)) : null;
+                                if (d && Number.isFinite(d.getTime())) {
+                                  setLiveDate(d.toISOString().slice(0, 10));
+                                  setLiveTime(d.toTimeString().slice(0, 5));
+                                }
+                              }}
+                            >
+                              編輯
+                            </button>
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                              onClick={async () => {
+                                if (!confirm('確定要刪除此直播通告？')) return;
+                                try {
+                                  await deleteLiveAnnouncement(API_URL, operatorId, String(it.id));
+                                  await loadData();
+                                  if (editingLiveId && String(it.id) === editingLiveId) {
+                                    setEditingLiveId('');
+                                    setLiveTitle('');
+                                    setLiveUrl('');
+                                  }
+                                  setToast('已刪除');
+                                  setTimeout(() => setToast(null), 2000);
+                                } catch (e: any) {
+                                  setToast(e?.message || '刪除失敗');
+                                  setTimeout(() => setToast(null), 3000);
+                                }
+                              }}
+                            >
+                              刪除
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -7,18 +7,15 @@ import {
   getAvailability,
   getClubLeaderboardHighest,
   getClubLeaderboardMonthly,
-  getMyClubMessages,
   getMyJoinedClubs,
   getMyReservations,
   getPublicClubLiveAnnouncements,
+  getPublicClubMessages,
   getPublicClubProfile,
   getPublicClubTournaments,
   getPublicPricing,
   getPublicTables,
-  getSiteNotice,
-  hideClubMessages,
   joinClub,
-  markClubMessageRead,
   signupTournament,
 } from './lib/api';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
@@ -79,17 +76,13 @@ const ClubPublicPage: React.FC = () => {
   const [leaderError, setLeaderError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'live' | 'leader' | 'info' | 'contact'>('booking');
 
-  const [siteNotice, setSiteNotice] = useState<any>(null);
-  const [siteNoticeLoading, setSiteNoticeLoading] = useState(false);
   const [clubMessages, setClubMessages] = useState<any[]>([]);
   const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
-  const [clubMsgState, setClubMsgState] = useState<LocalMsgState>({ read: {}, hidden: {} });
-  const [clubMsgSelected, setClubMsgSelected] = useState<Record<string, boolean>>({});
-  const [clubMsgOpenKey, setClubMsgOpenKey] = useState<string | null>(null);
+  const [clubMsgOpenId, setClubMsgOpenId] = useState<string | null>(null);
 
   const [clubLive, setClubLive] = useState<any[]>([]);
   const [clubLiveLoading, setClubLiveLoading] = useState(false);
-  const [clubLiveState, setClubLiveState] = useState<LocalMsgState>({ read: {}, hidden: {} });
+  const [clubLiveState, setClubLiveState] = useState<{ read: Record<string, boolean>; hidden: Record<string, boolean> }>({ read: {}, hidden: {} });
   const [clubLiveSelected, setClubLiveSelected] = useState<Record<string, boolean>>({});
   const [clubLiveOpenKey, setClubLiveOpenKey] = useState<string | null>(null);
 
@@ -285,38 +278,6 @@ const ClubPublicPage: React.FC = () => {
   }, [clubId, session]);
 
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      setSiteNoticeLoading(true);
-      try {
-        const row = await getSiteNotice(API_URL);
-        if (mounted) setSiteNotice(row || null);
-      } catch {
-        if (mounted) setSiteNotice(null);
-      } finally {
-        if (mounted) setSiteNoticeLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!clubId) return;
-    const key = `clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`;
-    try {
-      const raw = localStorage.getItem(key) || '{}';
-      const obj = JSON.parse(raw);
-      const read = (obj && typeof obj === 'object' ? obj.read : null) || {};
-      const hidden = (obj && typeof obj === 'object' ? obj.hidden : null) || {};
-      setClubMsgState({ read: read && typeof read === 'object' ? read : {}, hidden: hidden && typeof hidden === 'object' ? hidden : {} });
-    } catch {
-      setClubMsgState({ read: {}, hidden: {} });
-    }
-    setClubMsgSelected({});
-    setClubMsgOpenKey(null);
-  }, [clubId, sessionMemberId]);
-
-  useEffect(() => {
     if (!clubId) return;
     const key = `clubPageLiveState:${clubId}:${sessionMemberId || 'guest'}`;
     try {
@@ -384,14 +345,13 @@ const ClubPublicPage: React.FC = () => {
         if (mounted) setClubMessagesLoading(false);
         return;
       }
-      if (!sessionMemberId) {
-        setClubMessages([]);
-        setClubMessagesLoading(false);
-        return;
-      }
       setClubMessagesLoading(true);
       try {
-        const rows = await getMyClubMessages(API_URL, sessionMemberId);
+        if (!clubId) {
+          if (mounted) setClubMessages([]);
+          return;
+        }
+        const rows = await getPublicClubMessages(API_URL, clubId, 50);
         if (mounted) setClubMessages(Array.isArray(rows) ? rows : []);
       } catch {
         if (mounted) setClubMessages([]);
@@ -400,7 +360,7 @@ const ClubPublicPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [sessionMemberId, clubMessagesEnabled]);
+  }, [clubId, clubMessagesEnabled]);
 
   useEffect(() => {
     if (!clubId || !session?.id) {
@@ -613,127 +573,25 @@ const ClubPublicPage: React.FC = () => {
     });
   };
 
-  const clubInboxItems = useMemo((): InboxItem[] => {
-    const items: InboxItem[] = [];
-    const hidden = clubMsgState.hidden || {};
-    const read = clubMsgState.read || {};
-
-    const noticeEnabled = siteNotice?.enabled !== false;
-    const noticeMsg = String(siteNotice?.message || '').trim();
-    if (noticeEnabled && noticeMsg) {
-      const key = 'system:notice';
-      if (!hidden[key]) {
-        const dRaw = siteNotice?.updatedAt ?? siteNotice?.createdAt;
-        const d = dRaw ? new Date(String(dRaw)) : new Date();
-        const href = normalizeVideoHref(siteNotice?.youtubeEmbedUrl);
-        const content = href ? `${noticeMsg}\n\nYouTube：${href}` : noticeMsg;
-        items.push({
-          key,
-          kind: 'system',
-          title: '系統通知',
-          content,
-          createdAt: d,
-          subtitle: '系統',
-          href: null,
-          read: !!read[key],
-          deletable: true,
-          raw: siteNotice,
-        });
-      }
-    }
-
+  const clubNoticeItems = useMemo((): InboxItem[] => {
     const rows = Array.isArray(clubMessages) ? clubMessages : [];
-    for (const m of rows) {
-      const id = String(m?.id || '').trim();
-      if (!id) continue;
-      const key = `club:${id}`;
-      const msgClubId = String(m?.clubId || m?.club_id || m?.club?.id || '').trim();
-      if (msgClubId && clubId && msgClubId !== String(clubId)) continue;
-      items.push({
-        key,
-        kind: 'club',
-        title: String(m?.title || '場館訊息'),
-        content: String(m?.content || ''),
-        createdAt: m?.createdAt ? new Date(String(m.createdAt)) : new Date(),
-        subtitle: String(m?.club?.name || club?.name || '場館'),
-        href: null,
-        read: !!m?.read,
-        deletable: true,
-        raw: m,
-      });
-    }
-
+    const items = rows.map((m) => ({
+      key: String(m?.id || ''),
+      kind: 'club' as const,
+      title: String(m?.title || '場館訊息'),
+      content: String(m?.content || ''),
+      createdAt: m?.createdAt ? new Date(String(m.createdAt)) : new Date(),
+      subtitle: String(club?.name || '場館'),
+      href: null,
+      read: true,
+      deletable: false,
+      raw: m,
+    })).filter((x) => x.key);
     items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     return items;
-  }, [club, clubId, clubMessages, clubMsgState.hidden, clubMsgState.read, siteNotice]);
+  }, [club?.name, clubMessages]);
 
-  const clubInboxUnreadCount = useMemo(() => clubInboxItems.filter((x) => !x.read).length, [clubInboxItems]);
-  const clubInboxLoading = clubMessagesLoading || siteNoticeLoading;
-  const clubInboxOpen = useMemo(() => (clubMsgOpenKey ? clubInboxItems.find((x) => x.key === clubMsgOpenKey) || null : null), [clubMsgOpenKey, clubInboxItems]);
-
-  useEffect(() => {
-    if (!clubInboxOpen || !clubId) return;
-    if (clubInboxOpen.read) return;
-    if (clubInboxOpen.kind === 'club' && sessionMemberId) {
-      const id = String(clubInboxOpen.raw?.id || '').trim();
-      if (!id) return;
-      (async () => {
-        try {
-          await markClubMessageRead(API_URL, sessionMemberId, id);
-        } catch {}
-        setClubMessages((prev) => (Array.isArray(prev) ? prev.map((m: any) => (String(m?.id || '') === id ? { ...m, read: true } : m)) : prev));
-      })();
-      return;
-    }
-    const key = clubInboxOpen.key;
-    const next: LocalMsgState = { read: { ...(clubMsgState.read || {}), [key]: true }, hidden: { ...(clubMsgState.hidden || {}) } };
-    setClubMsgState(next);
-    try { localStorage.setItem(`clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
-  }, [API_URL, clubId, clubInboxOpen, clubMsgState.hidden, clubMsgState.read, sessionMemberId]);
-
-  const clubInboxToggleSelect = (key: string, checked: boolean) => {
-    setClubMsgSelected((prev) => {
-      const next = { ...(prev || {}) };
-      if (checked) next[key] = true;
-      else delete next[key];
-      return next;
-    });
-  };
-
-  const clubInboxDelete = async (keys: string[]) => {
-    if (!clubId) return;
-    const clubMsgIds: string[] = [];
-    const otherKeys: string[] = [];
-    for (const k of keys) {
-      const it = clubInboxItems.find((x) => x.key === k);
-      if (!it) continue;
-      if (it.kind === 'club') {
-        const id = String(it.raw?.id || '').trim();
-        if (id) clubMsgIds.push(id);
-      } else {
-        otherKeys.push(it.key);
-      }
-    }
-    if (clubMsgIds.length > 0) {
-      if (!sessionMemberId) return alert('請先登入會員');
-      try {
-        await hideClubMessages(API_URL, sessionMemberId, clubMsgIds);
-        setClubMessages((prev) => (Array.isArray(prev) ? prev.filter((m: any) => !clubMsgIds.includes(String(m?.id || ''))) : prev));
-      } catch (e: any) {
-        alert(String(e?.message || '刪除訊息失敗'));
-        return;
-      }
-    }
-    if (otherKeys.length > 0) {
-      const nextHidden = { ...(clubMsgState.hidden || {}) };
-      for (const k of otherKeys) nextHidden[k] = true;
-      const next: LocalMsgState = { read: { ...(clubMsgState.read || {}) }, hidden: nextHidden };
-      setClubMsgState(next);
-      try { localStorage.setItem(`clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
-    }
-    setClubMsgOpenKey(null);
-    setClubMsgSelected({});
-  };
+  const clubNoticeOpen = useMemo(() => (clubMsgOpenId ? clubNoticeItems.find((x) => x.key === clubMsgOpenId) || null : null), [clubMsgOpenId, clubNoticeItems]);
 
   const clubLiveItems = useMemo((): InboxItem[] => {
     const items: InboxItem[] = [];
@@ -967,11 +825,6 @@ const ClubPublicPage: React.FC = () => {
                 label: (
                   <span className="inline-flex items-center">
                     <span>訊息</span>
-                    {clubInboxUnreadCount > 0 && (
-                      <span className="ml-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-extrabold">
-                        {clubInboxUnreadCount}
-                      </span>
-                    )}
                   </span>
                 ),
               }] : []),
@@ -1002,146 +855,60 @@ const ClubPublicPage: React.FC = () => {
                 <div className="cue-surface rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <div className="font-semibold text-lg">訊息</div>
-                    <div className="text-xs cue-muted">{clubInboxLoading ? '讀取中…' : `共 ${clubInboxItems.length} 則`}</div>
+                    <div className="text-xs cue-muted">{clubMessagesLoading ? '讀取中…' : `共 ${clubNoticeItems.length} 則`}</div>
                   </div>
 
-                  {!sessionMemberId ? (
-                    <div className="text-sm cue-muted">
-                      需登入才能查看場館訊息。<button type="button" className="accent-yellow underline" onClick={() => nav(`/members/login?redirect=${encodeURIComponent(loc.pathname + loc.search)}`)}>登入</button>
+                  {clubMessagesLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                  {!clubMessagesLoading && clubNoticeItems.length === 0 && <div className="text-sm cue-muted">暫無訊息</div>}
+                  {!clubMessagesLoading && clubNoticeItems.length > 0 && (
+                    <div className="space-y-2">
+                      {clubNoticeItems.slice(0, 200).map((it) => (
+                        <div
+                          key={it.key}
+                          className="cue-surface-strong rounded-lg p-3 flex items-start gap-3 hover:brightness-95 cursor-pointer"
+                          onClick={() => setClubMsgOpenId(it.key)}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold truncate">{it.title}</div>
+                              <div className="text-xs cue-muted flex-shrink-0">{Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleDateString() : ''}</div>
+                            </div>
+                            <div className="text-xs cue-muted mt-1 truncate">{Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleString() : ''}</div>
+                          </div>
+                        </div>
+                      ))}
+                      {clubNoticeItems.length > 200 && <div className="text-xs cue-muted">只顯示前 200 筆</div>}
                     </div>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                        <div className="text-sm cue-muted">未讀 {clubInboxUnreadCount} · 已選 {Object.keys(clubMsgSelected).length}</div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const all = clubInboxItems;
-                              if (all.length === 0) return;
-                              const allSelected = all.every((x) => clubMsgSelected[x.key]);
-                              if (allSelected) return setClubMsgSelected({});
-                              const next: Record<string, boolean> = {};
-                              for (const x of all) next[x.key] = true;
-                              setClubMsgSelected(next);
-                            }}
-                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
-                          >
-                            全選
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setClubMsgSelected({})}
-                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
-                          >
-                            清除
-                          </button>
-                          <button
-                            type="button"
-                            disabled={Object.keys(clubMsgSelected).length === 0}
-                            onClick={async () => {
-                              const keys = Object.keys(clubMsgSelected);
-                              if (keys.length === 0) return;
-                              if (!confirm(`確定要刪除已選 ${keys.length} 則訊息？`)) return;
-                              if (!confirm('再次確認：刪除後不可復原')) return;
-                              await clubInboxDelete(keys);
-                            }}
-                            className={`px-3 py-2 rounded text-sm font-semibold ${Object.keys(clubMsgSelected).length === 0 ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
-                          >
-                            批量刪除
-                          </button>
-                        </div>
-                      </div>
-
-                      {clubInboxLoading && <div className="text-sm cue-muted">讀取中…</div>}
-                      {!clubInboxLoading && clubInboxItems.length === 0 && <div className="text-sm cue-muted">暫無訊息</div>}
-                      {!clubInboxLoading && clubInboxItems.length > 0 && (
-                        <div className="space-y-2">
-                          {clubInboxItems.slice(0, 200).map((it) => {
-                            const isSelected = !!clubMsgSelected[it.key];
-                            const isUnread = !it.read;
-                            return (
-                              <div
-                                key={it.key}
-                                className={`cue-surface-strong rounded-lg p-3 flex items-start gap-3 hover:brightness-95 cursor-pointer ${isUnread ? 'ring-1 ring-yellow-300/30' : ''}`}
-                                onClick={() => setClubMsgOpenKey(it.key)}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => clubInboxToggleSelect(it.key, e.target.checked)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="mt-1"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className={`font-semibold truncate ${isUnread ? 'text-white' : 'cue-muted'}`}>{it.title}</div>
-                                    <div className="text-xs cue-muted flex-shrink-0">{Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleDateString() : ''}</div>
-                                  </div>
-                                  <div className="text-xs cue-muted mt-1 truncate">
-                                    {it.subtitle ? `${it.subtitle} · ` : ''}
-                                    {it.kind === 'system' ? '系統' : '場館'}
-                                    {isUnread ? ' · 未讀' : ''}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {clubInboxItems.length > 200 && <div className="text-xs cue-muted">只顯示前 200 筆</div>}
-                        </div>
-                      )}
-                    </>
                   )}
                 </div>
 
-                {!!clubInboxOpen && (
+                {!!clubNoticeOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80" onClick={() => setClubMsgOpenKey(null)} />
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setClubMsgOpenId(null)} />
                     <div className="relative w-full max-w-lg cue-surface rounded-xl p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-lg font-extrabold accent-yellow truncate">{clubInboxOpen.title}</div>
+                          <div className="text-lg font-extrabold accent-yellow truncate">{clubNoticeOpen.title}</div>
                           <div className="text-xs cue-muted mt-1">
-                            {clubInboxOpen.subtitle ? `${clubInboxOpen.subtitle} · ` : ''}
-                            {clubInboxOpen.kind === 'system' ? '系統' : '場館'}
-                            {Number.isFinite(clubInboxOpen.createdAt.getTime()) ? ` · ${clubInboxOpen.createdAt.toLocaleString()}` : ''}
+                            {clubNoticeOpen.subtitle ? `${clubNoticeOpen.subtitle} · ` : ''}
+                            {Number.isFinite(clubNoticeOpen.createdAt.getTime()) ? ` · ${clubNoticeOpen.createdAt.toLocaleString()}` : ''}
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => setClubMsgOpenKey(null)}
+                          onClick={() => setClubMsgOpenId(null)}
                           className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
                         >
                           返回
                         </button>
                       </div>
 
-                      <div className="mt-4 text-sm whitespace-pre-wrap">{clubInboxOpen.content || '—'}</div>
-
-                      {clubInboxOpen.href && (
-                        <div className="mt-3">
-                          <a href={clubInboxOpen.href} target="_blank" rel="noreferrer" className="accent-blue underline text-sm">
-                            開啟連結
-                          </a>
-                        </div>
-                      )}
-
-                      <div className="mt-5 flex gap-2">
+                      <div className="mt-4 text-sm whitespace-pre-wrap">{clubNoticeOpen.content || '—'}</div>
+                      <div className="mt-5">
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (!confirm('確定要刪除這則訊息？')) return;
-                            if (!confirm('再次確認：刪除後不可復原')) return;
-                            await clubInboxDelete([clubInboxOpen.key]);
-                          }}
-                          className="flex-1 px-4 py-2 rounded bg-red-700 hover:bg-red-600 text-white font-semibold"
-                        >
-                          刪除
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setClubMsgOpenKey(null)}
-                          className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                          onClick={() => setClubMsgOpenId(null)}
+                          className="w-full px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
                         >
                           返回
                         </button>

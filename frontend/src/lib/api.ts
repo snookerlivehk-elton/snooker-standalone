@@ -496,6 +496,24 @@ export async function createLiveAnnouncement(
   return res.json();
 }
 
+export async function updateLiveAnnouncement(
+  apiUrl: string,
+  memberId: string,
+  id: string,
+  payload: { title?: string; startsAt?: string; liveUrl?: string }
+) {
+  const res = await fetch(`${apiUrl}/api/club/live-announcements/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新直播通告失敗');
+  }
+  return res.json();
+}
+
 export async function getLiveAnnouncements(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/live-announcements`, {
     headers: { 'x-member-id': memberId },
@@ -530,6 +548,13 @@ export async function getPublicClubLiveAnnouncements(apiUrl: string, clubId: str
   const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
   const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/live-announcements/public${q}`);
   if (!res.ok) throw new Error('讀取直播通告失敗');
+  return res.json();
+}
+
+export async function getPublicClubMessages(apiUrl: string, clubId: string, limit?: number) {
+  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/messages/public${q}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('讀取場館訊息失敗');
   return res.json();
 }
 

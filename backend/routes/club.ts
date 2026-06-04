@@ -380,6 +380,48 @@ router.post('/live-announcements', async (req, res) => {
     res.json(row);
 });
 
+router.put('/live-announcements/:id', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const payload = req.body || {};
+
+    const patch: any = {};
+    if (payload.title != null) patch.title = String(payload.title || '').trim();
+    if (payload.startsAt !== undefined) {
+        const v = payload.startsAt;
+        if (v == null || String(v).trim() === '') patch.startsAt = null;
+        else {
+            const d = new Date(String(v));
+            if (!Number.isFinite(d.getTime())) return res.status(400).json({ error: 'startsAt invalid' });
+            patch.startsAt = d;
+        }
+    }
+    if (payload.liveUrl !== undefined) {
+        const u = normalizeHttpUrl(payload.liveUrl);
+        if (!u) return res.status(400).json({ error: 'liveUrl invalid' });
+        patch.liveUrl = u;
+    }
+
+    try {
+        const row = await prisma.liveAnnouncement.findUnique({ where: { id } });
+        if (!row || row.clubId !== clubId || row.deletedAt != null) return res.status(404).json({ error: 'Not found' });
+        if (patch.title != null && !patch.title) return res.status(400).json({ error: 'title required' });
+        if (patch.startsAt === null) return res.status(400).json({ error: 'startsAt required' });
+        const updated = await prisma.liveAnnouncement.update({
+            where: { id },
+            data: patch,
+        });
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
 router.get('/tournaments', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
@@ -843,6 +885,38 @@ router.post('/messages/hide', async (req, res) => {
             );
         }
         res.json({ ok: true, hidden: uniqueIds.length });
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
+function isSystemClubMessageTitle(title: any): boolean {
+    const t = String(title == null ? '' : title).trim();
+    if (!t) return false;
+    if (t === '新預約待確認') return true;
+    if (t.startsWith('直播通告：')) return true;
+    if (t.startsWith('比賽報名待確認：')) return true;
+    return false;
+}
+
+router.get('/:clubId/messages/public', async (req, res) => {
+    const clubId = String(req.params.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'clubId required' });
+    const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
+    const limit = Math.min(100, Math.max(1, Number(limitRaw || 30) || 30));
+    try {
+        const rows = await prisma.clubMessage.findMany({
+            where: {
+                clubId,
+                NOT: [
+                    { title: '新預約待確認' },
+                ],
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+        const filtered = rows.filter((m) => !isSystemClubMessageTitle((m as any).title));
+        res.json(filtered);
     } catch (e) {
         res.status(500).json({ error: String(e) });
     }
