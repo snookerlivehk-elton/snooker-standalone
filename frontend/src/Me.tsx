@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
-import { getMember, getMemberMatches, getMyJoinedClubs, getPublicLiveAnnouncements } from './lib/api';
+import { getMember, getMemberMatches, getMyJoinedClubs, getPublicLiveAnnouncements, updateMemberSelf } from './lib/api';
 import Tabs from './components/Tabs';
 
 function normalizeHttpUrl(raw: any): string | null {
@@ -25,6 +25,15 @@ const Me: React.FC = () => {
   const [liveLoading, setLiveLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'matches' | 'clubs' | 'live' | 'history' | 'settings'>('clubs');
+  const [editMode, setEditMode] = useState(false);
+  const [editPhone, setEditPhone] = useState('');
+  const [editBirthDate, setEditBirthDate] = useState('');
+  const [editClubName, setEditClubName] = useState('');
+  const [editNewPassword, setEditNewPassword] = useState('');
+  const [editNewPassword2, setEditNewPassword2] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const displayName = useMemo(() => String(profile?.name || 'Member'), [profile?.name]);
   const avatarText = useMemo(() => {
@@ -47,6 +56,27 @@ const Me: React.FC = () => {
       }
     })();
   }, [memberId]);
+
+  useEffect(() => {
+    if (!memberId || !profile) return;
+    setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
+    setEditClubName(String(profile?.club_name ?? profile?.clubName ?? profile?.club?.name ?? '') || '');
+    const bd = profile?.birthDate ?? profile?.birth_date;
+    if (bd) {
+      const d = new Date(bd);
+      if (!Number.isNaN(d.getTime())) {
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        setEditBirthDate(`${d.getFullYear()}-${mm}-${dd}`);
+      }
+    }
+  }, [memberId, profile]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     let mounted = true;
@@ -229,7 +259,20 @@ const Me: React.FC = () => {
             {!!memberId && activeTab === 'settings' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-2">會員資料</div>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">會員資料</div>
+                    <button
+                      type="button"
+                      disabled={savingProfile}
+                      onClick={() => {
+                        setToast(null);
+                        setEditMode((v) => !v);
+                      }}
+                      className={`px-3 py-1 rounded text-sm font-semibold ${savingProfile ? 'cue-surface-strong cue-muted' : 'cue-surface-strong hover:brightness-95'}`}
+                    >
+                      {editMode ? '取消編輯' : '編輯資料'}
+                    </button>
+                  </div>
                   <div className="space-y-2">
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">ID</div>
@@ -259,45 +302,133 @@ const Me: React.FC = () => {
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">電話</div>
-                      <div className="text-sm font-semibold text-right">
-                        {(() => {
-                          try {
-                            const key = String(profile?.email || memberId || '');
-                            const raw = localStorage.getItem('memberOptional') || '{}';
-                            const store = JSON.parse(raw);
-                            const opt = store[key] || {};
-                            const v = String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? opt.phone ?? '') || '-';
-                            return v || '-';
-                          } catch {
-                            return String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '-') || '-';
-                          }
-                        })()}
-                      </div>
+                      {editMode ? (
+                        <input
+                          value={editPhone}
+                          onChange={(e) => setEditPhone(e.target.value)}
+                          placeholder="例如：61234567 或 +85261234567"
+                          className="w-64 max-w-[65%] px-3 py-1.5 rounded cue-surface text-sm"
+                        />
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {(() => {
+                            try {
+                              const key = String(profile?.email || memberId || '');
+                              const raw = localStorage.getItem('memberOptional') || '{}';
+                              const store = JSON.parse(raw);
+                              const opt = store[key] || {};
+                              const v = String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? opt.phone ?? '') || '-';
+                              return v || '-';
+                            } catch {
+                              return String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '-') || '-';
+                            }
+                          })()}
+                        </div>
+                      )}
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">出生日期</div>
-                      <div className="text-sm font-semibold text-right">
-                        {(() => {
-                          try {
-                            const key = String(profile?.email || memberId || '');
-                            const raw = localStorage.getItem('memberOptional') || '{}';
-                            const store = JSON.parse(raw);
-                            const opt = store[key] || {};
-                            const v = String(profile?.birthDate ?? profile?.birth_date ?? opt.birthDate ?? '') || '-';
-                            return v || '-';
-                          } catch {
-                            return String(profile?.birthDate ?? profile?.birth_date ?? '-') || '-';
-                          }
-                        })()}
-                      </div>
+                      {editMode ? (
+                        <input
+                          type="date"
+                          value={editBirthDate}
+                          onChange={(e) => setEditBirthDate(e.target.value)}
+                          className="w-64 max-w-[65%] px-3 py-1.5 rounded cue-surface text-sm"
+                        />
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {(() => {
+                            try {
+                              const key = String(profile?.email || memberId || '');
+                              const raw = localStorage.getItem('memberOptional') || '{}';
+                              const store = JSON.parse(raw);
+                              const opt = store[key] || {};
+                              const v = String(profile?.birthDate ?? profile?.birth_date ?? opt.birthDate ?? '') || '-';
+                              return v || '-';
+                            } catch {
+                              return String(profile?.birthDate ?? profile?.birth_date ?? '-') || '-';
+                            }
+                          })()}
+                        </div>
+                      )}
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">所屬球會</div>
-                      <div className="text-sm font-semibold text-right">
-                        {String(profile?.club_name || profile?.clubName || profile?.club?.name || '未設定')}
-                      </div>
+                      {editMode ? (
+                        <input
+                          value={editClubName}
+                          onChange={(e) => setEditClubName(e.target.value)}
+                          placeholder="未設定"
+                          className="w-64 max-w-[65%] px-3 py-1.5 rounded cue-surface text-sm"
+                        />
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {String(profile?.club_name || profile?.clubName || profile?.club?.name || '未設定')}
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {toast && <div className="mt-3 text-sm cue-muted">{toast}</div>}
+                  {editMode && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={savingProfile}
+                        onClick={async () => {
+                          if (!memberId) return;
+                          try {
+                            setSavingProfile(true);
+                            const res = await updateMemberSelf(API_URL, memberId, {
+                              phone: String(editPhone || '').trim(),
+                              birthDate: String(editBirthDate || '').trim(),
+                              clubName: String(editClubName || '').trim(),
+                            });
+                            const next = (res as any)?.member ?? res;
+                            setProfile(next);
+                            try {
+                              const key = String(next?.email || memberId || '');
+                              const raw = localStorage.getItem('memberOptional') || '{}';
+                              const store = JSON.parse(raw);
+                              store[key] = { ...(store[key] || {}), phone: String(editPhone || '').trim(), birthDate: String(editBirthDate || '').trim() };
+                              localStorage.setItem('memberOptional', JSON.stringify(store));
+                            } catch {}
+                            setToast('已更新資料');
+                            setEditMode(false);
+                          } catch (e: any) {
+                            setToast(String(e?.message || '更新失敗'));
+                          } finally {
+                            setSavingProfile(false);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded font-semibold ${savingProfile ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                      >
+                        儲存
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingProfile}
+                        onClick={() => {
+                          setEditMode(false);
+                          setToast(null);
+                          setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
+                          setEditClubName(String(profile?.club_name ?? profile?.clubName ?? profile?.club?.name ?? '') || '');
+                          setEditBirthDate('');
+                          const bd = profile?.birthDate ?? profile?.birth_date;
+                          if (bd) {
+                            const d = new Date(bd);
+                            if (!Number.isNaN(d.getTime())) {
+                              const mm = String(d.getMonth() + 1).padStart(2, '0');
+                              const dd = String(d.getDate()).padStart(2, '0');
+                              setEditBirthDate(`${d.getFullYear()}-${mm}-${dd}`);
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 rounded font-semibold cue-surface-strong hover:brightness-95"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  )}
                   <div className="mt-3">
                     <button
                       type="button"
@@ -311,6 +442,53 @@ const Me: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                <details className="cue-surface rounded-lg p-4">
+                  <summary className="cursor-pointer font-semibold text-lg">更改密碼</summary>
+                  <div className="mt-3 space-y-2">
+                    <input
+                      type="password"
+                      value={editNewPassword}
+                      onChange={(e) => setEditNewPassword(e.target.value)}
+                      placeholder="新密碼（至少 6 位）"
+                      className="w-full px-3 py-2 rounded cue-surface-strong"
+                    />
+                    <input
+                      type="password"
+                      value={editNewPassword2}
+                      onChange={(e) => setEditNewPassword2(e.target.value)}
+                      placeholder="再次輸入新密碼"
+                      className="w-full px-3 py-2 rounded cue-surface-strong"
+                    />
+                    <button
+                      type="button"
+                      disabled={savingPassword}
+                      onClick={async () => {
+                        if (!memberId) return;
+                        const p1 = String(editNewPassword || '');
+                        const p2 = String(editNewPassword2 || '');
+                        if (p1.length < 6) return setToast('新密碼至少 6 位');
+                        if (p1 !== p2) return setToast('兩次新密碼不一致');
+                        try {
+                          setSavingPassword(true);
+                          const res = await updateMemberSelf(API_URL, memberId, { password: p1 });
+                          const next = (res as any)?.member ?? res;
+                          setProfile(next);
+                          setEditNewPassword('');
+                          setEditNewPassword2('');
+                          setToast('已更新密碼');
+                        } catch (e: any) {
+                          setToast(String(e?.message || '更新失敗'));
+                        } finally {
+                          setSavingPassword(false);
+                        }
+                      }}
+                      className={`w-full px-4 py-2 rounded font-semibold ${savingPassword ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                    >
+                      更新密碼
+                    </button>
+                  </div>
+                </details>
               </div>
             )}
 
