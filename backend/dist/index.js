@@ -104,10 +104,13 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ strict: false }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ strict: false, limit: '50mb' }));
 app.use((err, _req, res, next) => {
     // Handle JSON parse errors from body-parser
+    if (err && err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'payload_too_large' });
+    }
     if (err instanceof SyntaxError && 'body' in err && err.status === 400) {
         console.error('JSON Parse Error:', err.message);
         return res.status(400).json({ error: 'Invalid JSON payload' });
@@ -117,8 +120,365 @@ app.use((err, _req, res, next) => {
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
 createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
+const FEATURE_CATALOG = [
+    { key: 'booking', label: '會員預約', defaultEnabled: true },
+    { key: 'qr_session', label: '掃碼起鐘及結算', defaultEnabled: true },
+    { key: 'points', label: '消費積分', defaultEnabled: true },
+    { key: 'highbreak', label: '單杆統計及排名', defaultEnabled: true },
+    { key: 'tournaments', label: '比賽報名入口', defaultEnabled: true },
+    { key: 'club_messages', label: '球會訊息', defaultEnabled: true },
+    { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
+    { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
+    { key: 'member_portal', label: '會員主頁', defaultEnabled: true },
+    { key: 'scoring', label: '計分', defaultEnabled: true },
+    { key: 'live', label: '直播', defaultEnabled: true },
+];
+let featureCache = null;
+async function getFeatureMap() {
+    const now = Date.now();
+    if (featureCache && (now - featureCache.at) < 10_000)
+        return featureCache.map;
+    const defaults = {};
+    for (const f of FEATURE_CATALOG)
+        defaults[f.key] = f.defaultEnabled;
+    let rows = [];
+    try {
+        rows = await prisma.featureFlag.findMany({
+            where: { key: { in: FEATURE_CATALOG.map(f => f.key) } },
+            select: { key: true, enabled: true },
+        });
+    }
+    catch { }
+    const map = { ...defaults };
+    for (const r of rows)
+        map[r.key] = r.enabled;
+    featureCache = { at: now, map };
+    return map;
+}
+function requireFeature(key) {
+    return async (_req, res, next) => {
+        try {
+            const map = await getFeatureMap();
+            if (map[key] === false)
+                return res.status(403).json({ error: 'feature_disabled', feature: key });
+        }
+        catch { }
+        next();
+    };
+}
 // Mount Club Router
 app.use('/api/club', clubRouter);
+async function requireActiveMember(req, res) {
+    const memberId = String(req.headers['x-member-id'] || '').trim();
+    if (!memberId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, is_enabled: true }
+    });
+    if (!member) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    if (member.is_enabled === false) {
+        res.status(403).json({ error: 'Disabled' });
+        return null;
+    }
+    return member;
+}
+function ceilDiv(a, b) {
+    if (b <= 0)
+        return a;
+    return Math.floor((a + b - 1) / b);
+}
+function calcBilledMinutes(startAt, endAt, cfg) {
+    const diffMs = endAt.getTime() - startAt.getTime();
+    const rawMinutes = Math.max(0, Math.ceil(diffMs / 60000));
+    const roundingMinutes = Math.max(1, Math.floor(Number(cfg?.roundingMinutes ?? 15)));
+    const minBillableMinutes = Math.max(0, Math.floor(Number(cfg?.minBillableMinutes ?? 0)));
+    const rounded = ceilDiv(rawMinutes, roundingMinutes) * roundingMinutes;
+    return Math.max(rounded, minBillableMinutes);
+}
+function calcChargedAmount(basePrice, billedMinutes) {
+    if (basePrice == null)
+        return null;
+    const perHour = Number(String(basePrice));
+    if (!Number.isFinite(perHour) || perHour <= 0)
+        return null;
+    const amt = perHour * (billedMinutes / 60);
+    return Number.isFinite(amt) ? amt : null;
+}
+function calcChargedPoints(amount, cfg) {
+    if (amount == null)
+        return 0;
+    const ppc = Number(String(cfg?.pointsPerCurrency ?? 1));
+    if (!Number.isFinite(ppc) || ppc <= 0)
+        return 0;
+    const pts = Math.round(amount * ppc);
+    return Number.isFinite(pts) && pts > 0 ? pts : 0;
+}
+app.get('/api/qr/table/info', requireFeature('qr_session'), async (req, res) => {
+    try {
+        const member = await requireActiveMember(req, res);
+        if (!member)
+            return;
+        const token = String(req.query.token || '').trim();
+        if (!token)
+            return res.status(400).json({ error: 'token required' });
+        const qr = await prisma.tableQrToken.findUnique({
+            where: { token },
+            include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+        });
+        if (!qr || qr.active === false)
+            return res.status(404).json({ error: 'Not found' });
+        if (qr.table.active === false)
+            return res.status(409).json({ error: 'Table disabled' });
+        const session = await prisma.tableSession.findFirst({
+            where: { tableId: qr.tableId, status: 'ACTIVE', startedByMemberId: member.id },
+            orderBy: [{ startAt: 'desc' }],
+        });
+        res.json({ club: qr.club, table: qr.table, session });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.post('/api/qr/table/start-init', requireFeature('qr_session'), async (req, res) => {
+    try {
+        const member = await requireActiveMember(req, res);
+        if (!member)
+            return;
+        const token = String((req.body || {}).token || '').trim();
+        if (!token)
+            return res.status(400).json({ error: 'token required' });
+        const qr = await prisma.tableQrToken.findUnique({
+            where: { token },
+            include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+        });
+        if (!qr || qr.active === false)
+            return res.status(404).json({ error: 'Not found' });
+        if (qr.table.active === false)
+            return res.status(409).json({ error: 'Table disabled' });
+        const active = await prisma.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
+        if (active)
+            return res.status(409).json({ error: 'already_active' });
+        const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+        const confirmId = randomUUID();
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+        await prisma.tableSessionConfirm.create({
+            data: {
+                id: confirmId,
+                action: 'START',
+                token,
+                clubId: qr.clubId,
+                tableId: qr.tableId,
+                memberId: member.id,
+                expiresAt,
+            }
+        });
+        res.json({
+            confirmId,
+            expiresAt,
+            club: qr.club,
+            table: qr.table,
+            pointsConfig: cfg ? { currencyCode: cfg.currencyCode, pointsPerCurrency: String(cfg.pointsPerCurrency), roundingMinutes: cfg.roundingMinutes, minBillableMinutes: cfg.minBillableMinutes } : null,
+        });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.post('/api/qr/table/start-confirm', requireFeature('qr_session'), async (req, res) => {
+    try {
+        const member = await requireActiveMember(req, res);
+        if (!member)
+            return;
+        const confirmId = String((req.body || {}).confirmId || '').trim();
+        if (!confirmId)
+            return res.status(400).json({ error: 'confirmId required' });
+        const now = new Date();
+        const out = await prisma.$transaction(async (tx) => {
+            const c = await tx.tableSessionConfirm.findUnique({ where: { id: confirmId } });
+            if (!c)
+                throw new Error('confirm_not_found');
+            if (c.memberId !== member.id)
+                throw new Error('forbidden');
+            if (c.action !== 'START')
+                throw new Error('invalid_action');
+            if (c.consumedAt)
+                throw new Error('already_consumed');
+            if (new Date(c.expiresAt).getTime() < now.getTime())
+                throw new Error('expired');
+            const qr = await tx.tableQrToken.findUnique({
+                where: { token: c.token },
+                include: { table: { select: { id: true, active: true } } }
+            });
+            if (!qr || qr.active === false)
+                throw new Error('not_found');
+            if (qr.table.active === false)
+                throw new Error('table_disabled');
+            const active = await tx.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
+            if (active)
+                throw new Error('already_active');
+            await tx.tableSessionConfirm.update({ where: { id: c.id }, data: { consumedAt: now } });
+            const s = await tx.tableSession.create({
+                data: { id: randomUUID(), clubId: qr.clubId, tableId: qr.tableId, startedByMemberId: member.id, startAt: now, status: 'ACTIVE' }
+            });
+            return s;
+        });
+        res.json(out);
+    }
+    catch (e) {
+        const msg = String(e?.message || e);
+        const code = msg === 'already_active' ? 409 : msg === 'expired' ? 410 : msg === 'forbidden' ? 403 : 400;
+        res.status(code).json({ error: msg });
+    }
+});
+app.post('/api/qr/table/end-init', requireFeature('qr_session'), async (req, res) => {
+    try {
+        const member = await requireActiveMember(req, res);
+        if (!member)
+            return;
+        const token = String((req.body || {}).token || '').trim();
+        if (!token)
+            return res.status(400).json({ error: 'token required' });
+        const qr = await prisma.tableQrToken.findUnique({
+            where: { token },
+            include: { club: { select: { id: true, name: true, logoUrl: true } }, table: { select: { id: true, name: true, basePrice: true, active: true } } }
+        });
+        if (!qr || qr.active === false)
+            return res.status(404).json({ error: 'Not found' });
+        const session = await prisma.tableSession.findFirst({
+            where: { tableId: qr.tableId, status: 'ACTIVE', startedByMemberId: member.id },
+            orderBy: [{ startAt: 'desc' }],
+        });
+        if (!session)
+            return res.status(404).json({ error: 'no_active_session' });
+        const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+        const now = new Date();
+        const billedMinutes = calcBilledMinutes(session.startAt, now, cfg);
+        const amount = calcChargedAmount(qr.table.basePrice, billedMinutes);
+        const chargedPoints = calcChargedPoints(amount, cfg);
+        const confirmId = randomUUID();
+        const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+        await prisma.tableSessionConfirm.create({
+            data: {
+                id: confirmId,
+                action: 'END',
+                token,
+                clubId: qr.clubId,
+                tableId: qr.tableId,
+                memberId: member.id,
+                sessionId: session.id,
+                expiresAt,
+            }
+        });
+        res.json({
+            confirmId,
+            expiresAt,
+            club: qr.club,
+            table: qr.table,
+            session,
+            preview: {
+                billedMinutes,
+                chargedAmount: amount,
+                chargedCurrency: String(cfg?.currencyCode || 'HKD'),
+                chargedPoints,
+            }
+        });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, res) => {
+    try {
+        const member = await requireActiveMember(req, res);
+        if (!member)
+            return;
+        const confirmId = String((req.body || {}).confirmId || '').trim();
+        if (!confirmId)
+            return res.status(400).json({ error: 'confirmId required' });
+        const now = new Date();
+        const featureMap = await getFeatureMap();
+        const enablePoints = featureMap.points !== false;
+        const out = await prisma.$transaction(async (tx) => {
+            const c = await tx.tableSessionConfirm.findUnique({ where: { id: confirmId } });
+            if (!c)
+                throw new Error('confirm_not_found');
+            if (c.memberId !== member.id)
+                throw new Error('forbidden');
+            if (c.action !== 'END')
+                throw new Error('invalid_action');
+            if (c.consumedAt)
+                throw new Error('already_consumed');
+            if (new Date(c.expiresAt).getTime() < now.getTime())
+                throw new Error('expired');
+            if (!c.sessionId)
+                throw new Error('invalid_session');
+            const s = await tx.tableSession.findUnique({
+                where: { id: c.sessionId },
+                include: { table: { select: { id: true, name: true, basePrice: true } } }
+            });
+            if (!s)
+                throw new Error('not_found');
+            if (s.status !== 'ACTIVE')
+                throw new Error('not_active');
+            if (s.startedByMemberId !== member.id)
+                throw new Error('forbidden');
+            const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId: s.clubId } });
+            const billedMinutes = calcBilledMinutes(s.startAt, now, cfg);
+            const amount = calcChargedAmount(s.table.basePrice, billedMinutes);
+            const currency = String(cfg?.currencyCode || 'HKD');
+            const chargedPoints = enablePoints ? calcChargedPoints(amount, cfg) : 0;
+            await tx.tableSessionConfirm.update({ where: { id: c.id }, data: { consumedAt: now } });
+            let pointsLedgerId = null;
+            if (enablePoints && chargedPoints > 0) {
+                pointsLedgerId = randomUUID();
+                await tx.pointsLedger.create({
+                    data: {
+                        id: pointsLedgerId,
+                        clubId: s.clubId,
+                        memberId: member.id,
+                        deltaPoints: -chargedPoints,
+                        reason: `台費抵扣（${s.table.name}）`,
+                        refType: 'TABLE_SESSION',
+                        refId: s.id,
+                        createdByMemberId: member.id,
+                        createdAt: now,
+                    }
+                });
+                await tx.pointsBalance.upsert({
+                    where: { clubId_memberId: { clubId: s.clubId, memberId: member.id } },
+                    update: { balance: { increment: -chargedPoints } },
+                    create: { id: randomUUID(), clubId: s.clubId, memberId: member.id, balance: -chargedPoints },
+                });
+            }
+            return tx.tableSession.update({
+                where: { id: s.id },
+                data: {
+                    status: 'ENDED',
+                    endAt: now,
+                    endedByMemberId: member.id,
+                    endSource: 'MEMBER',
+                    billedMinutes,
+                    chargedAmount: amount == null ? null : String(amount),
+                    chargedCurrency: currency,
+                    chargedPoints: chargedPoints || null,
+                    pointsLedgerId,
+                }
+            });
+        });
+        res.json(out);
+    }
+    catch (e) {
+        const msg = String(e?.message || e);
+        const code = msg === 'expired' ? 410 : msg === 'forbidden' ? 403 : 400;
+        res.status(code).json({ error: msg });
+    }
+});
 async function resolveMemberIdentifiers(identifiers) {
     const trimmed = Array.from(new Set(identifiers
         .map((v) => String(v ?? '').trim())
@@ -167,8 +527,15 @@ app.get('/health/db', async (_req, res) => {
         res.status(500).json({ status: 'error', error: String(err) });
     }
 });
+app.get('/api/features', async (_req, res) => {
+    const map = await getFeatureMap();
+    res.json({
+        features: map,
+        catalog: FEATURE_CATALOG,
+    });
+});
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
-app.post('/api/matches/strict', writeAuth, async (req, res) => {
+app.post('/api/matches/strict', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
         const { roomId, match, players, timestamps, operatorId } = req.body || {};
         if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -213,7 +580,7 @@ app.post('/api/matches/strict', writeAuth, async (req, res) => {
         res.status(500).json({ error: String(err?.message || err) });
     }
 });
-app.post('/api/matches/partial', writeAuth, async (req, res) => {
+app.post('/api/matches/partial', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
         const { roomId, match, players, timestamps, operatorId } = req.body || {};
         if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -311,10 +678,10 @@ const rooms = [];
         console.error('Failed to load rooms:', e);
     }
 })();
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', requireFeature('scoring'), (req, res) => {
     res.json(rooms);
 });
-app.get('/rooms/:roomId/state', async (req, res) => {
+app.get('/rooms/:roomId/state', requireFeature('scoring'), async (req, res) => {
     const roomId = String(req.params.roomId);
     const room = rooms.find(r => r.id === roomId || r.code === roomId);
     let operator = null;
@@ -330,7 +697,7 @@ app.get('/rooms/:roomId/state', async (req, res) => {
     }
     res.json({ roomId, state: room?.gameState ?? null, operator });
 });
-app.post('/rooms/:roomId/reset', async (req, res) => {
+app.post('/rooms/:roomId/reset', requireFeature('scoring'), async (req, res) => {
     const { roomId } = req.params;
     const room = rooms.find(r => r.id === roomId || r.code === roomId);
     if (!room)
@@ -351,7 +718,7 @@ app.post('/rooms/:roomId/reset', async (req, res) => {
     io.emit('rooms', rooms);
     res.json({ message: 'Room reset' });
 });
-app.post('/api/rooms', async (req, res) => {
+app.post('/api/rooms', requireFeature('scoring'), async (req, res) => {
     const { name, operatorId } = req.body;
     if (!name) {
         return res.status(400).json({ message: 'Room name is required' });
@@ -380,8 +747,10 @@ app.post('/api/rooms', async (req, res) => {
     io.emit('rooms', rooms);
     res.status(201).json(newRoom);
 });
-app.delete('/api/rooms/:roomId', async (req, res) => {
-    const { roomId } = req.params;
+app.delete('/api/rooms/:roomId', requireFeature('scoring'), async (req, res) => {
+    const roomId = String(req.params.roomId || '');
+    if (!roomId)
+        return res.status(400).json({ error: 'roomId required' });
     const index = rooms.findIndex(room => room.id === roomId);
     if (index !== -1) {
         rooms.splice(index, 1);
@@ -400,7 +769,7 @@ app.delete('/api/rooms/:roomId', async (req, res) => {
     }
 });
 // Verification endpoints
-app.post('/api/match-verification-code', async (req, res) => {
+app.post('/api/match-verification-code', requireFeature('scoring'), async (req, res) => {
     const { email, purpose } = req.body;
     if (!email)
         return res.status(400).json({ error: 'Email required' });
@@ -449,7 +818,7 @@ app.post('/api/match-verification-code', async (req, res) => {
         res.json({ message: 'Code sent (Dev mode)' });
     }
 });
-app.post('/api/matches/start', async (req, res) => {
+app.post('/api/matches/start', requireFeature('scoring'), async (req, res) => {
     const { p1_email, p2_email, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
     console.log(`[StartMatch] P1: ${p1_email}, P2: ${p2_email}, Room: ${room_id}`);
     let p1_member_id = null;
@@ -522,7 +891,7 @@ app.post('/api/matches/start', async (req, res) => {
     }
 });
 // Create match invites for specific member emails (operator triggers from Setup page)
-app.post('/api/matches/invite', async (req, res) => {
+app.post('/api/matches/invite', requireFeature('scoring'), async (req, res) => {
     try {
         const { room_id, operator_id, emails } = req.body || {};
         if (!room_id || !Array.isArray(emails) || emails.length === 0) {
@@ -583,7 +952,7 @@ app.post('/api/matches/invite', async (req, res) => {
     }
 });
 // List my invites (member inbox-style)
-app.get('/api/matches/invites/my', async (req, res) => {
+app.get('/api/matches/invites/my', requireFeature('scoring'), async (req, res) => {
     const memberId = req.headers['x-member-id'];
     if (!memberId)
         return res.status(401).json({ error: 'Unauthorized' });
@@ -605,7 +974,7 @@ app.get('/api/matches/invites/my', async (req, res) => {
     }
 });
 // Accept invite (member confirms to join match)
-app.post('/api/matches/invites/accept', async (req, res) => {
+app.post('/api/matches/invites/accept', requireFeature('scoring'), async (req, res) => {
     try {
         const memberId = req.headers['x-member-id'];
         const { token } = req.body || {};
@@ -659,6 +1028,37 @@ function adminAuth(req, res, next) {
     }
     next();
 }
+app.get('/api/admin/features', adminAuth, async (_req, res) => {
+    const map = await getFeatureMap();
+    const rows = FEATURE_CATALOG.map((f) => ({
+        key: f.key,
+        label: f.label,
+        enabled: map[f.key],
+        defaultEnabled: f.defaultEnabled,
+    }));
+    res.json({ features: rows });
+});
+app.put('/api/admin/features', adminAuth, async (req, res) => {
+    const updates = (req.body || {}).updates;
+    if (!Array.isArray(updates))
+        return res.status(400).json({ error: 'updates_required' });
+    const allowed = new Set(FEATURE_CATALOG.map((f) => f.key));
+    const normalized = updates
+        .map((u) => ({ key: String(u?.key || '').trim(), enabled: !!u?.enabled }))
+        .filter((u) => allowed.has(u.key));
+    const unique = new Map();
+    for (const u of normalized)
+        unique.set(u.key, u.enabled);
+    const items = Array.from(unique.entries());
+    await prisma.$transaction(items.map(([key, enabled]) => prisma.featureFlag.upsert({
+        where: { key },
+        update: { enabled },
+        create: { key, enabled },
+    })));
+    featureCache = null;
+    const map = await getFeatureMap();
+    res.json({ ok: true, features: map });
+});
 // Basic write authorization for match write endpoints
 function writeAuth(req, res, next) {
     if (!WRITE_TOKEN)
@@ -1144,7 +1544,7 @@ app.get('/test', (_req, res) => {
   </html>`);
 });
 // Match write endpoints (create, events append, finalize)
-app.post('/api/matches', writeAuth, async (req, res) => {
+app.post('/api/matches', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
         const { roomId, match, players, timestamps } = req.body || {};
         if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
@@ -1197,7 +1597,7 @@ app.post('/api/matches', writeAuth, async (req, res) => {
     }
 });
 // Append events to a match (batch)
-app.post('/api/matches/:matchId/events', writeAuth, async (req, res) => {
+app.post('/api/matches/:matchId/events', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
         const matchId = req.params.matchId;
         const { events } = req.body || {};
@@ -1227,7 +1627,7 @@ app.post('/api/matches/:matchId/events', writeAuth, async (req, res) => {
     }
 });
 // Finalize a match: persist foul totals, stats, and winner
-app.post('/api/matches/:matchId/finalize', writeAuth, async (req, res) => {
+app.post('/api/matches/:matchId/finalize', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
         const matchId = req.params.matchId;
         const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
@@ -1714,79 +2114,139 @@ app.get('/api/members/:id/matches', async (req, res) => {
         res.status(500).json({ error: String(err?.message || err) });
     }
 });
-// Register a new member with district-based sequential member_code (no country prefix for now)
+app.get('/api/me/breaks', async (req, res) => {
+    try {
+        const memberId = String(req.headers['x-member-id'] || '').trim();
+        if (!memberId)
+            return res.status(401).json({ error: 'Unauthorized' });
+        const member = await prisma.member.findUnique({ where: { id: memberId }, select: { id: true, is_enabled: true } });
+        if (!member)
+            return res.status(401).json({ error: 'Unauthorized' });
+        if (member.is_enabled === false)
+            return res.status(403).json({ error: 'Disabled' });
+        const parseMonthRange = (month) => {
+            const m = String(month || '').trim();
+            const match = /^(\d{4})-(\d{2})$/.exec(m);
+            if (!match)
+                return null;
+            const year = Number(match[1]);
+            const mon = Number(match[2]);
+            if (!Number.isFinite(year) || !Number.isFinite(mon) || mon < 1 || mon > 12)
+                return null;
+            const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
+            const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
+            return { start, end };
+        };
+        const clubId = req.query.clubId ? String(req.query.clubId).trim() : '';
+        const month = req.query.month ? String(req.query.month).trim() : '';
+        const where = { member_id: memberId, deleted_at: null };
+        if (clubId)
+            where.club_id = clubId;
+        if (month) {
+            const range = parseMonthRange(month);
+            if (!range)
+                return res.status(400).json({ error: 'month invalid' });
+            where.recorded_at = { gte: range.start, lt: range.end };
+        }
+        const rows = await prisma.breakRecord.findMany({
+            where,
+            orderBy: [{ recorded_at: 'desc' }],
+            include: {
+                club: { select: { id: true, name: true, logoUrl: true } },
+            },
+        });
+        res.json(rows);
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
 app.post('/api/members/register', async (req, res) => {
     try {
         const payload = (req.body || {});
         const email = String(payload.email || '').trim().normalize('NFKC');
         const name = String(payload.name || '').trim();
+        const password = String(payload.password || '');
         const phone = payload.phone ? String(payload.phone).trim() : undefined;
+        const phoneE164 = normalizePhoneE164({
+            ...(payload.phoneCountry ? { country: String(payload.phoneCountry).trim() } : {}),
+            ...(payload.phoneNumber ? { number: String(payload.phoneNumber).trim() } : {}),
+        });
+        const clubName = payload.clubName ? String(payload.clubName).trim() : undefined;
         const birthDateStr = payload.birthDate ? String(payload.birthDate).trim() : undefined;
-        if (!email || !name) {
-            return res.status(400).json({ error: 'email 與 name 為必填' });
+        if (!name) {
+            return res.status(400).json({ error: 'name 為必填' });
         }
-        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        if (!emailOk) {
+        const emailOk = email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) : false;
+        if (email && !emailOk) {
             return res.status(400).json({ error: 'email 格式不正確' });
         }
-        const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
-        const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
+        if (!email && !phoneE164) {
+            return res.status(400).json({ error: '請輸入 email 或 手機號碼' });
+        }
+        const hasPassword = password.length > 0;
+        if (hasPassword) {
+            const pwLenOk = password.length >= 8;
+            const pwHasNum = /\d/.test(password);
+            const pwHasAlpha = /[A-Za-z]/.test(password);
+            if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+                return res.status(400).json({ error: '密碼不符合規則（至少8字元，需含英文字母與數字）' });
+            }
+        }
         const birthDate = birthDateStr ? new Date(birthDateStr) : undefined;
         if (birthDateStr && Number.isNaN(birthDate.getTime())) {
             return res.status(400).json({ error: '出生日期格式無效，請使用 ISO 格式，如 1990-01-31' });
         }
         const result = await prisma.$transaction(async (tx) => {
-            const existsEmail = await tx.member.findFirst({ where: { email } });
-            if (existsEmail) {
-                throw new Error('email 已存在');
+            if (email) {
+                const existsEmail = await tx.member.findFirst({ where: { email } });
+                if (existsEmail) {
+                    throw new Error('email 已存在');
+                }
             }
-            let regionCode = regionRaw;
-            let districtCode = districtRaw;
-            if (!regionCode && districtCode) {
-                regionCode = 'HKG';
+            if (phoneE164) {
+                const existsPhone = await tx.member.findFirst({ where: { phone_e164: phoneE164 } });
+                if (existsPhone) {
+                    throw new Error('手機號碼已存在');
+                }
             }
-            if (!regionCode || !districtCode) {
-                throw new Error('regionCode 與 districtCode 為必填');
+            let memberCode = null;
+            for (let i = 0; i < 5; i++) {
+                const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+                const exists = await tx.member.findFirst({ where: { member_code: code } });
+                if (!exists) {
+                    memberCode = code;
+                    break;
+                }
             }
-            const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
-            if (!region || region.active === false) {
-                throw new Error('無效的地方編號');
-            }
-            const district = await tx.memberDistrict.findFirst({
-                where: { region_code: regionCode, code3: districtCode, active: true },
-            });
-            if (!district) {
-                throw new Error('無效的分區編號');
-            }
-            const seq = await tx.memberCodeSequence.upsert({
-                where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
-                update: { next_seq: { increment: 1 } },
-                create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
-                select: { next_seq: true },
-            });
-            const current = seq.next_seq - 1;
-            const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
-            // const token = Buffer.from(randomBytes(24)).toString('hex');
-            // const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            const now = new Date();
-            const membershipExpires = new Date(now.getTime());
-            membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
+            const salt = hasPassword ? makeSalt() : null;
+            const digest = hasPassword
+                ? (() => {
+                    const h = createHash('sha256');
+                    h.update(String(salt) + password);
+                    return h.digest('hex');
+                })()
+                : null;
             const created = await tx.member.create({
                 data: {
                     id: randomUUID(),
                     name,
-                    email,
-                    // region_code: regionCode,
-                    district_code: districtCode,
+                    email: email || null,
+                    district_code: null,
                     phone: phone ?? null,
+                    phone_country: payload.phoneCountry ? String(payload.phoneCountry).trim() : null,
+                    phone_number: payload.phoneNumber ? String(payload.phoneNumber).trim() : null,
+                    phone_e164: phoneE164 || null,
+                    club_name: clubName ?? null,
                     birth_date: birthDate ?? null,
                     member_code: memberCode,
-                    // email_verification_token: token,
-                    // email_verification_expires_at: expiresAt,
-                    membership_expires_at: membershipExpires,
+                    membership_expires_at: null,
+                    password_salt: salt,
+                    password_hash: digest,
+                    password_updated_at: hasPassword ? new Date() : null,
                 },
             });
-            return { id: created.id, memberCode, token: '' }; // token empty
+            return { id: created.id, memberCode }; // token empty
         });
         // 寄送驗證信（若已配置郵件供應商）
         if (RESEND_API_KEY) {
@@ -1816,12 +2276,26 @@ app.post('/api/members/register', async (req, res) => {
     }
     catch (err) {
         const msg = String(err?.message || err);
-        const status = msg.includes('email 已存在') ? 409 : 500;
+        const status = msg.includes('已存在') ? 409 : 500;
         res.status(status).json({ error: msg });
     }
 });
 function makeSalt() {
     return randomBytes(16).toString('hex');
+}
+function normalizePhoneE164(input) {
+    const raw = typeof input === 'string' ? input : `${String(input.country || '')}${String(input.number || '')}`;
+    const s0 = String(raw || '').trim();
+    if (!s0)
+        return '';
+    let s = s0.replace(/[()\s\-\.]/g, '');
+    s = s.replace(/^00/, '+');
+    if (!s.startsWith('+')) {
+        s = `+${s}`;
+    }
+    if (!/^\+\d{6,20}$/.test(s))
+        return '';
+    return s;
 }
 function generateEmailCode() {
     const buf = randomBytes(3);
@@ -1947,41 +2421,20 @@ app.post('/api/members/register-with-code', async (req, res) => {
             where: { id: verification.id },
             data: { used_at: now },
         });
-        const regionRaw = String(payload.regionCode || '').trim().toUpperCase();
-        const districtRaw = String(payload.districtCode || payload.districtName || '').trim().toUpperCase();
         const result = await prisma.$transaction(async (tx) => {
             const existsEmail = await tx.member.findFirst({ where: { email } });
             if (existsEmail) {
                 throw new Error('email 已存在');
             }
-            let regionCode = regionRaw;
-            let districtCode = districtRaw;
-            if (!regionCode && districtCode) {
-                regionCode = 'HKG';
+            let memberCode = null;
+            for (let i = 0; i < 5; i++) {
+                const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+                const exists = await tx.member.findFirst({ where: { member_code: code } });
+                if (!exists) {
+                    memberCode = code;
+                    break;
+                }
             }
-            if (!regionCode || !districtCode) {
-                throw new Error('regionCode 與 districtCode 為必填');
-            }
-            const region = await tx.memberRegion.findUnique({ where: { code3: regionCode } });
-            if (!region || region.active === false) {
-                throw new Error('無效的地方編號');
-            }
-            const district = await tx.memberDistrict.findFirst({
-                where: { region_code: regionCode, code3: districtCode, active: true },
-            });
-            if (!district) {
-                throw new Error('無效的分區編號');
-            }
-            const seq = await tx.memberCodeSequence.upsert({
-                where: { region_code_district_code: { region_code: regionCode, district_code: districtCode } },
-                update: { next_seq: { increment: 1 } },
-                create: { region_code: regionCode, district_code: districtCode, next_seq: 2 },
-                select: { next_seq: true },
-            });
-            const current = seq.next_seq - 1;
-            const memberCode = `${regionCode}${districtCode}${String(current).padStart(7, '0')}`;
-            const membershipExpires = new Date(now.getTime());
-            membershipExpires.setFullYear(membershipExpires.getFullYear() + 3);
             const salt = makeSalt();
             const h = createHash('sha256');
             h.update(salt + password);
@@ -1991,12 +2444,12 @@ app.post('/api/members/register-with-code', async (req, res) => {
                     id: randomUUID(),
                     name,
                     email,
-                    district_code: districtCode,
+                    district_code: null,
                     phone: phone ?? null,
                     club_name: clubName ?? null,
                     birth_date: birthDate ?? null,
                     member_code: memberCode,
-                    membership_expires_at: membershipExpires,
+                    membership_expires_at: null,
                     password_salt: salt,
                     password_hash: digest,
                     password_updated_at: now,
@@ -2172,7 +2625,7 @@ app.get('/api/operators/:id/active-rooms', async (req, res) => {
 });
 // Simple password hashing helpers (SHA-256 with per-user salt)
 import { OAuth2Client } from 'google-auth-library';
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com');
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com');
 app.post('/api/auth/google', async (req, res) => {
     try {
         const { credential } = req.body;
@@ -2180,17 +2633,22 @@ app.post('/api/auth/google', async (req, res) => {
             return res.status(400).json({ error: 'Missing credential' });
         const ticket = await googleClient.verifyIdToken({
             idToken: credential,
-            audience: process.env.GOOGLE_CLIENT_ID || '216977203711-pm37tm2vr3h178qgdnaj8v4n72k5hps9.apps.googleusercontent.com',
+            audience: process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com',
         });
         const payload = ticket.getPayload();
         if (!payload || !payload.email)
             return res.status(400).json({ error: 'Invalid token' });
         const email = payload.email.toLowerCase();
         const googleId = payload.sub;
+        const displayName = String(payload.name || payload.given_name || '').trim() || (email.split('@')[0] || email);
+        const emailVerified = Boolean(payload.email_verified);
         let member = await prisma.member.findUnique({ where: { email } });
         if (member) {
             // Logic for google_id update removed due to DB permission issues.
             // Matching by email only for now.
+            if (member.is_enabled === false) {
+                return res.status(403).json({ error: '此帳號已被停用' });
+            }
             return res.json({
                 ok: true,
                 id: member.id,
@@ -2204,7 +2662,46 @@ app.post('/api/auth/google', async (req, res) => {
             });
         }
         else {
-            return res.status(404).json({ error: 'Google 帳號未連結或未註冊，請先註冊會員' });
+            if (!emailVerified) {
+                return res.status(400).json({ error: 'Google Email 尚未驗證，無法註冊' });
+            }
+            const created = await prisma.$transaction(async (tx) => {
+                let memberCode = null;
+                for (let i = 0; i < 5; i++) {
+                    const code = `M${randomBytes(6).toString('hex').toUpperCase()}`;
+                    const exists = await tx.member.findFirst({ where: { member_code: code } });
+                    if (!exists) {
+                        memberCode = code;
+                        break;
+                    }
+                }
+                const m = await tx.member.create({
+                    data: {
+                        id: randomUUID(),
+                        name: displayName,
+                        email,
+                        district_code: null,
+                        phone: null,
+                        club_name: null,
+                        birth_date: null,
+                        member_code: memberCode,
+                        membership_expires_at: null,
+                        is_enabled: true,
+                    },
+                });
+                return m;
+            });
+            return res.status(201).json({
+                ok: true,
+                id: created.id,
+                member: {
+                    id: created.id,
+                    name: created.name,
+                    email: created.email,
+                    member_code: created.member_code,
+                    role: created.role,
+                },
+            });
         }
     }
     catch (err) {
@@ -2215,13 +2712,33 @@ app.post('/api/auth/google', async (req, res) => {
 // Member login (email + password), returns member basic info
 app.post('/api/members/login', async (req, res) => {
     try {
-        const { email, password } = (req.body || {});
-        const em = String(email || '').trim();
-        const pw = String(password || '');
-        if (!em || !pw) {
-            return res.status(400).json({ error: '缺少 email 或 password' });
+        const body = (req.body || {});
+        const idRaw = String((body.identifier || body.email || '') || '').trim().normalize('NFKC');
+        const pw = String(body.password || '');
+        if (!idRaw || !pw) {
+            return res.status(400).json({ error: '缺少帳號或密碼' });
         }
-        const m = await prisma.member.findUnique({ where: { email: em } });
+        const isEmail = idRaw.includes('@');
+        const email = isEmail ? idRaw.toLowerCase() : '';
+        const phoneE164 = !isEmail
+            ? (() => {
+                if (body.phoneE164)
+                    return normalizePhoneE164(String(body.phoneE164));
+                if (body.phoneCountry || body.phoneNumber) {
+                    return normalizePhoneE164({
+                        ...(body.phoneCountry ? { country: String(body.phoneCountry) } : {}),
+                        ...(body.phoneNumber ? { number: String(body.phoneNumber) } : {}),
+                    });
+                }
+                return normalizePhoneE164(idRaw);
+            })()
+            : '';
+        if (!isEmail && !phoneE164) {
+            return res.status(400).json({ error: '手機號碼格式不正確' });
+        }
+        const m = isEmail
+            ? await prisma.member.findUnique({ where: { email } })
+            : await prisma.member.findUnique({ where: { phone_e164: phoneE164 } });
         if (!m)
             return res.status(404).json({ error: '會員不存在' });
         const mh = m.password_hash;
@@ -2644,6 +3161,24 @@ app.put('/api/admin/members/:id', adminAuth, async (req, res) => {
             const r = String(body.role || 'MEMBER').toUpperCase();
             data.role = r === 'ADMIN' ? 'ADMIN' : 'MEMBER';
         }
+        const enabledRaw = body.is_enabled ?? body.isEnabled;
+        if (enabledRaw !== undefined) {
+            data.is_enabled = Boolean(enabledRaw);
+        }
+        const accessRaw = body.access_expires_at ?? body.accessExpiresAt;
+        if (accessRaw !== undefined) {
+            const s = String(accessRaw || '').trim();
+            if (!s) {
+                data.access_expires_at = null;
+            }
+            else {
+                const d = new Date(s);
+                if (Number.isNaN(d.getTime())) {
+                    return res.status(400).json({ error: '場館限期格式不正確' });
+                }
+                data.access_expires_at = d;
+            }
+        }
         const member = await prisma.member.update({
             where: { id },
             data,
@@ -2730,6 +3265,305 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.get('/api/admin/breaks', adminAuth, async (req, res) => {
+    try {
+        const page = Number(req.query.page || '1');
+        const pageSize = Number(req.query.pageSize || '50');
+        const take = Math.max(1, Math.min(Number.isFinite(pageSize) ? Math.floor(pageSize) : 50, 200));
+        const safePage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
+        const skip = Math.max(0, (safePage - 1) * take);
+        const memberId = String(req.query.memberId || '').trim();
+        const clubId = String(req.query.clubId || '').trim();
+        const month = String(req.query.month || '').trim();
+        const q = String(req.query.q || '').trim();
+        const includeDeleted = String(req.query.includeDeleted || '').trim() === '1';
+        const where = {};
+        if (!includeDeleted)
+            where.deleted_at = null;
+        if (memberId)
+            where.member_id = memberId;
+        if (clubId)
+            where.club_id = clubId;
+        if (month) {
+            const range = parseMonthRangeUtc(month);
+            if (!range)
+                return res.status(400).json({ error: 'month invalid' });
+            where.recorded_at = { gte: range.start, lt: range.end };
+        }
+        if (q) {
+            where.OR = [
+                { note: { contains: q, mode: 'insensitive' } },
+                { video_url: { contains: q, mode: 'insensitive' } },
+                { member: { name: { contains: q, mode: 'insensitive' } } },
+                { member: { member_code: { contains: q, mode: 'insensitive' } } },
+                { club: { name: { contains: q, mode: 'insensitive' } } },
+            ];
+        }
+        const [total, rows] = await prisma.$transaction([
+            prisma.breakRecord.count({ where }),
+            prisma.breakRecord.findMany({
+                where,
+                orderBy: [{ recorded_at: 'desc' }, { id: 'desc' }],
+                skip,
+                take,
+                include: {
+                    member: { select: { id: true, name: true, member_code: true } },
+                    club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+                },
+            }),
+        ]);
+        const breaks = rows.map((r) => ({
+            ...r,
+            club: r.club
+                ? {
+                    ...r.club,
+                    name: r.club.name || r.club.member?.name || '',
+                }
+                : null,
+        }));
+        res.json({ total, page: safePage, pageSize: take, breaks });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.patch('/api/admin/breaks/:id', adminAuth, async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: '缺少 break ID' });
+        const body = (req.body || {});
+        const data = {
+            updated_at: new Date(),
+            updated_by_admin: 'super_admin',
+        };
+        if (body.points !== undefined) {
+            const p = Number(body.points);
+            if (!Number.isFinite(p) || p <= 0)
+                return res.status(400).json({ error: 'points invalid' });
+            data.points = Math.floor(p);
+        }
+        if (body.recordedAt !== undefined) {
+            const d = new Date(String(body.recordedAt || ''));
+            if (Number.isNaN(d.getTime()))
+                return res.status(400).json({ error: 'recordedAt invalid' });
+            data.recorded_at = d;
+        }
+        if (body.videoUrl !== undefined)
+            data.video_url = body.videoUrl ? String(body.videoUrl).trim() : null;
+        if (body.note !== undefined)
+            data.note = body.note ? String(body.note).trim() : null;
+        if (body.restore) {
+            data.deleted_at = null;
+            data.deleted_by_admin = null;
+            data.delete_reason = null;
+        }
+        const row = await prisma.breakRecord.update({
+            where: { id },
+            data,
+        });
+        res.json(row);
+    }
+    catch (err) {
+        if (err?.code === 'P2025')
+            return res.status(404).json({ error: 'break 不存在' });
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.get('/api/site/notice', async (_req, res) => {
+    try {
+        const row = await prisma.siteNotice.findUnique({ where: { id: 'main' } });
+        res.json(row || { id: 'main', enabled: true, message: '', youtubeEmbedUrl: null });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+function parseMonthRangeUtc(month) {
+    const m = String(month || '').trim();
+    const match = /^(\d{4})-(\d{2})$/.exec(m);
+    if (!match)
+        return null;
+    const year = Number(match[1]);
+    const mon = Number(match[2]);
+    if (!Number.isFinite(year) || !Number.isFinite(mon) || mon < 1 || mon > 12)
+        return null;
+    const start = new Date(Date.UTC(year, mon - 1, 1, 0, 0, 0));
+    const end = new Date(Date.UTC(year, mon, 1, 0, 0, 0));
+    return { start, end };
+}
+function parseLimit(raw, fallback) {
+    const n = Number(raw);
+    if (!Number.isFinite(n))
+        return fallback;
+    return Math.max(1, Math.min(200, Math.floor(n)));
+}
+app.get('/api/leaderboard/members/highest', async (req, res) => {
+    try {
+        const take = parseLimit(req.query.limit, 10);
+        const rows = await prisma.breakRecord.groupBy({
+            by: ['member_id'],
+            where: { deleted_at: null },
+            _max: { points: true },
+            orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
+            take,
+        });
+        const ids = rows.map((r) => r.member_id);
+        const members = await prisma.member.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, member_code: true },
+        });
+        const memberMap = new Map(members.map((m) => [m.id, m]));
+        res.json(rows.map((r) => ({
+            memberId: r.member_id,
+            member: memberMap.get(r.member_id) || null,
+            points: r._max.points || 0,
+        })));
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.get('/api/leaderboard/members/monthly', async (req, res) => {
+    try {
+        const take = parseLimit(req.query.limit, 10);
+        const month = String(req.query.month || '').trim();
+        const range = parseMonthRangeUtc(month);
+        if (!range)
+            return res.status(400).json({ error: 'month invalid' });
+        const rows = await prisma.breakRecord.groupBy({
+            by: ['member_id'],
+            where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+            _sum: { points: true },
+            orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
+            take,
+        });
+        const ids = rows.map((r) => r.member_id);
+        const members = await prisma.member.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, member_code: true },
+        });
+        const memberMap = new Map(members.map((m) => [m.id, m]));
+        res.json(rows.map((r) => ({
+            memberId: r.member_id,
+            member: memberMap.get(r.member_id) || null,
+            points: r._sum.points || 0,
+        })));
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.get('/api/leaderboard/clubs/highest', async (req, res) => {
+    try {
+        const take = parseLimit(req.query.limit, 10);
+        const rows = await prisma.breakRecord.groupBy({
+            by: ['club_id'],
+            where: { deleted_at: null },
+            _max: { points: true },
+            orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
+            take,
+        });
+        const ids = rows.map((r) => r.club_id);
+        const clubs = await prisma.clubProfile.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
+        });
+        const clubMap = new Map(clubs.map((c) => [c.id, c]));
+        res.json(rows.map((r) => {
+            const club = clubMap.get(r.club_id);
+            return {
+                clubId: r.club_id,
+                club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
+                points: r._max.points || 0,
+            };
+        }));
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.get('/api/leaderboard/clubs/monthly', async (req, res) => {
+    try {
+        const take = parseLimit(req.query.limit, 10);
+        const month = String(req.query.month || '').trim();
+        const range = parseMonthRangeUtc(month);
+        if (!range)
+            return res.status(400).json({ error: 'month invalid' });
+        const rows = await prisma.breakRecord.groupBy({
+            by: ['club_id'],
+            where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+            _sum: { points: true },
+            orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
+            take,
+        });
+        const ids = rows.map((r) => r.club_id);
+        const clubs = await prisma.clubProfile.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
+        });
+        const clubMap = new Map(clubs.map((c) => [c.id, c]));
+        res.json(rows.map((r) => {
+            const club = clubMap.get(r.club_id);
+            return {
+                clubId: r.club_id,
+                club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
+                points: r._sum.points || 0,
+            };
+        }));
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.put('/api/admin/site/notice', adminAuth, async (req, res) => {
+    try {
+        const payload = req.body || {};
+        const enabled = payload.enabled === undefined ? undefined : !!payload.enabled;
+        const message = payload.message === undefined ? undefined : String(payload.message || '');
+        const youtubeEmbedUrl = payload.youtubeEmbedUrl === undefined
+            ? undefined
+            : (String(payload.youtubeEmbedUrl || '').trim() || null);
+        const row = await prisma.siteNotice.upsert({
+            where: { id: 'main' },
+            create: { id: 'main', enabled: enabled ?? true, message: message ?? '', youtubeEmbedUrl: youtubeEmbedUrl ?? null },
+            update: {
+                ...(enabled === undefined ? {} : { enabled }),
+                ...(message === undefined ? {} : { message }),
+                ...(youtubeEmbedUrl === undefined ? {} : { youtubeEmbedUrl }),
+            },
+        });
+        res.json(row);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message || e) });
+    }
+});
+app.delete('/api/admin/breaks/:id', adminAuth, async (req, res) => {
+    try {
+        const id = String(req.params.id || '').trim();
+        if (!id)
+            return res.status(400).json({ error: '缺少 break ID' });
+        const reasonRaw = (req.body || {}).reason;
+        const reason = reasonRaw == null ? null : String(reasonRaw).trim() || null;
+        const row = await prisma.breakRecord.update({
+            where: { id },
+            data: {
+                deleted_at: new Date(),
+                deleted_by_admin: 'super_admin',
+                delete_reason: reason,
+                updated_at: new Date(),
+                updated_by_admin: 'super_admin',
+            },
+        });
+        res.json(row);
+    }
+    catch (err) {
+        if (err?.code === 'P2025')
+            return res.status(404).json({ error: 'break 不存在' });
         res.status(500).json({ error: String(err?.message || err) });
     }
 });

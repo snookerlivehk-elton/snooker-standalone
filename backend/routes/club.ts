@@ -1572,7 +1572,12 @@ router.post('/:clubId/reservations', async (req, res) => {
     const created = await prisma.tableReservation.create({ data });
     try {
         const messageTitle = '新預約待確認';
-        const content = `會員 ${memberId} 預約 ${s.toISOString()} 至 ${e.toISOString()}`;
+        const m = await prisma.member.findUnique({ where: { id: memberId }, select: { name: true, member_code: true } });
+        const memberName = String(m?.name || '').trim();
+        const memberCode = String(m?.member_code || '').trim();
+        const who = [memberCode || '無', memberName].filter(Boolean).join(' ');
+        const tableName = String((table as any)?.name || '').trim() || '球枱';
+        const content = `會員：${who}\n球枱：${tableName}\n時段：${formatHongKongDateTime(s)} 至 ${formatHongKongDateTime(e)}`;
         await prisma.clubMessage.create({ data: { clubId, title: messageTitle, content } });
     } catch {}
     res.json(created);
