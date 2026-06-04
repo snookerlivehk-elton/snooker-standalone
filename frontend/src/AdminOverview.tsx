@@ -324,7 +324,7 @@ const AdminOverview: React.FC = () => {
               onClick={() => {
                 const base = resolveBasePath();
                 const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/legacy${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+                window.location.href = `${window.location.origin}${base}/admin/members${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
               }}
             >
               舊版PANEL
