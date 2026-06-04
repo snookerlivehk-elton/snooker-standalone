@@ -5,7 +5,7 @@ export const FEATURE_CATALOG = [
   { key: 'qr_session', label: '掃碼起鐘及結算', defaultEnabled: true },
   { key: 'points', label: '消費積分', defaultEnabled: true },
   { key: 'highbreak', label: '單杆統計及排名', defaultEnabled: true },
-  { key: 'tournaments', label: '比賽報名入口', defaultEnabled: true },
+  { key: 'tournaments', label: '比賽報名入口', defaultEnabled: false },
   { key: 'club_messages', label: '球會訊息', defaultEnabled: true },
   { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
   { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
@@ -77,7 +77,7 @@ export function clearFeatureCache() {
 
 export function useFeatureEnabled(apiUrl: string, key: FeatureKey) {
   const [loading, setLoading] = useState(true);
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => buildDefaults()[key] !== false);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -87,11 +87,10 @@ export function useFeatureEnabled(apiUrl: string, key: FeatureKey) {
       setLoading(false);
     }).catch(() => {
       if (cancelled) return;
-      setEnabled(true);
+      setEnabled(buildDefaults()[key] !== false);
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [apiUrl, key]);
   return useMemo(() => ({ loading, enabled }), [loading, enabled]);
 }
-

@@ -573,10 +573,6 @@ const ClubPublicPage: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="brand-page p-6 text-center cue-muted">載入中...</div>;
-  if (error) return <div className="brand-page p-6 text-center text-red-500">錯誤：{error}</div>;
-  if (!club) return <div className="brand-page p-6 text-center cue-muted">找不到場館</div>;
-
   const toggleHour = (hour: number) => {
     setSelectedHours((prev) => {
       const list = Array.isArray(prev) ? prev.slice() : [];
@@ -805,6 +801,10 @@ const ClubPublicPage: React.FC = () => {
     setClubLiveOpenKey(null);
     setClubLiveSelected({});
   };
+
+  if (loading) return <div className="brand-page p-6 text-center cue-muted">載入中...</div>;
+  if (error) return <div className="brand-page p-6 text-center text-red-500">錯誤：{error}</div>;
+  if (!club) return <div className="brand-page p-6 text-center cue-muted">找不到場館</div>;
 
   return (
     <div className="brand-page min-h-[100dvh]">
