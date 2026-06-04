@@ -526,6 +526,13 @@ export async function getPublicLiveAnnouncements(apiUrl: string, limit?: number)
   return res.json();
 }
 
+export async function getPublicClubLiveAnnouncements(apiUrl: string, clubId: string, limit?: number) {
+  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/live-announcements/public${q}`);
+  if (!res.ok) throw new Error('讀取直播通告失敗');
+  return res.json();
+}
+
 export async function getMyClubMessages(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/messages`, {
     headers: { 'x-member-id': memberId }
@@ -566,6 +573,148 @@ export async function hideClubMessages(apiUrl: string, memberId: string, ids: st
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `刪除訊息失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getPublicClubTournaments(apiUrl: string, clubId: string, memberId?: string) {
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/public`, {
+    headers: memberId ? { 'x-member-id': memberId } : undefined,
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('讀取比賽列表失敗');
+  return res.json();
+}
+
+export async function getPublicClubTournament(apiUrl: string, clubId: string, tournamentId: string, memberId?: string) {
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/${encodeURIComponent(tournamentId)}/public`, {
+    headers: memberId ? { 'x-member-id': memberId } : undefined,
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('讀取比賽資料失敗');
+  return res.json();
+}
+
+export async function signupTournament(apiUrl: string, clubId: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/${encodeURIComponent(tournamentId)}/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '報名失敗');
+  }
+  return res.json();
+}
+
+export async function getMyClubTournaments(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments`, { headers: { 'x-member-id': memberId }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取比賽失敗');
+  }
+  return res.json();
+}
+
+export async function createClubTournament(
+  apiUrl: string,
+  memberId: string,
+  payload: { title: string; description?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '建立比賽失敗');
+  }
+  return res.json();
+}
+
+export async function updateClubTournament(
+  apiUrl: string,
+  memberId: string,
+  id: string,
+  payload: { title?: string; description?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新比賽失敗');
+  }
+  return res.json();
+}
+
+export async function publishClubTournament(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '上架失敗');
+  }
+  return res.json();
+}
+
+export async function closeClubTournament(apiUrl: string, memberId: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}/close`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '關閉失敗');
+  }
+  return res.json();
+}
+
+export async function getTournamentSignups(apiUrl: string, memberId: string, tournamentId: string, status?: string) {
+  const sp = new URLSearchParams();
+  if (status) sp.set('status', status);
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/signups${qs ? `?${qs}` : ''}`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取報名失敗');
+  }
+  return res.json();
+}
+
+export async function confirmTournamentSignup(apiUrl: string, memberId: string, tournamentId: string, signupId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/signups/${encodeURIComponent(signupId)}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '確認失敗');
+  }
+  return res.json();
+}
+
+export async function cancelTournamentSignup(apiUrl: string, memberId: string, tournamentId: string, signupId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/signups/${encodeURIComponent(signupId)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '取消失敗');
   }
   return res.json();
 }

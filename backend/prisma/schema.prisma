@@ -37,6 +37,18 @@ enum MemberRole {
   ADMIN
 }
 
+enum TournamentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum TournamentSignupStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
 model Member {
   id           String       @id @default(uuid())
   name         String
@@ -90,6 +102,8 @@ model Member {
   startedTableSessions TableSession[] @relation("table_session_started_by")
   endedTableSessionsAsMember TableSession[] @relation("table_session_ended_by_member")
   endedTableSessionsAsOperator TableSession[] @relation("table_session_ended_by_operator")
+
+  tournamentSignups TournamentSignup[]
 }
 
 model ClubProfile {
@@ -114,6 +128,7 @@ model ClubProfile {
   messages    ClubMessage[]
   breakRecords BreakRecord[]
   liveAnnouncements LiveAnnouncement[]
+  tournaments Tournament[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -181,6 +196,42 @@ model LiveAnnouncement {
   @@index([clubId, startsAt])
   @@index([startsAt])
   @@index([deletedAt])
+}
+
+model Tournament {
+  id          String   @id @default(uuid())
+  clubId      String
+  club        ClubProfile @relation(fields: [clubId], references: [id])
+  status      TournamentStatus @default(DRAFT)
+  title       String
+  description String?
+  capacity    Int      @default(32)
+  startsAt    DateTime?
+  signupOpensAt DateTime?
+  signupClosesAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  signups     TournamentSignup[]
+
+  @@index([clubId, status])
+  @@index([clubId, startsAt])
+}
+
+model TournamentSignup {
+  id           String   @id @default(uuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id])
+  status       TournamentSignupStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tournamentId, memberId])
+  @@index([memberId, createdAt])
+  @@index([tournamentId, createdAt])
+  @@index([status])
 }
 
 model SiteNotice {

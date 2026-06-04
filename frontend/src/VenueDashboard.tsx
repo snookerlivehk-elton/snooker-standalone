@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, broadcastClubMessage, createLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, getClubPointsConfig, updateClubPointsConfig, getClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
@@ -40,6 +40,17 @@ const VenueDashboard: React.FC = () => {
   const [liveTime, setLiveTime] = useState(() => `${String(new Date().getHours()).padStart(2, '0')}:00`);
   const [liveUrl, setLiveUrl] = useState('');
   const [liveCreating, setLiveCreating] = useState(false);
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [tournamentsLoading, setTournamentsLoading] = useState(false);
+  const [tournamentTitle, setTournamentTitle] = useState('');
+  const [tournamentDesc, setTournamentDesc] = useState('');
+  const [tournamentCapacity, setTournamentCapacity] = useState('32');
+  const [tournamentStartsAt, setTournamentStartsAt] = useState('');
+  const [tournamentDeadline, setTournamentDeadline] = useState('');
+  const [tournamentCreating, setTournamentCreating] = useState(false);
+  const [tournamentSelectedId, setTournamentSelectedId] = useState<string>('');
+  const [tournamentSignups, setTournamentSignups] = useState<any[]>([]);
+  const [tournamentSignupsLoading, setTournamentSignupsLoading] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newTableNotes, setNewTableNotes] = useState('');
@@ -108,6 +119,7 @@ const VenueDashboard: React.FC = () => {
   const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
   const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
+  const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
 
   const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'scoring'>('home');
 
@@ -471,6 +483,54 @@ const VenueDashboard: React.FC = () => {
 
     loadData();
   }, [operatorId, isOperator, navigate, loadData]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!operatorId) return;
+      if (!tournamentsEnabled) {
+        if (mounted) setTournaments([]);
+        return;
+      }
+      if (activeTab !== 'content') return;
+      setTournamentsLoading(true);
+      try {
+        const rows = await getMyClubTournaments(API_URL, operatorId);
+        if (mounted) setTournaments(Array.isArray(rows) ? rows : []);
+      } catch (e: any) {
+        if (mounted) setTournaments([]);
+        setToast(e?.message || '載入比賽失敗');
+        setTimeout(() => setToast(null), 3000);
+      } finally {
+        if (mounted) setTournamentsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeTab, operatorId, tournamentsEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!operatorId) return;
+      if (!tournamentsEnabled) return;
+      if (!tournamentSelectedId) {
+        if (mounted) setTournamentSignups([]);
+        return;
+      }
+      setTournamentSignupsLoading(true);
+      try {
+        const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING');
+        if (mounted) setTournamentSignups(Array.isArray(rows) ? rows : []);
+      } catch (e: any) {
+        if (mounted) setTournamentSignups([]);
+        setToast(e?.message || '載入報名名單失敗');
+        setTimeout(() => setToast(null), 3000);
+      } finally {
+        if (mounted) setTournamentSignupsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [operatorId, tournamentSelectedId, tournamentsEnabled]);
 
   useEffect(() => {
     setActiveTab(resolveTab());
@@ -2485,6 +2545,315 @@ const VenueDashboard: React.FC = () => {
         <div className="glass rounded-xl p-6">
           <div className="text-xl font-bold mb-2">發送場館訊息</div>
           <div className="cue-muted text-sm">此功能未開通</div>
+        </div>
+        )}
+
+        {tournamentsEnabled ? (
+        <div className="glass rounded-xl p-6">
+          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽報名（管理）</h2>
+
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="md:col-span-3">
+              <label className="block text-sm mb-1 cue-muted">標題</label>
+              <input value={tournamentTitle} onChange={(e) => setTournamentTitle(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：週末公開賽" />
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm mb-1 cue-muted">上限</label>
+              <input value={tournamentCapacity} onChange={(e) => setTournamentCapacity(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="32" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">截止日期</label>
+              <input type="date" value={tournamentDeadline} onChange={(e) => setTournamentDeadline(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-sm mb-1 cue-muted">比賽時間（可選）</label>
+              <input type="datetime-local" value={tournamentStartsAt} onChange={(e) => setTournamentStartsAt(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-sm mb-1 cue-muted">比賽詳情</label>
+              <textarea value={tournamentDesc} onChange={(e) => setTournamentDesc(e.target.value)} className="w-full px-3 py-2 rounded cue-input h-24" placeholder="輸入比賽詳情..." />
+            </div>
+            <div className="md:col-span-6 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={tournamentCreating}
+                className={`px-4 py-2 rounded font-semibold ${tournamentCreating ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
+                onClick={async () => {
+                  try {
+                    if (!operatorId) return;
+                    const title = String(tournamentTitle || '').trim();
+                    if (!title) throw new Error('請輸入標題');
+                    const cap = Number(tournamentCapacity || 32);
+                    if (!Number.isFinite(cap) || cap <= 0) throw new Error('上限不正確');
+                    const deadlineIso = tournamentDeadline ? new Date(`${tournamentDeadline}T23:59:59`).toISOString() : null;
+                    const startsIso = tournamentStartsAt ? new Date(tournamentStartsAt).toISOString() : null;
+                    if (tournamentStartsAt && !Number.isFinite(new Date(tournamentStartsAt).getTime())) throw new Error('比賽時間格式不正確');
+                    if (tournamentDeadline && !Number.isFinite(new Date(`${tournamentDeadline}T23:59:59`).getTime())) throw new Error('截止日期格式不正確');
+                    setTournamentCreating(true);
+                    if (tournamentSelectedId) {
+                      await updateClubTournament(API_URL, operatorId, tournamentSelectedId, { title, description: tournamentDesc, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
+                      setToast('已更新比賽');
+                    } else {
+                      await createClubTournament(API_URL, operatorId, { title, description: tournamentDesc, capacity: Math.floor(cap), startsAt: startsIso, signupClosesAt: deadlineIso });
+                      setToast('已建立比賽（草稿）');
+                      setTournamentTitle('');
+                      setTournamentDesc('');
+                      setTournamentCapacity('32');
+                      setTournamentDeadline('');
+                      setTournamentStartsAt('');
+                    }
+                    setTimeout(() => setToast(null), 2000);
+                    const rows = await getMyClubTournaments(API_URL, operatorId).catch(() => []);
+                    setTournaments(Array.isArray(rows) ? rows : []);
+                  } catch (e: any) {
+                    setToast(e?.message || '操作失敗');
+                    setTimeout(() => setToast(null), 3000);
+                  } finally {
+                    setTournamentCreating(false);
+                  }
+                }}
+              >
+                {tournamentSelectedId ? '更新' : '建立'}
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                onClick={() => {
+                  setTournamentSelectedId('');
+                  setTournamentTitle('');
+                  setTournamentDesc('');
+                  setTournamentCapacity('32');
+                  setTournamentDeadline('');
+                  setTournamentStartsAt('');
+                  setTournamentSignups([]);
+                }}
+              >
+                清除
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded cue-surface hover:brightness-95 font-semibold"
+                onClick={async () => {
+                  if (!operatorId) return;
+                  setTournamentsLoading(true);
+                  try {
+                    const rows = await getMyClubTournaments(API_URL, operatorId);
+                    setTournaments(Array.isArray(rows) ? rows : []);
+                  } finally {
+                    setTournamentsLoading(false);
+                  }
+                }}
+              >
+                重新整理
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            {tournamentsLoading ? (
+              <div className="text-sm cue-muted">載入中...</div>
+            ) : tournaments.length === 0 ? (
+              <div className="text-sm cue-muted">暫無比賽</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-2">狀態</th>
+                      <th className="py-2 px-2">標題</th>
+                      <th className="py-2 px-2">上限</th>
+                      <th className="py-2 px-2">截止</th>
+                      <th className="py-2 px-2">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tournaments.slice(0, 200).map((t: any) => {
+                      const id = String(t?.id || '');
+                      const status = String(t?.status || '').toUpperCase();
+                      const cap = t?.capacity != null ? String(t.capacity) : '-';
+                      const closes = t?.signupClosesAt ? new Date(t.signupClosesAt).toLocaleDateString() : '-';
+                      const isSelected = tournamentSelectedId && id === tournamentSelectedId;
+                      return (
+                        <tr
+                          key={id}
+                          className={`border-b cue-border hover:brightness-95 ${isSelected ? 'bg-white/5' : ''}`}
+                        >
+                          <td className="py-2 px-2 whitespace-nowrap">{status || '-'}</td>
+                          <td className="py-2 px-2 font-semibold">{String(t?.title || '')}</td>
+                          <td className="py-2 px-2">{cap}</td>
+                          <td className="py-2 px-2">{closes}</td>
+                          <td className="py-2 px-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                                onClick={async () => {
+                                  setTournamentSelectedId(id);
+                                  setTournamentTitle(String(t?.title || ''));
+                                  setTournamentDesc(String(t?.description || ''));
+                                  setTournamentCapacity(String(t?.capacity ?? 32));
+                                  setTournamentDeadline(t?.signupClosesAt ? String(t.signupClosesAt).slice(0, 10) : '');
+                                  if (t?.startsAt) {
+                                    const d = new Date(String(t.startsAt));
+                                    if (Number.isFinite(d.getTime())) {
+                                      const y = d.getFullYear();
+                                      const m = String(d.getMonth() + 1).padStart(2, '0');
+                                      const dd = String(d.getDate()).padStart(2, '0');
+                                      const hh = String(d.getHours()).padStart(2, '0');
+                                      const mm = String(d.getMinutes()).padStart(2, '0');
+                                      setTournamentStartsAt(`${y}-${m}-${dd}T${hh}:${mm}`);
+                                    } else {
+                                      setTournamentStartsAt('');
+                                    }
+                                  } else {
+                                    setTournamentStartsAt('');
+                                  }
+                                  try {
+                                    setTournamentSignupsLoading(true);
+                                    const rows = await getTournamentSignups(API_URL, operatorId, id, 'PENDING');
+                                    setTournamentSignups(Array.isArray(rows) ? rows : []);
+                                  } catch {}
+                                  setTournamentSignupsLoading(false);
+                                }}
+                              >
+                                {isSelected ? '已選擇' : '選擇'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={status === 'PUBLISHED'}
+                                className={`px-3 py-1 rounded text-sm font-semibold ${status === 'PUBLISHED' ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                                onClick={async () => {
+                                  if (!confirm('確定要上架此比賽？')) return;
+                                  try {
+                                    await publishClubTournament(API_URL, operatorId, id);
+                                    const rows = await getMyClubTournaments(API_URL, operatorId).catch(() => []);
+                                    setTournaments(Array.isArray(rows) ? rows : []);
+                                    setToast('已上架');
+                                    setTimeout(() => setToast(null), 2000);
+                                  } catch (e: any) {
+                                    setToast(e?.message || '上架失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  }
+                                }}
+                              >
+                                上架
+                              </button>
+                              <button
+                                type="button"
+                                disabled={status === 'CLOSED'}
+                                className={`px-3 py-1 rounded text-sm font-semibold ${status === 'CLOSED' ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                                onClick={async () => {
+                                  if (!confirm('確定要關閉此比賽？')) return;
+                                  try {
+                                    await closeClubTournament(API_URL, operatorId, id);
+                                    const rows = await getMyClubTournaments(API_URL, operatorId).catch(() => []);
+                                    setTournaments(Array.isArray(rows) ? rows : []);
+                                    setToast('已關閉');
+                                    setTimeout(() => setToast(null), 2000);
+                                  } catch (e: any) {
+                                    setToast(e?.message || '關閉失敗');
+                                    setTimeout(() => setToast(null), 3000);
+                                  }
+                                }}
+                              >
+                                關閉
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {tournamentSelectedId && (
+            <div className="mt-6 cue-surface-strong rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="font-semibold">待確認報名</div>
+                <div className="text-xs cue-muted">{tournamentSignupsLoading ? '讀取中…' : `${tournamentSignups.length} 筆`}</div>
+              </div>
+              {tournamentSignupsLoading ? (
+                <div className="text-sm cue-muted">讀取中…</div>
+              ) : tournamentSignups.length === 0 ? (
+                <div className="text-sm cue-muted">暫無待確認報名</div>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">報名時間</th>
+                        <th className="py-2 px-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournamentSignups.slice(0, 200).map((s: any) => {
+                        const sid = String(s?.id || '');
+                        const m = s?.member || {};
+                        const who = [String(m?.member_code || '無').trim(), String(m?.name || '').trim()].filter(Boolean).join(' ');
+                        return (
+                          <tr key={sid} className="border-b cue-border hover:brightness-95">
+                            <td className="py-2 px-2 font-semibold">{who || '-'}</td>
+                            <td className="py-2 px-2 cue-muted whitespace-nowrap">{s?.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1 rounded cue-button text-sm font-semibold"
+                                  onClick={async () => {
+                                    if (!confirm('確定要確認此報名？')) return;
+                                    try {
+                                      await confirmTournamentSignup(API_URL, operatorId, tournamentSelectedId, sid);
+                                      const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []);
+                                      setTournamentSignups(Array.isArray(rows) ? rows : []);
+                                      setToast('已確認');
+                                      setTimeout(() => setToast(null), 2000);
+                                    } catch (e: any) {
+                                      setToast(e?.message || '確認失敗');
+                                      setTimeout(() => setToast(null), 3000);
+                                    }
+                                  }}
+                                >
+                                  確認
+                                </button>
+                                <button
+                                  type="button"
+                                  className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm font-semibold"
+                                  onClick={async () => {
+                                    if (!confirm('確定要取消此報名？')) return;
+                                    try {
+                                      await cancelTournamentSignup(API_URL, operatorId, tournamentSelectedId, sid);
+                                      const rows = await getTournamentSignups(API_URL, operatorId, tournamentSelectedId, 'PENDING').catch(() => []);
+                                      setTournamentSignups(Array.isArray(rows) ? rows : []);
+                                      setToast('已取消');
+                                      setTimeout(() => setToast(null), 2000);
+                                    } catch (e: any) {
+                                      setToast(e?.message || '取消失敗');
+                                      setTimeout(() => setToast(null), 3000);
+                                    }
+                                  }}
+                                >
+                                  取消
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        ) : (
+        <div className="glass rounded-xl p-6">
+          <div className="text-xl font-bold mb-2">比賽報名（管理）</div>
+          <div className="cue-muted text-sm">此功能未開通（可於系統功能上架設定中開啟）</div>
         </div>
         )}
         </>

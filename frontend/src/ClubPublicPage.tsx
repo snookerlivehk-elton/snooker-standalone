@@ -1,9 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
-import { getPublicClubProfile, joinClub, getPublicTables, getPublicPricing, getAvailability, getMyReservations, createReservation, cancelMyReservation, getClubLeaderboardHighest, getClubLeaderboardMonthly, getMyJoinedClubs } from './lib/api';
+import {
+  cancelMyReservation,
+  createReservation,
+  getAvailability,
+  getClubLeaderboardHighest,
+  getClubLeaderboardMonthly,
+  getMyClubMessages,
+  getMyJoinedClubs,
+  getMyReservations,
+  getPublicClubLiveAnnouncements,
+  getPublicClubProfile,
+  getPublicClubTournaments,
+  getPublicPricing,
+  getPublicTables,
+  getSiteNotice,
+  hideClubMessages,
+  joinClub,
+  markClubMessageRead,
+  signupTournament,
+} from './lib/api';
 import TimeFeeCalculator from './components/TimeFeeCalculator';
 import Tabs from './components/Tabs';
+import { useFeatureEnabled } from './lib/features';
 
 function normalizeVideoHref(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -12,6 +32,21 @@ function normalizeVideoHref(raw: any): string | null {
   if (s.startsWith('//')) return `https:${s}`;
   return `https://${s}`;
 }
+
+type LocalMsgState = { read: Record<string, boolean>; hidden: Record<string, boolean> };
+
+type InboxItem = {
+  key: string;
+  kind: 'system' | 'club' | 'live';
+  title: string;
+  content: string;
+  createdAt: Date;
+  subtitle?: string;
+  href?: string | null;
+  read: boolean;
+  deletable: boolean;
+  raw?: any;
+};
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -42,12 +77,43 @@ const ClubPublicPage: React.FC = () => {
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'booking' | 'leader' | 'info' | 'contact'>('booking');
+  const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'live' | 'leader' | 'info' | 'contact'>('booking');
+
+  const [siteNotice, setSiteNotice] = useState<any>(null);
+  const [siteNoticeLoading, setSiteNoticeLoading] = useState(false);
+  const [clubMessages, setClubMessages] = useState<any[]>([]);
+  const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
+  const [clubMsgState, setClubMsgState] = useState<LocalMsgState>({ read: {}, hidden: {} });
+  const [clubMsgSelected, setClubMsgSelected] = useState<Record<string, boolean>>({});
+  const [clubMsgOpenKey, setClubMsgOpenKey] = useState<string | null>(null);
+
+  const [clubLive, setClubLive] = useState<any[]>([]);
+  const [clubLiveLoading, setClubLiveLoading] = useState(false);
+  const [clubLiveState, setClubLiveState] = useState<LocalMsgState>({ read: {}, hidden: {} });
+  const [clubLiveSelected, setClubLiveSelected] = useState<Record<string, boolean>>({});
+  const [clubLiveOpenKey, setClubLiveOpenKey] = useState<string | null>(null);
+
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [tournamentsLoading, setTournamentsLoading] = useState(false);
+  const [tournamentOpen, setTournamentOpen] = useState<any>(null);
+  const [tournamentOpenLoading, setTournamentOpenLoading] = useState(false);
+  const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string }>({ open: false, title: '' });
   
   const session = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   }, []);
   const isLoggedIn = !!(session && (session as any).id);
+  const sessionMemberId = String((session as any)?.id || '').trim() || null;
+
+  const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
+  const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
+  const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
+
+  useEffect(() => {
+    if (activeTab === 'messages' && !clubMessagesEnabled) setActiveTab('booking');
+    if (activeTab === 'signup' && !tournamentsEnabled) setActiveTab('booking');
+    if (activeTab === 'live' && !liveEnabled) setActiveTab('booking');
+  }, [activeTab, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
 
   const galleryUrls = useMemo(() => {
     const raw = (club as any)?.galleryUrls;
@@ -217,6 +283,124 @@ const ClubPublicPage: React.FC = () => {
       })
       .catch(() => setJoined(false));
   }, [clubId, session]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setSiteNoticeLoading(true);
+      try {
+        const row = await getSiteNotice(API_URL);
+        if (mounted) setSiteNotice(row || null);
+      } catch {
+        if (mounted) setSiteNotice(null);
+      } finally {
+        if (mounted) setSiteNoticeLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!clubId) return;
+    const key = `clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`;
+    try {
+      const raw = localStorage.getItem(key) || '{}';
+      const obj = JSON.parse(raw);
+      const read = (obj && typeof obj === 'object' ? obj.read : null) || {};
+      const hidden = (obj && typeof obj === 'object' ? obj.hidden : null) || {};
+      setClubMsgState({ read: read && typeof read === 'object' ? read : {}, hidden: hidden && typeof hidden === 'object' ? hidden : {} });
+    } catch {
+      setClubMsgState({ read: {}, hidden: {} });
+    }
+    setClubMsgSelected({});
+    setClubMsgOpenKey(null);
+  }, [clubId, sessionMemberId]);
+
+  useEffect(() => {
+    if (!clubId) return;
+    const key = `clubPageLiveState:${clubId}:${sessionMemberId || 'guest'}`;
+    try {
+      const raw = localStorage.getItem(key) || '{}';
+      const obj = JSON.parse(raw);
+      const read = (obj && typeof obj === 'object' ? obj.read : null) || {};
+      const hidden = (obj && typeof obj === 'object' ? obj.hidden : null) || {};
+      setClubLiveState({ read: read && typeof read === 'object' ? read : {}, hidden: hidden && typeof hidden === 'object' ? hidden : {} });
+    } catch {
+      setClubLiveState({ read: {}, hidden: {} });
+    }
+    setClubLiveSelected({});
+    setClubLiveOpenKey(null);
+  }, [clubId, sessionMemberId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!clubId) return;
+      if (!liveEnabled) {
+        if (mounted) setClubLive([]);
+        if (mounted) setClubLiveLoading(false);
+        return;
+      }
+      setClubLiveLoading(true);
+      try {
+        const rows = await getPublicClubLiveAnnouncements(API_URL, clubId, 5);
+        if (mounted) setClubLive(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setClubLive([]);
+      } finally {
+        if (mounted) setClubLiveLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [clubId, liveEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!clubId) return;
+      if (!tournamentsEnabled) {
+        if (mounted) setTournaments([]);
+        if (mounted) setTournamentsLoading(false);
+        return;
+      }
+      setTournamentsLoading(true);
+      try {
+        const rows = await getPublicClubTournaments(API_URL, clubId, sessionMemberId || undefined);
+        if (mounted) setTournaments(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setTournaments([]);
+      } finally {
+        if (mounted) setTournamentsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [clubId, sessionMemberId, tournamentsEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!clubMessagesEnabled) {
+        if (mounted) setClubMessages([]);
+        if (mounted) setClubMessagesLoading(false);
+        return;
+      }
+      if (!sessionMemberId) {
+        setClubMessages([]);
+        setClubMessagesLoading(false);
+        return;
+      }
+      setClubMessagesLoading(true);
+      try {
+        const rows = await getMyClubMessages(API_URL, sessionMemberId);
+        if (mounted) setClubMessages(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (mounted) setClubMessages([]);
+      } finally {
+        if (mounted) setClubMessagesLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [sessionMemberId, clubMessagesEnabled]);
 
   useEffect(() => {
     if (!clubId || !session?.id) {
@@ -433,6 +617,195 @@ const ClubPublicPage: React.FC = () => {
     });
   };
 
+  const clubInboxItems = useMemo((): InboxItem[] => {
+    const items: InboxItem[] = [];
+    const hidden = clubMsgState.hidden || {};
+    const read = clubMsgState.read || {};
+
+    const noticeEnabled = siteNotice?.enabled !== false;
+    const noticeMsg = String(siteNotice?.message || '').trim();
+    if (noticeEnabled && noticeMsg) {
+      const key = 'system:notice';
+      if (!hidden[key]) {
+        const dRaw = siteNotice?.updatedAt ?? siteNotice?.createdAt;
+        const d = dRaw ? new Date(String(dRaw)) : new Date();
+        const href = normalizeVideoHref(siteNotice?.youtubeEmbedUrl);
+        const content = href ? `${noticeMsg}\n\nYouTube：${href}` : noticeMsg;
+        items.push({
+          key,
+          kind: 'system',
+          title: '系統通知',
+          content,
+          createdAt: d,
+          subtitle: '系統',
+          href: null,
+          read: !!read[key],
+          deletable: true,
+          raw: siteNotice,
+        });
+      }
+    }
+
+    const rows = Array.isArray(clubMessages) ? clubMessages : [];
+    for (const m of rows) {
+      const id = String(m?.id || '').trim();
+      if (!id) continue;
+      const key = `club:${id}`;
+      const msgClubId = String(m?.clubId || m?.club_id || m?.club?.id || '').trim();
+      if (msgClubId && clubId && msgClubId !== String(clubId)) continue;
+      items.push({
+        key,
+        kind: 'club',
+        title: String(m?.title || '場館訊息'),
+        content: String(m?.content || ''),
+        createdAt: m?.createdAt ? new Date(String(m.createdAt)) : new Date(),
+        subtitle: String(m?.club?.name || club?.name || '場館'),
+        href: null,
+        read: !!m?.read,
+        deletable: true,
+        raw: m,
+      });
+    }
+
+    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return items;
+  }, [club, clubId, clubMessages, clubMsgState.hidden, clubMsgState.read, siteNotice]);
+
+  const clubInboxUnreadCount = useMemo(() => clubInboxItems.filter((x) => !x.read).length, [clubInboxItems]);
+  const clubInboxLoading = clubMessagesLoading || siteNoticeLoading;
+  const clubInboxOpen = useMemo(() => (clubMsgOpenKey ? clubInboxItems.find((x) => x.key === clubMsgOpenKey) || null : null), [clubMsgOpenKey, clubInboxItems]);
+
+  useEffect(() => {
+    if (!clubInboxOpen || !clubId) return;
+    if (clubInboxOpen.read) return;
+    if (clubInboxOpen.kind === 'club' && sessionMemberId) {
+      const id = String(clubInboxOpen.raw?.id || '').trim();
+      if (!id) return;
+      (async () => {
+        try {
+          await markClubMessageRead(API_URL, sessionMemberId, id);
+        } catch {}
+        setClubMessages((prev) => (Array.isArray(prev) ? prev.map((m: any) => (String(m?.id || '') === id ? { ...m, read: true } : m)) : prev));
+      })();
+      return;
+    }
+    const key = clubInboxOpen.key;
+    const next: LocalMsgState = { read: { ...(clubMsgState.read || {}), [key]: true }, hidden: { ...(clubMsgState.hidden || {}) } };
+    setClubMsgState(next);
+    try { localStorage.setItem(`clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
+  }, [API_URL, clubId, clubInboxOpen, clubMsgState.hidden, clubMsgState.read, sessionMemberId]);
+
+  const clubInboxToggleSelect = (key: string, checked: boolean) => {
+    setClubMsgSelected((prev) => {
+      const next = { ...(prev || {}) };
+      if (checked) next[key] = true;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const clubInboxDelete = async (keys: string[]) => {
+    if (!clubId) return;
+    const clubMsgIds: string[] = [];
+    const otherKeys: string[] = [];
+    for (const k of keys) {
+      const it = clubInboxItems.find((x) => x.key === k);
+      if (!it) continue;
+      if (it.kind === 'club') {
+        const id = String(it.raw?.id || '').trim();
+        if (id) clubMsgIds.push(id);
+      } else {
+        otherKeys.push(it.key);
+      }
+    }
+    if (clubMsgIds.length > 0) {
+      if (!sessionMemberId) return alert('請先登入會員');
+      try {
+        await hideClubMessages(API_URL, sessionMemberId, clubMsgIds);
+        setClubMessages((prev) => (Array.isArray(prev) ? prev.filter((m: any) => !clubMsgIds.includes(String(m?.id || ''))) : prev));
+      } catch (e: any) {
+        alert(String(e?.message || '刪除訊息失敗'));
+        return;
+      }
+    }
+    if (otherKeys.length > 0) {
+      const nextHidden = { ...(clubMsgState.hidden || {}) };
+      for (const k of otherKeys) nextHidden[k] = true;
+      const next: LocalMsgState = { read: { ...(clubMsgState.read || {}) }, hidden: nextHidden };
+      setClubMsgState(next);
+      try { localStorage.setItem(`clubPageMsgState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
+    }
+    setClubMsgOpenKey(null);
+    setClubMsgSelected({});
+  };
+
+  const clubLiveItems = useMemo((): InboxItem[] => {
+    const items: InboxItem[] = [];
+    const hidden = clubLiveState.hidden || {};
+    const read = clubLiveState.read || {};
+    const rows = Array.isArray(clubLive) ? clubLive : [];
+    for (const it of rows) {
+      const id = String(it?.id || '').trim();
+      if (!id) continue;
+      const key = `live:${id}`;
+      if (hidden[key]) continue;
+      const startsAt = it?.startsAt ? new Date(String(it.startsAt)) : null;
+      const d = startsAt && Number.isFinite(startsAt.getTime()) ? startsAt : it?.createdAt ? new Date(String(it.createdAt)) : new Date();
+      const href = normalizeVideoHref(it?.liveUrl);
+      const whenText = startsAt && Number.isFinite(startsAt.getTime()) ? startsAt.toLocaleString() : '';
+      const content = [
+        whenText ? `開始時間：${whenText}` : '',
+        href ? `連結：${href}` : '',
+      ].filter(Boolean).join('\n');
+      items.push({
+        key,
+        kind: 'live',
+        title: String(it?.title || '直播通告'),
+        content,
+        createdAt: d,
+        subtitle: String(club?.name || '場館'),
+        href,
+        read: !!read[key],
+        deletable: true,
+        raw: it,
+      });
+    }
+    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return items;
+  }, [club?.name, clubLive, clubLiveState.hidden, clubLiveState.read]);
+
+  const clubLiveUnreadCount = useMemo(() => clubLiveItems.filter((x) => !x.read).length, [clubLiveItems]);
+  const clubLiveOpen = useMemo(() => (clubLiveOpenKey ? clubLiveItems.find((x) => x.key === clubLiveOpenKey) || null : null), [clubLiveOpenKey, clubLiveItems]);
+
+  useEffect(() => {
+    if (!clubLiveOpen || !clubId) return;
+    if (clubLiveOpen.read) return;
+    const key = clubLiveOpen.key;
+    const next: LocalMsgState = { read: { ...(clubLiveState.read || {}), [key]: true }, hidden: { ...(clubLiveState.hidden || {}) } };
+    setClubLiveState(next);
+    try { localStorage.setItem(`clubPageLiveState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
+  }, [clubId, clubLiveOpen, clubLiveState.hidden, clubLiveState.read, sessionMemberId]);
+
+  const clubLiveToggleSelect = (key: string, checked: boolean) => {
+    setClubLiveSelected((prev) => {
+      const next = { ...(prev || {}) };
+      if (checked) next[key] = true;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const clubLiveDelete = async (keys: string[]) => {
+    if (!clubId) return;
+    const nextHidden = { ...(clubLiveState.hidden || {}) };
+    for (const k of keys) nextHidden[k] = true;
+    const next: LocalMsgState = { read: { ...(clubLiveState.read || {}) }, hidden: nextHidden };
+    setClubLiveState(next);
+    try { localStorage.setItem(`clubPageLiveState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
+    setClubLiveOpenKey(null);
+    setClubLiveSelected({});
+  };
+
   return (
     <div className="brand-page min-h-[100dvh]">
       <div
@@ -589,6 +962,33 @@ const ClubPublicPage: React.FC = () => {
           <Tabs
             items={[
               { key: 'booking', label: '訂台' },
+              ...(clubMessagesEnabled ? [{
+                key: 'messages',
+                label: (
+                  <span className="inline-flex items-center">
+                    <span>訊息</span>
+                    {clubInboxUnreadCount > 0 && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-extrabold">
+                        {clubInboxUnreadCount}
+                      </span>
+                    )}
+                  </span>
+                ),
+              }] : []),
+              ...(tournamentsEnabled ? [{ key: 'signup', label: '報名' }] : []),
+              ...(liveEnabled ? [{
+                key: 'live',
+                label: (
+                  <span className="inline-flex items-center">
+                    <span>直播</span>
+                    {clubLiveUnreadCount > 0 && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-extrabold">
+                        {clubLiveUnreadCount}
+                      </span>
+                    )}
+                  </span>
+                ),
+              }] : []),
               { key: 'leader', label: '排行榜' },
               { key: 'info', label: '資訊' },
               { key: 'contact', label: '聯絡' },
@@ -596,6 +996,450 @@ const ClubPublicPage: React.FC = () => {
             activeKey={activeTab}
             onChange={(k) => setActiveTab(k as any)}
           />
+
+            {activeTab === 'messages' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">訊息</div>
+                    <div className="text-xs cue-muted">{clubInboxLoading ? '讀取中…' : `共 ${clubInboxItems.length} 則`}</div>
+                  </div>
+
+                  {!sessionMemberId ? (
+                    <div className="text-sm cue-muted">
+                      需登入才能查看場館訊息。<button type="button" className="accent-yellow underline" onClick={() => nav(`/members/login?redirect=${encodeURIComponent(loc.pathname + loc.search)}`)}>登入</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div className="text-sm cue-muted">未讀 {clubInboxUnreadCount} · 已選 {Object.keys(clubMsgSelected).length}</div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const all = clubInboxItems;
+                              if (all.length === 0) return;
+                              const allSelected = all.every((x) => clubMsgSelected[x.key]);
+                              if (allSelected) return setClubMsgSelected({});
+                              const next: Record<string, boolean> = {};
+                              for (const x of all) next[x.key] = true;
+                              setClubMsgSelected(next);
+                            }}
+                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                          >
+                            全選
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setClubMsgSelected({})}
+                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                          >
+                            清除
+                          </button>
+                          <button
+                            type="button"
+                            disabled={Object.keys(clubMsgSelected).length === 0}
+                            onClick={async () => {
+                              const keys = Object.keys(clubMsgSelected);
+                              if (keys.length === 0) return;
+                              if (!confirm(`確定要刪除已選 ${keys.length} 則訊息？`)) return;
+                              if (!confirm('再次確認：刪除後不可復原')) return;
+                              await clubInboxDelete(keys);
+                            }}
+                            className={`px-3 py-2 rounded text-sm font-semibold ${Object.keys(clubMsgSelected).length === 0 ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                          >
+                            批量刪除
+                          </button>
+                        </div>
+                      </div>
+
+                      {clubInboxLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                      {!clubInboxLoading && clubInboxItems.length === 0 && <div className="text-sm cue-muted">暫無訊息</div>}
+                      {!clubInboxLoading && clubInboxItems.length > 0 && (
+                        <div className="space-y-2">
+                          {clubInboxItems.slice(0, 200).map((it) => {
+                            const isSelected = !!clubMsgSelected[it.key];
+                            const isUnread = !it.read;
+                            return (
+                              <div
+                                key={it.key}
+                                className={`cue-surface-strong rounded-lg p-3 flex items-start gap-3 hover:brightness-95 cursor-pointer ${isUnread ? 'ring-1 ring-yellow-300/30' : ''}`}
+                                onClick={() => setClubMsgOpenKey(it.key)}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => clubInboxToggleSelect(it.key, e.target.checked)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-1"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className={`font-semibold truncate ${isUnread ? 'text-white' : 'cue-muted'}`}>{it.title}</div>
+                                    <div className="text-xs cue-muted flex-shrink-0">{Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleDateString() : ''}</div>
+                                  </div>
+                                  <div className="text-xs cue-muted mt-1 truncate">
+                                    {it.subtitle ? `${it.subtitle} · ` : ''}
+                                    {it.kind === 'system' ? '系統' : '場館'}
+                                    {isUnread ? ' · 未讀' : ''}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {clubInboxItems.length > 200 && <div className="text-xs cue-muted">只顯示前 200 筆</div>}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {!!clubInboxOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setClubMsgOpenKey(null)} />
+                    <div className="relative w-full max-w-lg cue-surface rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-lg font-extrabold accent-yellow truncate">{clubInboxOpen.title}</div>
+                          <div className="text-xs cue-muted mt-1">
+                            {clubInboxOpen.subtitle ? `${clubInboxOpen.subtitle} · ` : ''}
+                            {clubInboxOpen.kind === 'system' ? '系統' : '場館'}
+                            {Number.isFinite(clubInboxOpen.createdAt.getTime()) ? ` · ${clubInboxOpen.createdAt.toLocaleString()}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setClubMsgOpenKey(null)}
+                          className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+
+                      <div className="mt-4 text-sm whitespace-pre-wrap">{clubInboxOpen.content || '—'}</div>
+
+                      {clubInboxOpen.href && (
+                        <div className="mt-3">
+                          <a href={clubInboxOpen.href} target="_blank" rel="noreferrer" className="accent-blue underline text-sm">
+                            開啟連結
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm('確定要刪除這則訊息？')) return;
+                            if (!confirm('再次確認：刪除後不可復原')) return;
+                            await clubInboxDelete([clubInboxOpen.key]);
+                          }}
+                          className="flex-1 px-4 py-2 rounded bg-red-700 hover:bg-red-600 text-white font-semibold"
+                        >
+                          刪除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClubMsgOpenKey(null)}
+                          className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'live' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">直播</div>
+                    <div className="text-xs cue-muted">{clubLiveLoading ? '讀取中…' : `共 ${clubLiveItems.length} 則`}</div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div className="text-sm cue-muted">未讀 {clubLiveUnreadCount} · 已選 {Object.keys(clubLiveSelected).length}</div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const all = clubLiveItems;
+                          if (all.length === 0) return;
+                          const allSelected = all.every((x) => clubLiveSelected[x.key]);
+                          if (allSelected) return setClubLiveSelected({});
+                          const next: Record<string, boolean> = {};
+                          for (const x of all) next[x.key] = true;
+                          setClubLiveSelected(next);
+                        }}
+                        className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                      >
+                        全選
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClubLiveSelected({})}
+                        className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                      >
+                        清除
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Object.keys(clubLiveSelected).length === 0}
+                        onClick={async () => {
+                          const keys = Object.keys(clubLiveSelected);
+                          if (keys.length === 0) return;
+                          if (!confirm(`確定要刪除已選 ${keys.length} 則直播訊息？`)) return;
+                          if (!confirm('再次確認：刪除後不可復原')) return;
+                          await clubLiveDelete(keys);
+                        }}
+                        className={`px-3 py-2 rounded text-sm font-semibold ${Object.keys(clubLiveSelected).length === 0 ? 'cue-surface-strong cue-muted' : 'bg-red-700 hover:bg-red-600 text-white'}`}
+                      >
+                        批量刪除
+                      </button>
+                    </div>
+                  </div>
+
+                  {clubLiveLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                  {!clubLiveLoading && clubLiveItems.length === 0 && <div className="text-sm cue-muted">暫無直播訊息</div>}
+                  {!clubLiveLoading && clubLiveItems.length > 0 && (
+                    <div className="space-y-2">
+                      {clubLiveItems.map((it) => {
+                        const isSelected = !!clubLiveSelected[it.key];
+                        const isUnread = !it.read;
+                        return (
+                          <div
+                            key={it.key}
+                            className={`cue-surface-strong rounded-lg p-3 flex items-start gap-3 hover:brightness-95 cursor-pointer ${isUnread ? 'ring-1 ring-yellow-300/30' : ''}`}
+                            onClick={() => setClubLiveOpenKey(it.key)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => clubLiveToggleSelect(it.key, e.target.checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className={`font-semibold truncate ${isUnread ? 'text-white' : 'cue-muted'}`}>{it.title}</div>
+                                <div className="text-xs cue-muted flex-shrink-0">{Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleDateString() : ''}</div>
+                              </div>
+                              <div className="text-xs cue-muted mt-1 truncate">
+                                {Number.isFinite(it.createdAt.getTime()) ? it.createdAt.toLocaleString() : ''}
+                                {isUnread ? ' · 未讀' : ''}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {!!clubLiveOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setClubLiveOpenKey(null)} />
+                    <div className="relative w-full max-w-lg cue-surface rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-lg font-extrabold accent-yellow truncate">{clubLiveOpen.title}</div>
+                          <div className="text-xs cue-muted mt-1">
+                            {Number.isFinite(clubLiveOpen.createdAt.getTime()) ? clubLiveOpen.createdAt.toLocaleString() : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setClubLiveOpenKey(null)}
+                          className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+
+                      <div className="mt-4 text-sm whitespace-pre-wrap">{clubLiveOpen.content || '—'}</div>
+
+                      {clubLiveOpen.href && (
+                        <div className="mt-3">
+                          <a href={clubLiveOpen.href} target="_blank" rel="noreferrer" className="accent-blue underline text-sm">
+                            開啟連結
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!confirm('確定要刪除這則直播訊息？')) return;
+                            if (!confirm('再次確認：刪除後不可復原')) return;
+                            await clubLiveDelete([clubLiveOpen.key]);
+                          }}
+                          className="flex-1 px-4 py-2 rounded bg-red-700 hover:bg-red-600 text-white font-semibold"
+                        >
+                          刪除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClubLiveOpenKey(null)}
+                          className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'signup' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">比賽列表</div>
+                    <div className="text-xs cue-muted">{tournamentsLoading ? '讀取中…' : `共 ${tournaments.length} 場`}</div>
+                  </div>
+
+                  {tournamentsLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                  {!tournamentsLoading && tournaments.length === 0 && <div className="text-sm cue-muted">暫無比賽</div>}
+                  {!tournamentsLoading && tournaments.length > 0 && (
+                    <div className="space-y-2">
+                      {tournaments.slice(0, 50).map((t) => {
+                        const title = String(t?.title || '比賽');
+                        const cap = Number(t?.capacity ?? 0);
+                        const count = Number(t?.signupCount ?? 0);
+                        const status = cap > 0 ? `${count}/${cap}` : `${count}/—`;
+                        const startsAt = t?.startsAt ? new Date(String(t.startsAt)) : null;
+                        const startsText = startsAt && Number.isFinite(startsAt.getTime()) ? startsAt.toLocaleString() : '';
+                        const closesAt = t?.signupClosesAt ? new Date(String(t.signupClosesAt)) : null;
+                        const closesText = closesAt && Number.isFinite(closesAt.getTime()) ? closesAt.toLocaleDateString() : '';
+                        const my = t?.mySignup;
+                        const myStatus = String(my?.status || '').toUpperCase();
+                        const myLabel = myStatus === 'CONFIRMED' ? '已確認' : myStatus === 'PENDING' ? '待確認' : myStatus === 'CANCELLED' ? '已取消' : '';
+                        return (
+                          <div
+                            key={String(t?.id || title)}
+                            className="cue-surface-strong rounded-lg p-3 flex items-start justify-between gap-3 hover:brightness-95 cursor-pointer"
+                            onClick={() => setTournamentOpen(t)}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-semibold truncate">{title}</div>
+                              <div className="text-xs cue-muted mt-1 truncate">
+                                {startsText ? `${startsText} · ` : ''}
+                                {closesText ? `截止 ${closesText} · ` : ''}
+                                {myLabel ? `${myLabel} · ` : ''}
+                                報名 {status}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 font-semibold accent-yellow">{status}</div>
+                          </div>
+                        );
+                      })}
+                      {tournaments.length > 50 && <div className="text-xs cue-muted">只顯示前 50 場</div>}
+                    </div>
+                  )}
+                </div>
+
+                {!!tournamentOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setTournamentOpen(null)} />
+                    <div className="relative w-full max-w-lg cue-surface rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-lg font-extrabold accent-yellow truncate">{String(tournamentOpen?.title || '比賽')}</div>
+                          <div className="text-xs cue-muted mt-1">
+                            {(() => {
+                              const cap = Number(tournamentOpen?.capacity ?? 0);
+                              const count = Number(tournamentOpen?.signupCount ?? 0);
+                              const status = cap > 0 ? `${count}/${cap}` : `${count}/—`;
+                              const startsAt = tournamentOpen?.startsAt ? new Date(String(tournamentOpen.startsAt)) : null;
+                              const startsText = startsAt && Number.isFinite(startsAt.getTime()) ? startsAt.toLocaleString() : '';
+                              const closesAt = tournamentOpen?.signupClosesAt ? new Date(String(tournamentOpen.signupClosesAt)) : null;
+                              const closesText = closesAt && Number.isFinite(closesAt.getTime()) ? closesAt.toLocaleDateString() : '';
+                              return `${startsText ? `${startsText} · ` : ''}${closesText ? `截止 ${closesText} · ` : ''}報名 ${status}`;
+                            })()}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTournamentOpen(null)}
+                          className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+
+                      <div className="mt-4 text-sm whitespace-pre-wrap">{String(tournamentOpen?.description || '—')}</div>
+
+                      <div className="mt-5 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={tournamentOpenLoading}
+                          onClick={async () => {
+                            if (!clubId) return;
+                            if (!sessionMemberId) {
+                              nav(`/members/login?redirect=${encodeURIComponent(loc.pathname + loc.search)}`);
+                              return;
+                            }
+                            try {
+                              setTournamentOpenLoading(true);
+                              const res = await signupTournament(API_URL, clubId, sessionMemberId, String(tournamentOpen.id));
+                              const ok = !!(res && (res as any).ok);
+                              if (!ok) throw new Error('報名失敗');
+                              setTournamentSubmitModal({ open: true, title: String(tournamentOpen?.title || '比賽') });
+                              try {
+                                const rows = await getPublicClubTournaments(API_URL, clubId, sessionMemberId || undefined);
+                                setTournaments(Array.isArray(rows) ? rows : []);
+                              } catch {}
+                              setTournamentOpen(null);
+                            } catch (e: any) {
+                              alert(String(e?.message || '報名失敗'));
+                            } finally {
+                              setTournamentOpenLoading(false);
+                            }
+                          }}
+                          className={`flex-1 px-4 py-2 rounded font-semibold ${tournamentOpenLoading ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                        >
+                          一鍵報名
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTournamentOpen(null)}
+                          className="flex-1 px-4 py-2 rounded cue-surface-strong hover:brightness-95 font-semibold"
+                        >
+                          返回
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tournamentSubmitModal.open && (
+                  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.78)' }}>
+                    <div className="w-full max-w-md cue-surface rounded-xl border cue-border p-4">
+                      <div className="font-extrabold text-lg">已提交報名</div>
+                      <div className="mt-2 text-sm cue-muted">
+                        已提交至場館，等待確認。{tournamentSubmitModal.title ? `（${tournamentSubmitModal.title}）` : ''}
+                      </div>
+                      {String((club as any)?.paymentInfo || '').trim() && (
+                        <div className="mt-3 cue-surface-strong rounded-lg p-3">
+                          <div className="font-semibold mb-1">付款方法</div>
+                          <div className="text-sm cue-muted whitespace-pre-wrap">{String((club as any)?.paymentInfo || '')}</div>
+                        </div>
+                      )}
+                      <div className="mt-4 flex justify-end">
+                        <button type="button" className="px-4 py-2 rounded cue-button font-semibold" onClick={() => setTournamentSubmitModal({ open: false, title: '' })}>
+                          知道了
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {activeTab === 'info' && (
               <div className="mt-5 space-y-6">
