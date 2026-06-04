@@ -260,11 +260,6 @@ const HomePage: React.FC = () => {
             <div className="space-y-4">
               <PageSection
                 title="全站公告"
-                right={
-                  <a href="/admin/overview" className="text-sm accent-blue underline">
-                    管理
-                  </a>
-                }
               >
                 {noticeLoading && <div className="text-sm cue-muted">讀取中…</div>}
                 {!noticeLoading && !showNotice && <div className="text-sm cue-muted">暫無公告</div>}

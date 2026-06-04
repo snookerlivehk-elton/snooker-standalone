@@ -94,15 +94,6 @@ const Me: React.FC = () => {
   const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
-  const { enabled: systemPortalEnabled } = useFeatureEnabled(API_URL, 'system_portal');
-
-  const showSystemPortalEntry = useMemo(() => {
-    if (!systemPortalEnabled) return false;
-    const role = String((session as any)?.role || '').toUpperCase();
-    let tok = '';
-    try { tok = localStorage.getItem('adminToken') || ''; } catch {}
-    return role === 'ADMIN' || !!tok;
-  }, [systemPortalEnabled, session]);
 
   useEffect(() => {
     if (activeTab === 'history' && !highbreakEnabled) setActiveTab('clubs');
@@ -1154,13 +1145,6 @@ const Me: React.FC = () => {
                       >
                         取消
                       </button>
-                    </div>
-                  )}
-                  {showSystemPortalEntry && (
-                    <div className="mt-3">
-                      <Link to="/admin/overview" className="block w-full px-4 py-2 rounded cue-button text-center font-semibold">
-                        系統主頁
-                      </Link>
                     </div>
                   )}
                   <div className="mt-3">

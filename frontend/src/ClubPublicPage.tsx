@@ -104,15 +104,6 @@ const ClubPublicPage: React.FC = () => {
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
-  const { enabled: systemPortalEnabled } = useFeatureEnabled(API_URL, 'system_portal');
-
-  const showSystemPortalEntry = useMemo(() => {
-    if (!systemPortalEnabled) return false;
-    const role = String((session as any)?.role || '').toUpperCase();
-    let tok = '';
-    try { tok = localStorage.getItem('adminToken') || ''; } catch {}
-    return (role === 'ADMIN' || !!tok) && isLoggedIn;
-  }, [isLoggedIn, session, systemPortalEnabled]);
 
   const [myPoints, setMyPoints] = useState<{ balance: number; updatedAt: string | null } | null>(null);
   const [myPointsLoading, setMyPointsLoading] = useState(false);
@@ -1490,12 +1481,6 @@ const ClubPublicPage: React.FC = () => {
                         {myPointsLoading ? '…' : (myPoints ? String(myPoints.balance) : '—')}
                       </div>
                     </div>
-                  ) : null}
-
-                  {showSystemPortalEntry ? (
-                    <Link to="/admin/overview" className="mb-3 block w-full rounded-lg px-4 py-2 text-center font-semibold cue-button">
-                      系統主頁
-                    </Link>
                   ) : null}
 
                   {!selTable || !date ? (

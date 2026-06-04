@@ -1031,7 +1031,9 @@ app.get('/rooms/:roomId/invites', async (req, res) => {
 
 // Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)
 function adminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!ADMIN_TOKEN) return next();
+  if (!ADMIN_TOKEN) {
+    return res.status(503).json({ error: 'admin_token_not_configured' });
+  }
   const token = (req.headers['x-admin-token'] as string) || (req.query.token as string) || '';
   if (token !== ADMIN_TOKEN) {
     return res.status(401).json({ error: 'unauthorized' });
