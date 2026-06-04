@@ -5,6 +5,7 @@ import {
   getMember,
   getMyBreaks,
   getMyClubMessages,
+  getMyClubPointsBalances,
   getMyInvites,
   getMyJoinedClubs,
   getPublicLiveAnnouncements,
@@ -46,6 +47,8 @@ const Me: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [joinedClubs, setJoinedClubs] = useState<any[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
+  const [clubPointsMap, setClubPointsMap] = useState<Record<string, { balance: number; updatedAt: string | null }>>({});
+  const [clubPointsLoading, setClubPointsLoading] = useState(false);
   const [breaks, setBreaks] = useState<any[]>([]);
   const [breaksLoading, setBreaksLoading] = useState(false);
   const [clubMessages, setClubMessages] = useState<any[]>([]);
@@ -297,6 +300,30 @@ const Me: React.FC = () => {
         if (mounted) setJoinedClubs([]);
       } finally {
         if (mounted) setClubsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!memberId) return;
+      setClubPointsLoading(true);
+      try {
+        const rows = await getMyClubPointsBalances(API_URL, memberId);
+        const map: Record<string, { balance: number; updatedAt: string | null }> = {};
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const clubId = String((r as any)?.clubId || '').trim();
+          if (!clubId) continue;
+          const bal = Number((r as any)?.balance ?? 0);
+          map[clubId] = { balance: Number.isFinite(bal) ? bal : 0, updatedAt: (r as any)?.updatedAt ?? null };
+        }
+        if (mounted) setClubPointsMap(map);
+      } catch {
+        if (mounted) setClubPointsMap({});
+      } finally {
+        if (mounted) setClubPointsLoading(false);
       }
     })();
     return () => { mounted = false; };
@@ -580,14 +607,25 @@ const Me: React.FC = () => {
                       {joinedClubs.slice(0, 20).map((r: any, idx: number) => {
                         const c = r?.club || {};
                         const id = String(r?.clubId || c?.id || '');
+                        const pts = id ? clubPointsMap[id] : null;
+                        const bal = pts ? Number(pts.balance ?? 0) : null;
+                        const balOk = bal != null && Number.isFinite(bal);
+                        const badgeCls = balOk && bal < 0 ? 'bg-red-700 text-white' : 'bg-emerald-700 text-white';
                         return (
                           <a
                             key={r.id || `${id}-${idx}`}
                             href={id ? `/club/${id}` : '#'}
                             className="block cue-surface-strong rounded-lg p-3 hover:brightness-95"
                           >
-                            <div className="font-semibold truncate">{c?.name || '場館'}</div>
-                            <div className="text-xs cue-muted mt-1 truncate">{c?.address || ''}</div>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-semibold truncate">{c?.name || '場館'}</div>
+                                <div className="text-xs cue-muted mt-1 truncate">{c?.address || ''}</div>
+                              </div>
+                              <div className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-extrabold ${badgeCls}`}>
+                                {clubPointsLoading ? '積分…' : `積分 ${balOk ? String(bal) : '—'}`}
+                              </div>
+                            </div>
                           </a>
                         );
                       })}

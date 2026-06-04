@@ -1296,6 +1296,27 @@ router.get('/points/my-balance', async (req, res) => {
     res.json({ clubId, memberId: member.id, balance: bal?.balance ?? 0, updatedAt: bal?.updatedAt ?? null });
 });
 
+router.get('/points/my-balances', async (req, res) => {
+    const member = await requireMember(req, res);
+    if (!member) return;
+    const memberships = await prisma.clubMember.findMany({
+        where: { memberId: member.id },
+        select: { clubId: true },
+        orderBy: [{ joinedAt: 'desc' }],
+        take: 200,
+    });
+    const clubIds = memberships.map((m) => m.clubId);
+    const rows = clubIds.length === 0 ? [] : await prisma.pointsBalance.findMany({
+        where: { memberId: member.id, clubId: { in: clubIds } },
+        select: { clubId: true, balance: true, updatedAt: true },
+    });
+    const map = new Map(rows.map((r) => [r.clubId, r]));
+    res.json(clubIds.map((clubId) => {
+        const r = map.get(clubId);
+        return { clubId, balance: r?.balance ?? 0, updatedAt: r?.updatedAt ?? null };
+    }));
+});
+
 router.get('/points/ledger', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;

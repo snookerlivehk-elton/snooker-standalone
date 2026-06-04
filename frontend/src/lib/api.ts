@@ -320,6 +320,18 @@ export async function getMyClubPointsBalance(apiUrl: string, memberId: string, c
   return res.json();
 }
 
+export async function getMyClubPointsBalances(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/points/my-balances`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取我的各場館積分失敗');
+  }
+  return res.json();
+}
+
 export async function getClubPointsLedger(
   apiUrl: string,
   memberId: string,
