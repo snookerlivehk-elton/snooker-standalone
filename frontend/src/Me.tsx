@@ -15,6 +15,7 @@ import {
   updateMemberSelf,
 } from './lib/api';
 import Tabs from './components/Tabs';
+import { useFeatureEnabled } from './lib/features';
 
 function normalizeHttpUrl(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -78,6 +79,15 @@ const Me: React.FC = () => {
   const [selectedMsgKeys, setSelectedMsgKeys] = useState<Record<string, boolean>>({});
   const [openMsgKey, setOpenMsgKey] = useState<string | null>(null);
 
+  const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
+  const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
+  const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
+  const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
+
+  useEffect(() => {
+    if (activeTab === 'history' && !highbreakEnabled) setActiveTab('clubs');
+  }, [activeTab, highbreakEnabled]);
+
   const avatarText = useMemo(() => {
     const s = String(profile?.name || session?.email || 'M').trim();
     return (s.slice(0, 1) || 'M').toUpperCase();
@@ -130,6 +140,11 @@ const Me: React.FC = () => {
     let mounted = true;
     (async () => {
       if (!memberId) return;
+      if (!highbreakEnabled) {
+        if (mounted) setBreaks([]);
+        if (mounted) setBreaksLoading(false);
+        return;
+      }
       setBreaksLoading(true);
       try {
         const rows = await getMyBreaks(API_URL, memberId);
@@ -141,12 +156,17 @@ const Me: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [memberId]);
+  }, [memberId, highbreakEnabled]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (!memberId) return;
+      if (!clubMessagesEnabled) {
+        if (mounted) setClubMessages([]);
+        if (mounted) setClubMessagesLoading(false);
+        return;
+      }
       setClubMessagesLoading(true);
       try {
         const rows = await getMyClubMessages(API_URL, memberId);
@@ -158,7 +178,7 @@ const Me: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [memberId]);
+  }, [memberId, clubMessagesEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -309,6 +329,11 @@ const Me: React.FC = () => {
     let mounted = true;
     (async () => {
       if (!memberId) return;
+      if (!pointsEnabled) {
+        if (mounted) setClubPointsMap({});
+        if (mounted) setClubPointsLoading(false);
+        return;
+      }
       setClubPointsLoading(true);
       try {
         const rows = await getMyClubPointsBalances(API_URL, memberId);
@@ -327,11 +352,16 @@ const Me: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [memberId]);
+  }, [memberId, pointsEnabled]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!liveEnabled) {
+        if (mounted) setPublicLiveAnnouncements([]);
+        if (mounted) setPublicLiveLoading(false);
+        return;
+      }
       setPublicLiveLoading(true);
       try {
         const rows = await getPublicLiveAnnouncements(API_URL, 20);
@@ -343,7 +373,7 @@ const Me: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [liveEnabled]);
 
   const inboxItems = useMemo((): InboxItem[] => {
     const items: InboxItem[] = [];
@@ -588,7 +618,7 @@ const Me: React.FC = () => {
                       </span>
                     ),
                   },
-                  { key: 'history', label: '歷史記錄' },
+                  ...(highbreakEnabled ? [{ key: 'history', label: '歷史記錄' }] : []),
                   { key: 'settings', label: '設定' },
                 ]}
                 activeKey={activeTab}
@@ -622,9 +652,11 @@ const Me: React.FC = () => {
                                 <div className="font-semibold truncate">{c?.name || '場館'}</div>
                                 <div className="text-xs cue-muted mt-1 truncate">{c?.address || ''}</div>
                               </div>
-                              <div className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-extrabold ${badgeCls}`}>
-                                {clubPointsLoading ? '積分…' : `積分 ${balOk ? String(bal) : '—'}`}
-                              </div>
+                              {pointsEnabled ? (
+                                <div className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-extrabold ${badgeCls}`}>
+                                  {clubPointsLoading ? '消費積分…' : `消費積分 ${balOk ? String(bal) : '—'}`}
+                                </div>
+                              ) : null}
                             </div>
                           </a>
                         );

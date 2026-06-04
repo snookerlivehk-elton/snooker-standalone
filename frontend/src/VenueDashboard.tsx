@@ -481,7 +481,7 @@ const VenueDashboard: React.FC = () => {
       setPointsLedgerRows(rows);
       setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
     } catch (err: any) {
-      setToast(err?.message || '載入積分資料失敗');
+      setToast(err?.message || '載入消費積分資料失敗');
       setTimeout(() => setToast(null), 3000);
       setPointsLedgerRows([]);
       setPointsLedgerTotalDelta(0);
@@ -583,6 +583,16 @@ const VenueDashboard: React.FC = () => {
   useEffect(() => {
     setActiveTab(resolveTab());
   }, []);
+
+  useEffect(() => {
+    const contentVisible = clubMessagesEnabled || liveEnabled || tournamentsEnabled;
+    if (activeTab === 'booking' && !bookingEnabled) return updateTab('home');
+    if (activeTab === 'qr' && !qrEnabled) return updateTab('home');
+    if (activeTab === 'points' && !pointsEnabled) return updateTab('home');
+    if (activeTab === 'highbreak' && !highbreakEnabled) return updateTab('home');
+    if (activeTab === 'content' && !contentVisible) return updateTab('home');
+    if (activeTab === 'scoring' && !scoringEnabled) return updateTab('home');
+  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled, scoringEnabled]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) return;
@@ -718,13 +728,13 @@ const VenueDashboard: React.FC = () => {
           <Tabs
             items={[
               { key: 'home', label: '主頁編輯' },
-              { key: 'booking', label: '預約/球枱' },
-              { key: 'qr', label: '掃碼起鐘' },
-              { key: 'points', label: '積分' },
-              { key: 'highbreak', label: '單杆' },
-              { key: 'content', label: '訊息/直播' },
+              ...(bookingEnabled ? [{ key: 'booking', label: '預約/球枱' }] : []),
+              ...(qrEnabled ? [{ key: 'qr', label: '掃碼起鐘' }] : []),
+              ...(pointsEnabled ? [{ key: 'points', label: '消費積分' }] : []),
+              ...(highbreakEnabled ? [{ key: 'highbreak', label: '單杆' }] : []),
+              ...((clubMessagesEnabled || liveEnabled || tournamentsEnabled) ? [{ key: 'content', label: '內容管理' }] : []),
               { key: 'members', label: '會員管理' },
-              { key: 'scoring', label: '計分/房間' },
+              ...(scoringEnabled ? [{ key: 'scoring', label: '計分/房間' }] : []),
             ]}
             activeKey={activeTab}
             onChange={(k) => updateTab(k as any)}
@@ -1349,7 +1359,7 @@ const VenueDashboard: React.FC = () => {
           ) : (
             <div className="grid gap-6">
               <div>
-                <div className="font-semibold mb-2">會員積分加減</div>
+                <div className="font-semibold mb-2">會員消費積分加減</div>
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="md:col-span-3">
                     <label className="block text-sm mb-1 cue-muted">搜尋會員（名稱/電話/Email/會員編號）</label>
@@ -1409,7 +1419,7 @@ const VenueDashboard: React.FC = () => {
                         });
                         setPointsAdjustDelta('');
                         setPointsAdjustReason('');
-                        setToast('已更新積分');
+                        setToast('已更新消費積分');
                         setTimeout(() => setToast(null), 2000);
                         setPointsLedgerMode('detail');
                         setPointsLedgerMemberId(pointsAdjustMemberId);
@@ -1439,7 +1449,7 @@ const VenueDashboard: React.FC = () => {
               </div>
 
               <div>
-                <div className="font-semibold mb-2">會員餘額（搜尋）</div>
+                <div className="font-semibold mb-2">會員消費積分餘額（搜尋）</div>
                 <div className="grid gap-3">
                   <div>
                     <label className="block text-sm mb-1 cue-muted">搜尋（名稱/電話/Email/會員編號）</label>
@@ -1493,7 +1503,7 @@ const VenueDashboard: React.FC = () => {
               </div>
 
               <div>
-                <div className="font-semibold mb-2">積分流水</div>
+                <div className="font-semibold mb-2">消費積分流水</div>
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="md:col-span-2">
                     <label className="block text-sm mb-1 cue-muted">模式</label>
@@ -1558,7 +1568,7 @@ const VenueDashboard: React.FC = () => {
                             setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
                           }
                         } catch (e: any) {
-                          setToast(e?.message || '讀取積分流水失敗');
+                          setToast(e?.message || '讀取消費積分流水失敗');
                           setTimeout(() => setToast(null), 3000);
                           setPointsLedgerRows([]);
                           setPointsLedgerTotalDelta(0);

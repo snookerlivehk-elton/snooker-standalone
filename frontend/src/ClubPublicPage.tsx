@@ -1409,7 +1409,7 @@ const ClubPublicPage: React.FC = () => {
                     <div
                       className={`mb-3 rounded-xl px-4 py-3 border cue-border flex items-center justify-between gap-3 ${myPoints && myPoints.balance < 0 ? 'bg-red-700 text-white' : 'bg-emerald-700 text-white'}`}
                     >
-                      <div className="text-sm font-semibold opacity-90">我的積分（此場館）</div>
+                      <div className="text-sm font-semibold opacity-90">我的消費積分（此場館）</div>
                       <div className="text-2xl font-extrabold">
                         {myPointsLoading ? '…' : (myPoints ? String(myPoints.balance) : '—')}
                       </div>

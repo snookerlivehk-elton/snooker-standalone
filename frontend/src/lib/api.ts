@@ -252,7 +252,7 @@ export async function getClubPointsConfig(apiUrl: string, memberId: string) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取積分設定失敗');
+    throw new Error(err.error || '讀取消費積分設定失敗');
   }
   return res.json();
 }
@@ -269,7 +269,7 @@ export async function updateClubPointsConfig(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '更新積分設定失敗');
+    throw new Error(err.error || '更新消費積分設定失敗');
   }
   return res.json();
 }
@@ -281,7 +281,7 @@ export async function getClubPointsBalances(apiUrl: string, memberId: string) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取會員積分失敗');
+    throw new Error(err.error || '讀取會員消費積分失敗');
   }
   return res.json();
 }
@@ -301,7 +301,7 @@ export async function searchClubPointsBalances(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '搜尋會員積分失敗');
+    throw new Error(err.error || '搜尋會員消費積分失敗');
   }
   return res.json();
 }
@@ -315,7 +315,7 @@ export async function getMyClubPointsBalance(apiUrl: string, memberId: string, c
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取我的積分失敗');
+    throw new Error(err.error || '讀取我的消費積分失敗');
   }
   return res.json();
 }
@@ -327,7 +327,7 @@ export async function getMyClubPointsBalances(apiUrl: string, memberId: string) 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取我的各場館積分失敗');
+    throw new Error(err.error || '讀取我的各場館消費積分失敗');
   }
   return res.json();
 }
@@ -352,7 +352,7 @@ export async function getClubPointsLedger(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取積分流水失敗');
+    throw new Error(err.error || '讀取消費積分流水失敗');
   }
   return res.json() as Promise<any>;
 }
@@ -369,7 +369,7 @@ export async function adjustClubMemberPoints(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '積分調整失敗');
+    throw new Error(err.error || '消費積分調整失敗');
   }
   return res.json();
 }
