@@ -2,7 +2,7 @@ import React from 'react';
 
 export type TabItem = {
   key: string;
-  label: string;
+  label: React.ReactNode;
 };
 
 type TabsProps = {
@@ -37,4 +37,3 @@ const Tabs: React.FC<TabsProps> = ({ items, activeKey, onChange }) => {
 };
 
 export default Tabs;
-

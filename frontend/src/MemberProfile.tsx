@@ -210,7 +210,6 @@ const MemberProfile: React.FC = () => {
             <div><span className="font-semibold">建立時間：</span>{member.created_at ? new Date(member.created_at).toLocaleString() : '-'}</div>
             <div><span className="font-semibold">電話：</span>{phoneDisplay}</div>
             <div><span className="font-semibold">出生日期：</span>{birthDisplay}</div>
-            <div><span className="font-semibold">所屬球會：</span>{String(member.club_name || member.clubName || '未設定')}</div>
           </div>
           <div className="text-xs cue-muted mt-2">必填資料不可更改；選填資料可於下方更新</div>
         </div>
@@ -527,29 +526,6 @@ const MemberProfile: React.FC = () => {
             <div>
               <label className="block text-sm mb-1">出生日期</label>
               <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
-            </div>
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm">所屬球會</label>
-                <a href="#joined-clubs" className="text-xs accent-blue hover:underline">跳到列表</a>
-              </div>
-              {joinedClubs.length === 0 ? (
-                <div className="text-sm cue-muted">尚未加入任何場館</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {joinedClubs.map((jc: any) => (
-                    <a
-                      key={jc.id}
-                      href={`/club/${jc.club?.id}`}
-                      target="_blank"
-                      className="px-3 py-1.5 rounded-full cue-surface-strong text-sm accent-blue hover:brightness-95"
-                      title={jc.club?.name || '場館主頁'}
-                    >
-                      {jc.club?.name || '未命名場館'}
-                    </a>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
           <div className="mt-3">
