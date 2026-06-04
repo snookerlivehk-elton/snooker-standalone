@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { API_URL } from './config';
 import { getAdminFeatures, getAdminSiteAds, getSiteNotice, updateAdminFeatures, updateAdminSiteAd, updateSiteNotice, uploadAdminSiteAdImage } from './lib/api';
 import { clearFeatureCache } from './lib/features';
@@ -32,6 +32,9 @@ const AdminOverview: React.FC = () => {
     venue: { enabled: true, imageUrl: '', linkUrl: '' },
     member: { enabled: true, imageUrl: '', linkUrl: '' },
   });
+  const systemAdFileRef = useRef<HTMLInputElement | null>(null);
+  const venueAdFileRef = useRef<HTMLInputElement | null>(null);
+  const memberAdFileRef = useRef<HTMLInputElement | null>(null);
 
   function resolveBasePath(): string {
     const rawBase = (import.meta.env.BASE_URL || '/');
@@ -434,9 +437,10 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://.../banner.jpg"
                     />
                     <input
+                      ref={systemAdFileRef}
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      className="mt-2 block w-full text-sm"
+                      className="hidden"
                       disabled={adsSaving}
                       onChange={(e) => {
                         const f = e.currentTarget.files?.[0];
@@ -455,16 +459,25 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://..."
                     />
                   </div>
-                  {!!adsDraft.system?.imageUrl && (
-                    <div className="cue-surface rounded-lg p-2">
+                  <button
+                    type="button"
+                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
+                    disabled={adsSaving}
+                    onClick={() => systemAdFileRef.current?.click()}
+                  >
+                    {adsDraft.system?.imageUrl ? (
                       <img
                         src={String(adsDraft.system.imageUrl)}
                         alt=""
                         className="w-full rounded object-cover max-h-[30vh]"
                         onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
+                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
+                      </div>
+                    )}
+                  </button>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
@@ -541,9 +554,10 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://.../banner.jpg"
                     />
                     <input
+                      ref={venueAdFileRef}
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      className="mt-2 block w-full text-sm"
+                      className="hidden"
                       disabled={adsSaving}
                       onChange={(e) => {
                         const f = e.currentTarget.files?.[0];
@@ -562,16 +576,25 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://..."
                     />
                   </div>
-                  {!!adsDraft.venue?.imageUrl && (
-                    <div className="cue-surface rounded-lg p-2">
+                  <button
+                    type="button"
+                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
+                    disabled={adsSaving}
+                    onClick={() => venueAdFileRef.current?.click()}
+                  >
+                    {adsDraft.venue?.imageUrl ? (
                       <img
                         src={String(adsDraft.venue.imageUrl)}
                         alt=""
                         className="w-full rounded object-cover max-h-[30vh]"
                         onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
+                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
+                      </div>
+                    )}
+                  </button>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
@@ -677,9 +700,10 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://.../banner.jpg"
                     />
                     <input
+                      ref={memberAdFileRef}
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      className="mt-2 block w-full text-sm"
+                      className="hidden"
                       disabled={adsSaving}
                       onChange={(e) => {
                         const f = e.currentTarget.files?.[0];
@@ -698,16 +722,25 @@ const AdminOverview: React.FC = () => {
                       placeholder="https://..."
                     />
                   </div>
-                  {!!adsDraft.member?.imageUrl && (
-                    <div className="cue-surface rounded-lg p-2">
+                  <button
+                    type="button"
+                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
+                    disabled={adsSaving}
+                    onClick={() => memberAdFileRef.current?.click()}
+                  >
+                    {adsDraft.member?.imageUrl ? (
                       <img
                         src={String(adsDraft.member.imageUrl)}
                         alt=""
                         className="w-full rounded object-cover max-h-[30vh]"
                         onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
+                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
+                      </div>
+                    )}
+                  </button>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
