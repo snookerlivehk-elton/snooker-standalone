@@ -3588,14 +3588,89 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
     if (!id) {
       return res.status(400).json({ error: '缺少會員 ID' });
     }
+    const purge = String((req.query as any)?.purge || '').trim() === '1';
     try {
-      await prisma.member.delete({ where: { id } });
+      if (purge) {
+        const club = await prisma.clubProfile.findUnique({
+          where: { memberId: id },
+          select: { id: true },
+        });
+        const clubId = club?.id || null;
+
+        const rooms = await prisma.room.findMany({
+          where: { operator_id: id },
+          select: { id: true },
+        });
+        const roomIds = rooms.map((r) => r.id);
+
+        const matchPlayers = await prisma.matchPlayer.findMany({
+          where: { member_id: id },
+          select: { match_id: true },
+        });
+        const matchIdsFromPlayers = matchPlayers.map((r) => r.match_id);
+
+        const matchesDirect = await prisma.match.findMany({
+          where: {
+            OR: [
+              { operator_id: id },
+              { winner_member_id: id },
+              ...(roomIds.length ? [{ room_id: { in: roomIds } }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        const matchIdsDirect = matchesDirect.map((m) => m.id);
+
+        const matchIds = Array.from(new Set([...matchIdsFromPlayers, ...matchIdsDirect]));
+
+        await prisma.$transaction(async (tx) => {
+          if (clubId) {
+            await tx.tournamentSignup.deleteMany({ where: { tournament: { clubId } } });
+            await tx.tournament.deleteMany({ where: { clubId } });
+            await tx.liveAnnouncement.deleteMany({ where: { clubId } });
+            await tx.clubMessage.deleteMany({ where: { clubId } });
+            await tx.breakRecord.deleteMany({ where: { club_id: clubId } });
+            await tx.pointsLedger.deleteMany({ where: { clubId } });
+            await tx.pointsBalance.deleteMany({ where: { clubId } });
+            await tx.clubPointsConfig.deleteMany({ where: { clubId } });
+            await tx.tableSession.deleteMany({ where: { clubId } });
+            await tx.tableQrToken.deleteMany({ where: { clubId } });
+            await tx.tableReservation.deleteMany({ where: { clubId } });
+            await tx.tablePricingScheme.deleteMany({ where: { clubId } });
+            await tx.clubTable.deleteMany({ where: { clubId } });
+            await tx.clubMember.deleteMany({ where: { clubId } });
+            await tx.clubProfile.deleteMany({ where: { id: clubId } });
+          }
+
+          await tx.clubMember.deleteMany({ where: { memberId: id } });
+          await tx.tournamentSignup.deleteMany({ where: { memberId: id } });
+          await tx.liveAnnouncement.deleteMany({ where: { createdByMemberId: id } });
+          await tx.tableReservation.deleteMany({ where: { memberId: id } });
+          await tx.pointsLedger.deleteMany({ where: { memberId: id } });
+          await tx.pointsBalance.deleteMany({ where: { memberId: id } });
+          await tx.breakRecord.deleteMany({ where: { member_id: id } });
+          await tx.breakRecord.deleteMany({ where: { created_by_member_id: id } });
+          await tx.event.deleteMany({ where: { player_member_id: id } });
+
+          if (matchIds.length) {
+            await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+          }
+
+          if (roomIds.length) {
+            await tx.room.deleteMany({ where: { id: { in: roomIds } } });
+          }
+
+          await tx.member.delete({ where: { id } });
+        });
+      } else {
+        await prisma.member.delete({ where: { id } });
+      }
     } catch (err: any) {
       if ((err as any)?.code === 'P2025') {
         return res.status(404).json({ error: '會員不存在' });
       }
       if ((err as any)?.code === 'P2003') {
-        return res.status(400).json({ error: '會員已有比賽紀錄，無法刪除' });
+        return res.status(400).json({ error: '會員已有關聯資料（例如比賽/場館/預約），無法直接刪除。若要連同相關資料永久刪除，請使用 purge=1' });
       }
       throw err;
     }

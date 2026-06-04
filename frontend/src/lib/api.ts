@@ -1475,12 +1475,21 @@ export async function uploadAdminSiteAdImage(
   return res.json();
 }
 
-export async function deleteMember(apiUrl: string, adminToken: string, id: string | number) {
-  const res = await fetch(`${apiUrl}/api/admin/members/${id}`, {
+export async function deleteMember(
+  apiUrl: string,
+  adminToken: string,
+  id: string | number,
+  options?: { purge?: boolean }
+) {
+  const qs = options?.purge ? '?purge=1' : '';
+  const res = await fetch(`${apiUrl}/api/admin/members/${id}${qs}`, {
     method: 'DELETE',
     headers: { 'x-admin-token': adminToken },
   });
-  if (!res.ok) throw new Error(`刪除會員失敗 (${res.status})`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `刪除會員失敗 (${res.status})`);
+  }
   return res.json();
 }
 

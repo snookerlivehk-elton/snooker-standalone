@@ -102,9 +102,14 @@ const AdminMembers: React.FC = () => {
       const label = String(m.member_code || '').trim();
       const name = String(m.name || '').trim();
       const display = name || label || id;
-      const ok = window.confirm(`再次確認：確定要永久刪除會員「${display}」？此操作不可復原。`);
+      const isClub = String(m.role || '').toUpperCase() === 'ADMIN';
+      const ok = window.confirm(
+        isClub
+          ? `再次確認：確定要永久刪除場館戶口「${display}」？\n\n此操作會一併永久刪除與該場館/帳戶相關的資料（例如：場館資料、桌、預約、訊息、單杆、積分、比賽/房間等）。\n\n此操作不可復原。`
+          : `再次確認：確定要永久刪除會員「${display}」？此操作不可復原。`
+      );
       if (!ok) return;
-      await deleteMember(API_URL, adminToken, id);
+      await deleteMember(API_URL, adminToken, id, { purge: String(m.role || '').toUpperCase() === 'ADMIN' });
       try {
         const res = await listMembers(API_URL, adminToken);
         setMembers(res.members || []);
