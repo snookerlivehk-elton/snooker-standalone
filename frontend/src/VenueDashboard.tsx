@@ -3,7 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
 import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
-import TimeFeeCalculator from './components/TimeFeeCalculator';
 import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
 
@@ -33,6 +32,7 @@ const VenueDashboard: React.FC = () => {
   const [matches, setMatches] = useState<any[]>([]);
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [clubProfile, setClubProfile] = useState<any>({});
+  const [facilitiesDraft, setFacilitiesDraft] = useState('');
   const [clubMembers, setClubMembers] = useState<any[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberRatingDraft, setMemberRatingDraft] = useState<Record<string, string>>({});
@@ -76,6 +76,7 @@ const VenueDashboard: React.FC = () => {
   const [newTableNotes, setNewTableNotes] = useState('');
   const [newTableBasePrice, setNewTableBasePrice] = useState('');
   const [pricing, setPricing] = useState<any[]>([]);
+  const [pricingSavingId, setPricingSavingId] = useState<string>('');
   const [newPricingTitle, setNewPricingTitle] = useState('');
   const [newPricingDesc, setNewPricingDesc] = useState('');
   const [newPricingPrice, setNewPricingPrice] = useState('');
@@ -306,6 +307,11 @@ const VenueDashboard: React.FC = () => {
       .filter((x) => x.length > 0)
       .slice(0, max);
   }, []);
+
+  useEffect(() => {
+    const lines = Array.isArray(clubProfile?.facilities) ? clubProfile.facilities.map((x: any) => String(x)) : [];
+    setFacilitiesDraft(lines.join('\n'));
+  }, [clubProfile?.id, clubProfile?.updatedAt]);
 
   const getGalleryArray = useCallback((raw: any) => {
     return Array.isArray(raw) ? raw.map((x: any) => String(x || '').trim()).filter(Boolean) : [];
@@ -1103,8 +1109,12 @@ const VenueDashboard: React.FC = () => {
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 cue-muted">設施（每行一項，最多 24 項）</label>
                <textarea
-                 value={Array.isArray(clubProfile.facilities) ? clubProfile.facilities.join('\n') : ''}
-                 onChange={(e) => setClubProfile({ ...clubProfile, facilities: parseLines(e.target.value, 24) })}
+                 value={facilitiesDraft}
+                 onChange={(e) => {
+                   const v = e.target.value;
+                   setFacilitiesDraft(v);
+                   setClubProfile((prev: any) => ({ ...prev, facilities: parseLines(v, 24) }));
+                 }}
                  className="w-full px-3 py-2 rounded cue-input h-24"
                  placeholder="例如：免費泊車\n淋浴\n家庭房"
                />
@@ -1274,9 +1284,6 @@ const VenueDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-6">
-            <TimeFeeCalculator title="波鐘計算機" />
-          </div>
         </div>
 
         {/* Club Members List */}
@@ -2752,12 +2759,30 @@ const VenueDashboard: React.FC = () => {
                         <input type="checkbox" checked={p.active} onChange={(e) => setPricing(prev => prev.map(x => x.id === p.id ? { ...x, active: e.target.checked } : x))} />
                         啟用
                       </label>
-                      <button onClick={async () => {
-                        const cur = pricing.find(x => x.id === p.id);
-                        if (!cur) return;
-                        const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price, tableId: cur.tableId || null });
-                        setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
-                      }} className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm">儲存</button>
+                      <button
+                        onClick={async () => {
+                          const cur = pricing.find(x => x.id === p.id);
+                          if (!cur) return;
+                          if (!operatorId) return;
+                          setPricingSavingId(p.id);
+                          try {
+                            const updated = await updatePricingScheme(API_URL, operatorId, p.id, { title: cur.title, description: cur.description || null, rulesJson: cur.rulesJson, active: cur.active, price: cur.price === '' ? null : cur.price, tableId: cur.tableId || null });
+                            setPricing(prev => prev.map(x => x.id === p.id ? updated : x));
+                            setToast('方案已儲存');
+                            setTimeout(() => setToast(null), 2000);
+                            await loadData();
+                          } catch (e: any) {
+                            setToast(e?.message || '儲存失敗');
+                            setTimeout(() => setToast(null), 3000);
+                          } finally {
+                            setPricingSavingId('');
+                          }
+                        }}
+                        disabled={pricingSavingId === p.id}
+                        className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {pricingSavingId === p.id ? '儲存中...' : '儲存'}
+                      </button>
                       <button onClick={async () => {
                         if (!window.confirm('確定要刪除此方案？（已有預約紀錄的方案將無法刪除，請改用停用）')) return;
                         try {

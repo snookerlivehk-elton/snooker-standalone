@@ -1,0 +1,17 @@
+{
+  "name": "CUE AIM LIVE",
+  "short_name": "CUE AIM LIVE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Cue Aim System Admin & Member portal",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

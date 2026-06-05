@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#111827" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snooker Scoreboard</title>
     <script>
@@ -26,10 +28,17 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-ByqIZSKt.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CiPpqFH8.css">
+    <script type="module" crossorigin src="/assets/index-DLYbp8y4.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BNBjhtJD.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function(){});
+        });
+      }
+    </script>
   </body>
 </html>

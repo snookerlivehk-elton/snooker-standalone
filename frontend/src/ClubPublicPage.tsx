@@ -22,7 +22,6 @@ import {
   joinClub,
   signupTournament,
 } from './lib/api';
-import TimeFeeCalculator from './components/TimeFeeCalculator';
 import Tabs from './components/Tabs';
 import { useFeatureEnabled } from './lib/features';
 
@@ -1463,11 +1462,6 @@ const ClubPublicPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-3">波鐘計算機</div>
-                  <TimeFeeCalculator title="波鐘計算機" />
-                </div>
 
                 {String((club as any)?.policies || '').trim() && (
                   <div className="cue-surface rounded-lg p-4">
