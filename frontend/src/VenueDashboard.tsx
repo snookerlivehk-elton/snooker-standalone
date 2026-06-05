@@ -813,7 +813,7 @@ const VenueDashboard: React.FC = () => {
   if (!operatorId || !isOperator) return null;
 
   return (
-    <div className="brand-page p-4 sm:p-6">
+    <div className="brand-page p-4 sm:p-6 overflow-x-hidden">
       <div className="max-w-4xl mx-auto grid gap-6">
         {venueAccessDaysLeft !== null && venueAccessDaysLeft >= 0 && venueAccessDaysLeft <= 30 && (
           <div
@@ -848,17 +848,21 @@ const VenueDashboard: React.FC = () => {
         )}
         
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold">Cue Aim System - 場館管理後台 <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span></h1>
-        <button 
-            onClick={() => {
-              localStorage.removeItem('memberSession');
-              navigate('/members/login');
-            }}
-            className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors"
-          >
-            登出
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0">
+            Cue Aim System - 場館管理後台 <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span>
+          </h1>
+          <div className="sm:ml-auto">
+            <button 
+              onClick={() => {
+                localStorage.removeItem('memberSession');
+                navigate('/members/login');
+              }}
+              className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
+            >
+              登出
+            </button>
+          </div>
         </div>
 
         <div className="glass rounded-xl p-3 sm:p-4">
