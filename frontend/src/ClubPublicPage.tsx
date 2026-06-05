@@ -104,6 +104,7 @@ const ClubPublicPage: React.FC = () => {
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
+  const { enabled: systemPortalEnabled } = useFeatureEnabled(API_URL, 'system_portal');
 
   const [myPoints, setMyPoints] = useState<{ balance: number; updatedAt: string | null } | null>(null);
   const [myPointsLoading, setMyPointsLoading] = useState(false);
@@ -801,16 +802,18 @@ const ClubPublicPage: React.FC = () => {
           </button>
         )}
       </div>
-      <a
-        href="https://www.snookerhk.live/"
-        target="_blank"
-        rel="noreferrer"
-        className="fixed z-50 right-4 select-none px-4 py-3 rounded-full bg-amber-400 text-slate-950 font-extrabold shadow-lg ring-2 ring-amber-200 hover:brightness-95 active:brightness-90"
-        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
-        aria-label="snookerhk.live首頁"
-      >
-        snookerhk.live首頁
-      </a>
+      {systemPortalEnabled && (
+        <a
+          href="https://www.snookerhk.live/"
+          target="_blank"
+          rel="noreferrer"
+          className="fixed z-50 right-4 select-none px-4 py-3 rounded-full bg-amber-400 text-slate-950 font-extrabold shadow-lg ring-2 ring-amber-200 hover:brightness-95 active:brightness-90"
+          style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+          aria-label="snookerhk.live首頁"
+        >
+          snookerhk.live首頁
+        </a>
+      )}
 
       <div style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         {siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
