@@ -813,7 +813,7 @@ const VenueDashboard: React.FC = () => {
   if (!operatorId || !isOperator) return null;
 
   return (
-    <div className="brand-page p-4 sm:p-6 overflow-x-hidden">
+    <div className="brand-page p-4 sm:p-6">
       <div className="max-w-4xl mx-auto grid gap-6">
         {venueAccessDaysLeft !== null && venueAccessDaysLeft >= 0 && venueAccessDaysLeft <= 30 && (
           <div
