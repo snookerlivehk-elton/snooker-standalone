@@ -544,8 +544,11 @@ const VenueDashboard: React.FC = () => {
       setLeaderHighest(Array.isArray(highest) ? highest : []);
       setLeaderMonthly(Array.isArray(monthly) ? monthly : []);
     } catch (err: any) {
-      setToast(err?.message || '載入單杆資料失敗');
-      setTimeout(() => setToast(null), 3000);
+      const msg = String(err?.message || '');
+      if (!msg.includes('feature_disabled')) {
+        setToast(msg || '載入單杆資料失敗');
+        setTimeout(() => setToast(null), 3000);
+      }
     } finally {
       setBreaksLoading(false);
     }
@@ -563,8 +566,11 @@ const VenueDashboard: React.FC = () => {
       setPointsLedgerRows(rows);
       setPointsLedgerTotalDelta(Number.isFinite(totalDelta) ? totalDelta : 0);
     } catch (err: any) {
-      setToast(err?.message || '載入消費積分資料失敗');
-      setTimeout(() => setToast(null), 3000);
+      const msg = String(err?.message || '');
+      if (!msg.includes('feature_disabled')) {
+        setToast(msg || '載入消費積分資料失敗');
+        setTimeout(() => setToast(null), 3000);
+      }
       setPointsLedgerRows([]);
       setPointsLedgerTotalDelta(0);
     } finally {
@@ -703,8 +709,9 @@ const VenueDashboard: React.FC = () => {
   useEffect(() => {
     if (!operatorId || !isOperator) return;
     if (!clubProfile?.id) return;
+    if (!highbreakEnabled) return;
     loadBreakData();
-  }, [operatorId, isOperator, clubProfile?.id, loadBreakData]);
+  }, [operatorId, isOperator, clubProfile?.id, highbreakEnabled, loadBreakData]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) return;
