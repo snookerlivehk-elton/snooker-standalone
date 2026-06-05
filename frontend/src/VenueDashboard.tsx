@@ -1183,14 +1183,12 @@ const VenueDashboard: React.FC = () => {
                     <div className="flex-shrink-0 px-3 py-2 rounded cue-button text-sm font-semibold">加入</div>
                   </div>
                   {Array.isArray(clubProfile.facilities) && clubProfile.facilities.length > 0 && (
-                    <div className="mt-3 w-full overflow-x-auto">
-                      <div className="inline-flex gap-2 min-w-full">
-                        {clubProfile.facilities.slice(0, 24).map((f: any) => (
-                          <div key={String(f)} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs whitespace-nowrap">
-                            {String(f)}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {clubProfile.facilities.slice(0, 24).map((f: any) => (
+                        <div key={String(f)} className="px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-xs break-words">
+                          {String(f)}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
