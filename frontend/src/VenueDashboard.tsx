@@ -1296,49 +1296,89 @@ const VenueDashboard: React.FC = () => {
           {clubMembers.length === 0 ? (
              <div className="cue-muted text-center py-8">暫無會員加入</div>
           ) : (
-             <div className="overflow-x-auto -mx-2 px-2">
+            <>
+              <div className="sm:hidden space-y-2">
+                {clubMembers.map((cm: any) => {
+                  const name = cm.member?.name || '-';
+                  const email = cm.member?.email || '-';
+                  const phone = cm.member?.phone || '-';
+                  const region = String(cm.member?.region_code ?? cm.member?.regionCode ?? '-') || '-';
+                  const district = String(cm.member?.district_code ?? cm.member?.districtCode ?? '-') || '-';
+                  const joined = cm.joinedAt ? new Date(cm.joinedAt).toLocaleDateString() : '-';
+                  return (
+                    <div key={cm.id} className="cue-surface rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{name}</div>
+                          <div className="text-xs cue-muted break-words mt-0.5">{email}</div>
+                          <div className="text-xs break-words mt-0.5">{phone}</div>
+                          <div className="text-xs cue-muted mt-1">地方：{region}　分區：{district}</div>
+                          <div className="text-xs cue-muted mt-0.5">加入：{joined}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex-shrink-0 px-3 py-1.5 rounded text-xs font-semibold cue-surface-strong hover:brightness-95"
+                          onClick={() => {
+                            const memId = String(cm.member?.id || cm.memberId || '').trim();
+                            if (!memId) return;
+                            setMemberLocMemberId(memId);
+                            setMemberLocRegionCode(String(cm.member?.region_code ?? cm.member?.regionCode ?? '') || '');
+                            setMemberLocDistrictCode(String(cm.member?.district_code ?? cm.member?.districtCode ?? '') || '');
+                            setMemberLocOpen(true);
+                          }}
+                        >
+                          更改
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-left border-collapse">
-                   <thead>
-                      <tr className="cue-muted border-b cue-border">
-                         <th className="py-2 px-3">名稱</th>
-                         <th className="py-2 px-3">Email</th>
-                         <th className="py-2 px-3">電話</th>
-                                 <th className="py-2 px-3">地方</th>
-                                 <th className="py-2 px-3">分區</th>
-                         <th className="py-2 px-3">加入時間</th>
-                                 <th className="py-2 px-3">操作</th>
+                  <thead>
+                    <tr className="cue-muted border-b cue-border">
+                      <th className="py-2 px-3">名稱</th>
+                      <th className="py-2 px-3">Email</th>
+                      <th className="py-2 px-3">電話</th>
+                      <th className="py-2 px-3">地方</th>
+                      <th className="py-2 px-3">分區</th>
+                      <th className="py-2 px-3">加入時間</th>
+                      <th className="py-2 px-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clubMembers.map((cm: any) => (
+                      <tr key={cm.id} className="border-b cue-border hover:brightness-95">
+                        <td className="py-2 px-3">{cm.member?.name || '-'}</td>
+                        <td className="py-2 px-3 text-sm cue-muted">{cm.member?.email || '-'}</td>
+                        <td className="py-2 px-3 text-sm">{cm.member?.phone || '-'}</td>
+                        <td className="py-2 px-3 text-sm">{String(cm.member?.region_code ?? cm.member?.regionCode ?? '-') || '-'}</td>
+                        <td className="py-2 px-3 text-sm">{String(cm.member?.district_code ?? cm.member?.districtCode ?? '-') || '-'}</td>
+                        <td className="py-2 px-3 text-sm cue-muted">{new Date(cm.joinedAt).toLocaleDateString()}</td>
+                        <td className="py-2 px-3">
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded text-xs font-semibold cue-surface-strong hover:brightness-95"
+                            onClick={() => {
+                              const memId = String(cm.member?.id || cm.memberId || '').trim();
+                              if (!memId) return;
+                              setMemberLocMemberId(memId);
+                              setMemberLocRegionCode(String(cm.member?.region_code ?? cm.member?.regionCode ?? '') || '');
+                              setMemberLocDistrictCode(String(cm.member?.district_code ?? cm.member?.districtCode ?? '') || '');
+                              setMemberLocOpen(true);
+                            }}
+                          >
+                            更改地方/分區
+                          </button>
+                        </td>
                       </tr>
-                   </thead>
-                   <tbody>
-                      {clubMembers.map((cm: any) => (
-                         <tr key={cm.id} className="border-b cue-border hover:brightness-95">
-                            <td className="py-2 px-3">{cm.member?.name || '-'}</td>
-                            <td className="py-2 px-3 text-sm cue-muted">{cm.member?.email || '-'}</td>
-                            <td className="py-2 px-3 text-sm">{cm.member?.phone || '-'}</td>
-                                    <td className="py-2 px-3 text-sm">{String(cm.member?.region_code ?? cm.member?.regionCode ?? '-') || '-'}</td>
-                                    <td className="py-2 px-3 text-sm">{String(cm.member?.district_code ?? cm.member?.districtCode ?? '-') || '-'}</td>
-                            <td className="py-2 px-3 text-sm cue-muted">{new Date(cm.joinedAt).toLocaleDateString()}</td>
-                                    <td className="py-2 px-3">
-                                      <button
-                                        type="button"
-                                        className="px-3 py-1.5 rounded text-xs font-semibold cue-surface-strong hover:brightness-95"
-                                        onClick={() => {
-                                          const memId = String(cm.member?.id || cm.memberId || '').trim();
-                                          if (!memId) return;
-                                          setMemberLocMemberId(memId);
-                                          setMemberLocRegionCode(String(cm.member?.region_code ?? cm.member?.regionCode ?? '') || '');
-                                          setMemberLocDistrictCode(String(cm.member?.district_code ?? cm.member?.districtCode ?? '') || '');
-                                          setMemberLocOpen(true);
-                                        }}
-                                      >
-                                        更改地方/分區
-                                      </button>
-                                    </td>
-                         </tr>
-                      ))}
-                   </tbody>
+                    ))}
+                  </tbody>
                 </table>
-             </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -1462,47 +1502,81 @@ const VenueDashboard: React.FC = () => {
             {activeSessions.length === 0 ? (
               <div className="cue-muted text-sm">暫無進行中台鐘</div>
             ) : (
-              <div className="overflow-x-auto -mx-2 px-2">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="cue-muted border-b cue-border">
-                      <th className="py-2 px-2">球枱</th>
-                      <th className="py-2 px-2">會員</th>
-                      <th className="py-2 px-2">開始</th>
-                      <th className="py-2 px-2">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeSessions.map((s: any) => (
-                      <tr key={s.id} className="border-b cue-border hover:brightness-95">
-                        <td className="py-2 px-2">{s.table?.name || '-'}</td>
-                        <td className="py-2 px-2">{s.startedBy?.name || s.startedBy?.email || '-'}</td>
-                        <td className="py-2 px-2 cue-muted whitespace-nowrap">{s.startAt ? new Date(s.startAt).toLocaleString() : '-'}</td>
-                        <td className="py-2 px-2">
-                          <button
-                            type="button"
-                            className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs"
-                            onClick={async () => {
-                              if (!window.confirm('確定要為此台落鐘並結算？')) return;
-                              try {
-                                await endTableSessionAsOperator(API_URL, operatorId, s.id);
-                                setToast('已落鐘並結算');
-                                setTimeout(() => setToast(null), 2000);
-                                await loadData();
-                              } catch (e: any) {
-                                setToast(e?.message || '落鐘失敗');
-                                setTimeout(() => setToast(null), 3000);
-                              }
-                            }}
-                          >
-                            落鐘
-                          </button>
-                        </td>
+              <>
+                <div className="sm:hidden space-y-2">
+                  {activeSessions.map((s: any) => (
+                    <div key={s.id} className="cue-surface rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{s.table?.name || '-'}</div>
+                          <div className="text-xs cue-muted break-words mt-0.5">{s.startedBy?.name || s.startedBy?.email || '-'}</div>
+                          <div className="text-xs cue-muted mt-1">{s.startAt ? new Date(s.startAt).toLocaleString() : '-'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex-shrink-0 px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs"
+                          onClick={async () => {
+                            if (!window.confirm('確定要為此台落鐘並結算？')) return;
+                            try {
+                              await endTableSessionAsOperator(API_URL, operatorId, s.id);
+                              setToast('已落鐘並結算');
+                              setTimeout(() => setToast(null), 2000);
+                              await loadData();
+                            } catch (e: any) {
+                              setToast(e?.message || '落鐘失敗');
+                              setTimeout(() => setToast(null), 3000);
+                            }
+                          }}
+                        >
+                          落鐘
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden sm:block overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-2">球枱</th>
+                        <th className="py-2 px-2">會員</th>
+                        <th className="py-2 px-2">開始</th>
+                        <th className="py-2 px-2">操作</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {activeSessions.map((s: any) => (
+                        <tr key={s.id} className="border-b cue-border hover:brightness-95">
+                          <td className="py-2 px-2">{s.table?.name || '-'}</td>
+                          <td className="py-2 px-2">{s.startedBy?.name || s.startedBy?.email || '-'}</td>
+                          <td className="py-2 px-2 cue-muted whitespace-nowrap">{s.startAt ? new Date(s.startAt).toLocaleString() : '-'}</td>
+                          <td className="py-2 px-2">
+                            <button
+                              type="button"
+                              className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-xs"
+                              onClick={async () => {
+                                if (!window.confirm('確定要為此台落鐘並結算？')) return;
+                                try {
+                                  await endTableSessionAsOperator(API_URL, operatorId, s.id);
+                                  setToast('已落鐘並結算');
+                                  setTimeout(() => setToast(null), 2000);
+                                  await loadData();
+                                } catch (e: any) {
+                                  setToast(e?.message || '落鐘失敗');
+                                  setTimeout(() => setToast(null), 3000);
+                                }
+                              }}
+                            >
+                              落鐘
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
 
@@ -2365,39 +2439,74 @@ const VenueDashboard: React.FC = () => {
             {pendingReservations.length === 0 ? (
               <div className="cue-muted">暫無待確認預約</div>
             ) : (
-              <div className="overflow-x-auto -mx-2 px-2">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="cue-muted border-b cue-border">
-                      <th className="py-2 px-3">會員</th>
-                      <th className="py-2 px-3">球枱</th>
-                      <th className="py-2 px-3">時間</th>
-                      <th className="py-2 px-3">方案</th>
-                      <th className="py-2 px-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingReservations.map((r: any) => (
-                      <tr key={r.id} className="border-b cue-border hover:brightness-95">
-                        <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
-                        <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                        <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
-                        <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
-                        <td className="py-2 px-3">
-                          <div className="flex gap-2">
-                            <button onClick={async () => {
+              <>
+                <div className="sm:hidden space-y-2">
+                  {pendingReservations.map((r: any) => (
+                    <div key={r.id} className="cue-surface rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold break-words">{r.member?.name || r.member?.email || r.memberId}</div>
+                          <div className="text-xs cue-muted mt-0.5">球枱：{r.table?.name || r.tableId}</div>
+                          <div className="text-xs cue-muted mt-0.5">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</div>
+                          <div className="text-xs mt-1">方案：{r.pricingScheme?.title || '-'}</div>
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col gap-2">
+                          <button
+                            onClick={async () => {
                               try { await confirmReservation(API_URL, operatorId, r.id); await loadData(); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                            }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
-                            <button onClick={async () => {
+                            }}
+                            className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm"
+                          >
+                            確認
+                          </button>
+                          <button
+                            onClick={async () => {
                               try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                            }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
-                          </div>
-                        </td>
+                            }}
+                            className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden sm:block overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-3">會員</th>
+                        <th className="py-2 px-3">球枱</th>
+                        <th className="py-2 px-3">時間</th>
+                        <th className="py-2 px-3">方案</th>
+                        <th className="py-2 px-3">操作</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {pendingReservations.map((r: any) => (
+                        <tr key={r.id} className="border-b cue-border hover:brightness-95">
+                          <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                          <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                          <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                          <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2">
+                              <button onClick={async () => {
+                                try { await confirmReservation(API_URL, operatorId, r.id); await loadData(); setToast('已確認'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              }} className="px-3 py-1 rounded bg-green-700 hover:bg-green-600 text-white text-sm">確認</button>
+                              <button onClick={async () => {
+                                try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                              }} className="px-3 py-1 rounded bg-red-700 hover:bg-red-600 text-white text-sm">取消</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
           <div className="mt-6">
@@ -2435,27 +2544,16 @@ const VenueDashboard: React.FC = () => {
             {filteredAllReservations.length === 0 ? (
               <div className="cue-muted">暫無預約</div>
             ) : (
-              <div className="overflow-x-auto -mx-2 px-2">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="cue-muted border-b cue-border">
-                      <th className="py-2 px-3">狀態</th>
-                      <th className="py-2 px-3">會員</th>
-                      <th className="py-2 px-3">球枱</th>
-                      <th className="py-2 px-3">時間</th>
-                      <th className="py-2 px-3">方案</th>
-                      <th className="py-2 px-3">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAllReservations.slice(0, 100).map((r: any) => {
-                      const status = String(r?.status || '').toUpperCase();
-                      const e = new Date(String(r?.endAt));
-                      const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
-                      const tag = status === 'PENDING'
-                        ? { label: '待確認', cls: 'bg-amber-900 text-white' }
-                        : status === 'BLOCKED'
-                          ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
+              <>
+                <div className="sm:hidden space-y-2">
+                  {filteredAllReservations.slice(0, 100).map((r: any) => {
+                    const status = String(r?.status || '').toUpperCase();
+                    const e = new Date(String(r?.endAt));
+                    const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+                    const tag = status === 'PENDING'
+                      ? { label: '待確認', cls: 'bg-amber-900 text-white' }
+                      : status === 'BLOCKED'
+                        ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
                         : status === 'CONFIRMED' && ended
                           ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
                           : status === 'CONFIRMED'
@@ -2463,36 +2561,96 @@ const VenueDashboard: React.FC = () => {
                             : status === 'CANCELLED'
                               ? { label: '已取消', cls: 'cue-surface-strong cue-muted' }
                               : { label: status || '—', cls: 'cue-surface-strong cue-muted' };
-                      const canCancel = status !== 'CANCELLED';
-                      return (
-                        <tr key={r.id} className="border-b cue-border hover:brightness-95">
-                          <td className="py-2 px-3">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
-                          </td>
-                          <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
-                          <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
-                          <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
-                          <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
-                          <td className="py-2 px-3">
-                            <button
-                              type="button"
-                              disabled={!canCancel}
-                              className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
-                              onClick={async () => {
-                                if (!confirm('確定要刪除此預約（取消）嗎？')) return;
-                                try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
-                              }}
-                            >
-                              刪除
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {filteredAllReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
-              </div>
+                    const canCancel = status !== 'CANCELLED';
+                    return (
+                      <div key={r.id} className="cue-surface rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
+                              <div className="font-semibold break-words">{r.member?.name || r.member?.email || r.memberId}</div>
+                            </div>
+                            <div className="text-xs cue-muted mt-1">球枱：{r.table?.name || r.tableId}</div>
+                            <div className="text-xs cue-muted mt-0.5">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</div>
+                            <div className="text-xs mt-1">方案：{r.pricingScheme?.title || '-'}</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!canCancel}
+                            className={`flex-shrink-0 px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
+                            onClick={async () => {
+                              if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                              try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                            }}
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredAllReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
+                </div>
+
+                <div className="hidden sm:block overflow-x-auto -mx-2 px-2">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="cue-muted border-b cue-border">
+                        <th className="py-2 px-3">狀態</th>
+                        <th className="py-2 px-3">會員</th>
+                        <th className="py-2 px-3">球枱</th>
+                        <th className="py-2 px-3">時間</th>
+                        <th className="py-2 px-3">方案</th>
+                        <th className="py-2 px-3">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAllReservations.slice(0, 100).map((r: any) => {
+                        const status = String(r?.status || '').toUpperCase();
+                        const e = new Date(String(r?.endAt));
+                        const ended = Number.isFinite(e.getTime()) && e.getTime() < Date.now() - 60_000;
+                        const tag = status === 'PENDING'
+                          ? { label: '待確認', cls: 'bg-amber-900 text-white' }
+                          : status === 'BLOCKED'
+                            ? { label: '封鎖', cls: 'bg-slate-700 text-white' }
+                            : status === 'CONFIRMED' && ended
+                              ? { label: '已完成', cls: 'bg-emerald-900 text-white' }
+                              : status === 'CONFIRMED'
+                                ? { label: '已確認', cls: 'bg-blue-800 text-white' }
+                                : status === 'CANCELLED'
+                                  ? { label: '已取消', cls: 'cue-surface-strong cue-muted' }
+                                  : { label: status || '—', cls: 'cue-surface-strong cue-muted' };
+                        const canCancel = status !== 'CANCELLED';
+                        return (
+                          <tr key={r.id} className="border-b cue-border hover:brightness-95">
+                            <td className="py-2 px-3">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs ${tag.cls}`}>{tag.label}</span>
+                            </td>
+                            <td className="py-2 px-3">{r.member?.name || r.member?.email || r.memberId}</td>
+                            <td className="py-2 px-3">{r.table?.name || r.tableId}</td>
+                            <td className="py-2 px-3 text-sm cue-muted">{new Date(r.startAt).toLocaleString()} - {new Date(r.endAt).toLocaleTimeString()}</td>
+                            <td className="py-2 px-3 text-sm">{r.pricingScheme?.title || '-'}</td>
+                            <td className="py-2 px-3">
+                              <button
+                                type="button"
+                                disabled={!canCancel}
+                                className={`px-3 py-1 rounded text-sm ${canCancel ? 'bg-red-700 hover:bg-red-600 text-white' : 'cue-surface-strong cue-muted'}`}
+                                onClick={async () => {
+                                  if (!confirm('確定要刪除此預約（取消）嗎？')) return;
+                                  try { await cancelReservation(API_URL, operatorId, r.id); await loadData(); setToast('已取消'); setTimeout(() => setToast(null), 2000); } catch (e: any) { setToast(e.message || '失敗'); setTimeout(() => setToast(null), 2000); }
+                                }}
+                              >
+                                刪除
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {filteredAllReservations.length > 100 && <div className="text-xs cue-muted mt-2">只顯示最近 100 筆</div>}
+                </div>
+              </>
             )}
           </div>
           <div className="mt-6 grid gap-6">
@@ -3903,91 +4061,143 @@ const VenueDashboard: React.FC = () => {
             ) : matches.length === 0 ? (
               <div className="text-center text-gray-500 py-8">尚無記錄</div>
             ) : (
-              <div className="overflow-x-auto mt-3">
-                <table className="w-full text-sm text-left whitespace-nowrap">
-                  <thead className="cue-muted border-b cue-border">
-                    <tr>
-                      <th className="py-3 px-4">日期</th>
-                      <th className="py-3 px-4">房間/比賽代碼</th>
-                      <th className="py-3 px-4">比賽名稱</th>
-                      <th className="py-3 px-4">球手資料</th>
-                      <th className="py-3 px-4 text-center">比分</th>
-                      <th className="py-3 px-4">結果</th>
-                      <th className="py-3 px-4">用時</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700">
-                    {matches.map((m) => {
-                      const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
-                      const duration = m.durationSeconds 
-                        ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒` 
-                        : '-';
-                      
-                      return (
-                        <tr key={m.id} className="hover:brightness-95 transition-colors">
-                          <td className="py-3 px-4 align-top">{dateStr}</td>
-                          <td className="py-3 px-4 align-top">
-                            <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
-                              {m.matchCode || '-'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 align-top">
-                            <div className="font-medium">{m.matchName}</div>
+              <>
+                <div className="sm:hidden mt-3 space-y-2">
+                  {matches.map((m) => {
+                    const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
+                    const duration = m.durationSeconds
+                      ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒`
+                      : '-';
+                    const resultCls = m.result === 'In Progress' ? 'bg-yellow-900 text-yellow-200' : 'bg-green-900 text-green-200';
+                    return (
+                      <div key={m.id} className="cue-surface rounded-lg p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">{m.matchCode || '-'}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${resultCls}`}>{m.result}</span>
+                            </div>
+                            <div className="font-semibold break-words mt-1">{m.matchName}</div>
                             {m.framesRequired > 1 && (
-                              <div className="text-xs text-gray-500 mt-0.5">{m.framesRequired} 局決</div>
+                              <div className="text-xs cue-muted mt-0.5">{m.framesRequired} 局決</div>
                             )}
-                          </td>
-                          <td className="py-3 px-4 align-top">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{m.p0.name}</span>
+                            <div className="text-xs cue-muted mt-1">{dateStr}</div>
+                            <div className="mt-2 space-y-1 text-sm">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold">{m.p0.name}</span>
                                 {m.p0.handicap !== 0 && (
-                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                    {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
-                                  </span>
+                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">{m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}</span>
                                 )}
                                 {m.p0.maxBreak > 0 && (
-                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                    單杆: {m.p0.maxBreak}
-                                  </span>
+                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">單杆: {m.p0.maxBreak}</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{m.p1.name}</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold">{m.p1.name}</span>
                                 {m.p1.handicap !== 0 && (
-                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                    {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
-                                  </span>
+                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">{m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}</span>
                                 )}
                                 {m.p1.maxBreak > 0 && (
-                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                    單杆: {m.p1.maxBreak}
-                                  </span>
+                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">單杆: {m.p1.maxBreak}</span>
                                 )}
                               </div>
                             </div>
-                          </td>
-                          <td className="py-3 px-4 text-center font-bold text-lg align-top">
-                            {m.p0.score} - {m.p1.score}
-                          </td>
-                          <td className="py-3 px-4 align-top">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              m.result === 'In Progress' 
-                                ? 'bg-yellow-900 text-yellow-200' 
-                                : 'bg-green-900 text-green-200'
-                            }`}>
-                              {m.result}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 align-top text-gray-400">
-                            {duration}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <div className="font-extrabold text-lg">{m.p0.score} - {m.p1.score}</div>
+                            <div className="text-xs cue-muted mt-0.5">{duration}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden sm:block overflow-x-auto mt-3">
+                  <table className="w-full text-sm text-left whitespace-nowrap">
+                    <thead className="cue-muted border-b cue-border">
+                      <tr>
+                        <th className="py-3 px-4">日期</th>
+                        <th className="py-3 px-4">房間/比賽代碼</th>
+                        <th className="py-3 px-4">比賽名稱</th>
+                        <th className="py-3 px-4">球手資料</th>
+                        <th className="py-3 px-4 text-center">比分</th>
+                        <th className="py-3 px-4">結果</th>
+                        <th className="py-3 px-4">用時</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                      {matches.map((m) => {
+                        const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
+                        const duration = m.durationSeconds 
+                          ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒` 
+                          : '-';
+                        return (
+                          <tr key={m.id} className="hover:brightness-95 transition-colors">
+                            <td className="py-3 px-4 align-top">{dateStr}</td>
+                            <td className="py-3 px-4 align-top">
+                              <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
+                                {m.matchCode || '-'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <div className="font-medium">{m.matchName}</div>
+                              {m.framesRequired > 1 && (
+                                <div className="text-xs text-gray-500 mt-0.5">{m.framesRequired} 局決</div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{m.p0.name}</span>
+                                  {m.p0.handicap !== 0 && (
+                                    <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
+                                      {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
+                                    </span>
+                                  )}
+                                  {m.p0.maxBreak > 0 && (
+                                    <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
+                                      單杆: {m.p0.maxBreak}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{m.p1.name}</span>
+                                  {m.p1.handicap !== 0 && (
+                                    <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
+                                      {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
+                                    </span>
+                                  )}
+                                  {m.p1.maxBreak > 0 && (
+                                    <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
+                                      單杆: {m.p1.maxBreak}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center font-bold text-lg align-top">
+                              {m.p0.score} - {m.p1.score}
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                m.result === 'In Progress' 
+                                  ? 'bg-yellow-900 text-yellow-200' 
+                                  : 'bg-green-900 text-green-200'
+                              }`}>
+                                {m.result}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 align-top text-gray-400">
+                              {duration}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </details>
         </>
