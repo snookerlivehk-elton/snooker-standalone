@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
 import {
@@ -45,6 +45,7 @@ type InboxItem = {
 };
 
 const Me: React.FC = () => {
+  const location = useLocation();
   const session = (() => {
     try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
   })() as { id?: string; email?: string };
@@ -106,6 +107,15 @@ const Me: React.FC = () => {
     const s = String(profile?.name || session?.email || 'M').trim();
     return (s.slice(0, 1) || 'M').toUpperCase();
   }, [profile?.name, session?.email]);
+
+  const showExpiredBanner = useMemo(() => {
+    try {
+      const sp = new URLSearchParams(location.search || '');
+      return sp.get('expired') === '1';
+    } catch {
+      return false;
+    }
+  }, [location.search]);
 
   useEffect(() => {
     (async () => {
@@ -736,6 +746,31 @@ const Me: React.FC = () => {
 
         <div className="px-4 mt-4">
           <div className="max-w-2xl mx-auto">
+            {showExpiredBanner && (
+              <div className="cue-surface rounded-lg p-3 mb-4 ring-1 ring-amber-400/40">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-amber-300">場館限期已到期</div>
+                    <div className="text-sm cue-muted mt-1">
+                      場館管理功能已暫停（非永久刪除）。如需續期，請聯絡管理員。
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    onClick={() => {
+                      try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('expired');
+                        window.history.replaceState({}, '', url.toString());
+                      } catch {}
+                    }}
+                  >
+                    知道了
+                  </button>
+                </div>
+              </div>
+            )}
             {!!memberId && siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
               <div className="cue-surface rounded-lg p-3 mb-4">
                 <div className="flex items-start justify-between gap-3">
