@@ -20,6 +20,7 @@ import {
 } from './lib/api';
 import Tabs from './components/Tabs';
 import { useFeatureEnabled } from './lib/features';
+import HelpGuide from './components/HelpGuide';
 
 function normalizeHttpUrl(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -825,7 +826,26 @@ const Me: React.FC = () => {
             {!!memberId && activeTab === 'clubs' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-2">已加入場館</div>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">已加入場館</div>
+                    <HelpGuide
+                      title="已加入場館"
+                      intro="查看你已加入的場館、進入場館頁、查看消費積分。"
+                      steps={[
+                        '點選場館卡片進入場館公開頁。',
+                        '如顯示「消費積分」，代表該場館有啟用積分功能；數值會不定期更新。',
+                        '想加入新場館：由場館方提供邀請/加入方式（例如邀請訊息、QR 或連結）。',
+                      ]}
+                      tips={[
+                        '如見到「—」代表積分仍在讀取或暫時未有資料。',
+                        '只顯示最近 20 筆已加入場館。',
+                      ]}
+                      faq={[
+                        { q: '點解我見唔到「消費積分」？', a: '該場館未啟用積分功能，或系統已關閉此功能模組。' },
+                        { q: '點解積分數字好似未更新？', a: '積分會按場館記錄同步；如剛有消費/調整，稍後再刷新頁面。' },
+                      ]}
+                    />
+                  </div>
                   {clubsLoading && <div className="text-sm cue-muted">讀取中…</div>}
                   {!clubsLoading && joinedClubs.length === 0 && <div className="text-sm cue-muted">暫未加入任何場館</div>}
                   {!clubsLoading && joinedClubs.length > 0 && (
@@ -869,7 +889,27 @@ const Me: React.FC = () => {
                 <div className="cue-surface rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <div className="font-semibold text-lg">訊息</div>
-                    <div className="text-xs cue-muted">{inboxLoading ? '讀取中…' : `共 ${inboxItems.length} 則`}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs cue-muted">{inboxLoading ? '讀取中…' : `共 ${inboxItems.length} 則`}</div>
+                      <HelpGuide
+                        title="訊息"
+                        intro="查看系統/場館/直播/比賽通知，支援批量選取與刪除。"
+                        steps={[
+                          '點選訊息卡片可打開內容；會自動標記已讀。',
+                          '需要批量處理：先勾選訊息 → 使用「批量刪除」。',
+                          '用「全選 / 清除」快速管理多則訊息。',
+                          '如訊息內有「開啟連結」，可跳到相關頁面或外部網站。',
+                        ]}
+                        tips={[
+                          '刪除訊息不可復原，刪除前請先確認內容。',
+                          '如遇到讀取中，稍後再刷新頁面。',
+                        ]}
+                        faq={[
+                          { q: '點解有啲訊息刪唔到？', a: '部分訊息可能屬系統公告或功能模組限制；可先嘗試批量刪除，或稍後再試。' },
+                          { q: '未讀數字點計？', a: '未讀會以本機紀錄 + 後端訊息狀態整合；開啟過訊息後會自動變已讀。' },
+                        ]}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1016,17 +1056,38 @@ const Me: React.FC = () => {
                 <div className="cue-surface rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <div className="font-semibold text-lg">會員資料</div>
-                    <button
-                      type="button"
-                      disabled={savingProfile}
-                      onClick={() => {
-                        setToast(null);
-                        setEditMode((v) => !v);
-                      }}
-                      className={`px-3 py-1 rounded text-sm font-semibold ${savingProfile ? 'cue-surface-strong cue-muted' : 'cue-surface-strong hover:brightness-95'}`}
-                    >
-                      {editMode ? '取消編輯' : '編輯資料'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <HelpGuide
+                        title="會員資料"
+                        intro="編輯你的聯絡資料與地區設定，並可在此登出。"
+                        steps={[
+                          '按「編輯資料」進入編輯模式。',
+                          '修改電話/出生日期/地方/分區後按「儲存」。',
+                          '如不想保存，按「取消」恢復原本資料。',
+                          '按「登出」會清除本機登入狀態。',
+                        ]}
+                        tips={[
+                          '地方與分區需要同時選擇（不可只選其中一個）。',
+                          '地方/分區清單讀取中時會暫時不可選。',
+                          '電話可輸入 8 位本地號碼或 +852… 格式。',
+                        ]}
+                        faq={[
+                          { q: '點解地方/分區選項係灰色？', a: '代表資料仍在讀取中，或你未先選擇「地方」。' },
+                          { q: '我改咗資料但冇反映？', a: '請按「儲存」後等待提示，再刷新頁面確認。' },
+                        ]}
+                      />
+                      <button
+                        type="button"
+                        disabled={savingProfile}
+                        onClick={() => {
+                          setToast(null);
+                          setEditMode((v) => !v);
+                        }}
+                        className={`px-3 py-1 rounded text-sm font-semibold ${savingProfile ? 'cue-surface-strong cue-muted' : 'cue-surface-strong hover:brightness-95'}`}
+                      >
+                        {editMode ? '取消編輯' : '編輯資料'}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
@@ -1245,7 +1306,22 @@ const Me: React.FC = () => {
                 </div>
 
                 <details className="cue-surface rounded-lg p-4">
-                  <summary className="cursor-pointer font-semibold text-lg">更改密碼</summary>
+                  <summary className="cursor-pointer font-semibold text-lg flex items-center justify-between gap-3">
+                    <span>更改密碼</span>
+                    <HelpGuide
+                      title="更改密碼"
+                      intro="更新此帳戶的登入密碼。"
+                      steps={[
+                        '展開「更改密碼」。',
+                        '輸入新密碼（至少 6 位）及再次確認。',
+                        '按「更新密碼」。',
+                      ]}
+                      tips={[
+                        '更新後建議重新登入一次，確保新密碼生效。',
+                        '如兩次輸入不一致，系統會提示並拒絕更新。',
+                      ]}
+                    />
+                  </summary>
                   <div className="mt-3 space-y-2">
                     <input
                       type="password"
@@ -1296,7 +1372,22 @@ const Me: React.FC = () => {
             {!!memberId && activeTab === 'history' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
-                  <div className="font-semibold text-lg mb-2">歷史記錄</div>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold text-lg">歷史記錄</div>
+                    <HelpGuide
+                      title="歷史記錄"
+                      intro="查看歷史單杆統計與查詢記錄。"
+                      steps={[
+                        '上方顯示歷史最高及累計。',
+                        '可在「時間段 / 年 / 月」切換篩選方式。',
+                        '下方列表會顯示符合條件的單杆記錄；如有影片連結可點「連結」開啟。',
+                      ]}
+                      tips={[
+                        '表格在手機可左右滑查看欄位。',
+                        '只顯示前 200 筆記錄。',
+                      ]}
+                    />
+                  </div>
                   {breaksLoading ? (
                     <div className="text-sm cue-muted">讀取中…</div>
                   ) : (

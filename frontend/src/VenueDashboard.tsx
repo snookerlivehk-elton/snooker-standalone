@@ -5,6 +5,7 @@ import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateM
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
+import HelpGuide from './components/HelpGuide';
 
 type PricingRule = {
   daysOfWeek?: number[];
@@ -905,7 +906,30 @@ const VenueDashboard: React.FC = () => {
         <>
         {/* Club Profile Management */}
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">場館資料管理</h2>
+          <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+            <h2 className="text-xl font-bold">場館資料管理</h2>
+            <HelpGuide
+              title="主頁編輯：場館資料管理"
+              intro="設定場館公開頁顯示資料（名稱/簡介/聯絡方式/相片/設施/政策），並可在下方預覽。"
+              steps={[
+                '填寫或修改場館資料（名稱、簡介、電話、Email、地址、Google Map URL）。',
+                '上載 LOGO 或以 URL 設定 LOGO。',
+                '上載輪播相片：可一次選多張（最多 12 張），並可「設為封面 / 刪除」。',
+                '在「設施」以每行一項輸入（最多 24 項）。',
+                '在「政策」輸入多行文字（支援換行）。',
+                '完成後按頁面底部「儲存場館資料」。',
+              ]}
+              tips={[
+                'LOGO 建議正方形圖片；輪播相片建議 16:9，系統會自動縮放/壓縮。',
+                '封面是輪播第一張，未設定封面時會取你新加入的第一張相片。',
+                'Google Map URL 留空時，公開頁會用「地址」自動生成搜尋連結。',
+              ]}
+              faq={[
+                { q: '點解上載後圖片好似變咗質素？', a: '系統會自動縮放與壓縮（方便手機載入），屬正常現象。' },
+                { q: '點解公開頁未即時更新？', a: '請先按「儲存場館資料」，再刷新公開頁（或等數秒讓快取更新）。' },
+              ]}
+            />
+          </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
                <label className="block text-sm mb-1 cue-muted">場館名稱 (Club Name)</label>
@@ -1590,7 +1614,19 @@ const VenueDashboard: React.FC = () => {
           </div>
 
           <div className="glass rounded-xl p-6">
-            <div className="text-xl font-bold mb-4 border-b cue-border pb-2">球枱 QR</div>
+            <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+              <div className="text-xl font-bold">球枱 QR</div>
+              <HelpGuide
+                title="掃碼起鐘：球枱 QR"
+                intro="管理每張球枱的 QR，供會員掃碼開台計時。"
+                steps={[
+                  '先到「預約/球枱」新增球枱，系統會為球枱生成 QR。',
+                  '在此頁可查看每張球枱的 QR，並可複製連結或下載 SVG/PNG。',
+                  '如需更換 QR（避免舊 QR 被誤用），請到球枱管理區按「更換」。',
+                ]}
+                tips={['建議把 QR 貼到對應球枱，並定期檢查是否貼錯。']}
+              />
+            </div>
             {tables.length === 0 ? (
               <div className="cue-muted text-sm">暫無球枱</div>
             ) : (
@@ -1685,7 +1721,22 @@ const VenueDashboard: React.FC = () => {
         <div className="glass rounded-xl p-4 md:p-6">
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">消費積分</h2>
-            <button onClick={loadPointsData} className="text-sm accent-blue hover:underline">重新整理</button>
+            <div className="flex items-center gap-2">
+              <HelpGuide
+                title="消費積分"
+                intro="查詢積分流水、會員積分結餘，並可手動加減積分。"
+                steps={[
+                  '按「重新整理」更新最新積分資料。',
+                  '在「會員消費積分加減」搜尋並選擇會員，輸入加減分數及原因後提交。',
+                  '在「積分流水」可查看最近記錄，並可切換顯示方式/篩選。',
+                ]}
+                tips={[
+                  '加減積分屬即時生效操作，建議填寫原因，方便日後追查。',
+                  '如找不到會員，請確認會員是否已加入場館或輸入關鍵字是否正確。',
+                ]}
+              />
+              <button onClick={loadPointsData} className="text-sm accent-blue hover:underline">重新整理</button>
+            </div>
           </div>
 
           {pointsLoading ? (
@@ -1693,7 +1744,23 @@ const VenueDashboard: React.FC = () => {
           ) : (
             <div className="grid gap-6">
               <div>
-                <div className="font-semibold mb-2">會員消費積分加減</div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="font-semibold">會員消費積分加減</div>
+                  <HelpGuide
+                    title="會員消費積分加減"
+                    intro="為指定會員手動加/減積分（例如充值、抵扣台費、調整）。"
+                    steps={[
+                      '先用搜尋欄輸入姓名/電話/Email/會員編號。',
+                      '在下拉選單選擇正確會員（括號內顯示目前結餘）。',
+                      '輸入「加減分」（可負數）及原因。',
+                      '按提交後會即時生效，並出現在積分流水。',
+                    ]}
+                    tips={[
+                      '如輸入負數，代表扣分；建議填寫清晰原因。',
+                      '如找不到會員，請先確保該會員已加入此場館。',
+                    ]}
+                  />
+                </div>
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="md:col-span-3">
                     <label className="block text-sm mb-1 cue-muted">搜尋會員（名稱/電話/Email/會員編號）</label>
@@ -1837,7 +1904,23 @@ const VenueDashboard: React.FC = () => {
               </div>
 
               <div>
-                <div className="font-semibold mb-2">消費積分流水</div>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="font-semibold">消費積分流水</div>
+                  <HelpGuide
+                    title="消費積分流水"
+                    intro="查詢積分變動記錄，支援按模式/會員/月份或日期篩選。"
+                    steps={[
+                      '選擇模式：明細（逐筆）或按月（彙總）。',
+                      '如要按會員篩選，可先在上方搜尋會員，再在此選擇會員。',
+                      '選擇月份，或用日期範圍（由/至）進一步篩選。',
+                      '按「搜尋」載入結果。',
+                    ]}
+                    tips={[
+                      '明細模式會顯示每筆變動；按月模式適合快速看趨勢。',
+                      '如結果太多，建議先用日期或會員縮窄範圍。',
+                    ]}
+                  />
+                </div>
                 <div className="grid gap-3 md:grid-cols-6">
                   <div className="md:col-span-2">
                     <label className="block text-sm mb-1 cue-muted">模式</label>
@@ -2008,6 +2091,19 @@ const VenueDashboard: React.FC = () => {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">單杆紀錄</h2>
             <div className="flex flex-wrap gap-2 items-center">
+              <HelpGuide
+                title="單杆紀錄"
+                intro="新增單杆記錄，並按月份/會員查詢與統計。"
+                steps={[
+                  '右上角先選擇月份與會員（可選）作為篩選條件，按「重新整理」更新列表。',
+                  '要新增記錄：下方選擇會員、輸入分數與日期（可選：影片連結/備註），按「新增」。',
+                  '列表可查看已記錄的單杆，包含影片連結（如有）。',
+                ]}
+                tips={[
+                  '影片連結建議使用可直接開啟的 https:// URL。',
+                  '如看不到某會員，請先到「會員管理」確認該會員已加入場館。',
+                ]}
+              />
               <input
                 type="month"
                 value={breakFilterMonth}
@@ -2250,26 +2346,54 @@ const VenueDashboard: React.FC = () => {
         {activeTab === 'booking' && (
         bookingEnabled ? (
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">預約管理</h2>
+          <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+            <h2 className="text-xl font-bold">預約管理</h2>
+            <HelpGuide
+              title="預約/球枱：預約管理"
+              intro="管理進行中台鐘、手動預約/封鎖時段、待確認預約、全部預約。"
+              steps={[
+                '「進行中台鐘」可查看現正進行的掃碼起鐘；需要結算可按「落鐘」。',
+                '「手動預約 / 封鎖時段」可新增封鎖時段或為指定會員建立預約。',
+                '「待確認預約」可一鍵確認或取消。',
+                '「全部預約」可按日期查看全部預約記錄。',
+              ]}
+              tips={[
+                '落鐘會即時結算，操作前請先確認球枱及會員資料。',
+                '封鎖時段會禁止網上預約，用於包場、維修或活動。',
+              ]}
+            />
+          </div>
           {qrEnabled ? (
             <div className="cue-surface rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="font-semibold">進行中台鐘</div>
-                <button
-                  type="button"
-                  className="text-sm accent-blue hover:underline"
-                  onClick={async () => {
-                    try {
-                      setSessionsLoading(true);
-                      const rows = await getActiveTableSessions(API_URL, operatorId).catch(() => []);
-                      setActiveSessions(Array.isArray(rows) ? rows : []);
-                    } finally {
-                      setSessionsLoading(false);
-                    }
-                  }}
-                >
-                  {sessionsLoading ? '載入中...' : '重新整理'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <HelpGuide
+                    title="進行中台鐘"
+                    intro="查看正在計時的球枱，並可為指定球枱落鐘結算。"
+                    steps={[
+                      '按「重新整理」取得最新進行中台鐘列表。',
+                      '如需結算，按該行的「落鐘」。',
+                      '確認提示後會結束計時並結算。',
+                    ]}
+                    tips={['落鐘屬即時操作，建議先確認球枱/會員無誤。']}
+                  />
+                  <button
+                    type="button"
+                    className="text-sm accent-blue hover:underline"
+                    onClick={async () => {
+                      try {
+                        setSessionsLoading(true);
+                        const rows = await getActiveTableSessions(API_URL, operatorId).catch(() => []);
+                        setActiveSessions(Array.isArray(rows) ? rows : []);
+                      } finally {
+                        setSessionsLoading(false);
+                      }
+                    }}
+                  >
+                    {sessionsLoading ? '載入中...' : '重新整理'}
+                  </button>
+                </div>
               </div>
               {activeSessions.length === 0 ? (
                 <div className="cue-muted text-sm">暫無進行中台鐘</div>
@@ -2321,17 +2445,33 @@ const VenueDashboard: React.FC = () => {
           <div className="cue-surface rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="font-semibold">手動預約 / 封鎖時段</div>
-              <select
-                value={manualMode}
-                onChange={(e) => {
-                  const v = String(e.target.value || 'BLOCK').toUpperCase();
-                  setManualMode(v === 'MEMBER' ? 'MEMBER' : 'BLOCK');
-                }}
-                className="px-3 py-2 rounded cue-input text-sm"
-              >
-                <option value="BLOCK">封鎖時段（禁止網上預約）</option>
-                <option value="MEMBER">手動預約（指定會員）</option>
-              </select>
+              <div className="flex items-center gap-2">
+                <HelpGuide
+                  title="手動預約 / 封鎖時段"
+                  intro="用於包場/維修等封鎖時段，或為指定會員建立手動預約。"
+                  steps={[
+                    '選擇模式：封鎖時段 或 手動預約（指定會員）。',
+                    '選擇球枱、日期、開始時間及時數。',
+                    '手動預約模式需選擇會員；封鎖時段則不需要。',
+                    '按「建立」完成新增。',
+                  ]}
+                  tips={[
+                    '封鎖時段會禁止網上預約；適合活動、維修、包場。',
+                    '如建立失敗，請檢查球枱是否已停用或時間是否衝突。',
+                  ]}
+                />
+                <select
+                  value={manualMode}
+                  onChange={(e) => {
+                    const v = String(e.target.value || 'BLOCK').toUpperCase();
+                    setManualMode(v === 'MEMBER' ? 'MEMBER' : 'BLOCK');
+                  }}
+                  className="px-3 py-2 rounded cue-input text-sm"
+                >
+                  <option value="BLOCK">封鎖時段（禁止網上預約）</option>
+                  <option value="MEMBER">手動預約（指定會員）</option>
+                </select>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-6">
@@ -2444,7 +2584,18 @@ const VenueDashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-6">
-            <h3 className="font-semibold mb-2">待確認預約</h3>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h3 className="font-semibold">待確認預約</h3>
+              <HelpGuide
+                title="待確認預約"
+                intro="處理會員提交的預約申請（確認或取消）。"
+                steps={[
+                  '查看列表內的會員、球枱、時間及方案。',
+                  '按「確認」即核准預約；按「取消」即拒絕預約。',
+                ]}
+                tips={['如需要改時間/改球枱，建議先取消原預約，再用「手動預約」重新建立。']}
+              />
+            </div>
             {pendingReservations.length === 0 ? (
               <div className="cue-muted">暫無待確認預約</div>
             ) : (
@@ -2519,7 +2670,19 @@ const VenueDashboard: React.FC = () => {
             )}
           </div>
           <div className="mt-6">
-            <h3 className="font-semibold mb-2">全部預約</h3>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h3 className="font-semibold">全部預約</h3>
+              <HelpGuide
+                title="全部預約"
+                intro="按日期查看全部預約記錄，並可選擇顯示已完成/已取消。"
+                steps={[
+                  '選擇日期可縮窄查詢範圍（可留空）。',
+                  '勾選「顯示已完成/已取消」可包含歷史狀態。',
+                  '按「清除」可重置篩選。',
+                ]}
+                tips={['手機版可用列表方式快速瀏覽；桌面版以表格顯示更多欄位。']}
+              />
+            </div>
             <div className="grid gap-2 sm:flex sm:items-end sm:justify-between mb-3">
               <label className="grid gap-1">
                 <div className="text-xs cue-muted">日期（可選）</div>
@@ -2664,7 +2827,24 @@ const VenueDashboard: React.FC = () => {
           </div>
           <div className="mt-6 grid gap-6">
             <div>
-              <h3 className="font-semibold mb-2">球枱</h3>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 className="font-semibold">球枱</h3>
+                <HelpGuide
+                  title="球枱管理"
+                  intro="新增/編輯球枱、設定正價、啟用/停用、管理球枱 QR。"
+                  steps={[
+                    '在上方輸入球枱名稱（可選：正價/時、備註）後按「新增」。',
+                    '在列表可直接修改球枱名稱/正價，按「儲存」寫入後端。',
+                    '用「啟用」開關控制是否可被網上預約（停用後會隱藏/不可預約）。',
+                    '如有掃碼起鐘，會顯示 QR：可「複製連結 / 下載SVG / 下載PNG / 更換」。',
+                    '如需移除球枱，按「刪除」（已有預約紀錄的球枱可能無法刪除，建議改用停用）。',
+                  ]}
+                  tips={[
+                    '更換 QR 會令舊 QR 失效，避免張貼錯誤 QR。',
+                    '手機版列表可能需要上下滑動；桌面版可一次看到更多按鈕。',
+                  ]}
+                />
+              </div>
               <div className="flex gap-2 mb-3 flex-wrap">
                 <input value={newTableName} onChange={(e) => setNewTableName(e.target.value)} className="flex-1 min-w-[180px] px-3 py-2 rounded cue-input" placeholder="球枱名稱" />
                 <input value={newTableBasePrice} onChange={(e) => setNewTableBasePrice(e.target.value)} type="number" step="0.01" className="w-32 px-3 py-2 rounded cue-input" placeholder="正價/時" />
@@ -2819,7 +2999,23 @@ const VenueDashboard: React.FC = () => {
               </div>
             </div>
             <div>
-              <h3 className="font-semibold mb-2">收費方案</h3>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 className="font-semibold">收費方案</h3>
+                <HelpGuide
+                  title="收費方案"
+                  intro="建立不同收費/時段方案，並可套用到預約或球枱。"
+                  steps={[
+                    '在「方案標題/說明/價目」輸入基本資料。',
+                    '如需要限制生效時段，按「新增規則」加入星期/時間/每小時價。',
+                    '按「新增方案」建立；建立後可在列表內編輯內容並按「儲存」。',
+                    '如要停用某方案，可關閉「啟用」或直接刪除（視乎系統限制）。',
+                  ]}
+                  tips={[
+                    '建議先建立「正價」方案，再按需要新增時段優惠（例如平日早場）。',
+                    '若某方案已被預約引用，刪除可能會受限制；可改用停用。',
+                  ]}
+                />
+              </div>
               <div className="grid gap-2 mb-3">
                 <input value={newPricingTitle} onChange={(e) => setNewPricingTitle(e.target.value)} className="px-3 py-2 rounded cue-input" placeholder="方案標題" />
                 <input value={newPricingDesc} onChange={(e) => setNewPricingDesc(e.target.value)} className="px-3 py-2 rounded cue-input" placeholder="方案說明" />
@@ -3088,7 +3284,22 @@ const VenueDashboard: React.FC = () => {
         <>
         {liveEnabled ? (
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽直播通告</h2>
+          <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+            <h2 className="text-xl font-bold">比賽直播通告</h2>
+            <HelpGuide
+              title="比賽直播通告"
+              intro="建立/更新直播通告，發佈後會推送到會員（以場館訊息形式）。"
+              steps={[
+                '填寫日期、時間、標題及直播連結。',
+                '按「發佈」建立通告；如已在編輯模式，按「更新」保存修改。',
+                '在下方列表可按「編輯」載入回上方表單，或按「刪除」移除通告。',
+              ]}
+              tips={[
+                '直播連結建議使用可直接開啟的 https:// URL。',
+                '刪除通告後，已推送的訊息仍可能保留在會員端歷史（視乎會員是否已刪除）。',
+              ]}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-6">
             <div className="md:col-span-2">
               <label className="block text-sm mb-1 cue-muted">日期</label>
@@ -3237,7 +3448,22 @@ const VenueDashboard: React.FC = () => {
 
         {clubMessagesEnabled ? (
         <div className="glass rounded-xl p-6">
-           <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">發送場館訊息</h2>
+           <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+             <h2 className="text-xl font-bold">發送場館訊息</h2>
+             <HelpGuide
+               title="發送場館訊息"
+               intro="向已加入場館的會員推送訊息（可新增、編輯、刪除）。"
+               steps={[
+                 '輸入標題及內容後按「發送」。',
+                 '如需修改已發送訊息，可在下方列表按「編輯」載入，再按「更新」。',
+                 '如需移除訊息，可在列表按「刪除」。',
+               ]}
+               tips={[
+                 '內容支援換行，會員端會以多行顯示。',
+                 '刪除後不可復原，操作前請確認。',
+               ]}
+             />
+           </div>
            <div className="space-y-4">
               <div>
                  <label className="block text-sm mb-1 cue-muted">標題</label>
@@ -3376,7 +3602,23 @@ const VenueDashboard: React.FC = () => {
 
         {tournamentsEnabled ? (
         <div className="glass rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4 border-b cue-border pb-2">比賽報名（管理）</h2>
+          <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
+            <h2 className="text-xl font-bold">比賽報名（管理）</h2>
+            <HelpGuide
+              title="比賽報名（管理）"
+              intro="建立/上架/關閉比賽報名，並管理待確認報名與已確認名單。"
+              steps={[
+                '填寫標題、上限、截止日期、比賽時間（可選）、詳情與參賽指引後按「新增」。',
+                '在下方列表可「選擇」某個比賽以查看報名名單。',
+                '按「上架」讓會員端可見並可報名；按「關閉」停止報名與後續操作。',
+                '在「待確認報名」可逐一確認/取消；在「已確認」可查看名單。',
+              ]}
+              tips={[
+                '建議先完成內容後再上架，避免會員看到未完成資訊。',
+                '截止日期到期後可手動關閉，以免再有新報名。',
+              ]}
+            />
+          </div>
 
           <div className="grid gap-3 md:grid-cols-6">
             <div className="md:col-span-3">
@@ -3743,24 +3985,41 @@ const VenueDashboard: React.FC = () => {
           <div className="glass rounded-xl p-6">
             <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
               <div className="text-xl font-bold">會員管理</div>
-              <button
-                type="button"
-                className="px-4 py-2 rounded cue-surface hover:brightness-95 font-semibold"
-                onClick={async () => {
-                  if (!operatorId) return;
-                  try {
-                    const rows = await getClubMembers(API_URL, operatorId).catch(() => []);
-                    setClubMembers(Array.isArray(rows) ? rows : []);
-                    setToast('已更新會員列表');
-                    setTimeout(() => setToast(null), 2000);
-                  } catch (e: any) {
-                    setToast(e?.message || '更新失敗');
-                    setTimeout(() => setToast(null), 3000);
-                  }
-                }}
-              >
-                重新整理
-              </button>
+              <div className="flex items-center gap-2">
+                <HelpGuide
+                  title="會員管理"
+                  intro="管理已加入場館的會員：搜尋、調整評分、移除會員、設定地區。"
+                  steps={[
+                    '用搜尋框輸入名稱/電話/Email/會員編號縮窄列表。',
+                    '在「評分」欄輸入數值後按「儲存」更新會員評分。',
+                    '如要移除會員，使用操作欄的移除按鈕（移除後需重新加入才會出現）。',
+                    '如需要設定會員地區，可在操作欄開啟地區設定視窗。',
+                    '按「重新整理」可更新會員列表。',
+                  ]}
+                  tips={[
+                    '評分只影響場館內部顯示/排序（如有），不會更改會員的登入資料。',
+                    '移除會員屬即時操作，建議先確認會員身份。',
+                  ]}
+                />
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded cue-surface hover:brightness-95 font-semibold"
+                  onClick={async () => {
+                    if (!operatorId) return;
+                    try {
+                      const rows = await getClubMembers(API_URL, operatorId).catch(() => []);
+                      setClubMembers(Array.isArray(rows) ? rows : []);
+                      setToast('已更新會員列表');
+                      setTimeout(() => setToast(null), 2000);
+                    } catch (e: any) {
+                      setToast(e?.message || '更新失敗');
+                      setTimeout(() => setToast(null), 3000);
+                    }
+                  }}
+                >
+                  重新整理
+                </button>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-3 mb-4">
@@ -3980,9 +4239,25 @@ const VenueDashboard: React.FC = () => {
           <div className="glass rounded-xl p-6">
             <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
               <h2 className="text-xl font-bold">進行中的房間</h2>
-              <span className="text-sm cue-muted">
-                {activeRooms.length} / 5
-              </span>
+              <div className="flex items-center gap-2">
+                <HelpGuide
+                  title="計分/房間"
+                  intro="建立房間用於計分/直播/Overlay，並可複製 Setup/Live/Overlay 連結。"
+                  steps={[
+                    '按「建立新房間」建立一個房間（最多 5 個同時進行）。',
+                    '建立後可用「Copy Setup / Copy Live / Copy Overlay」複製不同用途連結。',
+                    '如房間已完結，可按「刪除」移除進行中房間。',
+                    '下方「歷史房間記錄」可查看過往房間與結果。',
+                  ]}
+                  tips={[
+                    'Overlay 連結適合 OBS Browser Source；Live 連結適合直播展示；Setup 用於設定玩家/局數等。',
+                    '如連結無法開啟，請確認網域/BASE_PATH 及網絡環境。',
+                  ]}
+                />
+                <span className="text-sm cue-muted">
+                  {activeRooms.length} / 5
+                </span>
+              </div>
             </div>
             
             <p className="cue-muted mb-6 text-sm">
@@ -4054,7 +4329,19 @@ const VenueDashboard: React.FC = () => {
           </div>
 
           <details className="glass rounded-xl p-6">
-            <summary className="cursor-pointer text-xl font-bold">歷史房間記錄（可展開）</summary>
+            <summary className="cursor-pointer text-xl font-bold flex items-center justify-between gap-3">
+              <span>歷史房間記錄（可展開）</span>
+              <HelpGuide
+                title="歷史房間記錄"
+                intro="查看已建立過的房間/比賽記錄，並可複製連結回放或重新使用。"
+                steps={[
+                  '展開後按「重新整理」載入最新記錄。',
+                  '手機版以卡片顯示；桌面版以表格顯示更多欄位。',
+                  '可按需要複製對應連結或查看比賽詳情。',
+                ]}
+                tips={['若記錄較多，可用瀏覽器搜尋（頁內搜尋）快速定位 matchCode/名稱。']}
+              />
+            </summary>
             <div className="mt-4 flex justify-end">
               <button 
                 type="button"
