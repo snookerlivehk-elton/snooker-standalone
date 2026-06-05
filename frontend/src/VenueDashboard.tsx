@@ -28,6 +28,8 @@ const VenueDashboard: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
+  const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [clubProfile, setClubProfile] = useState<any>({});
@@ -577,9 +579,17 @@ const VenueDashboard: React.FC = () => {
           const raw = (m as any)?.access_expires_at ?? (m as any)?.accessExpiresAt ?? null;
           if (raw) {
             const d = new Date(raw);
-            if (!Number.isNaN(d.getTime()) && d.getTime() <= Date.now()) {
-              if (!canceled) navigate('/me?expired=1', { replace: true });
-              return;
+            if (!Number.isNaN(d.getTime())) {
+              const now = Date.now();
+              const daysLeft = Math.ceil((d.getTime() - now) / (24 * 60 * 60 * 1000));
+              if (!canceled) {
+                setVenueAccessExpiresAt(d.toISOString());
+                setVenueAccessDaysLeft(Number.isFinite(daysLeft) ? daysLeft : null);
+              }
+              if (d.getTime() <= now) {
+                if (!canceled) navigate('/me?expired=1', { replace: true });
+                return;
+              }
             }
           }
         }
@@ -799,6 +809,37 @@ const VenueDashboard: React.FC = () => {
   return (
     <div className="brand-page p-4 sm:p-6">
       <div className="max-w-4xl mx-auto grid gap-6">
+        {venueAccessDaysLeft !== null && venueAccessDaysLeft >= 0 && venueAccessDaysLeft <= 30 && (
+          <div
+            className="sticky z-50"
+            style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+          >
+            <div className="rounded-lg bg-amber-400 text-slate-950 px-4 py-3 shadow-lg ring-2 ring-amber-200">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-extrabold">
+                    場館限期尚餘 {venueAccessDaysLeft} 日
+                  </div>
+                  {venueAccessExpiresAt && (
+                    <div className="text-sm opacity-80 mt-0.5">
+                      到期日：{new Date(venueAccessExpiresAt).toISOString().slice(0, 10)}（請盡快續費）
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded bg-black/10 hover:bg-black/15 text-sm font-semibold"
+                  onClick={() => {
+                    setVenueAccessDaysLeft(null);
+                    setVenueAccessExpiresAt(null);
+                  }}
+                >
+                  隱藏
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

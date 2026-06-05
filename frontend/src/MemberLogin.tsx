@@ -3,15 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { GoogleLogin } from '@react-oauth/google';
 import { getMember, loginGoogle, loginMember, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
-import Tabs from './components/Tabs';
 
 const MemberLogin: React.FC = () => {
   const [view, setView] = useState<'login' | 'forgot-request' | 'forgot-reset'>('login');
-  const [method, setMethod] = useState<'email' | 'phone' | 'google'>('email');
+  const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phoneCountry, setPhoneCountry] = useState('+852');
-  const [phoneNumber, setPhoneNumber] = useState('');
   
   // Forgot password states
   const [resetCode, setResetCode] = useState('');
@@ -53,6 +51,13 @@ const MemberLogin: React.FC = () => {
     };
   }, []);
 
+  function normalizePhoneInput(country: string, raw: string) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (s.startsWith('+') || s.startsWith('00')) return normalizePhoneE164('', s);
+    return normalizePhoneE164(country, s);
+  }
+
   function pickPostLoginPath(role: string | null | undefined, target: string) {
     const r = String(role || '').toUpperCase();
     const safeTarget = target && target.startsWith('/') ? target : '';
@@ -68,11 +73,15 @@ const MemberLogin: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      const em = email.trim().toLowerCase();
-      const phoneE164 = normalizePhoneE164(phoneCountry, phoneNumber);
-      const result = await loginMember(API_URL, method === 'phone'
-        ? { identifier: phoneE164, password }
-        : { email: em, password }
+      const raw = String(identifier || '').trim();
+      const isEmail = raw.includes('@');
+      const em = isEmail ? raw.toLowerCase() : '';
+      const phoneE164 = !isEmail ? normalizePhoneInput(phoneCountry, raw) : '';
+      if (!isEmail && !phoneE164) throw new Error('手機號碼格式不正確');
+
+      const result = await loginMember(API_URL, isEmail
+        ? { email: em, password }
+        : { identifier: phoneE164, password }
       );
       const id = result?.id || result?.member?.id;
       let role = result?.role || result?.member?.role;
@@ -86,8 +95,8 @@ const MemberLogin: React.FC = () => {
       }
       
       localStorage.setItem('memberSession', JSON.stringify({
-        email: method === 'email' ? em : '',
-        phone: method === 'phone' ? phoneE164 : '',
+        email: em,
+        phone: phoneE164,
         id,
         role,
       }));
@@ -187,63 +196,31 @@ const MemberLogin: React.FC = () => {
 
         {view === 'login' && (
           <>
-            <Tabs
-              items={[
-                { key: 'email', label: 'Email' },
-                { key: 'phone', label: '手機' },
-                { key: 'google', label: 'Google' },
-              ]}
-              activeKey={method}
-              onChange={(k) => {
-                setMethod(k as any);
-                setError(null);
-                setSuccessMsg(null);
-              }}
-            />
+            <form onSubmit={onLogin} className="mt-5 grid gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email / 手機號碼</label>
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                  placeholder="例如 name@example.com 或 91234567 或 +85291234567"
+                  required
+                />
+              </div>
 
-            {method !== 'google' && (
-              <form onSubmit={onLogin} className="mt-5 grid gap-4">
-                {method === 'email' && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value.toLowerCase())}
-                      className="w-full px-3 py-2 rounded cue-input lowercase"
-                      required
-                    />
-                  </div>
-                )}
-
-                {method === 'phone' && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium mb-1">地區</label>
-                      <select
-                        value={phoneCountry}
-                        onChange={(e) => setPhoneCountry(e.target.value)}
-                        className="w-full px-3 py-2 rounded cue-input"
-                      >
-                        {phoneOptions.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium mb-1">手機號碼</label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="w-full px-3 py-2 rounded cue-input"
-                        placeholder="例如 91234567"
-                        required
-                      />
-                    </div>
-                  </div>
-                )}
+              <div>
+                <label className="block text-sm font-medium mb-1">電話地區（電話用）</label>
+                <select
+                  value={phoneCountry}
+                  onChange={(e) => setPhoneCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded cue-input"
+                >
+                  {phoneOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-1">密碼</label>
@@ -264,21 +241,23 @@ const MemberLogin: React.FC = () => {
                 </button>
 
                 <div className="flex justify-between mt-2 text-sm cue-muted">
-                  {method === 'email' ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setView('forgot-request');
-                        setError(null);
-                        setSuccessMsg(null);
-                      }}
-                      className="hover:brightness-95 underline"
-                    >
-                      忘記密碼？
-                    </button>
-                  ) : (
-                    <div />
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const raw = String(identifier || '').trim().toLowerCase();
+                      if (!raw.includes('@')) {
+                        setError('請輸入註冊 Email 才可重設密碼');
+                        return;
+                      }
+                      setEmail(raw);
+                      setView('forgot-request');
+                      setError(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="hover:brightness-95 underline"
+                  >
+                    忘記密碼？
+                  </button>
                   <button
                     type="button"
                     onClick={() => navigate('/members/register')}
@@ -288,26 +267,18 @@ const MemberLogin: React.FC = () => {
                   </button>
                 </div>
               </form>
-            )}
 
-            {method === 'google' && (
-              <div className="mt-5">
-                <div className="flex justify-center">
-                  <GoogleLogin
-                    onSuccess={onGoogleSuccess}
-                    onError={() => setError('Google Login Failed')}
-                    theme="outline"
-                    text="signin_with"
-                    shape="pill"
-                  />
-                </div>
-                <div className="mt-3 text-center text-sm cue-muted">
-                  <button type="button" onClick={() => navigate('/members/register')} className="hover:brightness-95 underline">
-                    首次使用？註冊
-                  </button>
-                </div>
+            <div className="mt-5">
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={onGoogleSuccess}
+                  onError={() => setError('Google Login Failed')}
+                  theme="outline"
+                  text="signin_with"
+                  shape="pill"
+                />
               </div>
-            )}
+            </div>
 
           </>
         )}

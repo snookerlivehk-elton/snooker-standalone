@@ -7,6 +7,8 @@ import {
   getAvailability,
   getClubLeaderboardHighest,
   getClubLeaderboardMonthly,
+  getClubProfile,
+  getMember,
   getMyJoinedClubs,
   getMyReservations,
   getMyClubPointsBalance,
@@ -99,6 +101,8 @@ const ClubPublicPage: React.FC = () => {
   }, []);
   const isLoggedIn = !!(session && (session as any).id);
   const sessionMemberId = String((session as any)?.id || '').trim() || null;
+  const sessionRole = String((session as any)?.role || '').toUpperCase();
+  const isAdminSession = sessionRole === 'ADMIN';
 
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
@@ -113,6 +117,44 @@ const ClubPublicPage: React.FC = () => {
   const [siteAdOpen, setSiteAdOpen] = useState(false);
   const [siteAdNextAt, setSiteAdNextAt] = useState<number | null>(null);
   const siteAdWasOpenRef = useRef(false);
+
+  const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
+  const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!clubId || !sessionMemberId || !isAdminSession) {
+      setVenueAccessExpiresAt(null);
+      setVenueAccessDaysLeft(null);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const [m, myClub] = await Promise.all([
+          getMember(API_URL, sessionMemberId),
+          getClubProfile(API_URL, sessionMemberId),
+        ]);
+        const myClubId = String((myClub as any)?.id || '').trim();
+        if (!myClubId || myClubId !== String(clubId)) {
+          if (mounted) {
+            setVenueAccessExpiresAt(null);
+            setVenueAccessDaysLeft(null);
+          }
+          return;
+        }
+        const raw = (m as any)?.access_expires_at ?? (m as any)?.accessExpiresAt ?? null;
+        if (!raw) return;
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return;
+        const now = Date.now();
+        const daysLeft = Math.ceil((d.getTime() - now) / (24 * 60 * 60 * 1000));
+        if (!mounted) return;
+        setVenueAccessExpiresAt(d.toISOString());
+        setVenueAccessDaysLeft(Number.isFinite(daysLeft) ? daysLeft : null);
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, [clubId, sessionMemberId, isAdminSession]);
 
   useEffect(() => {
     let mounted = true;
@@ -816,6 +858,41 @@ const ClubPublicPage: React.FC = () => {
       )}
 
       <div style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        {venueAccessDaysLeft !== null && venueAccessDaysLeft >= 0 && venueAccessDaysLeft <= 30 && (
+          <div
+            className="sticky z-40"
+            style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+          >
+            <div className="px-4 pt-3">
+              <div className="max-w-2xl mx-auto">
+                <div className="rounded-lg bg-amber-400 text-slate-950 px-4 py-3 shadow-lg ring-2 ring-amber-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-extrabold">
+                        場館限期尚餘 {venueAccessDaysLeft} 日
+                      </div>
+                      {venueAccessExpiresAt && (
+                        <div className="text-sm opacity-80 mt-0.5">
+                          到期日：{new Date(venueAccessExpiresAt).toISOString().slice(0, 10)}（請盡快續費）
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded bg-black/10 hover:bg-black/15 text-sm font-semibold"
+                      onClick={() => {
+                        setVenueAccessDaysLeft(null);
+                        setVenueAccessExpiresAt(null);
+                      }}
+                    >
+                      隱藏
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
           <div className="px-4 pt-3">
             <div className="max-w-2xl mx-auto">
