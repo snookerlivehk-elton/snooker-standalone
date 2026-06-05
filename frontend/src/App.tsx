@@ -103,10 +103,10 @@ function App() {
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
-        <Route path="/members/login" element={<MemberLogin mode="member" />} />
+        <Route path="/members/login" element={<MemberLogin />} />
         <Route path="/operator/login" element={<Navigate to="/venue/login" replace />} />
         <Route path="/operator/dashboard" element={<Navigate to="/venue/dashboard" replace />} />
-        <Route path="/venue/login" element={<MemberLogin mode="venue" />} />
+        <Route path="/venue/login" element={<MemberLogin />} />
         <Route path="/member/:id" element={<Navigate to="/me" replace />} />
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ClubPublicPage />} />

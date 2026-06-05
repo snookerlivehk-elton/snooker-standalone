@@ -458,13 +458,6 @@ const MemberRegister: React.FC = () => {
           >
             已有帳號？去登入
           </button>
-          <button
-            type="button"
-            onClick={() => navigate('/venue/login')}
-            className="rounded-md cue-surface-strong hover:brightness-95 px-3 py-2 transition-colors"
-          >
-            我是場館/球會管理員
-          </button>
         </div>
       </div>
     </div>

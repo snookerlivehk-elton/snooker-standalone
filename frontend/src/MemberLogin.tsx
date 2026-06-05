@@ -2,14 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { GoogleLogin } from '@react-oauth/google';
-import { loginMember, loginGoogle, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
+import { getMember, loginGoogle, loginMember, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
 import Tabs from './components/Tabs';
 
-interface MemberLoginProps {
-  mode?: 'member' | 'venue';
-}
-
-const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
+const MemberLogin: React.FC = () => {
   const [view, setView] = useState<'login' | 'forgot-request' | 'forgot-reset'>('login');
   const [method, setMethod] = useState<'email' | 'phone' | 'google'>('email');
   const [email, setEmail] = useState('');
@@ -31,7 +27,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
   const nextPath = useMemo(() => {
     try {
       const sp = new URLSearchParams(location.search || '');
-      const v = sp.get('next') || '';
+      const v = sp.get('next') || sp.get('redirect') || '';
       return v.startsWith('/') ? v : '';
     } catch {
       return '';
@@ -57,6 +53,16 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
     };
   }, []);
 
+  function pickPostLoginPath(role: string | null | undefined, target: string) {
+    const r = String(role || '').toUpperCase();
+    const safeTarget = target && target.startsWith('/') ? target : '';
+    if (r === 'ADMIN') {
+      if (safeTarget.startsWith('/venue') || safeTarget.startsWith('/admin')) return safeTarget;
+      return '/venue/dashboard';
+    }
+    return safeTarget || '/me';
+  }
+
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -69,9 +75,15 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
         : { email: em, password }
       );
       const id = result?.id || result?.member?.id;
-      const role = result?.role || result?.member?.role;
+      let role = result?.role || result?.member?.role;
       
       if (!id) throw new Error('登入失敗');
+      if (!role) {
+        try {
+          const m = await getMember(API_URL, String(id));
+          role = (m as any)?.role || null;
+        } catch {}
+      }
       
       localStorage.setItem('memberSession', JSON.stringify({
         email: method === 'email' ? em : '',
@@ -80,11 +92,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
         role,
       }));
       
-      if (mode === 'venue') {
-        navigate('/venue/dashboard');
-      } else {
-        navigate(nextPath || `/member/${id}`);
-      }
+      navigate(pickPostLoginPath(role, nextPath), { replace: true });
     } catch (err: any) {
       setError(err.message || '登入失敗');
     } finally {
@@ -101,18 +109,20 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
       
       const result = await loginGoogle(API_URL, credential);
       const id = result?.id || result?.member?.id;
-      const role = result?.role || result?.member?.role;
+      let role = result?.role || result?.member?.role;
       const email = result?.member?.email;
 
       if (!id) throw new Error('登入失敗');
+      if (!role) {
+        try {
+          const m = await getMember(API_URL, String(id));
+          role = (m as any)?.role || null;
+        } catch {}
+      }
 
       localStorage.setItem('memberSession', JSON.stringify({ email: String(email || '').trim().toLowerCase(), id, role }));
 
-      if (mode === 'venue') {
-        navigate('/venue/dashboard');
-      } else {
-        navigate(nextPath || `/member/${id}`);
-      }
+      navigate(pickPostLoginPath(role, nextPath), { replace: true });
     } catch (err: any) {
       setError(err.message || '登入失敗');
     } finally {
@@ -169,7 +179,7 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
         <div className="text-center mb-6">
           <div className="text-xl font-bold accent-yellow uppercase tracking-wider">Cue Aim System</div>
           <h2 className="text-2xl font-bold mt-1">
-            {view === 'login' && (mode === 'venue' ? '場館/球會登入' : '會員登入')}
+            {view === 'login' && '登入'}
             {view === 'forgot-request' && '忘記密碼'}
             {view === 'forgot-reset' && '重設密碼'}
           </h2>
@@ -299,17 +309,6 @@ const MemberLogin: React.FC<MemberLoginProps> = ({ mode = 'member' }) => {
               </div>
             )}
 
-            <div className="mt-5 text-center border-t pt-3" style={{ borderColor: 'var(--brand-border)' }}>
-              {mode === 'member' ? (
-                <button type="button" onClick={() => navigate('/venue/login')} className="text-sm accent-yellow hover:brightness-95">
-                  我是場館/球會管理員？在此登入
-                </button>
-              ) : (
-                <button type="button" onClick={() => navigate('/members/login')} className="text-sm accent-yellow hover:brightness-95">
-                  我是普通會員？在此登入
-                </button>
-              )}
-            </div>
           </>
         )}
 
