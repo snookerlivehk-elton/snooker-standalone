@@ -4083,6 +4083,18 @@ const VenueDashboard: React.FC = () => {
                             <td className="py-2 px-2 cue-muted">{email}</td>
                             <td className="py-2 px-2">
                               <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="w-10 h-9 rounded cue-surface-strong hover:brightness-95 font-extrabold"
+                                  onClick={() => {
+                                    const cur = String(memberRatingDraft[id] ?? inputValue ?? '').trim();
+                                    const next = cur === '' ? '-' : cur === '-' ? '' : cur.startsWith('-') ? cur.slice(1) : `-${cur}`;
+                                    setMemberRatingDraft((prev) => ({ ...(prev || {}), [id]: next }));
+                                  }}
+                                  aria-label="切換正負號"
+                                >
+                                  ±
+                                </button>
                                 <input
                                   value={inputValue}
                                   onChange={(e) => {
@@ -4091,6 +4103,8 @@ const VenueDashboard: React.FC = () => {
                                   }}
                                   className="w-24 px-3 py-1.5 rounded cue-input"
                                   inputMode="numeric"
+                                  pattern="-?[0-9]*"
+                                  placeholder="0"
                                 />
                                 <button
                                   type="button"
