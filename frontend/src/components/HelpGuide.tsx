@@ -63,13 +63,13 @@ export default function HelpGuide(props: {
                 </button>
               </div>
 
-              <div className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {steps.length > 0 && (
                   <div className="cue-surface rounded-lg p-3">
                     <div className="font-semibold mb-2">操作步驟</div>
-                    <ol className="list-decimal pl-5 space-y-1 text-sm">
+                    <ol className="list-decimal pl-5 space-y-1 text-sm marker:text-[var(--brand-fg)]">
                       {steps.map((s, i) => (
-                        <li key={`${i}-${s}`} className="text-white/90">
+                        <li key={`${i}-${s}`} className="text-[var(--brand-fg)]">
                           {s}
                         </li>
                       ))}
@@ -80,9 +80,9 @@ export default function HelpGuide(props: {
                 {tips.length > 0 && (
                   <div className="cue-surface rounded-lg p-3">
                     <div className="font-semibold mb-2">注意事項</div>
-                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                    <ul className="list-disc pl-5 space-y-1 text-sm marker:text-[var(--brand-fg)]">
                       {tips.map((s, i) => (
-                        <li key={`${i}-${s}`} className="text-white/90">
+                        <li key={`${i}-${s}`} className="text-[var(--brand-fg)]">
                           {s}
                         </li>
                       ))}
