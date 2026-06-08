@@ -261,6 +261,32 @@ model SiteAd {
   createdAt         DateTime @default(now())
 }
 
+model SiteAdItem {
+  id        String   @id @default(uuid())
+  enabled   Boolean  @default(true)
+  imageUrl  String?
+  linkUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  placements SiteAdPlacementItem[]
+}
+
+model SiteAdPlacementItem {
+  id        String   @id @default(uuid())
+  placement String
+  itemId    String
+  enabled   Boolean  @default(true)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item SiteAdItem @relation(fields: [itemId], references: [id])
+
+  @@unique([placement, itemId])
+  @@index([placement, sort])
+}
+
 model FeatureFlag {
   key       String   @id
   enabled   Boolean  @default(true)

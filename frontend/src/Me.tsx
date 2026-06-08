@@ -66,7 +66,9 @@ const Me: React.FC = () => {
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [siteNotice, setSiteNotice] = useState<any>(null);
   const [siteNoticeLoading, setSiteNoticeLoading] = useState(false);
-  const [siteAd, setSiteAd] = useState<any>(null);
+  const [siteAdItems, setSiteAdItems] = useState<any[]>([]);
+  const [siteAdCurrent, setSiteAdCurrent] = useState<any>(null);
+  const [siteAdConfig, setSiteAdConfig] = useState<{ enabled: boolean; displaySeconds: number; minIntervalMinutes: number; maxIntervalMinutes: number; versionUpdatedAt: string } | null>(null);
   const [siteAdOpen, setSiteAdOpen] = useState(false);
   const [siteAdNextAt, setSiteAdNextAt] = useState<number | null>(null);
   const siteAdWasOpenRef = useRef(false);
@@ -168,78 +170,114 @@ const Me: React.FC = () => {
     (async () => {
       try {
         const res = await getSiteAds(API_URL, 'member');
-        const ad = Array.isArray((res as any)?.ads) ? (res as any).ads[0] : null;
+        const cfg = (res as any)?.config || null;
+        const rawItems = Array.isArray((res as any)?.items)
+          ? (res as any).items
+          : Array.isArray((res as any)?.ads)
+            ? (res as any).ads
+            : [];
+        const items = rawItems.filter((x: any) => x && x.enabled !== false && x.imageUrl && x.linkUrl);
+        const versionUpdatedAt = String((res as any)?.versionUpdatedAt || cfg?.updatedAt || (rawItems?.[0]?.updatedAt ?? '') || '');
+        const enabled = cfg ? (cfg?.enabled !== false) : true;
+        const displaySeconds = Math.max(3, Math.min(60, Number(cfg?.displaySeconds ?? rawItems?.[0]?.displaySeconds ?? 15) || 15));
+        const minIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(cfg?.minIntervalMinutes ?? rawItems?.[0]?.minIntervalMinutes ?? 20) || 20));
+        const maxIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(cfg?.maxIntervalMinutes ?? rawItems?.[0]?.maxIntervalMinutes ?? 30) || 30));
         if (!mounted) return;
-        setSiteAd(ad || null);
-        if (!ad) return;
-        const key = `siteAdSeen:member`;
+        setSiteAdItems(items);
+        setSiteAdConfig({ enabled, displaySeconds, minIntervalMinutes, maxIntervalMinutes, versionUpdatedAt });
+        setSiteAdCurrent(null);
+
+        const key = `siteAdState:member`;
         let prev: any = null;
         try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
         const now = Date.now();
-        const currUpdatedAt = String(ad?.updatedAt || '');
-        const prevUpdatedAt = String(prev?.updatedAt || '');
+        const prevVer = String(prev?.versionUpdatedAt || '');
         const prevSeenAt = Number(prev?.seenAt || 0) || 0;
         const prevNextAt = Number(prev?.nextAt || 0) || 0;
+        const prevLastItemId = String(prev?.lastItemId || '');
 
-        const minM = Math.max(1, Math.min(24 * 60, Number((ad as any)?.minIntervalMinutes ?? 20) || 20));
-        const maxM = Math.max(1, Math.min(24 * 60, Number((ad as any)?.maxIntervalMinutes ?? 30) || 30));
-        const low = Math.min(minM, maxM);
-        const high = Math.max(minM, maxM);
+        if (!enabled || items.length === 0) {
+          setSiteAdNextAt(null);
+          try { localStorage.setItem(key, JSON.stringify({ versionUpdatedAt, seenAt: prevSeenAt || 0, nextAt: 0, lastItemId: prevLastItemId })); } catch {}
+          return;
+        }
+
+        const low = Math.min(minIntervalMinutes, maxIntervalMinutes);
+        const high = Math.max(minIntervalMinutes, maxIntervalMinutes);
         const pickMinutes = low + Math.floor(Math.random() * (high - low + 1));
 
         let nextAt = prevNextAt || (prevSeenAt ? (prevSeenAt + pickMinutes * 60 * 1000) : 0);
-        if (!prev || prevUpdatedAt !== currUpdatedAt) nextAt = now;
+        if (!prev || prevVer !== versionUpdatedAt) nextAt = now;
         if (!nextAt) nextAt = now;
 
         if (mounted) setSiteAdNextAt(nextAt);
-        try { localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: prevSeenAt || 0, nextAt })); } catch {}
+        try { localStorage.setItem(key, JSON.stringify({ versionUpdatedAt, seenAt: prevSeenAt || 0, nextAt, lastItemId: prevLastItemId })); } catch {}
       } catch {}
     })();
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
-    if (!siteAd || !siteAdNextAt) return;
-    if (!siteAd?.imageUrl || !siteAd?.linkUrl) return;
-    const key = `siteAdSeen:member`;
+    if (!siteAdConfig?.enabled) return;
+    if (!siteAdNextAt) return;
+    if (!Array.isArray(siteAdItems) || siteAdItems.length === 0) return;
+    const key = `siteAdState:member`;
     const now = Date.now();
     const delay = Math.max(0, siteAdNextAt - now);
     const t = window.setTimeout(() => {
+      let prev: any = null;
+      try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+      const lastItemId = String(prev?.lastItemId || '');
+      const idx = siteAdItems.findIndex((x) => String(x?.id || '') === lastItemId);
+      const next = siteAdItems[(idx >= 0 ? (idx + 1) : 0) % siteAdItems.length] || null;
+      if (!next) return;
+      setSiteAdCurrent(next);
       setSiteAdOpen(true);
       try {
-        const currUpdatedAt = String(siteAd?.updatedAt || '');
-        localStorage.setItem(key, JSON.stringify({ updatedAt: currUpdatedAt, seenAt: Date.now(), nextAt: siteAdNextAt }));
+        localStorage.setItem(
+          key,
+          JSON.stringify({
+            versionUpdatedAt: String(siteAdConfig?.versionUpdatedAt || ''),
+            seenAt: Date.now(),
+            nextAt: siteAdNextAt,
+            lastItemId: String(next?.id || ''),
+          }),
+        );
       } catch {}
     }, delay);
     return () => window.clearTimeout(t);
-  }, [siteAd, siteAdNextAt]);
+  }, [siteAdConfig?.enabled, siteAdConfig?.versionUpdatedAt, siteAdItems, siteAdNextAt]);
 
   useEffect(() => {
     if (!siteAdOpen) return;
-    const ds = Math.max(3, Math.min(60, Number((siteAd as any)?.displaySeconds ?? 15) || 15));
+    const ds = Math.max(3, Math.min(60, Number(siteAdConfig?.displaySeconds ?? 15) || 15));
     const t = window.setTimeout(() => setSiteAdOpen(false), ds * 1000);
     return () => window.clearTimeout(t);
-  }, [siteAdOpen, siteAd?.updatedAt]);
+  }, [siteAdOpen, siteAdConfig?.versionUpdatedAt]);
 
   useEffect(() => {
     const wasOpen = siteAdWasOpenRef.current;
     siteAdWasOpenRef.current = siteAdOpen;
-    if (!siteAd) return;
+    if (!siteAdConfig?.enabled) return;
+    if (!Array.isArray(siteAdItems) || siteAdItems.length === 0) return;
     if (!wasOpen || siteAdOpen) return;
-    const key = `siteAdSeen:member`;
+    const key = `siteAdState:member`;
     const now = Date.now();
-    const minM = Math.max(1, Math.min(24 * 60, Number((siteAd as any)?.minIntervalMinutes ?? 20) || 20));
-    const maxM = Math.max(1, Math.min(24 * 60, Number((siteAd as any)?.maxIntervalMinutes ?? 30) || 30));
-    const low = Math.min(minM, maxM);
-    const high = Math.max(minM, maxM);
+    const low = Math.min(siteAdConfig.minIntervalMinutes, siteAdConfig.maxIntervalMinutes);
+    const high = Math.max(siteAdConfig.minIntervalMinutes, siteAdConfig.maxIntervalMinutes);
     const pickMinutes = low + Math.floor(Math.random() * (high - low + 1));
     const nextAt = now + pickMinutes * 60 * 1000;
     setSiteAdNextAt(nextAt);
     try {
-      const updatedAt = String(siteAd?.updatedAt || '');
-      localStorage.setItem(key, JSON.stringify({ updatedAt, seenAt: now, nextAt }));
+      let prev: any = null;
+      try { prev = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+      const lastItemId = String(siteAdCurrent?.id || prev?.lastItemId || '');
+      localStorage.setItem(
+        key,
+        JSON.stringify({ versionUpdatedAt: String(siteAdConfig?.versionUpdatedAt || ''), seenAt: now, nextAt, lastItemId }),
+      );
     } catch {}
-  }, [siteAdOpen, siteAd]);
+  }, [siteAdOpen, siteAdConfig, siteAdItems, siteAdCurrent]);
 
   useEffect(() => {
     if (activeTab !== 'settings') return;
@@ -772,29 +810,34 @@ const Me: React.FC = () => {
                 </div>
               </div>
             )}
-            {!!memberId && siteAdOpen && siteAd?.imageUrl && siteAd?.linkUrl && (
-              <div className="cue-surface rounded-lg p-3 mb-4">
-                <div className="flex items-start justify-between gap-3">
-                  <a
-                    href={normalizeHttpUrl(siteAd.linkUrl) || String(siteAd.linkUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block flex-1 min-w-0"
-                  >
-                    <img
-                      src={String(siteAd.imageUrl)}
-                      alt=""
-                      className="w-full rounded-lg object-cover max-h-[30vh]"
-                      onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                    />
-                  </a>
-                  <button
-                    type="button"
-                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                    onClick={() => setSiteAdOpen(false)}
-                  >
-                    收起
-                  </button>
+            {!!memberId && siteAdOpen && siteAdCurrent?.imageUrl && siteAdCurrent?.linkUrl && (
+              <div
+                className="sticky z-40 mb-4"
+                style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+              >
+                <div className="cue-surface rounded-lg p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <a
+                      href={normalizeHttpUrl(siteAdCurrent.linkUrl) || String(siteAdCurrent.linkUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block flex-1 min-w-0"
+                    >
+                      <img
+                        src={String(siteAdCurrent.imageUrl)}
+                        alt=""
+                        className="w-full rounded-lg object-cover max-h-[30vh]"
+                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                      />
+                    </a>
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                      onClick={() => setSiteAdOpen(false)}
+                    >
+                      收起
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { API_URL } from './config';
-import { getAdminFeatures, getAdminSiteAds, getSiteNotice, updateAdminFeatures, updateAdminSiteAd, updateSiteNotice, uploadAdminSiteAdImage } from './lib/api';
+import { createAdminSiteAdItem, deleteAdminSiteAdItem, getAdminFeatures, getAdminSiteAds, getSiteNotice, setAdminSiteAdPlacementItems, updateAdminFeatures, updateAdminSiteAd, updateAdminSiteAdItem, updateSiteNotice, uploadAdminSiteAdItemImage } from './lib/api';
 import { clearFeatureCache } from './lib/features';
 import Tabs from './components/Tabs';
 
@@ -27,14 +27,13 @@ const AdminOverview: React.FC = () => {
   const [adsError, setAdsError] = useState<string | null>(null);
   const [adsSaving, setAdsSaving] = useState(false);
   const [adsSaveResult, setAdsSaveResult] = useState<string | null>(null);
-  const [adsDraft, setAdsDraft] = useState<Record<string, { enabled: boolean; imageUrl: string; linkUrl: string; displaySeconds: number; minIntervalMinutes: number; maxIntervalMinutes: number; updatedAt?: string }>>({
-    system: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
-    venue: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
-    member: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+  const [adConfigDraft, setAdConfigDraft] = useState<Record<'system' | 'venue' | 'member', { enabled: boolean; displaySeconds: number; minIntervalMinutes: number; maxIntervalMinutes: number; updatedAt?: string }>>({
+    system: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+    venue: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+    member: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
   });
-  const systemAdFileRef = useRef<HTMLInputElement | null>(null);
-  const venueAdFileRef = useRef<HTMLInputElement | null>(null);
-  const memberAdFileRef = useRef<HTMLInputElement | null>(null);
+  const [adItemsDraft, setAdItemsDraft] = useState<Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>>([]);
+  const [placementItemIdsDraft, setPlacementItemIdsDraft] = useState<Record<'system' | 'venue' | 'member', string[]>>({ system: [], venue: [], member: [] });
 
   function resolveBasePath(): string {
     const rawBase = (import.meta.env.BASE_URL || '/');
@@ -113,41 +112,69 @@ const AdminOverview: React.FC = () => {
     }
   }
 
+  async function refreshAds(tok?: string) {
+    const t = tok || resolveToken();
+    const row = await getAdminSiteAds(API_URL, t);
+
+    const cfgNext: any = {
+      system: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+      venue: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+      member: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
+    };
+    for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
+      const id = String(a?.id || '').trim();
+      if (id !== 'system' && id !== 'venue' && id !== 'member') continue;
+      cfgNext[id] = {
+        enabled: a?.enabled !== false,
+        displaySeconds: Number(a?.displaySeconds ?? 15) || 15,
+        minIntervalMinutes: Number(a?.minIntervalMinutes ?? 20) || 20,
+        maxIntervalMinutes: Number(a?.maxIntervalMinutes ?? 30) || 30,
+        updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
+      };
+    }
+
+    const itemsNext = (Array.isArray((row as any)?.items) ? (row as any).items : []).map((it: any) => ({
+      id: String(it?.id || ''),
+      enabled: it?.enabled !== false,
+      imageUrl: String(it?.imageUrl || ''),
+      linkUrl: String(it?.linkUrl || ''),
+      updatedAt: it?.updatedAt ? String(it.updatedAt) : undefined,
+    }));
+
+    const pi = (row as any)?.placementItems || {};
+    const placementNext: any = { system: [], venue: [], member: [] };
+    for (const p of ['system', 'venue', 'member']) {
+      const arr = Array.isArray(pi?.[p]) ? pi[p] : [];
+      placementNext[p] = arr
+        .slice()
+        .sort((a: any, b: any) => Number(a?.sort ?? 0) - Number(b?.sort ?? 0))
+        .filter((x: any) => x?.enabled !== false)
+        .map((x: any) => String(x?.itemId || '').trim())
+        .filter((x: any) => !!x);
+    }
+
+    setAdConfigDraft(cfgNext);
+    setAdItemsDraft(itemsNext);
+    setPlacementItemIdsDraft(placementNext);
+    return row;
+  }
+
   async function saveAd(placement: 'system' | 'venue' | 'member') {
     setAdsSaveResult(null);
     setAdsSaving(true);
     try {
       const tok = resolveToken();
-      const draft = adsDraft[placement] || { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 };
-      const imageUrl = String(draft.imageUrl || '').trim();
-      const linkUrl = String(draft.linkUrl || '').trim();
+      const draft = adConfigDraft[placement] || { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 };
       const displaySeconds = Math.max(3, Math.min(60, Number(draft.displaySeconds || 15) || 15));
       const minIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(draft.minIntervalMinutes || 20) || 20));
       const maxIntervalMinutes = Math.max(1, Math.min(24 * 60, Number(draft.maxIntervalMinutes || 30) || 30));
       await updateAdminSiteAd(API_URL, tok, placement, {
         enabled: !!draft.enabled,
-        imageUrl: imageUrl ? imageUrl : null,
-        linkUrl: linkUrl ? linkUrl : null,
         displaySeconds,
         minIntervalMinutes,
         maxIntervalMinutes,
       });
-      const row = await getAdminSiteAds(API_URL, tok);
-      const next: any = { ...adsDraft };
-      for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
-        const id = String(a?.id || '').trim();
-        if (!id) continue;
-        next[id] = {
-          enabled: a?.enabled !== false,
-          imageUrl: String(a?.imageUrl || ''),
-          linkUrl: String(a?.linkUrl || ''),
-          displaySeconds: Number(a?.displaySeconds ?? 15) || 15,
-          minIntervalMinutes: Number(a?.minIntervalMinutes ?? 20) || 20,
-          maxIntervalMinutes: Number(a?.maxIntervalMinutes ?? 30) || 30,
-          updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
-        };
-      }
-      setAdsDraft(next);
+      await refreshAds(tok);
       setAdsSaveResult('已儲存');
     } catch (e: any) {
       setAdsSaveResult(e?.message || '儲存失敗');
@@ -165,34 +192,113 @@ const AdminOverview: React.FC = () => {
     });
   }
 
-  async function uploadAdImage(placement: 'system' | 'venue' | 'member', file: File) {
+  async function savePlacementItems(placement: 'system' | 'venue' | 'member') {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      const ids = placementItemIdsDraft[placement] || [];
+      await setAdminSiteAdPlacementItems(
+        API_URL,
+        tok,
+        placement,
+        ids.map((itemId) => ({ itemId, enabled: true })),
+      );
+      await refreshAds(tok);
+      setAdsSaveResult('已儲存投放設定');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '儲存失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
+  async function addAdItem() {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      await createAdminSiteAdItem(API_URL, tok);
+      await refreshAds(tok);
+      setAdsSaveResult('已新增廣告');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '新增失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
+  async function saveAdItem(id: string) {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      const it = adItemsDraft.find((x) => x.id === id);
+      if (!it) throw new Error('item_not_found');
+      await updateAdminSiteAdItem(API_URL, tok, id, { enabled: it.enabled, linkUrl: it.linkUrl ? String(it.linkUrl).trim() : null });
+      await refreshAds(tok);
+      setAdsSaveResult('已儲存廣告');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '儲存失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
+  async function removeAdItem(id: string) {
+    setAdsSaveResult(null);
+    setAdsSaving(true);
+    try {
+      const tok = resolveToken();
+      await deleteAdminSiteAdItem(API_URL, tok, id);
+      await refreshAds(tok);
+      setAdsSaveResult('已刪除廣告');
+    } catch (e: any) {
+      setAdsSaveResult(e?.message || '刪除失敗');
+    } finally {
+      setAdsSaving(false);
+    }
+  }
+
+  async function uploadAdItemImage(id: string, file: File) {
     setAdsSaveResult(null);
     setAdsSaving(true);
     try {
       const tok = resolveToken();
       const dataUrl = await readFileAsDataUrl(file);
-      const res = await uploadAdminSiteAdImage(API_URL, tok, placement, {
-        filename: file.name,
-        contentType: file.type,
-        dataUrl,
-      });
-      const ad = (res as any)?.ad;
-      if (ad?.imageUrl) {
-        setAdsDraft((s) => ({
-          ...s,
-          [placement]: {
-            ...(s[placement] || { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 }),
-            imageUrl: String(ad.imageUrl || ''),
-            updatedAt: ad?.updatedAt ? String(ad.updatedAt) : (s[placement] as any)?.updatedAt,
-          },
-        }));
-      }
+      await uploadAdminSiteAdItemImage(API_URL, tok, id, { filename: file.name, contentType: file.type, dataUrl });
+      await refreshAds(tok);
       setAdsSaveResult('已上載圖片');
     } catch (e: any) {
       setAdsSaveResult(e?.message || '上載失敗');
     } finally {
       setAdsSaving(false);
     }
+  }
+
+  function togglePlacementItem(placement: 'system' | 'venue' | 'member', itemId: string, checked: boolean) {
+    setPlacementItemIdsDraft((s) => {
+      const cur = Array.isArray(s[placement]) ? s[placement] : [];
+      if (checked) {
+        if (cur.includes(itemId)) return s;
+        return { ...s, [placement]: [...cur, itemId] };
+      }
+      return { ...s, [placement]: cur.filter((x) => x !== itemId) };
+    });
+  }
+
+  function movePlacementItem(placement: 'system' | 'venue' | 'member', itemId: string, dir: -1 | 1) {
+    setPlacementItemIdsDraft((s) => {
+      const cur = Array.isArray(s[placement]) ? [...s[placement]] : [];
+      const idx = cur.indexOf(itemId);
+      if (idx < 0) return s;
+      const nextIdx = idx + dir;
+      if (nextIdx < 0 || nextIdx >= cur.length) return s;
+      const tmp = cur[idx];
+      cur[idx] = cur[nextIdx];
+      cur[nextIdx] = tmp;
+      return { ...s, [placement]: cur };
+    });
   }
 
   useEffect(() => {
@@ -267,26 +373,7 @@ const AdminOverview: React.FC = () => {
           setAdsError(null);
         }
         const tok = resolveToken();
-        const row = await getAdminSiteAds(API_URL, tok);
-        const next: any = {
-          system: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
-          venue: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
-          member: { enabled: true, imageUrl: '', linkUrl: '', displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
-        };
-        for (const a of Array.isArray((row as any)?.ads) ? (row as any).ads : []) {
-          const id = String(a?.id || '').trim();
-          if (!id) continue;
-          next[id] = {
-            enabled: a?.enabled !== false,
-            imageUrl: String(a?.imageUrl || ''),
-            linkUrl: String(a?.linkUrl || ''),
-            displaySeconds: Number(a?.displaySeconds ?? 15) || 15,
-            minIntervalMinutes: Number(a?.minIntervalMinutes ?? 20) || 20,
-            maxIntervalMinutes: Number(a?.maxIntervalMinutes ?? 30) || 30,
-            updatedAt: a?.updatedAt ? String(a.updatedAt) : undefined,
-          };
-        }
-        if (!cancelled) setAdsDraft(next);
+        await refreshAds(tok);
       } catch (e: any) {
         if (!cancelled) setAdsError(e?.message || '讀取廣告設定失敗');
       } finally {
@@ -418,15 +505,121 @@ const AdminOverview: React.FC = () => {
 
             <div className="bg-black/40 border border-white/10 rounded p-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-lg font-bold">主頁廣告位（系統）</div>
+                <div className="text-lg font-bold">廣告素材池（最多 5）</div>
                 <button
                   type="button"
                   className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
                   disabled={adsSaving}
-                  onClick={() => saveAd('system')}
+                  onClick={addAdItem}
                 >
-                  儲存
+                  新增
                 </button>
+              </div>
+              {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
+              {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
+              {!adsLoading && !adsError && (
+                <div className="mt-3 space-y-3">
+                  {adItemsDraft.length === 0 && (
+                    <div className="text-sm cue-muted">未有廣告素材</div>
+                  )}
+                  {adItemsDraft.map((it) => (
+                    <div key={it.id} className="bg-black/30 border border-white/10 rounded p-3 space-y-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="text-sm font-semibold break-all">{it.id}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={it.enabled !== false}
+                              onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, enabled: e.target.checked } : x))}
+                            />
+                            <span>啟用</span>
+                          </label>
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                            disabled={adsSaving}
+                            onClick={() => saveAdItem(it.id)}
+                          >
+                            儲存
+                          </button>
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded bg-red-600 hover:bg-red-700 text-sm font-semibold text-white"
+                            disabled={adsSaving}
+                            onClick={() => removeAdItem(it.id)}
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm cue-muted mb-1">跳轉連結</div>
+                        <input
+                          value={it.linkUrl || ''}
+                          onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, linkUrl: e.target.value } : x))}
+                          className="w-full cue-input rounded px-3 py-2 text-sm"
+                          placeholder="https://..."
+                        />
+                      </div>
+
+                      <label className="block w-full cue-surface rounded-lg p-2 text-left hover:brightness-95 cursor-pointer">
+                        {it.imageUrl ? (
+                          <img
+                            src={String(it.imageUrl)}
+                            alt=""
+                            className="w-full rounded object-cover max-h-[30vh]"
+                            onError={(e) => {
+                              (e.currentTarget as any).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
+                            按此上載圖片（JPG/PNG/WebP，最多 3MB）
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          disabled={adsSaving}
+                          onChange={(e) => {
+                            const f = e.currentTarget.files?.[0];
+                            e.currentTarget.value = '';
+                            if (!f) return;
+                            uploadAdItemImage(it.id, f);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                  {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-lg font-bold">主頁廣告位（系統）</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => saveAd('system')}
+                  >
+                    儲存規則
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => savePlacementItems('system')}
+                  >
+                    儲存投放
+                  </button>
+                </div>
               </div>
               {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
               {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
@@ -435,49 +628,18 @@ const AdminOverview: React.FC = () => {
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={adsDraft.system?.enabled !== false}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), enabled: e.target.checked } }))}
+                      checked={adConfigDraft.system?.enabled !== false}
+                      onChange={(e) => setAdConfigDraft((s) => ({ ...s, system: { ...(s.system || {}), enabled: e.target.checked } }))}
                     />
-                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                    <span>啟用（沒有投放廣告會自動不顯示）</span>
                   </label>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
-                    <input
-                      value={adsDraft.system?.imageUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), imageUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://.../banner.jpg"
-                    />
-                    <input
-                      ref={systemAdFileRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      disabled={adsSaving}
-                      onChange={(e) => {
-                        const f = e.currentTarget.files?.[0];
-                        e.currentTarget.value = '';
-                        if (!f) return;
-                        uploadAdImage('system', f);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
-                    <input
-                      value={adsDraft.system?.linkUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), linkUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
                       <div className="text-sm cue-muted mb-1">停留（秒）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.system?.displaySeconds ?? 15)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.system?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, system: { ...(s.system || {}), displaySeconds: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={3}
                         max={60}
@@ -487,8 +649,8 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.system?.minIntervalMinutes ?? 20)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.system?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, system: { ...(s.system || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
@@ -498,33 +660,55 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.system?.maxIntervalMinutes ?? 30)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, system: { ...(s.system || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.system?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, system: { ...(s.system || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
                       />
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
-                    disabled={adsSaving}
-                    onClick={() => systemAdFileRef.current?.click()}
-                  >
-                    {adsDraft.system?.imageUrl ? (
-                      <img
-                        src={String(adsDraft.system.imageUrl)}
-                        alt=""
-                        className="w-full rounded object-cover max-h-[30vh]"
-                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
-                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
-                      </div>
-                    )}
-                  </button>
+
+                  <div>
+                    <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
+                    <div className="space-y-2">
+                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
+                      {adItemsDraft.map((it) => {
+                        const checked = (placementItemIdsDraft.system || []).includes(it.id);
+                        return (
+                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
+                            <label className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => togglePlacementItem('system', it.id, e.target.checked)}
+                              />
+                              <span className="text-sm break-all truncate">{it.id}</span>
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('system', it.id, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('system', it.id, 1)}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
@@ -569,16 +753,26 @@ const AdminOverview: React.FC = () => {
             </div>
 
             <div className="bg-black/40 border border-white/10 rounded p-4">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-lg font-bold">主頁廣告位（場館）</div>
-                <button
-                  type="button"
-                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                  disabled={adsSaving}
-                  onClick={() => saveAd('venue')}
-                >
-                  儲存
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => saveAd('venue')}
+                  >
+                    儲存規則
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => savePlacementItems('venue')}
+                  >
+                    儲存投放
+                  </button>
+                </div>
               </div>
               {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
               {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
@@ -587,49 +781,18 @@ const AdminOverview: React.FC = () => {
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={adsDraft.venue?.enabled !== false}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), enabled: e.target.checked } }))}
+                      checked={adConfigDraft.venue?.enabled !== false}
+                      onChange={(e) => setAdConfigDraft((s) => ({ ...s, venue: { ...(s.venue || {}), enabled: e.target.checked } }))}
                     />
-                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                    <span>啟用（沒有投放廣告會自動不顯示）</span>
                   </label>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
-                    <input
-                      value={adsDraft.venue?.imageUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), imageUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://.../banner.jpg"
-                    />
-                    <input
-                      ref={venueAdFileRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      disabled={adsSaving}
-                      onChange={(e) => {
-                        const f = e.currentTarget.files?.[0];
-                        e.currentTarget.value = '';
-                        if (!f) return;
-                        uploadAdImage('venue', f);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
-                    <input
-                      value={adsDraft.venue?.linkUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), linkUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
                       <div className="text-sm cue-muted mb-1">停留（秒）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.venue?.displaySeconds ?? 15)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.venue?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, venue: { ...(s.venue || {}), displaySeconds: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={3}
                         max={60}
@@ -639,8 +802,8 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.venue?.minIntervalMinutes ?? 20)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.venue?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, venue: { ...(s.venue || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
@@ -650,33 +813,54 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.venue?.maxIntervalMinutes ?? 30)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, venue: { ...(s.venue || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.venue?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, venue: { ...(s.venue || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
                       />
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
-                    disabled={adsSaving}
-                    onClick={() => venueAdFileRef.current?.click()}
-                  >
-                    {adsDraft.venue?.imageUrl ? (
-                      <img
-                        src={String(adsDraft.venue.imageUrl)}
-                        alt=""
-                        className="w-full rounded object-cover max-h-[30vh]"
-                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
-                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
-                      </div>
-                    )}
-                  </button>
+
+                  <div>
+                    <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
+                    <div className="space-y-2">
+                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
+                      {adItemsDraft.map((it) => {
+                        const checked = (placementItemIdsDraft.venue || []).includes(it.id);
+                        return (
+                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
+                            <label className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => togglePlacementItem('venue', it.id, e.target.checked)}
+                              />
+                              <span className="text-sm break-all truncate">{it.id}</span>
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('venue', it.id, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('venue', it.id, 1)}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
@@ -750,16 +934,26 @@ const AdminOverview: React.FC = () => {
             </div>
 
             <div className="bg-black/40 border border-white/10 rounded p-4">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-lg font-bold">主頁廣告位（會員）</div>
-                <button
-                  type="button"
-                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                  disabled={adsSaving}
-                  onClick={() => saveAd('member')}
-                >
-                  儲存
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => saveAd('member')}
+                  >
+                    儲存規則
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    disabled={adsSaving}
+                    onClick={() => savePlacementItems('member')}
+                  >
+                    儲存投放
+                  </button>
+                </div>
               </div>
               {adsLoading && <div className="text-sm cue-muted mt-2">讀取中…</div>}
               {!adsLoading && adsError && <div className="text-sm text-red-500 mt-2">{adsError}</div>}
@@ -768,49 +962,18 @@ const AdminOverview: React.FC = () => {
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={adsDraft.member?.enabled !== false}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), enabled: e.target.checked } }))}
+                      checked={adConfigDraft.member?.enabled !== false}
+                      onChange={(e) => setAdConfigDraft((s) => ({ ...s, member: { ...(s.member || {}), enabled: e.target.checked } }))}
                     />
-                    <span>啟用（沒有圖或沒有連結會自動不顯示）</span>
+                    <span>啟用（沒有投放廣告會自動不顯示）</span>
                   </label>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">圖片 URL</div>
-                    <input
-                      value={adsDraft.member?.imageUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), imageUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://.../banner.jpg"
-                    />
-                    <input
-                      ref={memberAdFileRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      disabled={adsSaving}
-                      onChange={(e) => {
-                        const f = e.currentTarget.files?.[0];
-                        e.currentTarget.value = '';
-                        if (!f) return;
-                        uploadAdImage('member', f);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div className="text-sm cue-muted mb-1">跳轉連結</div>
-                    <input
-                      value={adsDraft.member?.linkUrl || ''}
-                      onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), linkUrl: e.target.value } }))}
-                      className="w-full cue-input rounded px-3 py-2 text-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
                       <div className="text-sm cue-muted mb-1">停留（秒）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.member?.displaySeconds ?? 15)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), displaySeconds: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.member?.displaySeconds ?? 15)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, member: { ...(s.member || {}), displaySeconds: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={3}
                         max={60}
@@ -820,8 +983,8 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最短（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.member?.minIntervalMinutes ?? 20)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.member?.minIntervalMinutes ?? 20)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, member: { ...(s.member || {}), minIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
@@ -831,33 +994,54 @@ const AdminOverview: React.FC = () => {
                       <div className="text-sm cue-muted mb-1">最長（分鐘）</div>
                       <input
                         type="number"
-                        value={Number(adsDraft.member?.maxIntervalMinutes ?? 30)}
-                        onChange={(e) => setAdsDraft((s) => ({ ...s, member: { ...(s.member || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
+                        value={Number(adConfigDraft.member?.maxIntervalMinutes ?? 30)}
+                        onChange={(e) => setAdConfigDraft((s) => ({ ...s, member: { ...(s.member || {}), maxIntervalMinutes: Number(e.target.value || 0) } }))}
                         className="w-full cue-input rounded px-3 py-2 text-sm"
                         min={1}
                         max={1440}
                       />
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="w-full cue-surface rounded-lg p-2 text-left hover:brightness-95"
-                    disabled={adsSaving}
-                    onClick={() => memberAdFileRef.current?.click()}
-                  >
-                    {adsDraft.member?.imageUrl ? (
-                      <img
-                        src={String(adsDraft.member.imageUrl)}
-                        alt=""
-                        className="w-full rounded object-cover max-h-[30vh]"
-                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-full rounded-lg border border-dashed border-white/20 p-6 text-sm cue-muted text-center">
-                        按此上載圖片（JPG/PNG/WebP，最多 3MB）
-                      </div>
-                    )}
-                  </button>
+
+                  <div>
+                    <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
+                    <div className="space-y-2">
+                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
+                      {adItemsDraft.map((it) => {
+                        const checked = (placementItemIdsDraft.member || []).includes(it.id);
+                        return (
+                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
+                            <label className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => togglePlacementItem('member', it.id, e.target.checked)}
+                              />
+                              <span className="text-sm break-all truncate">{it.id}</span>
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('member', it.id, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                disabled={!checked}
+                                onClick={() => movePlacementItem('member', it.id, 1)}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}

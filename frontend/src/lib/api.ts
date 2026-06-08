@@ -1488,6 +1488,84 @@ export async function uploadAdminSiteAdImage(
   return res.json();
 }
 
+export async function createAdminSiteAdItem(apiUrl: string, adminToken: string) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ad-items`, {
+    method: 'POST',
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `新增廣告失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateAdminSiteAdItem(
+  apiUrl: string,
+  adminToken: string,
+  id: string,
+  payload: { enabled?: boolean; linkUrl?: string | null },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ad-items/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `更新廣告失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function deleteAdminSiteAdItem(apiUrl: string, adminToken: string, id: string) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ad-items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-token': adminToken },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `刪除廣告失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function uploadAdminSiteAdItemImage(
+  apiUrl: string,
+  adminToken: string,
+  id: string,
+  payload: { filename?: string; contentType?: string; dataUrl: string },
+) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ad-items/${encodeURIComponent(id)}/image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `上載圖片失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function setAdminSiteAdPlacementItems(
+  apiUrl: string,
+  adminToken: string,
+  placement: 'system' | 'venue' | 'member',
+  items: Array<{ itemId: string; enabled?: boolean }>,
+) {
+  const res = await fetch(`${apiUrl}/api/admin/site-ad-placements/${placement}/items`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `更新投放設定失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function deleteMember(
   apiUrl: string,
   adminToken: string,

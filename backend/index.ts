@@ -1086,22 +1086,68 @@ app.put('/api/admin/features', adminAuth, async (req, res) => {
 app.get('/api/site-ads', async (req, res) => {
   try {
     const placement = String((req.query.placement as string) || '').trim().toLowerCase();
-    const where: any = { enabled: true };
-    if (placement) where.id = placement;
-    const rows = await prisma.siteAd.findMany({ where, orderBy: { updatedAt: 'desc' } });
-    const out = rows
-      .map((r) => ({
-        placement: r.id,
-        enabled: r.enabled,
-        imageUrl: r.imageUrl,
-        linkUrl: r.linkUrl,
-        displaySeconds: (r as any).displaySeconds ?? 15,
-        minIntervalMinutes: (r as any).minIntervalMinutes ?? 20,
-        maxIntervalMinutes: (r as any).maxIntervalMinutes ?? 30,
-        updatedAt: r.updatedAt,
+    const placements = ['system', 'venue', 'member'];
+    const id = placement && placements.includes(placement) ? placement : 'system';
+    const cfg = await prisma.siteAd.findUnique({ where: { id } });
+    if (!cfg) return res.json({ placement: id, config: null, items: [], ads: [], versionUpdatedAt: null });
+
+    const links = await prisma.siteAdPlacementItem.findMany({
+      where: { placement: id, enabled: true },
+      orderBy: { sort: 'asc' },
+      include: { item: true },
+    });
+
+    const baseCfg = {
+      enabled: cfg.enabled,
+      displaySeconds: (cfg as any).displaySeconds ?? 15,
+      minIntervalMinutes: (cfg as any).minIntervalMinutes ?? 20,
+      maxIntervalMinutes: (cfg as any).maxIntervalMinutes ?? 30,
+      updatedAt: cfg.updatedAt,
+    };
+
+    const validItems = links
+      .map((x) => ({
+        id: x.itemId,
+        enabled: x.enabled && (x.item as any)?.enabled !== false,
+        imageUrl: (x.item as any)?.imageUrl ?? null,
+        linkUrl: (x.item as any)?.linkUrl ?? null,
+        updatedAt: (x.item as any)?.updatedAt ?? null,
+        sort: x.sort,
       }))
-      .filter((r) => r.enabled && r.imageUrl && r.linkUrl);
-    res.json({ ads: out });
+      .filter((it) => it.enabled && it.imageUrl && it.linkUrl);
+
+    const fallbackLegacy =
+      validItems.length === 0 && cfg.enabled && cfg.imageUrl && cfg.linkUrl
+        ? [
+            {
+              id: `${id}-legacy`,
+              enabled: true,
+              imageUrl: cfg.imageUrl,
+              linkUrl: cfg.linkUrl,
+              updatedAt: cfg.updatedAt,
+              sort: 0,
+            },
+          ]
+        : [];
+
+    const items = validItems.length > 0 ? validItems : fallbackLegacy;
+    const versionUpdatedAt = new Date(
+      Math.max(
+        new Date(baseCfg.updatedAt).getTime(),
+        ...items.map((x) => new Date(x.updatedAt || 0).getTime()),
+      ),
+    ).toISOString();
+
+    const out = items.map((it) => ({
+      ...it,
+      placement: id,
+      displaySeconds: baseCfg.displaySeconds,
+      minIntervalMinutes: baseCfg.minIntervalMinutes,
+      maxIntervalMinutes: baseCfg.maxIntervalMinutes,
+      updatedAt: versionUpdatedAt,
+    }));
+
+    res.json({ placement: id, config: baseCfg, items: out, ads: out, versionUpdatedAt });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
@@ -1120,7 +1166,181 @@ app.get('/api/admin/site-ads', adminAuth, async (_req, res) => {
       ),
     );
     const ads = await prisma.siteAd.findMany({ orderBy: { id: 'asc' } });
-    res.json({ ads });
+
+    let links = await prisma.siteAdPlacementItem.findMany({
+      where: { placement: { in: placements } },
+      orderBy: [{ placement: 'asc' }, { sort: 'asc' }],
+    });
+
+    const linkPlacements = new Set(links.map((x) => String((x as any)?.placement || '')));
+    const legacy = ads
+      .filter((a) => placements.includes(a.id))
+      .filter((a) => !linkPlacements.has(a.id) && a.enabled && a.imageUrl && a.linkUrl)
+      .map((a) => ({ placement: a.id, imageUrl: String(a.imageUrl), linkUrl: String(a.linkUrl), enabled: a.enabled }));
+
+    if (legacy.length) {
+      const count = await prisma.siteAdItem.count();
+      const capacity = Math.max(0, 5 - count);
+      const take = legacy.slice(0, capacity);
+      if (take.length) {
+        await prisma.$transaction(
+          take.flatMap((x, idx) => {
+            const itemId = randomUUID();
+            return [
+              prisma.siteAdItem.create({ data: { id: itemId, enabled: true, imageUrl: x.imageUrl, linkUrl: x.linkUrl } }),
+              prisma.siteAdPlacementItem.create({ data: { id: randomUUID(), placement: x.placement, itemId, enabled: true, sort: idx } }),
+            ];
+          }),
+        );
+        links = await prisma.siteAdPlacementItem.findMany({
+          where: { placement: { in: placements } },
+          orderBy: [{ placement: 'asc' }, { sort: 'asc' }],
+        });
+      }
+    }
+    const placementItems: Record<string, any[]> = { system: [], venue: [], member: [] };
+    for (const x of links) {
+      const k = String((x as any)?.placement || '').trim();
+      if (!k) continue;
+      if (!placementItems[k]) placementItems[k] = [];
+      (placementItems[k] as any[]).push({ id: x.id, placement: x.placement, itemId: x.itemId, enabled: x.enabled, sort: x.sort });
+    }
+
+
+    const items = await prisma.siteAdItem.findMany({ orderBy: { updatedAt: 'desc' } });
+    res.json({ ads, items, placementItems });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/site-ad-items', adminAuth, async (_req, res) => {
+  try {
+    const count = await prisma.siteAdItem.count();
+    if (count >= 5) return res.status(400).json({ error: 'max_items_reached' });
+    const id = randomUUID();
+    const item = await prisma.siteAdItem.create({ data: { id, enabled: true, imageUrl: null, linkUrl: null } });
+    res.json({ item });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.put('/api/admin/site-ad-items/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id_required' });
+    const body = (req.body || {}) as { enabled?: boolean; linkUrl?: string | null };
+    const enabled = body.enabled === undefined ? undefined : Boolean(body.enabled);
+    const linkUrl = body.linkUrl === undefined ? undefined : (body.linkUrl ? String(body.linkUrl).trim() : null);
+    const item = await prisma.siteAdItem.update({
+      where: { id },
+      data: { ...(enabled !== undefined ? { enabled } : {}), ...(linkUrl !== undefined ? { linkUrl } : {}) } as any,
+    });
+    res.json({ item });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.delete('/api/admin/site-ad-items/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id_required' });
+    await prisma.siteAdItem.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.post('/api/admin/site-ad-items/:id/image', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id_required' });
+
+    const body = (req.body || {}) as { filename?: string; contentType?: string; base64?: string; dataUrl?: string };
+    let contentType = String(body.contentType || '').trim().toLowerCase();
+    let base64 = String(body.base64 || '').trim();
+    const filename = String(body.filename || '').trim();
+    const dataUrl = String(body.dataUrl || '').trim();
+
+    if (dataUrl) {
+      const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!m) return res.status(400).json({ error: 'data_url_invalid' });
+      contentType = String(m[1] || '').trim().toLowerCase();
+      base64 = String(m[2] || '').trim();
+    }
+
+    if (!base64) return res.status(400).json({ error: 'base64_required' });
+
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowed.has(contentType)) return res.status(400).json({ error: 'image_type_not_allowed' });
+
+    const buf = Buffer.from(base64, 'base64');
+    if (!buf || buf.length === 0) return res.status(400).json({ error: 'image_decode_failed' });
+    const maxBytes = 3 * 1024 * 1024;
+    if (buf.length > maxBytes) return res.status(413).json({ error: 'image_too_large' });
+
+    let ext = '';
+    if (contentType === 'image/jpeg') ext = 'jpg';
+    if (contentType === 'image/png') ext = 'png';
+    if (contentType === 'image/webp') ext = 'webp';
+    if (!ext && filename) {
+      const lower = filename.toLowerCase();
+      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) ext = 'jpg';
+      else if (lower.endsWith('.png')) ext = 'png';
+      else if (lower.endsWith('.webp')) ext = 'webp';
+    }
+    if (!ext) return res.status(400).json({ error: 'image_ext_unknown' });
+
+    const supabase = requireSupabaseAdmin();
+    const objectPath = `site-ads/items/${id}/${Date.now()}-${randomUUID()}.${ext}`;
+
+    const up = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).upload(objectPath, buf, {
+      contentType,
+      upsert: false,
+      cacheControl: '31536000',
+    });
+    if (up.error) return res.status(500).json({ error: `upload_failed: ${up.error.message}` });
+
+    const pub = supabase.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(objectPath);
+    const imageUrl = String((pub as any)?.data?.publicUrl || '').trim();
+    if (!imageUrl) return res.status(500).json({ error: 'public_url_failed' });
+
+    const item = await prisma.siteAdItem.update({ where: { id }, data: { imageUrl } });
+    res.json({ item });
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    const status = msg.includes('SUPABASE_URL') ? 400 : 500;
+    res.status(status).json({ error: msg });
+  }
+});
+
+app.put('/api/admin/site-ad-placements/:placement/items', adminAuth, async (req, res) => {
+  try {
+    const placement = String(req.params.placement || '').trim().toLowerCase();
+    if (!['system', 'venue', 'member'].includes(placement)) return res.status(400).json({ error: 'placement_invalid' });
+    const body = (req.body || {}) as { items?: Array<{ itemId: string; enabled?: boolean }> };
+    const items = Array.isArray(body.items) ? body.items : [];
+    const normalized = items
+      .map((x) => ({ itemId: String(x?.itemId || '').trim(), enabled: x?.enabled === undefined ? true : !!x.enabled }))
+      .filter((x) => !!x.itemId);
+    const uniq = new Map<string, boolean>();
+    for (const it of normalized) uniq.set(it.itemId, it.enabled);
+    const list = Array.from(uniq.entries()).map(([itemId, enabled], idx) => ({ itemId, enabled, sort: idx }));
+    await prisma.$transaction([
+      prisma.siteAdPlacementItem.deleteMany({ where: { placement } }),
+      ...(list.length
+        ? [
+            prisma.siteAdPlacementItem.createMany({
+              data: list.map((x) => ({ id: randomUUID(), placement, itemId: x.itemId, enabled: x.enabled, sort: x.sort })),
+            }),
+          ]
+        : []),
+    ]);
+    const rows = await prisma.siteAdPlacementItem.findMany({ where: { placement }, orderBy: { sort: 'asc' } });
+    res.json({ placement, items: rows });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
   }
