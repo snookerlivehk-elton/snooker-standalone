@@ -9,6 +9,7 @@ import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { Resend } from 'resend';
 import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
@@ -1047,6 +1048,7 @@ function requireSupabaseAdmin() {
   }
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    realtime: { transport: ws as any },
   });
 }
 
