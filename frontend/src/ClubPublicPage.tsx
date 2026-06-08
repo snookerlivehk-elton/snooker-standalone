@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import {
@@ -959,39 +960,44 @@ const ClubPublicPage: React.FC = () => {
           </div>
         )}
         {siteAdOpen && siteAdCurrent?.imageUrl && siteAdCurrent?.linkUrl && (
-          <div
-            className="sticky z-40"
-            style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
-          >
-            <div className="px-4 pt-3">
-              <div className="max-w-2xl mx-auto">
-                <div className="cue-surface rounded-lg p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <a
-                      href={normalizeVideoHref(siteAdCurrent.linkUrl) || String(siteAdCurrent.linkUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block flex-1 min-w-0"
-                    >
-                      <img
-                        src={String(siteAdCurrent.imageUrl)}
-                        alt=""
-                        className="w-full rounded-lg object-cover max-h-[30vh]"
-                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                      />
-                    </a>
-                    <button
-                      type="button"
-                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                      onClick={() => setSiteAdOpen(false)}
-                    >
-                      收起
-                    </button>
+          typeof document !== 'undefined' && document.body
+            ? createPortal(
+                <div
+                  className="fixed inset-x-0 z-[9999]"
+                  style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
+                >
+                  <div className="px-4 pt-3">
+                    <div className="max-w-2xl mx-auto">
+                      <div className="cue-surface rounded-lg p-3 shadow-lg ring-1 ring-white/10">
+                        <div className="flex items-start justify-between gap-3">
+                          <a
+                            href={normalizeVideoHref(siteAdCurrent.linkUrl) || String(siteAdCurrent.linkUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block flex-1 min-w-0"
+                          >
+                            <img
+                              src={String(siteAdCurrent.imageUrl)}
+                              alt=""
+                              className="w-full rounded-lg object-cover max-h-[30vh]"
+                              onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                            />
+                          </a>
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                            onClick={() => setSiteAdOpen(false)}
+                          >
+                            收起
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                </div>,
+                document.body,
+              )
+            : null
         )}
         <div className="bg-[var(--glass-bg)] border-b border-[var(--glass-border)] backdrop-blur">
           <div className="px-4 pt-3">

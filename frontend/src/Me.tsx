@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
@@ -811,35 +812,44 @@ const Me: React.FC = () => {
               </div>
             )}
             {!!memberId && siteAdOpen && siteAdCurrent?.imageUrl && siteAdCurrent?.linkUrl && (
-              <div
-                className="sticky z-40 mb-4"
-                style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
-              >
-                <div className="cue-surface rounded-lg p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <a
-                      href={normalizeHttpUrl(siteAdCurrent.linkUrl) || String(siteAdCurrent.linkUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block flex-1 min-w-0"
+              typeof document !== 'undefined' && document.body
+                ? createPortal(
+                    <div
+                      className="fixed inset-x-0 z-[9999]"
+                      style={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
                     >
-                      <img
-                        src={String(siteAdCurrent.imageUrl)}
-                        alt=""
-                        className="w-full rounded-lg object-cover max-h-[30vh]"
-                        onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
-                      />
-                    </a>
-                    <button
-                      type="button"
-                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                      onClick={() => setSiteAdOpen(false)}
-                    >
-                      收起
-                    </button>
-                  </div>
-                </div>
-              </div>
+                      <div className="px-4">
+                        <div className="max-w-2xl mx-auto">
+                          <div className="cue-surface rounded-lg p-3 shadow-lg ring-1 ring-white/10">
+                            <div className="flex items-start justify-between gap-3">
+                              <a
+                                href={normalizeHttpUrl(siteAdCurrent.linkUrl) || String(siteAdCurrent.linkUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block flex-1 min-w-0"
+                              >
+                                <img
+                                  src={String(siteAdCurrent.imageUrl)}
+                                  alt=""
+                                  className="w-full rounded-lg object-cover max-h-[30vh]"
+                                  onError={(e) => { (e.currentTarget as any).style.display = 'none'; }}
+                                />
+                              </a>
+                              <button
+                                type="button"
+                                className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                                onClick={() => setSiteAdOpen(false)}
+                              >
+                                收起
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )
+                : null
             )}
             {!!memberId && (
               <Tabs
