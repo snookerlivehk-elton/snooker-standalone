@@ -301,6 +301,72 @@ const AdminOverview: React.FC = () => {
     });
   }
 
+  function renderPlacementPicker(placement: 'system' | 'venue' | 'member') {
+    const selectedIds = Array.isArray(placementItemIdsDraft[placement]) ? placementItemIdsDraft[placement] : [];
+    const selectedItems = selectedIds
+      .map((id) => adItemsDraft.find((it) => it.id === id))
+      .filter((x) => !!x) as Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>;
+    const selectedSet = new Set(selectedItems.map((x) => x.id));
+    const unselectedItems = adItemsDraft.filter((it) => !selectedSet.has(it.id));
+
+    return (
+      <div className="space-y-2">
+        {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
+
+        {selectedItems.length > 0 && (
+          <div className="text-xs cue-muted">已投放（可調整輪播次序）</div>
+        )}
+        {selectedItems.map((it, idx) => (
+          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
+            <label className="flex items-center gap-2 min-w-0">
+              <input
+                type="checkbox"
+                checked
+                onChange={(e) => togglePlacementItem(placement, it.id, e.target.checked)}
+              />
+              <span className="text-sm break-all truncate">{it.id}</span>
+            </label>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                disabled={idx === 0}
+                onClick={() => movePlacementItem(placement, it.id, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                disabled={idx === selectedItems.length - 1}
+                onClick={() => movePlacementItem(placement, it.id, 1)}
+              >
+                ↓
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {unselectedItems.length > 0 && (
+          <div className="text-xs cue-muted mt-2">未投放</div>
+        )}
+        {unselectedItems.map((it) => (
+          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/15 border border-white/10 rounded px-3 py-2">
+            <label className="flex items-center gap-2 min-w-0">
+              <input
+                type="checkbox"
+                checked={false}
+                onChange={(e) => togglePlacementItem(placement, it.id, e.target.checked)}
+              />
+              <span className="text-sm break-all truncate">{it.id}</span>
+            </label>
+            <div className="w-[3.5rem]" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function fetchOverview() {
@@ -671,42 +737,7 @@ const AdminOverview: React.FC = () => {
 
                   <div>
                     <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
-                    <div className="space-y-2">
-                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
-                      {adItemsDraft.map((it) => {
-                        const checked = (placementItemIdsDraft.system || []).includes(it.id);
-                        return (
-                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
-                            <label className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => togglePlacementItem('system', it.id, e.target.checked)}
-                              />
-                              <span className="text-sm break-all truncate">{it.id}</span>
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('system', it.id, -1)}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('system', it.id, 1)}
-                              >
-                                ↓
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {renderPlacementPicker('system')}
                   </div>
 
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
@@ -824,42 +855,7 @@ const AdminOverview: React.FC = () => {
 
                   <div>
                     <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
-                    <div className="space-y-2">
-                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
-                      {adItemsDraft.map((it) => {
-                        const checked = (placementItemIdsDraft.venue || []).includes(it.id);
-                        return (
-                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
-                            <label className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => togglePlacementItem('venue', it.id, e.target.checked)}
-                              />
-                              <span className="text-sm break-all truncate">{it.id}</span>
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('venue', it.id, -1)}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('venue', it.id, 1)}
-                              >
-                                ↓
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {renderPlacementPicker('venue')}
                   </div>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
@@ -1005,42 +1001,7 @@ const AdminOverview: React.FC = () => {
 
                   <div>
                     <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
-                    <div className="space-y-2">
-                      {adItemsDraft.length === 0 && <div className="text-sm cue-muted">請先新增廣告素材</div>}
-                      {adItemsDraft.map((it) => {
-                        const checked = (placementItemIdsDraft.member || []).includes(it.id);
-                        return (
-                          <div key={it.id} className="flex items-center justify-between gap-2 bg-black/30 border border-white/10 rounded px-3 py-2">
-                            <label className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => togglePlacementItem('member', it.id, e.target.checked)}
-                              />
-                              <span className="text-sm break-all truncate">{it.id}</span>
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('member', it.id, -1)}
-                              >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                className="px-2 py-1 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-                                disabled={!checked}
-                                onClick={() => movePlacementItem('member', it.id, 1)}
-                              >
-                                ↓
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {renderPlacementPicker('member')}
                   </div>
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
