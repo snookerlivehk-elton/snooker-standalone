@@ -119,6 +119,12 @@ const ClubPublicPage: React.FC = () => {
 
   const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
   const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const showShareToast = useCallback((msg: string, ms = 2000) => {
+    setShareToast(msg);
+    window.setTimeout(() => setShareToast(null), ms);
+  }, []);
 
   useEffect(() => {
     if (!clubId || !sessionMemberId || !isAdminSession) {
@@ -685,6 +691,28 @@ const ClubPublicPage: React.FC = () => {
     }
   };
 
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = String((club as any)?.name || '場館主頁');
+    try {
+      const navAny: any = navigator as any;
+      if (navAny?.share) {
+        await navAny.share({ title, url });
+        return;
+      }
+    } catch {}
+    try {
+      await navigator.clipboard.writeText(url);
+      showShareToast('已複製分享連結');
+      return;
+    } catch {}
+    try {
+      window.prompt('複製此連結分享：', url);
+    } catch {
+      showShareToast('分享失敗');
+    }
+  };
+
   const toggleHour = (hour: number) => {
     setSelectedHours((prev) => {
       const list = Array.isArray(prev) ? prev.slice() : [];
@@ -987,15 +1015,24 @@ const ClubPublicPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex-shrink-0">
-                  {!joined ? (
-                    <button type="button" onClick={handleJoin} className="px-3 py-2 rounded cue-button font-semibold">
-                      加入
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleShare}
+                      className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                    >
+                      分享
                     </button>
-                  ) : (
-                    <div className="px-3 py-2 rounded cue-surface text-emerald-600 text-sm font-semibold">
-                      已加入
-                    </div>
-                  )}
+                    {!joined ? (
+                      <button type="button" onClick={handleJoin} className="px-3 py-2 rounded cue-button font-semibold">
+                        加入
+                      </button>
+                    ) : (
+                      <div className="px-3 py-2 rounded cue-surface text-emerald-600 text-sm font-semibold">
+                        已加入
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1877,6 +1914,12 @@ const ClubPublicPage: React.FC = () => {
             </div>
           </div>
       </main>
+
+      {shareToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-full bg-black/80 text-white text-sm font-semibold">
+          {shareToast}
+        </div>
+      )}
 
       {submitModal.open && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.78)' }}>
