@@ -101,6 +101,19 @@ export async function updateClubMemberRating(apiUrl: string, memberId: string, c
   return res.json();
 }
 
+export async function updateClubMemberNickname(apiUrl: string, memberId: string, clubMemberId: string, nickname: string) {
+  const res = await fetch(`${apiUrl}/api/club/my-members/${encodeURIComponent(clubMemberId)}/nickname`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({ nickname }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新暱稱失敗');
+  }
+  return res.json();
+}
+
 export async function removeClubMember(apiUrl: string, memberId: string, clubMemberId: string) {
   const res = await fetch(`${apiUrl}/api/club/my-members/${encodeURIComponent(clubMemberId)}`, {
     method: 'DELETE',

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, updateClubMemberNickname, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
@@ -37,6 +37,8 @@ const VenueDashboard: React.FC = () => {
   const [clubMembers, setClubMembers] = useState<any[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberRatingDraft, setMemberRatingDraft] = useState<Record<string, string>>({});
+  const [memberNicknameDraft, setMemberNicknameDraft] = useState<Record<string, string>>({});
+  const [memberNicknameSavingId, setMemberNicknameSavingId] = useState<string>('');
   const [memberSavingId, setMemberSavingId] = useState<string>('');
   const [memberRemovingId, setMemberRemovingId] = useState<string>('');
   const [memberLocOpen, setMemberLocOpen] = useState(false);
@@ -1345,7 +1347,7 @@ const VenueDashboard: React.FC = () => {
                           <div className="font-semibold truncate">{name}</div>
                           <div className="text-xs cue-muted break-words mt-0.5">{email}</div>
                           <div className="text-xs break-words mt-0.5">{phone}</div>
-                          <div className="text-xs cue-muted mt-1">地方：{region}　分區：{district}</div>
+                          <div className="text-xs cue-muted mt-1">地方：{region} 分區：{district}</div>
                           <div className="text-xs cue-muted mt-0.5">加入：{joined}</div>
                         </div>
                         <button
@@ -3990,8 +3992,9 @@ const VenueDashboard: React.FC = () => {
                   title="會員管理"
                   intro="管理已加入場館的會員：搜尋、調整評分、移除會員、設定地區。"
                   steps={[
-                    '用搜尋框輸入名稱/電話/Email/會員編號縮窄列表。',
+                    '用搜尋框輸入名稱/暱稱/電話/Email/會員編號縮窄列表。',
                     '在「評分」欄輸入數值後按「儲存」更新會員評分。',
+                    '在「暱稱」欄輸入後按「儲存」可為該會員設定場館內部暱稱（只供後台辨識）。',
                     '如要移除會員，使用操作欄的移除按鈕（移除後需重新加入才會出現）。',
                     '如需要設定會員地區，可在操作欄開啟地區設定視窗。',
                     '按「重新整理」可更新會員列表。',
@@ -4024,7 +4027,7 @@ const VenueDashboard: React.FC = () => {
 
             <div className="grid gap-3 md:grid-cols-3 mb-4">
               <div className="md:col-span-2">
-                <label className="block text-sm mb-1 cue-muted">搜尋（名稱 / 電話 / Email / 會員編號）</label>
+                <label className="block text-sm mb-1 cue-muted">搜尋（名稱 / 暱稱 / 電話 / Email / 會員編號）</label>
                 <input
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
@@ -4046,6 +4049,7 @@ const VenueDashboard: React.FC = () => {
                 const hay = [
                   String(m?.member_code || ''),
                   String(m?.name || ''),
+                  String(r?.nickname || ''),
                   String(m?.phone || m?.phone_e164 || ''),
                   String(m?.email || ''),
                 ].join(' ').toLowerCase();
@@ -4058,6 +4062,7 @@ const VenueDashboard: React.FC = () => {
                       <tr className="cue-muted border-b cue-border">
                         <th className="py-2 px-2">會員編號</th>
                         <th className="py-2 px-2">名稱</th>
+                        <th className="py-2 px-2">暱稱</th>
                         <th className="py-2 px-2">電話</th>
                         <th className="py-2 px-2">Email</th>
                         <th className="py-2 px-2">評分</th>
@@ -4070,6 +4075,9 @@ const VenueDashboard: React.FC = () => {
                         const m = r?.member || {};
                         const code = String(m?.member_code || '').trim() || '—';
                         const name = String(m?.name || '').trim() || '—';
+                        const nickname = String(r?.nickname || '').trim();
+                        const nicknameDraft = memberNicknameDraft[id];
+                        const nicknameValue = nicknameDraft != null ? nicknameDraft : nickname;
                         const phone = String(m?.phone || m?.phone_e164 || '').trim() || '—';
                         const email = String(m?.email || '').trim() || '—';
                         const rating = Number(r?.rating ?? 0);
@@ -4079,6 +4087,48 @@ const VenueDashboard: React.FC = () => {
                           <tr key={id} className="border-b cue-border hover:brightness-95">
                             <td className="py-2 px-2 font-semibold whitespace-nowrap">{code}</td>
                             <td className="py-2 px-2">{name}</td>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  value={nicknameValue}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setMemberNicknameDraft((prev) => ({ ...(prev || {}), [id]: v }));
+                                  }}
+                                  className="w-40 px-3 py-1.5 rounded cue-input"
+                                  placeholder="（後台暱稱）"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={memberNicknameSavingId === id}
+                                  className={`px-3 py-1.5 rounded text-sm font-semibold ${memberNicknameSavingId === id ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                                  onClick={async () => {
+                                    if (!operatorId) return;
+                                    const raw = (memberNicknameDraft[id] ?? nickname).trim();
+                                    setMemberNicknameSavingId(id);
+                                    try {
+                                      const row = await updateClubMemberNickname(API_URL, operatorId, id, raw);
+                                      const nextNick = row?.nickname ?? null;
+                                      setClubMembers((prev) => (Array.isArray(prev) ? prev.map((x: any) => (String(x?.id || '') === id ? { ...x, nickname: nextNick } : x)) : prev));
+                                      setMemberNicknameDraft((prev) => {
+                                        const next = { ...(prev || {}) };
+                                        delete next[id];
+                                        return next;
+                                      });
+                                      setToast('已更新暱稱');
+                                      setTimeout(() => setToast(null), 2000);
+                                    } catch (e: any) {
+                                      setToast(e?.message || '更新失敗');
+                                      setTimeout(() => setToast(null), 3000);
+                                    } finally {
+                                      setMemberNicknameSavingId('');
+                                    }
+                                  }}
+                                >
+                                  儲存
+                                </button>
+                              </div>
+                            </td>
                             <td className="py-2 px-2 cue-muted whitespace-nowrap">{phone}</td>
                             <td className="py-2 px-2 cue-muted">{email}</td>
                             <td className="py-2 px-2">

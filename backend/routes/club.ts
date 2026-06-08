@@ -312,6 +312,27 @@ router.put('/my-members/:id/rating', async (req, res) => {
     }
 });
 
+router.put('/my-members/:id/nickname', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const memberId = member.id;
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const payload = req.body || {};
+    const raw = String(payload.nickname == null ? '' : payload.nickname).trim();
+    const nickname = raw ? raw.slice(0, 40) : null;
+    try {
+        const club = await prisma.clubProfile.findUnique({ where: { memberId } });
+        if (!club) return res.status(404).json({ error: 'Club profile not found' });
+        const cur = await prisma.clubMember.findUnique({ where: { id } });
+        if (!cur || cur.clubId !== club.id) return res.status(404).json({ error: 'Not found' });
+        const row = await prisma.clubMember.update({ where: { id }, data: { nickname } });
+        res.json(row);
+    } catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+
 router.delete('/my-members/:id', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;

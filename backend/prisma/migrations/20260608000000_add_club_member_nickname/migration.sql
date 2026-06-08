@@ -1,0 +1,2 @@
+ALTER TABLE "ClubMember"
+ADD COLUMN IF NOT EXISTS "nickname" TEXT;
