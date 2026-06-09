@@ -111,12 +111,53 @@ function isLikelyImageUrl(url: string, contentType?: string | null): boolean {
   return /\.(png|jpe?g|webp|gif|avif)(\?|#|$)/i.test(u);
 }
 
+function parseSrcsetUrl(srcset: string): string {
+  const s = String(srcset || '').trim();
+  if (!s) return '';
+  const first = s.split(',')[0];
+  if (!first) return '';
+  return String(first.trim().split(/\s+/)[0] || '').trim();
+}
+
 function firstImageFromHtml(html: string): string {
   const s = String(html || '');
-  const m = s.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
-  const src = m ? String(m[1] || '').trim() : '';
-  if (!src || src.startsWith('data:')) return '';
-  return src;
+
+  const og = s.match(/<meta[^>]+property\s*=\s*["']og:image(?::url)?["'][^>]+content\s*=\s*["']([^"']+)["'][^>]*>/i)
+    || s.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+property\s*=\s*["']og:image(?::url)?["'][^>]*>/i);
+  if (og && og[1]) return String(og[1]).trim();
+
+  const tw = s.match(/<meta[^>]+name\s*=\s*["']twitter:image(?::src)?["'][^>]+content\s*=\s*["']([^"']+)["'][^>]*>/i)
+    || s.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']twitter:image(?::src)?["'][^>]*>/i);
+  if (tw && tw[1]) return String(tw[1]).trim();
+
+  const relImg = s.match(/<link[^>]+rel\s*=\s*["']image_src["'][^>]+href\s*=\s*["']([^"']+)["'][^>]*>/i)
+    || s.match(/<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']image_src["'][^>]*>/i);
+  if (relImg && relImg[1]) return String(relImg[1]).trim();
+
+  const imgTag = s.match(/<img\b[^>]*>/i);
+  const tag = imgTag ? String(imgTag[0]) : '';
+  if (!tag) return '';
+
+  const attr = (name: string) => {
+    const m = tag.match(new RegExp(`${name}\\s*=\\s*["']([^"']+)["']`, 'i'));
+    return m && m[1] ? String(m[1]).trim() : '';
+  };
+
+  const candidates = [
+    attr('data-lazy-src'),
+    attr('data-src'),
+    attr('data-original'),
+    parseSrcsetUrl(attr('data-srcset')),
+    parseSrcsetUrl(attr('srcset')),
+    attr('src'),
+  ].map((x) => String(x || '').trim()).filter(Boolean);
+
+  for (const c of candidates) {
+    if (!c) continue;
+    if (c.startsWith('data:')) continue;
+    return c;
+  }
+  return '';
 }
 
 function extractLinkUrl(it: any): string {
