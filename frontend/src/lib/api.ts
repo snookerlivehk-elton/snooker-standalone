@@ -331,6 +331,26 @@ export async function getMyClubFeatureAccess(apiUrl: string, memberId: string) {
   }>;
 }
 
+export async function getPublicClubFeatureAccess(apiUrl: string, clubId: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const res = await fetch(`${base}/api/club/${encodeURIComponent(clubId)}/features/public`, { cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館功能授權失敗');
+  }
+  return res.json() as Promise<{
+    clubId: string;
+    features: Record<string, {
+      globalEnabled: boolean;
+      assignedEnabled: boolean;
+      effectiveEnabled: boolean;
+      explicitEnabled: boolean | null;
+      source: string;
+      updatedAt?: string | null;
+    }>;
+  }>;
+}
+
 export async function getClubPointsConfig(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/points/config`, {
     headers: { 'x-member-id': memberId },

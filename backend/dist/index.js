@@ -172,6 +172,146 @@ function requireFeature(key) {
         next();
     };
 }
+async function resolveAdminClubIdFromHeader(req) {
+    const memberId = String(req.headers['x-member-id'] || '').trim();
+    if (!memberId)
+        return null;
+    try {
+        const row = await prisma.clubProfile.findUnique({ where: { memberId }, select: { id: true } });
+        return row?.id || null;
+    }
+    catch {
+        return null;
+    }
+}
+async function requireClubAdminForClubApi(req, res) {
+    const memberId = String(req.headers['x-member-id'] || '').trim();
+    if (!memberId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, role: true, is_enabled: true, access_expires_at: true },
+    });
+    if (!member) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return null;
+    }
+    if (member.is_enabled === false) {
+        res.status(403).json({ error: 'Disabled' });
+        return null;
+    }
+    if (String(member.role || '').toUpperCase() !== 'ADMIN') {
+        res.status(403).json({ error: 'Forbidden' });
+        return null;
+    }
+    if (member.access_expires_at && new Date(member.access_expires_at).getTime() < Date.now()) {
+        res.status(403).json({ error: 'Expired' });
+        return null;
+    }
+    return member;
+}
+app.get('/api/club/features/access', async (req, res) => {
+    const member = await requireClubAdminForClubApi(req, res);
+    if (!member)
+        return;
+    const clubId = await resolveAdminClubIdFromHeader(req);
+    if (!clubId)
+        return res.status(404).json({ error: 'Club not found' });
+    try {
+        const map = await getFeatureMap();
+        const [pointsAssignment, tournamentsAssignment] = await Promise.all([
+            getClubFeatureAssignment(prisma, clubId, 'points'),
+            getClubFeatureAssignment(prisma, clubId, 'tournaments'),
+        ]);
+        res.json({
+            clubId,
+            features: {
+                points: {
+                    globalEnabled: map.points !== false,
+                    assignedEnabled: pointsAssignment.assignedEnabled,
+                    effectiveEnabled: map.points !== false && pointsAssignment.assignedEnabled,
+                    explicitEnabled: pointsAssignment.explicitEnabled,
+                    source: pointsAssignment.source,
+                    updatedAt: pointsAssignment.updatedAt,
+                },
+                tournaments: {
+                    globalEnabled: map.tournaments !== false,
+                    assignedEnabled: tournamentsAssignment.assignedEnabled,
+                    effectiveEnabled: map.tournaments !== false && tournamentsAssignment.assignedEnabled,
+                    explicitEnabled: tournamentsAssignment.explicitEnabled,
+                    source: tournamentsAssignment.source,
+                    updatedAt: tournamentsAssignment.updatedAt,
+                },
+            },
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.get('/api/club/:clubId/features/public', async (req, res) => {
+    const clubId = String(req.params.clubId || '').trim();
+    if (!clubId)
+        return res.status(400).json({ error: 'clubId required' });
+    try {
+        const map = await getFeatureMap();
+        const [pointsAssignment, tournamentsAssignment] = await Promise.all([
+            getClubFeatureAssignment(prisma, clubId, 'points'),
+            getClubFeatureAssignment(prisma, clubId, 'tournaments'),
+        ]);
+        res.json({
+            clubId,
+            features: {
+                points: {
+                    globalEnabled: map.points !== false,
+                    assignedEnabled: pointsAssignment.assignedEnabled,
+                    effectiveEnabled: map.points !== false && pointsAssignment.assignedEnabled,
+                    explicitEnabled: pointsAssignment.explicitEnabled,
+                    source: pointsAssignment.source,
+                    updatedAt: pointsAssignment.updatedAt,
+                },
+                tournaments: {
+                    globalEnabled: map.tournaments !== false,
+                    assignedEnabled: tournamentsAssignment.assignedEnabled,
+                    effectiveEnabled: map.tournaments !== false && tournamentsAssignment.assignedEnabled,
+                    explicitEnabled: tournamentsAssignment.explicitEnabled,
+                    source: tournamentsAssignment.source,
+                    updatedAt: tournamentsAssignment.updatedAt,
+                },
+            },
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err?.message || err) });
+    }
+});
+app.use('/api/club', async (req, res, next) => {
+    const p = String(req.path || '');
+    if (!p.includes('/tournaments'))
+        return next();
+    try {
+        const map = await getFeatureMap();
+        if (map.tournaments === false)
+            return res.status(403).json({ error: 'feature_disabled', feature: 'tournaments' });
+        let clubId = null;
+        const m = p.match(/^\/([^/]+)\/tournaments(?:\/|$)/);
+        if (m && m[1])
+            clubId = String(m[1]).trim();
+        if (!clubId && p.startsWith('/tournaments')) {
+            clubId = await resolveAdminClubIdFromHeader(req);
+        }
+        if (!clubId)
+            return next();
+        const assignment = await getClubFeatureAssignment(prisma, clubId, 'tournaments');
+        if (!assignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'tournaments', scope: 'club', clubId });
+        }
+    }
+    catch { }
+    next();
+});
 // Mount Club Router
 app.use('/api/club', clubRouter);
 async function requireActiveMember(req, res) {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { getAdminClubFeatureAssignments, updateAdminClubFeatureAssignment } from './lib/api';
 
-type FeatureKey = 'points';
+type FeatureKey = 'points' | 'tournaments';
 
 function resolveAdminToken(): string {
   try {
@@ -23,8 +23,10 @@ function resolveFeatureKey(): FeatureKey {
     const params = new URLSearchParams(window.location.search);
     const k = String(params.get('feature') || '').trim();
     if (k === 'points') return 'points';
+    if (k === 'tournaments') return 'tournaments';
     const saved = String(localStorage.getItem('adminClubFeatureKey') || '').trim();
     if (saved === 'points') return 'points';
+    if (saved === 'tournaments') return 'tournaments';
     return 'points';
   } catch {
     return 'points';
@@ -110,7 +112,7 @@ const AdminClubFeatures: React.FC = () => {
     }
   }
 
-  const title = featureKey === 'points' ? '消費積分（points）' : featureKey;
+  const title = featureKey === 'points' ? '消費積分（points）' : featureKey === 'tournaments' ? '賽事報名（tournaments）' : featureKey;
 
   return (
     <div className="brand-page min-h-screen text-white">
@@ -167,6 +169,7 @@ const AdminClubFeatures: React.FC = () => {
                   className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 >
                   <option value="points">消費積分（points）</option>
+                  <option value="tournaments">賽事報名（tournaments）</option>
                 </select>
               </div>
               <div className="sm:col-span-2">

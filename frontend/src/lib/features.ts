@@ -26,6 +26,102 @@ let cachedValue: Record<string, boolean> | null = null;
 let cachedAt = 0;
 let inflight: Promise<Record<string, boolean>> | null = null;
 
+type ClubFeatureAccessMap = Record<string, { effectiveEnabled?: boolean; assignedEnabled?: boolean; globalEnabled?: boolean }>;
+type ClubFeatureAccessResponse = { clubId: string; features: ClubFeatureAccessMap };
+
+let cachedClubAccessKey: string | null = null;
+let cachedClubAccessValue: ClubFeatureAccessResponse | null = null;
+let cachedClubAccessAt = 0;
+let inflightClubAccess: Promise<ClubFeatureAccessResponse | null> | null = null;
+
+function tryParseMemberSession(): { id?: string; role?: string } {
+  try {
+    return JSON.parse(localStorage.getItem('memberSession') || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function detectClubIdFromPath(): string | null {
+  try {
+    const p = String(window.location.pathname || '');
+    const m = p.match(/\/club\/([^/?#]+)/);
+    return m && m[1] ? decodeURIComponent(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function detectVenueDashboard(): boolean {
+  try {
+    const p = String(window.location.pathname || '');
+    return p.includes('/venue/dashboard');
+  } catch {
+    return false;
+  }
+}
+
+async function fetchClubScopedAccess(apiUrl: string): Promise<ClubFeatureAccessResponse | null> {
+  if (typeof window === 'undefined') return null;
+  const now = Date.now();
+  const base = apiUrl.replace(/\/$/, '');
+
+  const session = tryParseMemberSession();
+  const memberId = String(session?.id || '').trim();
+  const role = String(session?.role || '').toUpperCase();
+
+  const clubIdFromPath = detectClubIdFromPath();
+  const isVenue = detectVenueDashboard();
+
+  let cacheKey: string | null = null;
+  let url: string | null = null;
+  let headers: Record<string, string> | undefined;
+
+  if (isVenue && memberId && role === 'ADMIN') {
+    cacheKey = `admin:${memberId}`;
+    url = `${base}/api/club/features/access`;
+    headers = { 'x-member-id': memberId };
+  } else if (clubIdFromPath) {
+    cacheKey = `public:${clubIdFromPath}`;
+    url = `${base}/api/club/${encodeURIComponent(clubIdFromPath)}/features/public`;
+    headers = undefined;
+  } else {
+    return null;
+  }
+
+  if (
+    cachedClubAccessValue &&
+    cachedClubAccessKey === cacheKey &&
+    (now - cachedClubAccessAt) < 10_000
+  ) {
+    return cachedClubAccessValue;
+  }
+  if (inflightClubAccess) return inflightClubAccess;
+
+  inflightClubAccess = (async () => {
+    try {
+      const res = await fetch(url!, { headers, cache: 'no-store' });
+      if (!res.ok) return null;
+      const json = await res.json().catch(() => null);
+      if (!json || typeof json !== 'object') return null;
+      const clubId = String((json as any).clubId || '').trim();
+      const features = (json as any).features;
+      if (!clubId || !features || typeof features !== 'object') return null;
+      const value: ClubFeatureAccessResponse = { clubId, features };
+      cachedClubAccessKey = cacheKey;
+      cachedClubAccessValue = value;
+      cachedClubAccessAt = Date.now();
+      return value;
+    } catch {
+      return null;
+    } finally {
+      inflightClubAccess = null;
+    }
+  })();
+
+  return inflightClubAccess;
+}
+
 export async function fetchFeatures(apiUrl: string): Promise<Record<string, boolean>> {
   const now = Date.now();
   if (cachedValue && (now - cachedAt) < 10_000) return cachedValue;
@@ -70,6 +166,10 @@ export function clearFeatureCache() {
   cachedValue = null;
   cachedAt = 0;
   inflight = null;
+  cachedClubAccessKey = null;
+  cachedClubAccessValue = null;
+  cachedClubAccessAt = 0;
+  inflightClubAccess = null;
   try {
     localStorage.removeItem('featureFlags');
   } catch {}
@@ -81,15 +181,27 @@ export function useFeatureEnabled(apiUrl: string, key: FeatureKey) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchFeatures(apiUrl).then((m) => {
-      if (cancelled) return;
-      setEnabled(m[key] !== false);
-      setLoading(false);
-    }).catch(() => {
-      if (cancelled) return;
-      setEnabled(buildDefaults()[key] !== false);
-      setLoading(false);
-    });
+    Promise.all([fetchFeatures(apiUrl), fetchClubScopedAccess(apiUrl)])
+      .then(([m, clubAccess]) => {
+        if (cancelled) return;
+        const globalEnabled = m[key] !== false;
+        if (key === 'points' || key === 'tournaments') {
+          const eff = clubAccess?.features?.[key]?.effectiveEnabled;
+          if (typeof eff === 'boolean') {
+            setEnabled(eff);
+          } else {
+            setEnabled(globalEnabled);
+          }
+        } else {
+          setEnabled(globalEnabled);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEnabled(buildDefaults()[key] !== false);
+        setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [apiUrl, key]);
   return useMemo(() => ({ loading, enabled }), [loading, enabled]);
