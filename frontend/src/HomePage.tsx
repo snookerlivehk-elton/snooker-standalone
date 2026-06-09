@@ -6,8 +6,7 @@ import { API_URL } from './config';
 import { getLeaderboardMembersHighest, getLeaderboardMembersMonthly, getPublicClubs, getSiteNotice, listMemberRegions } from './lib/api';
 
 const HomePage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'auth' | 'news'>('home');
-  const [homeSubTab, setHomeSubTab] = useState<'leaderboard' | 'clubs'>('leaderboard');
+  const [activeTab, setActiveTab] = useState<'leaderboard' | 'clubs' | 'auth' | 'news'>('leaderboard');
   const [notice, setNotice] = useState<any>(null);
   const [noticeLoading, setNoticeLoading] = useState(true);
   const [leaderMode, setLeaderMode] = useState<'highest' | 'monthly'>('highest');
@@ -26,25 +25,14 @@ const HomePage: React.FC = () => {
   const showLeaderboard = notice?.homeShowLeaderboard !== false;
   const showClubList = notice?.homeShowClubList !== false;
 
-  const homeTabLabel = useMemo(() => {
-    if (showLeaderboard && showClubList) return '龍虎榜 / 場館列表';
-    if (showLeaderboard) return '綜合單杆龍虎榜';
-    if (showClubList) return '場館列表';
-    return '首頁';
-  }, [showLeaderboard, showClubList]);
-
-  const homeSubTabs = useMemo(() => {
-    const items: Array<{ key: 'leaderboard' | 'clubs'; label: string }> = [];
+  const tabs = useMemo(() => {
+    const items: Array<{ key: 'leaderboard' | 'clubs' | 'auth' | 'news'; label: string }> = [];
     if (showLeaderboard) items.push({ key: 'leaderboard', label: '綜合單杆龍虎榜' });
     if (showClubList) items.push({ key: 'clubs', label: '場館列表' });
+    items.push({ key: 'auth', label: '登入 / 註冊' });
+    items.push({ key: 'news', label: 'Snooker 新聞' });
     return items;
   }, [showLeaderboard, showClubList]);
-
-  const tabs = useMemo(() => ([
-    { key: 'home', label: homeTabLabel },
-    { key: 'auth', label: '登入 / 註冊' },
-    { key: 'news', label: 'Snooker 新聞' },
-  ]), [homeTabLabel]);
 
   useEffect(() => {
     try {
@@ -53,31 +41,26 @@ const HomePage: React.FC = () => {
       const hs = String(params.get('homeTab') || '').trim();
       if (t === 'news') setActiveTab('news');
       else if (t === 'auth') setActiveTab('auth');
-      else if (t === 'home') setActiveTab('home');
-      if (hs === 'clubs') setHomeSubTab('clubs');
-      else if (hs === 'leaderboard') setHomeSubTab('leaderboard');
+      else if (t === 'clubs') setActiveTab('clubs');
+      else if (t === 'leaderboard') setActiveTab('leaderboard');
+      else if (t === 'home') setActiveTab(hs === 'clubs' ? 'clubs' : 'leaderboard');
     } catch {}
   }, []);
 
   const changeTab = (key: string) => {
-    const next = key === 'news' ? 'news' : (key === 'auth' ? 'auth' : 'home');
+    const next =
+      key === 'news'
+        ? 'news'
+        : key === 'auth'
+          ? 'auth'
+          : key === 'clubs'
+            ? 'clubs'
+            : 'leaderboard';
     setActiveTab(next);
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('tab', next);
-      if (next !== 'home') url.searchParams.delete('homeTab');
-      else url.searchParams.set('homeTab', homeSubTab);
-      window.history.replaceState({}, '', url.toString());
-    } catch {}
-  };
-
-  const changeHomeSubTab = (key: string) => {
-    const next = key === 'clubs' ? 'clubs' : 'leaderboard';
-    setHomeSubTab(next);
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'home');
-      url.searchParams.set('homeTab', next);
+      url.searchParams.delete('homeTab');
       window.history.replaceState({}, '', url.toString());
     } catch {}
   };
@@ -163,25 +146,24 @@ const HomePage: React.FC = () => {
   }, [noticeLoading, notice, clubQuery, regionCode]);
 
   useEffect(() => {
-    if (showLeaderboard && showClubList) return;
-    if (showLeaderboard && homeSubTab !== 'leaderboard') {
-      setHomeSubTab('leaderboard');
-      return;
-    }
-    if (showClubList && homeSubTab !== 'clubs') {
-      setHomeSubTab('clubs');
-    }
-  }, [showLeaderboard, showClubList, homeSubTab]);
+    if (noticeLoading) return;
+    const visibleTabs = tabs.map((item) => item.key);
+    if (visibleTabs.includes(activeTab)) return;
+    const fallback =
+      (showLeaderboard ? 'leaderboard' : null) ||
+      (showClubList ? 'clubs' : null) ||
+      'auth';
+    setActiveTab(fallback);
+  }, [noticeLoading, tabs, activeTab, showLeaderboard, showClubList]);
 
   useEffect(() => {
-    if (activeTab !== 'home') return;
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'home');
-      url.searchParams.set('homeTab', homeSubTab);
+      url.searchParams.set('tab', activeTab);
+      url.searchParams.delete('homeTab');
       window.history.replaceState({}, '', url.toString());
     } catch {}
-  }, [activeTab, homeSubTab]);
+  }, [activeTab]);
 
   const clubsByRegion = useMemo(() => {
     const map = new Map<string, any[]>();
@@ -210,23 +192,12 @@ const HomePage: React.FC = () => {
             <Tabs items={tabs} activeKey={activeTab} onChange={changeTab} />
           </div>
 
-          {activeTab === 'home' ? (
+          {activeTab === 'leaderboard' ? (
             <div className="glass rounded-xl p-4 space-y-4">
               {noticeLoading ? (
                 <div className="text-sm cue-muted">讀取中…</div>
               ) : null}
-
-              {homeSubTabs.length > 1 ? (
-                <div className="cue-surface rounded-lg p-2">
-                  <Tabs items={homeSubTabs} activeKey={homeSubTab} onChange={changeHomeSubTab} />
-                </div>
-              ) : null}
-
-              {!showLeaderboard && !showClubList ? (
-                <div className="cue-surface rounded-lg p-4 text-sm cue-muted">首頁內容暫時隱藏</div>
-              ) : null}
-
-              {showLeaderboard && homeSubTab === 'leaderboard' ? (
+              {showLeaderboard ? (
                 <div className="cue-surface rounded-lg p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-semibold text-lg">綜合單杆龍虎榜</div>
@@ -278,9 +249,16 @@ const HomePage: React.FC = () => {
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="cue-surface rounded-lg p-4 text-sm cue-muted">綜合單杆龍虎榜已隱藏</div>
+              )}
+            </div>
+          ) : activeTab === 'clubs' ? (
+            <div className="glass rounded-xl p-4 space-y-4">
+              {noticeLoading ? (
+                <div className="text-sm cue-muted">讀取中…</div>
               ) : null}
-
-              {showClubList && homeSubTab === 'clubs' ? (
+              {showClubList ? (
                 <div className="cue-surface rounded-lg p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="font-semibold text-lg">場館列表</div>
@@ -341,7 +319,9 @@ const HomePage: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ) : null}
+              ) : (
+                <div className="cue-surface rounded-lg p-4 text-sm cue-muted">場館列表已隱藏</div>
+              )}
             </div>
           ) : activeTab === 'auth' ? (
             <div className="glass rounded-xl p-6">
