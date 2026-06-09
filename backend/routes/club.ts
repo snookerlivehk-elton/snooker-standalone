@@ -131,20 +131,27 @@ router.get('/public', async (req, res) => {
     try {
         const qRaw = req.query.q ?? req.query.keyword ?? '';
         const q = String(qRaw || '').trim();
+        const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
+        const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
         const limitRaw = req.query.limit ?? '';
         const limitNum = Number(limitRaw);
         const take = Number.isFinite(limitNum) ? Math.max(1, Math.min(200, Math.floor(limitNum))) : 50;
         const now = new Date();
 
+        const memberWhere: any = {
+            role: 'ADMIN',
+            is_enabled: true,
+            OR: [
+                { access_expires_at: null },
+                { access_expires_at: { gt: now } },
+            ],
+        };
+        if (regionCode) memberWhere.region_code = regionCode;
+        if (districtCode) memberWhere.district_code = districtCode;
+
         const where: any = {
-            member: {
-                role: 'ADMIN',
-                is_enabled: true,
-                OR: [
-                    { access_expires_at: null },
-                    { access_expires_at: { gt: now } },
-                ],
-            },
+            publicEnabled: true,
+            member: memberWhere,
         };
 
         if (q) {
@@ -153,6 +160,10 @@ router.get('/public', async (req, res) => {
                 { intro: { contains: q, mode: 'insensitive' } },
                 { address: { contains: q, mode: 'insensitive' } },
                 { phone: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                { member: { email: { contains: q, mode: 'insensitive' } } },
+                { member: { phone: { contains: q, mode: 'insensitive' } } },
+                { member: { phone_e164: { contains: q, mode: 'insensitive' } } },
             ];
         }
 
@@ -166,8 +177,18 @@ router.get('/public', async (req, res) => {
                 intro: true,
                 address: true,
                 phone: true,
+                email: true,
                 logoUrl: true,
-                member: { select: { name: true } },
+                member: {
+                    select: {
+                        name: true,
+                        email: true,
+                        phone: true,
+                        phone_e164: true,
+                        region_code: true,
+                        district_code: true,
+                    }
+                },
             },
         });
 

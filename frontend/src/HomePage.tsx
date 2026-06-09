@@ -3,12 +3,13 @@ import TopBarPublic from './components/TopBarPublic';
 import Tabs from './components/Tabs';
 import NewsPage from './NewsPage';
 import { API_URL } from './config';
-import { getLeaderboardMembersHighest, getLeaderboardMembersMonthly, getPublicClubs, getSiteNotice, listMemberRegions } from './lib/api';
+import { getLeaderboardClubsHighest, getLeaderboardClubsMonthly, getLeaderboardMembersHighest, getLeaderboardMembersMonthly, getPublicClubs, getSiteNotice, listMemberDistricts, listMemberRegions } from './lib/api';
 
 const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'clubs' | 'auth' | 'news'>('leaderboard');
   const [notice, setNotice] = useState<any>(null);
   const [noticeLoading, setNoticeLoading] = useState(true);
+  const [leaderScope, setLeaderScope] = useState<'members' | 'clubs'>('members');
   const [leaderMode, setLeaderMode] = useState<'highest' | 'monthly'>('highest');
   const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [leaderRows, setLeaderRows] = useState<any[]>([]);
@@ -16,7 +17,14 @@ const HomePage: React.FC = () => {
   const [leaderError, setLeaderError] = useState<string | null>(null);
   const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
   const [regionLoading, setRegionLoading] = useState(false);
-  const [regionCode, setRegionCode] = useState('');
+  const [leaderRegionCode, setLeaderRegionCode] = useState('');
+  const [leaderDistricts, setLeaderDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [leaderDistrictLoading, setLeaderDistrictLoading] = useState(false);
+  const [leaderDistrictCode, setLeaderDistrictCode] = useState('');
+  const [clubRegionCode, setClubRegionCode] = useState('');
+  const [clubDistricts, setClubDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
+  const [clubDistrictLoading, setClubDistrictLoading] = useState(false);
+  const [clubDistrictCode, setClubDistrictCode] = useState('');
   const [clubQuery, setClubQuery] = useState('');
   const [clubs, setClubs] = useState<any[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
@@ -99,6 +107,56 @@ const HomePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    if (!leaderRegionCode) {
+      setLeaderDistricts([]);
+      setLeaderDistrictCode('');
+      setLeaderDistrictLoading(false);
+      return () => { mounted = false; };
+    }
+    setLeaderDistrictLoading(true);
+    listMemberDistricts(API_URL, leaderRegionCode)
+      .then((res) => {
+        if (!mounted) return;
+        const arr = Array.isArray((res as any)?.districts) ? (res as any).districts : [];
+        setLeaderDistricts(arr);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setLeaderDistricts([]);
+      })
+      .finally(() => {
+        if (mounted) setLeaderDistrictLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [leaderRegionCode]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!clubRegionCode) {
+      setClubDistricts([]);
+      setClubDistrictCode('');
+      setClubDistrictLoading(false);
+      return () => { mounted = false; };
+    }
+    setClubDistrictLoading(true);
+    listMemberDistricts(API_URL, clubRegionCode)
+      .then((res) => {
+        if (!mounted) return;
+        const arr = Array.isArray((res as any)?.districts) ? (res as any).districts : [];
+        setClubDistricts(arr);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setClubDistricts([]);
+      })
+      .finally(() => {
+        if (mounted) setClubDistrictLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [clubRegionCode]);
+
+  useEffect(() => {
     if (noticeLoading) return;
     if (notice && notice.homeShowLeaderboard === false) return;
     let mounted = true;
@@ -107,13 +165,33 @@ const HomePage: React.FC = () => {
       setLeaderError(null);
       try {
         const rows =
-          leaderMode === 'monthly'
-            ? await getLeaderboardMembersMonthly(API_URL, leaderMonth, 10)
-            : await getLeaderboardMembersHighest(API_URL, 10);
+          leaderScope === 'clubs'
+            ? (
+              leaderMode === 'monthly'
+                ? await getLeaderboardClubsMonthly(API_URL, leaderMonth, 10, {
+                    regionCode: leaderRegionCode || undefined,
+                    districtCode: leaderDistrictCode || undefined,
+                  })
+                : await getLeaderboardClubsHighest(API_URL, 10, {
+                    regionCode: leaderRegionCode || undefined,
+                    districtCode: leaderDistrictCode || undefined,
+                  })
+            )
+            : (
+              leaderMode === 'monthly'
+                ? await getLeaderboardMembersMonthly(API_URL, leaderMonth, 10, {
+                    regionCode: leaderRegionCode || undefined,
+                    districtCode: leaderDistrictCode || undefined,
+                  })
+                : await getLeaderboardMembersHighest(API_URL, 10, {
+                    regionCode: leaderRegionCode || undefined,
+                    districtCode: leaderDistrictCode || undefined,
+                  })
+            );
         if (mounted) setLeaderRows(Array.isArray(rows) ? rows : []);
       } catch (e: any) {
         if (mounted) {
-          setLeaderError(String(e?.message || '讀取龍虎榜失敗'));
+          setLeaderError(String(e?.message || (leaderScope === 'clubs' ? '讀取場館榜失敗' : '讀取會員榜失敗')));
           setLeaderRows([]);
         }
       } finally {
@@ -121,7 +199,7 @@ const HomePage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [noticeLoading, notice, leaderMode, leaderMonth]);
+  }, [noticeLoading, notice, leaderScope, leaderMode, leaderMonth, leaderRegionCode, leaderDistrictCode]);
 
   useEffect(() => {
     if (noticeLoading) return;
@@ -131,7 +209,12 @@ const HomePage: React.FC = () => {
       setClubsLoading(true);
       setClubsError(null);
       try {
-        const out = await getPublicClubs(API_URL, { q: clubQuery.trim() || undefined, regionCode: regionCode || undefined, limit: 200 });
+        const out = await getPublicClubs(API_URL, {
+          q: clubQuery.trim() || undefined,
+          regionCode: clubRegionCode || undefined,
+          districtCode: clubDistrictCode || undefined,
+          limit: 200,
+        });
         if (clubFetchSeq.current === seq) setClubs(Array.isArray(out) ? out : []);
       } catch (e: any) {
         if (clubFetchSeq.current === seq) {
@@ -143,7 +226,7 @@ const HomePage: React.FC = () => {
       }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [noticeLoading, notice, clubQuery, regionCode]);
+  }, [noticeLoading, notice, clubQuery, clubRegionCode, clubDistrictCode]);
 
   useEffect(() => {
     if (noticeLoading) return;
@@ -204,6 +287,20 @@ const HomePage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
+                        className={`px-3 py-1.5 rounded text-sm font-semibold ${leaderScope === 'members' ? 'cue-button' : 'cue-surface-strong hover:brightness-95'}`}
+                        onClick={() => setLeaderScope('members')}
+                      >
+                        會員榜
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 rounded text-sm font-semibold ${leaderScope === 'clubs' ? 'cue-button' : 'cue-surface-strong hover:brightness-95'}`}
+                        onClick={() => setLeaderScope('clubs')}
+                      >
+                        場館榜
+                      </button>
+                      <button
+                        type="button"
                         className={`px-3 py-1.5 rounded text-sm font-semibold ${leaderMode === 'highest' ? 'cue-button' : 'cue-surface-strong hover:brightness-95'}`}
                         onClick={() => setLeaderMode('highest')}
                       >
@@ -224,6 +321,31 @@ const HomePage: React.FC = () => {
                           placeholder="YYYY-MM"
                         />
                       ) : null}
+                      <select
+                        value={leaderRegionCode}
+                        onChange={(e) => {
+                          setLeaderRegionCode(String(e.target.value || '').trim().toUpperCase());
+                          setLeaderDistrictCode('');
+                        }}
+                        className="h-10 rounded cue-surface-strong px-3 text-sm"
+                        disabled={regionLoading}
+                      >
+                        <option value="">全部地區</option>
+                        {regions.map((r) => (
+                          <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
+                        ))}
+                      </select>
+                      <select
+                        value={leaderDistrictCode}
+                        onChange={(e) => setLeaderDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                        className="h-10 rounded cue-surface-strong px-3 text-sm"
+                        disabled={!leaderRegionCode || leaderDistrictLoading}
+                      >
+                        <option value="">{leaderRegionCode ? '全部分區' : '先選地區'}</option>
+                        {leaderDistricts.map((d) => (
+                          <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   {leaderLoading ? (
@@ -235,12 +357,21 @@ const HomePage: React.FC = () => {
                   ) : (
                     <div className="mt-3 space-y-2">
                       {leaderRows.slice(0, 10).map((r: any, idx: number) => (
-                        <div key={`${r?.memberId || idx}`} className="cue-surface-strong rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+                        <div key={`${r?.memberId || r?.clubId || idx}`} className="cue-surface-strong rounded-lg px-3 py-2 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-7 text-center font-extrabold accent-yellow">{idx + 1}</div>
                             <div className="min-w-0">
-                              <div className="font-semibold truncate">{String(r?.member?.name || '—')}</div>
-                              <div className="text-xs cue-muted truncate">{String(r?.member?.member_code || '')}</div>
+                              {leaderScope === 'clubs' ? (
+                                <>
+                                  <div className="font-semibold truncate">{String(r?.club?.name || '—')}</div>
+                                  <div className="text-xs cue-muted truncate">{String(r?.clubId || '')}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="font-semibold truncate">{String(r?.member?.name || '—')}</div>
+                                  <div className="text-xs cue-muted truncate">{String(r?.member?.member_code || '')}</div>
+                                </>
+                              )}
                             </div>
                           </div>
                           <div className="font-extrabold text-lg">{Number(r?.points || 0)}</div>
@@ -264,14 +395,28 @@ const HomePage: React.FC = () => {
                     <div className="font-semibold text-lg">場館列表</div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <select
-                        value={regionCode}
-                        onChange={(e) => setRegionCode(String(e.target.value || '').trim().toUpperCase())}
+                        value={clubRegionCode}
+                        onChange={(e) => {
+                          setClubRegionCode(String(e.target.value || '').trim().toUpperCase());
+                          setClubDistrictCode('');
+                        }}
                         className="h-10 rounded cue-surface-strong px-3 text-sm"
                         disabled={regionLoading}
                       >
                         <option value="">全部地區</option>
                         {regions.map((r) => (
                           <option key={r.code3} value={r.code3}>{r.name} ({r.code3})</option>
+                        ))}
+                      </select>
+                      <select
+                        value={clubDistrictCode}
+                        onChange={(e) => setClubDistrictCode(String(e.target.value || '').trim().toUpperCase())}
+                        className="h-10 rounded cue-surface-strong px-3 text-sm"
+                        disabled={!clubRegionCode || clubDistrictLoading}
+                      >
+                        <option value="">{clubRegionCode ? '全部分區' : '先選地區'}</option>
+                        {clubDistricts.map((d) => (
+                          <option key={d.code3} value={d.code3}>{d.name} ({d.code3})</option>
                         ))}
                       </select>
                       <input

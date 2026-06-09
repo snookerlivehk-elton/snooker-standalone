@@ -193,10 +193,11 @@ export async function getPublicClubProfile(apiUrl: string, clubId: string) {
   return res.json();
 }
 
-export async function getPublicClubs(apiUrl: string, params?: { q?: string; regionCode?: string; limit?: number }) {
+export async function getPublicClubs(apiUrl: string, params?: { q?: string; regionCode?: string; districtCode?: string; limit?: number }) {
   const sp = new URLSearchParams();
   if (params?.q) sp.set('q', params.q);
   if (params?.regionCode) sp.set('regionCode', params.regionCode);
+  if (params?.districtCode) sp.set('districtCode', params.districtCode);
   if (params?.limit != null) sp.set('limit', String(params.limit));
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/public${qs ? `?${qs}` : ''}`);
@@ -694,37 +695,45 @@ export async function qrTableEndConfirm(apiUrl: string, memberId: string, confir
   return res.json();
 }
 
-export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number) {
+export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));
+  if (params?.regionCode) sp.set('regionCode', params.regionCode);
+  if (params?.districtCode) sp.set('districtCode', params.districtCode);
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/leaderboard/members/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取會員榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardMembersMonthly(apiUrl: string, month: string, limit?: number) {
+export async function getLeaderboardMembersMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
   const sp = new URLSearchParams();
   sp.set('month', month);
   if (limit != null) sp.set('limit', String(limit));
+  if (params?.regionCode) sp.set('regionCode', params.regionCode);
+  if (params?.districtCode) sp.set('districtCode', params.districtCode);
   const res = await fetch(`${apiUrl}/api/leaderboard/members/monthly?${sp.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取會員榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardClubsHighest(apiUrl: string, limit?: number) {
+export async function getLeaderboardClubsHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));
+  if (params?.regionCode) sp.set('regionCode', params.regionCode);
+  if (params?.districtCode) sp.set('districtCode', params.districtCode);
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/leaderboard/clubs/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取場館榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardClubsMonthly(apiUrl: string, month: string, limit?: number) {
+export async function getLeaderboardClubsMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
   const sp = new URLSearchParams();
   sp.set('month', month);
   if (limit != null) sp.set('limit', String(limit));
+  if (params?.regionCode) sp.set('regionCode', params.regionCode);
+  if (params?.districtCode) sp.set('districtCode', params.districtCode);
   const res = await fetch(`${apiUrl}/api/leaderboard/clubs/monthly?${sp.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取場館榜失敗');
   return res.json();

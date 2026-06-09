@@ -4525,16 +4525,29 @@ function parseLimit(raw, fallback) {
         return fallback;
     return Math.max(1, Math.min(200, Math.floor(n)));
 }
-async function listPublicHighbreakClubIds() {
+async function listPublicHighbreakClubIds(regionCode, districtCode) {
+    const memberWhere = {};
+    if (regionCode)
+        memberWhere.region_code = regionCode;
+    if (districtCode)
+        memberWhere.district_code = districtCode;
     const rows = await prisma.clubProfile.findMany({
-        where: { publicEnabled: true, publicShowHighbreak: true },
+        where: {
+            publicEnabled: true,
+            publicShowHighbreak: true,
+            ...(Object.keys(memberWhere).length > 0 ? { member: memberWhere } : {}),
+        },
         select: { id: true },
     });
     return rows.map((r) => r.id);
 }
-async function listPublicHighbreakMemberIds() {
+async function listPublicHighbreakMemberIds(regionCode, districtCode) {
     const rows = await prisma.member.findMany({
-        where: { public_highbreak_enabled: true },
+        where: {
+            public_highbreak_enabled: true,
+            ...(regionCode ? { region_code: regionCode } : {}),
+            ...(districtCode ? { district_code: districtCode } : {}),
+        },
         select: { id: true },
     });
     return rows.map((r) => r.id);
@@ -4542,7 +4555,12 @@ async function listPublicHighbreakMemberIds() {
 app.get('/api/leaderboard/members/highest', async (req, res) => {
     try {
         const take = parseLimit(req.query.limit, 10);
-        const [clubIds, memberIds] = await Promise.all([listPublicHighbreakClubIds(), listPublicHighbreakMemberIds()]);
+        const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
+        const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+        const [clubIds, memberIds] = await Promise.all([
+            listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined),
+            listPublicHighbreakMemberIds(regionCode || undefined, districtCode || undefined),
+        ]);
         if (clubIds.length === 0 || memberIds.length === 0)
             return res.json([]);
         const rows = await prisma.breakRecord.groupBy({
@@ -4572,10 +4590,15 @@ app.get('/api/leaderboard/members/monthly', async (req, res) => {
     try {
         const take = parseLimit(req.query.limit, 10);
         const month = String(req.query.month || '').trim();
+        const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
+        const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
         const range = parseMonthRangeUtc(month);
         if (!range)
             return res.status(400).json({ error: 'month invalid' });
-        const [clubIds, memberIds] = await Promise.all([listPublicHighbreakClubIds(), listPublicHighbreakMemberIds()]);
+        const [clubIds, memberIds] = await Promise.all([
+            listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined),
+            listPublicHighbreakMemberIds(regionCode || undefined, districtCode || undefined),
+        ]);
         if (clubIds.length === 0 || memberIds.length === 0)
             return res.json([]);
         const rows = await prisma.breakRecord.groupBy({
@@ -4604,7 +4627,9 @@ app.get('/api/leaderboard/members/monthly', async (req, res) => {
 app.get('/api/leaderboard/clubs/highest', async (req, res) => {
     try {
         const take = parseLimit(req.query.limit, 10);
-        const clubIds = await listPublicHighbreakClubIds();
+        const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
+        const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+        const clubIds = await listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined);
         if (clubIds.length === 0)
             return res.json([]);
         const rows = await prisma.breakRecord.groupBy({
@@ -4637,10 +4662,12 @@ app.get('/api/leaderboard/clubs/monthly', async (req, res) => {
     try {
         const take = parseLimit(req.query.limit, 10);
         const month = String(req.query.month || '').trim();
+        const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
+        const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
         const range = parseMonthRangeUtc(month);
         if (!range)
             return res.status(400).json({ error: 'month invalid' });
-        const clubIds = await listPublicHighbreakClubIds();
+        const clubIds = await listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined);
         if (clubIds.length === 0)
             return res.json([]);
         const rows = await prisma.breakRecord.groupBy({
