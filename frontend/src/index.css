@@ -67,6 +67,10 @@
     width: 100%;
     overflow-x: auto;
   }
+  html:not([data-theme="light"]) .news-source-select option {
+    background: #ffffff;
+    color: #0f172a;
+  }
   .glass {
     background: var(--glass-bg);
     backdrop-filter: saturate(180%) blur(10px);

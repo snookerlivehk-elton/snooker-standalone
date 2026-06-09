@@ -5,7 +5,7 @@ import { getNewsItems, getNewsSources } from './lib/api';
 
 type Source = { id: string; name: string; siteUrl?: string | null };
 
-const NewsPage: React.FC = () => {
+const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
@@ -54,67 +54,78 @@ const NewsPage: React.FC = () => {
 
   const sourceMap = useMemo(() => new Map(sources.map((s) => [s.id, s])), [sources]);
 
+  const content = (
+    <main className="flex-1 px-4 pt-4 pb-10 flex items-start justify-center">
+      <div className="w-full max-w-2xl space-y-3">
+        <div className="glass rounded-xl p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm cue-muted">每 3 天自動更新；點擊標題會跳去原文</div>
+            <select
+              value={sourceId}
+              onChange={(e) => setSourceId(e.target.value)}
+              className="h-10 rounded px-2 cue-surface-strong text-sm news-source-select"
+            >
+              <option value="">全部來源</option>
+              {sources.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {loading && (
+          <div className="glass rounded-xl p-4">載入中...</div>
+        )}
+
+        {!loading && error && (
+          <div className="glass rounded-xl p-4 text-red-200">錯誤：{error}</div>
+        )}
+
+        {!loading && !error && items.length === 0 && (
+          <div className="glass rounded-xl p-4">暫時未有新聞</div>
+        )}
+
+        {!loading && !error && items.map((it: any) => {
+          const src = it?.source || (it?.sourceId ? sourceMap.get(String(it.sourceId)) : null);
+          const dt = it?.publishedAt ? new Date(String(it.publishedAt)) : null;
+          const dtStr = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('zh-HK') : '';
+          return (
+            <a
+              key={String(it?.id || it?.url)}
+              href={String(it?.url || '#')}
+              target="_blank"
+              rel="noreferrer"
+              className="block glass rounded-xl p-4 hover:brightness-95"
+            >
+              <div className="text-base font-extrabold cue-zh-title">{String(it?.title || '')}</div>
+              <div className="mt-1 text-xs cue-muted flex flex-wrap gap-x-2 gap-y-1">
+                <span>{src?.name ? `來源：${src.name}` : '來源：—'}</span>
+                {dtStr ? <span>{dtStr}</span> : null}
+              </div>
+              {it?.summary ? (
+                <div className="mt-2 text-sm cue-muted">{String(it.summary)}</div>
+              ) : null}
+            </a>
+          );
+        })}
+      </div>
+    </main>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col">
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div className="brand-page min-h-screen flex flex-col">
       <TopBarPublic title="Snooker 新聞" />
-      <main className="flex-1 px-4 pt-4 pb-10 flex items-start justify-center">
-        <div className="w-full max-w-2xl space-y-3">
-          <div className="glass rounded-xl p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm cue-muted">每 3 天自動更新；點擊標題會跳去原文</div>
-              <select
-                value={sourceId}
-                onChange={(e) => setSourceId(e.target.value)}
-                className="h-10 rounded px-2 cue-surface-strong text-sm"
-              >
-                <option value="">全部來源</option>
-                {sources.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {loading && (
-            <div className="glass rounded-xl p-4">載入中...</div>
-          )}
-
-          {!loading && error && (
-            <div className="glass rounded-xl p-4 text-red-200">錯誤：{error}</div>
-          )}
-
-          {!loading && !error && items.length === 0 && (
-            <div className="glass rounded-xl p-4">暫時未有新聞</div>
-          )}
-
-          {!loading && !error && items.map((it: any) => {
-            const src = it?.source || (it?.sourceId ? sourceMap.get(String(it.sourceId)) : null);
-            const dt = it?.publishedAt ? new Date(String(it.publishedAt)) : null;
-            const dtStr = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('zh-HK') : '';
-            return (
-              <a
-                key={String(it?.id || it?.url)}
-                href={String(it?.url || '#')}
-                target="_blank"
-                rel="noreferrer"
-                className="block glass rounded-xl p-4 hover:brightness-95"
-              >
-                <div className="text-base font-extrabold cue-zh-title">{String(it?.title || '')}</div>
-                <div className="mt-1 text-xs cue-muted flex flex-wrap gap-x-2 gap-y-1">
-                  <span>{src?.name ? `來源：${src.name}` : '來源：—'}</span>
-                  {dtStr ? <span>{dtStr}</span> : null}
-                </div>
-                {it?.summary ? (
-                  <div className="mt-2 text-sm cue-muted">{String(it.summary)}</div>
-                ) : null}
-              </a>
-            );
-          })}
-        </div>
-      </main>
+      {content}
     </div>
   );
 };
 
 export default NewsPage;
-
