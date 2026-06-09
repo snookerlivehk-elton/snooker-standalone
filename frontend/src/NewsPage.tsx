@@ -105,7 +105,7 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
                     src={imgProxy}
                     alt=""
                     loading="lazy"
-                    className="w-20 h-20 rounded-lg object-cover shrink-0 bg-black/20"
+                    className="w-16 h-16 sm:w-24 sm:h-24 rounded-lg object-cover shrink-0 bg-black/20"
                     onError={(e) => { try { (e.currentTarget as HTMLImageElement).style.display = 'none'; } catch {} }}
                   />
                 ) : null}
