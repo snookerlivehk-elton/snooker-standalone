@@ -89,6 +89,7 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
           const src = it?.source || (it?.sourceId ? sourceMap.get(String(it.sourceId)) : null);
           const dt = it?.publishedAt ? new Date(String(it.publishedAt)) : null;
           const dtStr = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('zh-HK') : '';
+          const img = it?.imageUrl ? String(it.imageUrl) : '';
           return (
             <a
               key={String(it?.id || it?.url)}
@@ -97,14 +98,27 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
               rel="noreferrer"
               className="block glass rounded-xl p-4 hover:brightness-95"
             >
-              <div className="text-base font-extrabold cue-zh-title">{String(it?.title || '')}</div>
-              <div className="mt-1 text-xs cue-muted flex flex-wrap gap-x-2 gap-y-1">
-                <span>{src?.name ? `來源：${src.name}` : '來源：—'}</span>
-                {dtStr ? <span>{dtStr}</span> : null}
+              <div className="flex gap-3">
+                {img ? (
+                  <img
+                    src={img}
+                    alt=""
+                    loading="lazy"
+                    className="w-20 h-20 rounded-lg object-cover shrink-0 bg-black/20"
+                    onError={(e) => { try { (e.currentTarget as HTMLImageElement).style.display = 'none'; } catch {} }}
+                  />
+                ) : null}
+                <div className="min-w-0">
+                  <div className="text-base font-extrabold cue-zh-title">{String(it?.title || '')}</div>
+                  <div className="mt-1 text-xs cue-muted flex flex-wrap gap-x-2 gap-y-1">
+                    <span>{src?.name ? `來源：${src.name}` : '來源：—'}</span>
+                    {dtStr ? <span>{dtStr}</span> : null}
+                  </div>
+                  {it?.summary ? (
+                    <div className="mt-2 text-sm cue-muted">{String(it.summary)}</div>
+                  ) : null}
+                </div>
               </div>
-              {it?.summary ? (
-                <div className="mt-2 text-sm cue-muted">{String(it.summary)}</div>
-              ) : null}
             </a>
           );
         })}

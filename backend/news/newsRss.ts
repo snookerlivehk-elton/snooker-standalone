@@ -8,6 +8,24 @@ export type RssFetchResult = {
   fetchedAt: Date;
 };
 
+function textValue(x: any): string {
+  if (x == null) return '';
+  if (typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean') return String(x);
+  if (typeof x === 'object') {
+    const candidates = [
+      x['#text'],
+      x.__cdata,
+      x.cdata,
+      x.text,
+      x.value,
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' || typeof c === 'number' || typeof c === 'boolean') return String(c);
+    }
+  }
+  return '';
+}
+
 function canonicalizeUrl(input: string): string {
   const s = String(input || '').trim();
   if (!s) return '';
@@ -85,6 +103,91 @@ function arrayify<T>(x: T | T[] | undefined | null): T[] {
   return Array.isArray(x) ? x : [x];
 }
 
+function isLikelyImageUrl(url: string, contentType?: string | null): boolean {
+  const u = String(url || '').trim().toLowerCase();
+  if (!u) return false;
+  if (u.startsWith('data:')) return false;
+  if (contentType && String(contentType).toLowerCase().startsWith('image/')) return true;
+  return /\.(png|jpe?g|webp|gif|avif)(\?|#|$)/i.test(u);
+}
+
+function firstImageFromHtml(html: string): string {
+  const s = String(html || '');
+  const m = s.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i);
+  const src = m ? String(m[1] || '').trim() : '';
+  if (!src || src.startsWith('data:')) return '';
+  return src;
+}
+
+function extractLinkUrl(it: any): string {
+  const link = it?.link;
+  if (!link) return '';
+  if (typeof link === 'string') return link;
+  if (Array.isArray(link)) {
+    const objs = link.filter((x) => x && typeof x === 'object');
+    const preferred = objs.find((x) => String(x.rel || '').toLowerCase() === 'alternate') || objs.find((x) => !x.rel);
+    const href = preferred?.href ?? preferred?.url ?? '';
+    return typeof href === 'string' ? href : '';
+  }
+  if (typeof link === 'object') {
+    const href = link.href ?? link.url ?? link['#text'] ?? '';
+    return typeof href === 'string' ? href : '';
+  }
+  return '';
+}
+
+function extractImageUrl(it: any, rawHtml: string): string {
+  const candidates: Array<{ url: string; type?: string | null }> = [];
+
+  for (const enc of arrayify(it?.enclosure)) {
+    if (!enc) continue;
+    if (typeof enc === 'string') {
+      candidates.push({ url: enc });
+      continue;
+    }
+    if (typeof enc === 'object') candidates.push({ url: String(enc.url || enc.href || ''), type: enc.type ?? enc.mimeType ?? null });
+  }
+
+  for (const th of arrayify(it?.thumbnail)) {
+    if (!th) continue;
+    if (typeof th === 'string') candidates.push({ url: th });
+    if (typeof th === 'object') candidates.push({ url: String(th.url || th.href || ''), type: th.type ?? null });
+  }
+
+  const img = it?.image;
+  if (img) {
+    if (typeof img === 'string') candidates.push({ url: img });
+    if (typeof img === 'object') candidates.push({ url: String(img.url || img.href || ''), type: img.type ?? null });
+  }
+
+  for (const content of arrayify(it?.content)) {
+    if (!content || typeof content !== 'object') continue;
+    const maybeUrl = String(content.url || content.href || '');
+    if (maybeUrl) candidates.push({ url: maybeUrl, type: content.type ?? content.mimeType ?? null });
+  }
+
+  for (const l of arrayify(it?.link)) {
+    if (!l || typeof l !== 'object') continue;
+    const rel = String(l.rel || '').toLowerCase();
+    const type = String(l.type || l.mimeType || '').toLowerCase();
+    if (rel !== 'enclosure') continue;
+    const href = String(l.href || l.url || '').trim();
+    if (!href) continue;
+    candidates.push({ url: href, type: type || null });
+  }
+
+  const imgFromHtml = firstImageFromHtml(rawHtml);
+  if (imgFromHtml) candidates.push({ url: imgFromHtml });
+
+  for (const c of candidates) {
+    const u = canonicalizeUrl(String(c.url || '').trim());
+    if (!u) continue;
+    if (!isLikelyImageUrl(u, c.type || null)) continue;
+    return u;
+  }
+  return '';
+}
+
 export async function fetchAndUpsertRssSource(
   prisma: PrismaClient,
   source: {
@@ -137,22 +240,24 @@ export async function fetchAndUpsertRssSource(
 
   let newCount = 0;
   for (const it of items) {
-    const titleRaw = String(it?.title?.['#text'] ?? it?.title ?? '').trim();
-    const linkRaw = String(it?.link?.href ?? it?.link ?? '').trim();
+    const titleRaw = String(textValue(it?.title?.['#text'] ?? it?.title) || '').trim();
+    const linkRaw = String(extractLinkUrl(it) || '').trim();
     const url = canonicalizeUrl(linkRaw);
     const title = truncate(stripHtml(titleRaw), 180);
     if (!url || !title) continue;
 
     const pub = safeDate(it?.pubDate ?? it?.published ?? it?.updated);
-    const author = String(it?.creator ?? it?.author?.name ?? it?.author ?? '').trim() || null;
+    const author = String(textValue(it?.creator ?? it?.author?.name ?? it?.author) || '').trim() || null;
 
-    const descRaw = String(it?.description ?? it?.summary ?? it?.content ?? '').trim();
+    const descRaw = String(textValue(it?.description ?? it?.summary ?? it?.content) || '').trim();
     const summary = descRaw ? truncate(stripHtml(descRaw), summaryMaxLen) : null;
 
-    const thumbUrl = String(it?.thumbnail?.url ?? it?.enclosure?.url ?? it?.image?.url ?? it?.content?.url ?? it?.media?.thumbnail?.url ?? '').trim();
-    const imageUrl = thumbUrl ? canonicalizeUrl(thumbUrl) : null;
+    const imageCandidate = extractImageUrl(it, String(it?.description ?? it?.summary ?? it?.content ?? ''));
+    const imageUrl = imageCandidate ? canonicalizeUrl(imageCandidate) : null;
 
-    const cats = arrayify(it?.category).map((c) => String(c?.['#text'] ?? c ?? '').trim()).filter((x) => !!x);
+    const cats = arrayify(it?.category)
+      .map((c) => String(textValue(c?.term ?? c?.['#text'] ?? c) || '').trim())
+      .filter((x) => !!x);
     const tags = cats.length ? cats.slice(0, 12) : null;
 
     try {
