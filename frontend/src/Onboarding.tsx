@@ -11,6 +11,7 @@ const Onboarding: React.FC = () => {
           <div className="cue-card p-6">
             <div className="cue-zh-title mb-1">Cue Track LIVE</div>
             <div className="cue-en-sub">Choose your path</div>
+            <div className="text-sm cue-muted mt-2">主持 / 場館管理員可先建立房間，再分享觀眾連結或 Overlay；一般觀眾只需要房間碼或直播連結即可加入。</div>
             <div className="grid md:grid-cols-3 gap-3 mt-4">
               <a href="/rooms" className="cue-button py-3 text-center rounded">我要開播 / 主持</a>
               <a href="/rooms" className="px-4 py-3 text-center rounded bg-gray-700 text-white">只觀戰</a>
@@ -20,8 +21,8 @@ const Onboarding: React.FC = () => {
           <div className="cue-card p-6">
             <div className="cue-zh-title mb-2">直播指引（概要）</div>
             <ul className="text-sm text-gray-200 list-disc pl-5 space-y-1">
-              <li>建立房間，取得 Overlay URL 與 QR</li>
-              <li>Android App 輸入 Overlay URL，開始合成</li>
+              <li>建立房間，取得主持、觀眾與 Overlay 連結</li>
+              <li>Android App 輸入 Overlay URL 與 RTMP，開始合成</li>
               <li>按「開始比賽」設定選手、讓分與局數</li>
               <li>主持端控制記分，觀眾即時同步</li>
             </ul>

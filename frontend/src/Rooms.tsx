@@ -79,6 +79,7 @@ const Rooms: React.FC = () => {
             <div className="cue-card p-4">
               <div className="cue-zh-title mb-1">觀眾加入</div>
               <div className="cue-en-sub">Enter Room Code</div>
+              <div className="text-sm cue-muted mt-2">輸入主持提供的房間碼即可進入直播頁；如你已收到完整直播連結，可直接開啟而毋須再輸入房間碼。</div>
               <div className="mt-3 flex gap-2">
                 <input
                   value={joinCode}
@@ -106,6 +107,7 @@ const Rooms: React.FC = () => {
                 <div>
                   <div className="cue-zh-title">我的房間</div>
                   <div className="cue-en-sub">Active Rooms</div>
+                  <div className="text-sm cue-muted mt-2">建立房間後可複製主持、觀眾或 Overlay 連結；如你主要用場館帳戶操作，亦可回到場館後台的「計分 / 房間」頁管理。</div>
                 </div>
                 <div className="flex gap-2">
                   <a href="/android" className="px-4 py-2 rounded bg-gray-700 text-white">Android 串接指引</a>

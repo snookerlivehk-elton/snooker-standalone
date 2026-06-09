@@ -22,6 +22,7 @@ const AndroidGuide: React.FC = () => {
           <div className="cue-card p-6">
             <div className="cue-zh-title mb-1">Overlay URL</div>
             <div className="cue-en-sub mb-3">For Android overlay composition</div>
+            <div className="text-sm cue-muted mb-3">先在「房間」或場館後台「計分 / 房間」建立房間，再輸入房間碼 / 房間 ID 產生 Overlay URL。</div>
             <label className="block text-sm mb-1">房間ID/碼</label>
             <input
               value={room}
@@ -59,8 +60,8 @@ const AndroidGuide: React.FC = () => {
           <div className="cue-card p-6">
             <div className="cue-zh-title mb-2">流程摘要</div>
             <ol className="text-sm text-gray-200 list-decimal pl-5 space-y-1">
-              <li>在「房間」建立房間，取得房間ID</li>
-              <li>輸入房間ID 產生 Overlay URL 並複製</li>
+              <li>在「房間」或場館後台「計分 / 房間」建立房間，取得房間碼 / ID</li>
+              <li>輸入房間碼 / ID 產生 Overlay URL 並複製</li>
               <li>Android App 輸入 Overlay 與 RTMP，開始推流</li>
               <li>主持端記分，觀眾頁與 Overlay 即時同步</li>
             </ol>

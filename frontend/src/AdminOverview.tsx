@@ -954,6 +954,7 @@ const AdminOverview: React.FC = () => {
                   </div>
                   <div className="pt-2 border-t border-white/10">
                     <div className="text-sm cue-muted mb-2">首頁設定</div>
+                    <div className="text-xs cue-muted mb-2">控制首頁主分頁是否顯示「綜合單杆龍虎榜」及「場館列表」。即使這裡已開啟，相關會員 / 場館仍需各自開啟公開設定先會有資料顯示。</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label className="flex items-center gap-2 text-sm">
                         <input

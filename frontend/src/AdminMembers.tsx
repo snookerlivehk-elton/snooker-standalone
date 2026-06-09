@@ -188,7 +188,10 @@ const AdminMembers: React.FC = () => {
     <div className="brand-page min-h-screen text-white">
       <div className="mx-auto w-full max-w-screen-2xl px-4 py-10">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="accent-yellow text-2xl font-bold">管理員：會員列表</h2>
+          <div>
+            <h2 className="accent-yellow text-2xl font-bold">管理員：會員列表</h2>
+            <div className="text-sm text-slate-300 mt-1">此列表現已顯示會員的地方與分區資料，可配合首頁龍虎榜與場館列表的分區統計使用。</div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Link
               to="/members/register"

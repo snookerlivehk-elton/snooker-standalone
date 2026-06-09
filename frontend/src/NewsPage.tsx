@@ -59,7 +59,7 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
       <div className="w-full max-w-2xl space-y-3">
         <div className="glass rounded-xl p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm cue-muted">每 3 天自動更新；點擊標題會跳去原文</div>
+            <div className="text-sm cue-muted">每 3 天自動更新；可按來源篩選；點擊新聞卡片會跳去原文；縮圖會按手機 / 桌面自動調整。</div>
             <select
               value={sourceId}
               onChange={(e) => setSourceId(e.target.value)}

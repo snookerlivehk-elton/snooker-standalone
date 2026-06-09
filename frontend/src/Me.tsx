@@ -911,11 +911,11 @@ const Me: React.FC = () => {
                     <div className="font-semibold text-lg">已加入場館</div>
                     <HelpGuide
                       title="已加入場館"
-                      intro="查看你已加入的場館、進入場館頁、查看消費積分。"
+                      intro="查看你已加入的場館、進入場館公開頁、查看消費積分與場館更新。"
                       steps={[
-                        '點選場館卡片進入場館公開頁。',
-                        '如顯示「消費積分」，代表該場館有啟用積分功能；數值會不定期更新。',
-                        '想加入新場館：由場館方提供邀請/加入方式（例如邀請訊息、QR 或連結）。',
+                        '點選場館卡片可進入該場館公開頁，查看場館資料、直播或比賽入口（如場館有公開）。',
+                        '如顯示「消費積分」，代表該場館有啟用積分功能；數值會按場館紀錄更新。',
+                        '想加入新場館，請向場館索取加入方式或邀請。',
                       ]}
                       tips={[
                         '如見到「—」代表積分仍在讀取或暫時未有資料。',
@@ -1140,10 +1140,10 @@ const Me: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <HelpGuide
                         title="會員資料"
-                        intro="編輯你的聯絡資料與地區設定，並可在此登出。"
+                        intro="編輯你的聯絡資料、地區設定與公開單杆選項，並可在此登出。"
                         steps={[
                           '按「編輯資料」進入編輯模式。',
-                          '修改電話/出生日期/地方/分區後按「儲存」。',
+                          '修改電話、出生日期、地方、分區及「公開單杆」後按「儲存」。',
                           '如不想保存，按「取消」恢復原本資料。',
                           '按「登出」會清除本機登入狀態。',
                         ]}
@@ -1155,6 +1155,7 @@ const Me: React.FC = () => {
                         faq={[
                           { q: '點解地方/分區選項係灰色？', a: '代表資料仍在讀取中，或你未先選擇「地方」。' },
                           { q: '我改咗資料但冇反映？', a: '請按「儲存」後等待提示，再刷新頁面確認。' },
+                          { q: '點解我已勾選「公開單杆」但首頁龍虎榜仍未見到我？', a: '除了會員要開啟公開單杆外，該筆紀錄所屬場館亦需要開啟公開單杆數據，並且系統首頁設定要顯示綜合單杆龍虎榜。' },
                         ]}
                       />
                       <button
@@ -1326,33 +1327,48 @@ const Me: React.FC = () => {
                     <div className="mt-3 cue-surface-strong rounded-lg p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-semibold">場館公開設定</div>
-                        <button
-                          type="button"
-                          disabled={myClubProfileSaving || myClubProfileLoading || !myClubProfile}
-                          onClick={async () => {
-                            if (!memberId || !myClubProfile) return;
-                            try {
-                              setMyClubProfileSaving(true);
-                              const payload = {
-                                ...myClubProfile,
-                                publicEnabled: myClubProfile.publicEnabled === true,
-                                publicShowHighbreak: myClubProfile.publicShowHighbreak !== false,
-                                publicShowTournaments: myClubProfile.publicShowTournaments !== false,
-                                publicShowLive: myClubProfile.publicShowLive !== false,
-                              };
-                              const res = await updateClubProfile(API_URL, memberId, payload);
-                              setMyClubProfile(res && typeof res === 'object' ? res : payload);
-                              setToast('已更新場館公開設定');
-                            } catch (e: any) {
-                              setToast(String(e?.message || '更新失敗'));
-                            } finally {
-                              setMyClubProfileSaving(false);
-                            }
-                          }}
-                          className={`px-3 py-2 rounded text-sm font-semibold ${myClubProfileSaving ? 'cue-surface cue-muted' : 'cue-button'}`}
-                        >
-                          儲存
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <HelpGuide
+                            title="場館公開設定"
+                            intro="控制你的場館是否顯示於首頁場館列表，以及是否公開單杆數據、比賽入口與直播訊息。"
+                            steps={[
+                              '勾選「公開顯示於首頁場館列表」後，此場館才可被首頁場館列表收錄。',
+                              '下方 3 個選項分別控制公開單杆數據、公開比賽入口及公開直播訊息。',
+                              '修改後按「儲存」寫入設定。',
+                            ]}
+                            tips={[
+                              '若未勾選首頁場館列表，其餘公開選項會一併停用。',
+                              '即使場館已公開，首頁仍需要由 Super Admin 開啟「場館列表」或「綜合單杆龍虎榜」對應模組才會顯示。',
+                            ]}
+                          />
+                          <button
+                            type="button"
+                            disabled={myClubProfileSaving || myClubProfileLoading || !myClubProfile}
+                            onClick={async () => {
+                              if (!memberId || !myClubProfile) return;
+                              try {
+                                setMyClubProfileSaving(true);
+                                const payload = {
+                                  ...myClubProfile,
+                                  publicEnabled: myClubProfile.publicEnabled === true,
+                                  publicShowHighbreak: myClubProfile.publicShowHighbreak !== false,
+                                  publicShowTournaments: myClubProfile.publicShowTournaments !== false,
+                                  publicShowLive: myClubProfile.publicShowLive !== false,
+                                };
+                                const res = await updateClubProfile(API_URL, memberId, payload);
+                                setMyClubProfile(res && typeof res === 'object' ? res : payload);
+                                setToast('已更新場館公開設定');
+                              } catch (e: any) {
+                                setToast(String(e?.message || '更新失敗'));
+                              } finally {
+                                setMyClubProfileSaving(false);
+                              }
+                            }}
+                            className={`px-3 py-2 rounded text-sm font-semibold ${myClubProfileSaving ? 'cue-surface cue-muted' : 'cue-button'}`}
+                          >
+                            儲存
+                          </button>
+                        </div>
                       </div>
                       {myClubProfileLoading ? (
                         <div className="text-sm cue-muted mt-2">讀取中…</div>
@@ -1556,9 +1572,9 @@ const Me: React.FC = () => {
                     <div className="font-semibold text-lg">歷史記錄</div>
                     <HelpGuide
                       title="歷史記錄"
-                      intro="查看歷史單杆統計與查詢記錄。"
+                      intro="查看歷史單杆統計、每月走勢與查詢記錄。"
                       steps={[
-                        '上方顯示歷史最高及累計。',
+                        '上方顯示歷史最高及累計，下方會顯示每月累計走勢。',
                         '可在「時間段 / 年 / 月」切換篩選方式。',
                         '下方列表會顯示符合條件的單杆記錄；如有影片連結可點「連結」開啟。',
                       ]}
