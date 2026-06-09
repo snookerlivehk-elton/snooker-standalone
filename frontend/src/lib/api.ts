@@ -258,6 +258,79 @@ export async function updateAdminFeatures(
   return res.json() as Promise<{ ok: true; features: Record<string, boolean> }>;
 }
 
+export async function getAdminClubFeatureAssignments(apiUrl: string, adminToken: string, featureKey: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/club-features/${encodeURIComponent(featureKey)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取場館功能授權失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{
+    featureKey: string;
+    globalEnabled: boolean;
+    clubs: Array<{
+      clubId: string;
+      clubName: string;
+      adminMemberId: string;
+      adminName: string;
+      adminEmail: string;
+      adminEnabled: boolean;
+      assignedEnabled: boolean;
+      effectiveEnabled: boolean;
+      source: string;
+      explicitEnabled: boolean | null;
+      accessExpiresAt?: string | null;
+      createdAt?: string | null;
+      updatedAt?: string | null;
+      assignmentUpdatedAt?: string | null;
+    }>;
+  }>;
+}
+
+export async function updateAdminClubFeatureAssignment(
+  apiUrl: string,
+  adminToken: string,
+  featureKey: string,
+  clubId: string,
+  enabled: boolean,
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/club-features/${encodeURIComponent(featureKey)}/${encodeURIComponent(clubId)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新場館功能授權失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getMyClubFeatureAccess(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/features/access`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館功能授權失敗');
+  }
+  return res.json() as Promise<{
+    clubId: string;
+    features: Record<string, {
+      globalEnabled: boolean;
+      assignedEnabled: boolean;
+      effectiveEnabled: boolean;
+      explicitEnabled: boolean | null;
+      source: string;
+      updatedAt?: string | null;
+    }>;
+  }>;
+}
+
 export async function getClubPointsConfig(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/points/config`, {
     headers: { 'x-member-id': memberId },

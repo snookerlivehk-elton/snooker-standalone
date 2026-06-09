@@ -921,7 +921,7 @@ const Me: React.FC = () => {
                                 <div className="font-semibold truncate">{c?.name || '場館'}</div>
                                 <div className="text-xs cue-muted mt-1 truncate">{c?.address || ''}</div>
                               </div>
-                              {pointsEnabled ? (
+                              {pointsEnabled && pts ? (
                                 <div className={`flex-shrink-0 px-3 py-1 rounded-full text-sm font-extrabold ${badgeCls}`}>
                                   {clubPointsLoading ? '消費積分…' : `消費積分 ${balOk ? String(bal) : '—'}`}
                                 </div>

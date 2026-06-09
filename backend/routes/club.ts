@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { getClubFeatureAssignment, getClubFeatureAssignments } from '../clubFeatureAccess.js';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -62,6 +63,27 @@ async function isFeatureEnabled(key: string): Promise<boolean> {
     return FEATURE_DEFAULTS[key] ?? true;
 }
 
+async function isClubFeatureEnabled(clubId: string, key: 'points'): Promise<boolean> {
+    const globalEnabled = await isFeatureEnabled(key);
+    if (!globalEnabled) return false;
+    const assignment = await getClubFeatureAssignment(prisma, clubId, key);
+    return assignment.assignedEnabled;
+}
+
+async function requireClubFeatureForClubId(res: express.Response, clubId: string, key: 'points') {
+    const globalEnabled = await isFeatureEnabled(key);
+    if (!globalEnabled) {
+        res.status(403).json({ error: 'feature_disabled', feature: key });
+        return false;
+    }
+    const assignment = await getClubFeatureAssignment(prisma, clubId, key);
+    if (!assignment.assignedEnabled) {
+        res.status(403).json({ error: 'feature_disabled', feature: key, scope: 'club', clubId });
+        return false;
+    }
+    return true;
+}
+
 router.use(async (req, res, next) => {
     const p = String(req.path || '');
     let key: string | null = null;
@@ -77,6 +99,32 @@ router.use(async (req, res, next) => {
     const ok = await isFeatureEnabled(key);
     if (!ok) return res.status(403).json({ error: 'feature_disabled', feature: key });
     next();
+});
+
+router.get('/features/access', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    try {
+        const globalEnabled = await isFeatureEnabled('points');
+        const assignment = await getClubFeatureAssignment(prisma, clubId, 'points');
+        res.json({
+            clubId,
+            features: {
+                points: {
+                    globalEnabled,
+                    assignedEnabled: assignment.assignedEnabled,
+                    effectiveEnabled: globalEnabled && assignment.assignedEnabled,
+                    explicitEnabled: assignment.explicitEnabled,
+                    source: assignment.source,
+                    updatedAt: assignment.updatedAt,
+                },
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
 });
 
 router.get('/public', async (req, res) => {
@@ -1203,6 +1251,7 @@ router.get('/points/config', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const row = await prisma.clubPointsConfig.findUnique({ where: { clubId } });
     res.json(row || { clubId, currencyCode: 'HKD', pointsPerCurrency: '1', roundingMinutes: 15, minBillableMinutes: 0 });
 });
@@ -1212,6 +1261,7 @@ router.put('/points/config', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const payload = req.body || {};
     const currencyCode = String(payload.currencyCode || 'HKD').trim().toUpperCase();
     const pointsPerCurrencyRaw = payload.pointsPerCurrency;
@@ -1238,6 +1288,7 @@ router.get('/points/balances', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const memberships = await prisma.clubMember.findMany({
         where: { clubId },
         include: { member: { select: { id: true, name: true, email: true, member_code: true, phone: true, phone_e164: true } } },
@@ -1265,6 +1316,7 @@ router.get('/points/balances/search', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const q = req.query.q == null ? '' : String(req.query.q || '').trim();
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(100, Math.max(1, Number(limitRaw || 20) || 20));
@@ -1310,6 +1362,7 @@ router.get('/points/my-balance', async (req, res) => {
     if (!clubId) return res.status(400).json({ error: 'clubId required' });
     const membership = await prisma.clubMember.findUnique({ where: { clubId_memberId: { clubId, memberId: member.id } } });
     if (!membership) return res.status(403).json({ error: 'Not in club' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const bal = await prisma.pointsBalance.findUnique({
         where: { clubId_memberId: { clubId, memberId: member.id } },
         select: { balance: true, updatedAt: true },
@@ -1320,6 +1373,8 @@ router.get('/points/my-balance', async (req, res) => {
 router.get('/points/my-balances', async (req, res) => {
     const member = await requireMember(req, res);
     if (!member) return;
+    const globalEnabled = await isFeatureEnabled('points');
+    if (!globalEnabled) return res.json([]);
     const memberships = await prisma.clubMember.findMany({
         where: { memberId: member.id },
         select: { clubId: true },
@@ -1327,12 +1382,14 @@ router.get('/points/my-balances', async (req, res) => {
         take: 200,
     });
     const clubIds = memberships.map((m) => m.clubId);
-    const rows = clubIds.length === 0 ? [] : await prisma.pointsBalance.findMany({
-        where: { memberId: member.id, clubId: { in: clubIds } },
+    const assignments = clubIds.length === 0 ? {} : await getClubFeatureAssignments(prisma, clubIds, 'points');
+    const enabledClubIds = clubIds.filter((clubId) => assignments[clubId]?.assignedEnabled);
+    const rows = enabledClubIds.length === 0 ? [] : await prisma.pointsBalance.findMany({
+        where: { memberId: member.id, clubId: { in: enabledClubIds } },
         select: { clubId: true, balance: true, updatedAt: true },
     });
     const map = new Map(rows.map((r) => [r.clubId, r]));
-    res.json(clubIds.map((clubId) => {
+    res.json(enabledClubIds.map((clubId) => {
         const r = map.get(clubId);
         return { clubId, balance: r?.balance ?? 0, updatedAt: r?.updatedAt ?? null };
     }));
@@ -1343,6 +1400,7 @@ router.get('/points/ledger', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(200, Math.max(1, Number(limitRaw || 50) || 50));
     const memberId = req.query.memberId == null ? '' : String(req.query.memberId).trim();
@@ -1426,6 +1484,7 @@ router.post('/points/adjust', async (req, res) => {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
     const payload = req.body || {};
     const targetMemberId = String(payload.memberId || '').trim();
     const delta = Math.floor(Number(payload.deltaPoints));
@@ -1560,7 +1619,7 @@ router.post('/sessions/:id/end', async (req, res) => {
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const id = String(req.params.id || '').trim();
     const now = new Date();
-    const featurePoints = await isFeatureEnabled('points');
+    const featurePoints = await isClubFeatureEnabled(clubId, 'points');
 
     const result = await prisma.$transaction(async (tx) => {
         const s = await tx.tableSession.findUnique({

@@ -15,6 +15,7 @@ import { resolveDistrictCode, DISTRICT_CODE_MAP } from './districtCodes.js';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import clubRouter from './routes/club.js';
 import { createClubTables } from './scripts/create_club_tables.js';
+import { getClubFeatureAssignment, getClubFeatureAssignments, isClubScopedFeatureKey } from './clubFeatureAccess.js';
 
 export interface Room {
   id: string;
@@ -276,6 +277,8 @@ app.post('/api/qr/table/start-init', requireFeature('qr_session'), async (req, r
     const active = await prisma.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
     if (active) return res.status(409).json({ error: 'already_active' });
     const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+    const pointsAssignment = await getClubFeatureAssignment(prisma, qr.clubId, 'points');
+    const pointsEnabled = (await getFeatureMap()).points !== false && pointsAssignment.assignedEnabled;
     const confirmId = randomUUID();
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
     await prisma.tableSessionConfirm.create({
@@ -294,7 +297,7 @@ app.post('/api/qr/table/start-init', requireFeature('qr_session'), async (req, r
       expiresAt,
       club: qr.club,
       table: qr.table,
-      pointsConfig: cfg ? { currencyCode: cfg.currencyCode, pointsPerCurrency: String(cfg.pointsPerCurrency), roundingMinutes: cfg.roundingMinutes, minBillableMinutes: cfg.minBillableMinutes } : null,
+      pointsConfig: pointsEnabled && cfg ? { currencyCode: cfg.currencyCode, pointsPerCurrency: String(cfg.pointsPerCurrency), roundingMinutes: cfg.roundingMinutes, minBillableMinutes: cfg.minBillableMinutes } : null,
     });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message || e) });
@@ -354,10 +357,12 @@ app.post('/api/qr/table/end-init', requireFeature('qr_session'), async (req, res
     });
     if (!session) return res.status(404).json({ error: 'no_active_session' });
     const cfg = await prisma.clubPointsConfig.findUnique({ where: { clubId: qr.clubId } });
+    const pointsAssignment = await getClubFeatureAssignment(prisma, qr.clubId, 'points');
+    const pointsEnabled = (await getFeatureMap()).points !== false && pointsAssignment.assignedEnabled;
     const now = new Date();
     const billedMinutes = calcBilledMinutes(session.startAt, now, cfg);
     const amount = calcChargedAmount(qr.table.basePrice, billedMinutes);
-    const chargedPoints = calcChargedPoints(amount, cfg);
+    const chargedPoints = pointsEnabled ? calcChargedPoints(amount, cfg) : 0;
     const confirmId = randomUUID();
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
     await prisma.tableSessionConfirm.create({
@@ -398,7 +403,6 @@ app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, 
     if (!confirmId) return res.status(400).json({ error: 'confirmId required' });
     const now = new Date();
     const featureMap = await getFeatureMap();
-    const enablePoints = featureMap.points !== false;
     const out = await prisma.$transaction(async (tx) => {
       const c = await tx.tableSessionConfirm.findUnique({ where: { id: confirmId } });
       if (!c) throw new Error('confirm_not_found');
@@ -414,6 +418,8 @@ app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, 
       if (!s) throw new Error('not_found');
       if (s.status !== 'ACTIVE') throw new Error('not_active');
       if (s.startedByMemberId !== member.id) throw new Error('forbidden');
+      const pointsAssignment = await getClubFeatureAssignment(tx, s.clubId, 'points');
+      const enablePoints = featureMap.points !== false && pointsAssignment.assignedEnabled;
       const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId: s.clubId } });
       const billedMinutes = calcBilledMinutes(s.startAt, now, cfg);
       const amount = calcChargedAmount(s.table.basePrice, billedMinutes);
@@ -1081,6 +1087,96 @@ app.put('/api/admin/features', adminAuth, async (req, res) => {
   featureCache = null;
   const map = await getFeatureMap();
   res.json({ ok: true, features: map });
+});
+
+app.get('/api/admin/club-features/:featureKey', adminAuth, async (req, res) => {
+  try {
+    const featureKey = String(req.params.featureKey || '').trim();
+    if (!isClubScopedFeatureKey(featureKey)) {
+      return res.status(400).json({ error: 'unsupported_feature_key' });
+    }
+    const globalMap = await getFeatureMap();
+    const clubs = await prisma.clubProfile.findMany({
+      orderBy: [{ updatedAt: 'desc' }],
+      select: {
+        id: true,
+        name: true,
+        updatedAt: true,
+        memberId: true,
+        member: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            is_enabled: true,
+            access_expires_at: true,
+            created_at: true,
+          },
+        },
+      },
+    });
+    const assignments = await getClubFeatureAssignments(prisma, clubs.map((club) => club.id), featureKey);
+    res.json({
+      featureKey,
+      globalEnabled: globalMap[featureKey] !== false,
+      clubs: clubs.map((club) => {
+        const assignment = assignments[club.id];
+        return {
+          clubId: club.id,
+          clubName: String(club.name || club.member?.name || '').trim(),
+          adminMemberId: club.memberId,
+          adminName: club.member?.name || '',
+          adminEmail: club.member?.email || '',
+          adminEnabled: club.member?.is_enabled !== false,
+          accessExpiresAt: club.member?.access_expires_at ?? null,
+          createdAt: club.member?.created_at ?? null,
+          updatedAt: club.updatedAt,
+          explicitEnabled: assignment?.explicitEnabled ?? null,
+          assignedEnabled: assignment?.assignedEnabled ?? false,
+          effectiveEnabled: globalMap[featureKey] !== false && (assignment?.assignedEnabled ?? false),
+          source: assignment?.source ?? 'default_off',
+          assignmentUpdatedAt: assignment?.updatedAt ?? null,
+        };
+      }),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.put('/api/admin/club-features/:featureKey/:clubId', adminAuth, async (req, res) => {
+  try {
+    const featureKey = String(req.params.featureKey || '').trim();
+    const clubId = String(req.params.clubId || '').trim();
+    if (!isClubScopedFeatureKey(featureKey)) {
+      return res.status(400).json({ error: 'unsupported_feature_key' });
+    }
+    if (!clubId) return res.status(400).json({ error: 'clubId_required' });
+    if (typeof (req.body || {}).enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled_required' });
+    }
+    const club = await prisma.clubProfile.findUnique({ where: { id: clubId }, select: { id: true } });
+    if (!club) return res.status(404).json({ error: 'club_not_found' });
+    const enabled = Boolean((req.body || {}).enabled);
+    const row = await prisma.clubFeatureAccess.upsert({
+      where: { clubId_featureKey: { clubId, featureKey } },
+      update: { enabled },
+      create: { id: randomUUID(), clubId, featureKey, enabled },
+      select: { clubId: true, featureKey: true, enabled: true, updatedAt: true },
+    });
+    const globalMap = await getFeatureMap();
+    res.json({
+      ok: true,
+      featureKey,
+      clubId,
+      explicitEnabled: row.enabled,
+      assignedEnabled: row.enabled,
+      effectiveEnabled: globalMap[featureKey] !== false && row.enabled,
+      updatedAt: row.updatedAt,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err?.message || err) });
+  }
 });
 
 app.get('/api/site-ads', async (req, res) => {
@@ -3856,6 +3952,7 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
             await tx.liveAnnouncement.deleteMany({ where: { clubId } });
             await tx.clubMessage.deleteMany({ where: { clubId } });
             await tx.breakRecord.deleteMany({ where: { club_id: clubId } });
+            await tx.clubFeatureAccess.deleteMany({ where: { clubId } });
             await tx.pointsLedger.deleteMany({ where: { clubId } });
             await tx.pointsBalance.deleteMany({ where: { clubId } });
             await tx.clubPointsConfig.deleteMany({ where: { clubId } });

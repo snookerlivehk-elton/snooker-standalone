@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, updateClubMemberNickname, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember } from './lib/api';
+import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, updateClubMemberNickname, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember, getMyClubFeatureAccess } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
@@ -142,6 +142,8 @@ const VenueDashboard: React.FC = () => {
   const [pointsLedgerFrom, setPointsLedgerFrom] = useState('');
   const [pointsLedgerTo, setPointsLedgerTo] = useState('');
   const [pointsLedgerMonth, setPointsLedgerMonth] = useState('');
+  const [clubFeatureAccess, setClubFeatureAccess] = useState<Record<string, { effectiveEnabled: boolean }>>({});
+  const [clubFeatureAccessLoaded, setClubFeatureAccessLoaded] = useState(false);
 
   const operatorId = session.id;
   const operatorName = session.name || session.email;
@@ -152,9 +154,11 @@ const VenueDashboard: React.FC = () => {
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
   const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
-  const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
+  const { enabled: pointsGlobalEnabled } = useFeatureEnabled(API_URL, 'points');
   const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
+  const pointsEnabled = pointsGlobalEnabled && Boolean(clubFeatureAccess.points?.effectiveEnabled);
+  const pointsTabVisible = pointsGlobalEnabled && (!clubFeatureAccessLoaded || pointsEnabled);
 
   const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring'>('home');
 
@@ -505,7 +509,7 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes, sessionsRes] = await Promise.all([
+      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes, featureAccessRes, sessionsRes] = await Promise.all([
         getOperatorMatches(API_URL, operatorId),
         getOperatorActiveRooms(API_URL, operatorId),
         getClubProfile(API_URL, operatorId).catch(() => ({})),
@@ -515,6 +519,7 @@ const VenueDashboard: React.FC = () => {
         getMyPricingSchemes(API_URL, operatorId).catch(() => []),
         getPendingReservations(API_URL, operatorId).catch(() => []),
         getClubReservations(API_URL, operatorId).catch(() => []),
+        getMyClubFeatureAccess(API_URL, operatorId).catch(() => ({ features: {} })),
         qrEnabled ? getActiveTableSessions(API_URL, operatorId).catch(() => []) : Promise.resolve([]),
       ]);
       setMatches(matchesRes.matches || []);
@@ -526,9 +531,12 @@ const VenueDashboard: React.FC = () => {
       setPricing(pricingRes || []);
       setPendingReservations(pendingRes || []);
       setAllReservations(allRes || []);
+      setClubFeatureAccess(((featureAccessRes as any)?.features && typeof (featureAccessRes as any).features === 'object') ? (featureAccessRes as any).features : {});
+      setClubFeatureAccessLoaded(true);
       setActiveSessions(Array.isArray(sessionsRes) ? sessionsRes : []);
     } catch (err: any) {
       setError(err.message || '無法載入資料');
+      setClubFeatureAccessLoaded(true);
     } finally {
       setLoading(false);
     }
@@ -703,11 +711,11 @@ const VenueDashboard: React.FC = () => {
     const contentVisible = clubMessagesEnabled || liveEnabled || tournamentsEnabled;
     if (activeTab === 'booking' && !bookingEnabled) return updateTab('home');
     if (activeTab === 'qr' && !qrEnabled) return updateTab('home');
-    if (activeTab === 'points' && !pointsEnabled) return updateTab('home');
+    if (activeTab === 'points' && clubFeatureAccessLoaded && !pointsEnabled) return updateTab('home');
     if (activeTab === 'highbreak' && !highbreakEnabled) return updateTab('home');
     if (activeTab === 'content' && !contentVisible) return updateTab('home');
     if (activeTab === 'scoring' && !scoringEnabled) return updateTab('home');
-  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled, scoringEnabled]);
+  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled, scoringEnabled]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) return;
@@ -881,7 +889,7 @@ const VenueDashboard: React.FC = () => {
               { key: 'home', label: '主頁編輯' },
               ...(bookingEnabled ? [{ key: 'booking', label: '預約/球枱' }] : []),
               ...(qrEnabled ? [{ key: 'qr', label: '掃碼起鐘' }] : []),
-              ...(pointsEnabled ? [{ key: 'points', label: '消費積分' }] : []),
+              ...(pointsTabVisible ? [{ key: 'points', label: '消費積分' }] : []),
               ...(highbreakEnabled ? [{ key: 'highbreak', label: '單杆' }] : []),
               ...((clubMessagesEnabled || liveEnabled || tournamentsEnabled) ? [{ key: 'content', label: '內容管理' }] : []),
               { key: 'members', label: '會員管理' },
@@ -1719,8 +1727,12 @@ const VenueDashboard: React.FC = () => {
         )}
 
         {activeTab === 'points' && (
-        pointsEnabled ? (
+        (!clubFeatureAccessLoaded || pointsEnabled) ? (
         <div className="glass rounded-xl p-4 md:p-6">
+          {!clubFeatureAccessLoaded ? (
+            <div className="cue-muted text-sm">讀取積分授權中...</div>
+          ) : (
+          <>
           <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">消費積分</h2>
             <div className="flex items-center gap-2">
@@ -2077,6 +2089,8 @@ const VenueDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
         ) : (

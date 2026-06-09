@@ -143,6 +143,7 @@ model ClubProfile {
 
   tableQrTokens TableQrToken[]
   tableSessions TableSession[]
+  featureAccesses ClubFeatureAccess[]
 }
 
 model BreakRecord {
@@ -292,6 +293,19 @@ model FeatureFlag {
   enabled   Boolean  @default(true)
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+}
+
+model ClubFeatureAccess {
+  id         String      @id @default(uuid())
+  clubId      String
+  club        ClubProfile @relation(fields: [clubId], references: [id])
+  featureKey String
+  enabled    Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([clubId, featureKey])
+  @@index([featureKey, enabled])
 }
 
 model ClubPointsConfig {

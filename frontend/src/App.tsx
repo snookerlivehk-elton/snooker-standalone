@@ -13,6 +13,7 @@ import AdminMembers from './AdminMembers';
 import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import AdminVenues from './AdminVenues';
+import AdminClubFeatures from './AdminClubFeatures';
 import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
 import TableQrPage from './TableQrPage';
@@ -115,6 +116,7 @@ function App() {
         <Route path="/admin/matches" element={<AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
+        <Route path="/admin/club-features" element={<AdminAuth><AdminClubFeatures /></AdminAuth>} />
         <Route path="/room/:roomId" element={<FeatureGate feature="scoring"><Scoreboard gameState={gameState} setGameState={setGameState} /></FeatureGate>} />
         <Route path="/room/:roomId/setup" element={<FeatureGate feature="scoring"><Setup onStartMatch={handleStartMatch} /></FeatureGate>} />
         <Route path="/room/:roomId/live" element={<FeatureGate feature="live"><LiveView /></FeatureGate>} />
