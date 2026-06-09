@@ -249,6 +249,10 @@ router.post('/my-profile', async (req, res) => {
         galleryUrls,
         facilities,
         policies,
+        publicEnabled,
+        publicShowHighbreak,
+        publicShowTournaments,
+        publicShowLive,
     } = req.body;
 
     const normalizeStringList = (raw: any, max: number) => {
@@ -265,11 +269,42 @@ router.post('/my-profile', async (req, res) => {
     try {
         console.log(`[Club] Update profile request for member ${memberId}`, req.body);
 
-        const updateData: any = { name, intro, address, mapUrl, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        const updateData: any = {
+            name,
+            intro,
+            address,
+            mapUrl,
+            phone,
+            email,
+            logoUrl,
+            paymentInfo,
+            coverImageUrl,
+            policies,
+        };
+        if (typeof publicEnabled === 'boolean') updateData.publicEnabled = publicEnabled;
+        if (typeof publicShowHighbreak === 'boolean') updateData.publicShowHighbreak = publicShowHighbreak;
+        if (typeof publicShowTournaments === 'boolean') updateData.publicShowTournaments = publicShowTournaments;
+        if (typeof publicShowLive === 'boolean') updateData.publicShowLive = publicShowLive;
         if (safeGalleryUrls !== undefined) updateData.galleryUrls = safeGalleryUrls;
         if (safeFacilities !== undefined) updateData.facilities = safeFacilities;
 
-        const createData: any = { memberId, name, intro, address, mapUrl, phone, email, logoUrl, paymentInfo, coverImageUrl, policies };
+        const createData: any = {
+            memberId,
+            name,
+            intro,
+            address,
+            mapUrl,
+            phone,
+            email,
+            logoUrl,
+            paymentInfo,
+            coverImageUrl,
+            policies,
+        };
+        if (typeof publicEnabled === 'boolean') createData.publicEnabled = publicEnabled;
+        if (typeof publicShowHighbreak === 'boolean') createData.publicShowHighbreak = publicShowHighbreak;
+        if (typeof publicShowTournaments === 'boolean') createData.publicShowTournaments = publicShowTournaments;
+        if (typeof publicShowLive === 'boolean') createData.publicShowLive = publicShowLive;
         if (safeGalleryUrls !== undefined) createData.galleryUrls = safeGalleryUrls;
         if (safeFacilities !== undefined) createData.facilities = safeFacilities;
 
