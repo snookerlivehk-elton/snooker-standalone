@@ -193,9 +193,10 @@ export async function getPublicClubProfile(apiUrl: string, clubId: string) {
   return res.json();
 }
 
-export async function getPublicClubs(apiUrl: string, params?: { q?: string; limit?: number }) {
+export async function getPublicClubs(apiUrl: string, params?: { q?: string; regionCode?: string; limit?: number }) {
   const sp = new URLSearchParams();
   if (params?.q) sp.set('q', params.q);
+  if (params?.regionCode) sp.set('regionCode', params.regionCode);
   if (params?.limit != null) sp.set('limit', String(params.limit));
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/public${qs ? `?${qs}` : ''}`);
@@ -240,7 +241,7 @@ export async function getNewsItems(apiUrl: string, params?: { limit?: number; so
 export async function updateSiteNotice(
   apiUrl: string,
   adminToken: string,
-  payload: { enabled?: boolean; message?: string; youtubeEmbedUrl?: string | null }
+  payload: { enabled?: boolean; message?: string; youtubeEmbedUrl?: string | null; homeShowLeaderboard?: boolean; homeShowClubList?: boolean }
 ) {
   const base = apiUrl.replace(/\/$/, '');
   const url = `${base}/api/admin/site/notice?token=${encodeURIComponent(adminToken || '')}`;
@@ -1662,7 +1663,7 @@ export async function updateMember(
 export async function updateMemberSelf(
   apiUrl: string,
   id: string,
-  data: { phone?: string; birthDate?: string; clubName?: string; password?: string; regionCode?: string | null; districtCode?: string | null }
+  data: { phone?: string; birthDate?: string; clubName?: string; password?: string; regionCode?: string | null; districtCode?: string | null; publicHighbreakEnabled?: boolean }
 ) {
   const res = await fetch(`${apiUrl}/api/members/${id}`, {
     method: 'PUT',

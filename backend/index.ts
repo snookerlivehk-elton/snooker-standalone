@@ -419,6 +419,56 @@ app.use('/api/club', async (req, res, next) => {
   next();
 });
 
+app.use('/api/club', async (req, res, next) => {
+  try {
+    const p = String(req.path || '');
+
+    if (p === '/live-announcements/public') {
+      const limitRaw = (req.query as any)?.limit == null ? '' : String((req.query as any)?.limit);
+      const limit = Math.min(50, Math.max(1, Number(limitRaw || 20) || 20));
+      const now = new Date();
+      const clubIds = (await prisma.clubProfile.findMany({
+        where: { publicEnabled: true, publicShowLive: true },
+        select: { id: true },
+      })).map((r) => r.id);
+      if (clubIds.length === 0) return res.json([]);
+      const rows = await prisma.liveAnnouncement.findMany({
+        where: { deletedAt: null, clubId: { in: clubIds }, startsAt: { gte: new Date(now.getTime() - 12 * 60 * 60 * 1000) } },
+        orderBy: [{ startsAt: 'asc' }],
+        take: limit,
+        include: { club: { select: { id: true, name: true, logoUrl: true } } }
+      });
+      return res.json(rows);
+    }
+
+    const mLive = p.match(/^\/([^/]+)\/live-announcements\/public(?:\/|$)/);
+    if (mLive && mLive[1]) {
+      const clubId = String(mLive[1] || '').trim();
+      const club = await prisma.clubProfile.findUnique({ where: { id: clubId }, select: { publicEnabled: true, publicShowLive: true } });
+      if (!club || club.publicEnabled !== true || club.publicShowLive !== true) return res.json([]);
+      return next();
+    }
+
+    const mTour = p.match(/^\/([^/]+)\/tournaments\/public(?:\/|$)/);
+    const mTourDetail = p.match(/^\/([^/]+)\/tournaments\/[^/]+\/public(?:\/|$)/);
+    if ((mTour || mTourDetail) && (mTour?.[1] || mTourDetail?.[1])) {
+      const clubId = String((mTour?.[1] || mTourDetail?.[1] || '')).trim();
+      const club = await prisma.clubProfile.findUnique({ where: { id: clubId }, select: { publicEnabled: true, publicShowTournaments: true } });
+      if (!club || club.publicEnabled !== true || club.publicShowTournaments !== true) return res.json([]);
+      return next();
+    }
+
+    const mLb = p.match(/^\/([^/]+)\/leaderboard\/(highest|monthly)(?:\/|$)/);
+    if (mLb && mLb[1]) {
+      const clubId = String(mLb[1] || '').trim();
+      const club = await prisma.clubProfile.findUnique({ where: { id: clubId }, select: { publicEnabled: true, publicShowHighbreak: true } });
+      if (!club || club.publicEnabled !== true || club.publicShowHighbreak !== true) return res.json([]);
+      return next();
+    }
+  } catch {}
+  next();
+});
+
 // Mount Club Router
 app.use('/api/club', clubRouter);
 
@@ -4274,12 +4324,16 @@ app.put('/api/members/:id', async (req, res) => {
       region_code?: string | null;
       districtCode?: string | null;
       district_code?: string | null;
+      publicHighbreakEnabled?: boolean;
+      public_highbreak_enabled?: boolean;
     };
 
     const data: any = {};
     if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
     if (body.club_name !== undefined) data.club_name = body.club_name ? String(body.club_name).trim() : null;
     if (body.clubName !== undefined) data.club_name = body.clubName ? String(body.clubName).trim() : null;
+    const pubRaw = (body as any).publicHighbreakEnabled ?? (body as any).public_highbreak_enabled;
+    if (pubRaw !== undefined) data.public_highbreak_enabled = !!pubRaw;
 
     const regionRaw = (body as any).regionCode ?? (body as any).region_code;
     const districtRaw = (body as any).districtCode ?? (body as any).district_code;
@@ -4562,7 +4616,7 @@ app.patch('/api/admin/breaks/:id', adminAuth, async (req, res) => {
 app.get('/api/site/notice', async (_req, res) => {
   try {
     const row = await prisma.siteNotice.findUnique({ where: { id: 'main' } });
-    res.json(row || { id: 'main', enabled: true, message: '', youtubeEmbedUrl: null });
+    res.json(row || { id: 'main', enabled: true, message: '', youtubeEmbedUrl: null, homeShowLeaderboard: true, homeShowClubList: true });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message || e) });
   }
@@ -4586,12 +4640,30 @@ function parseLimit(raw: any, fallback: number) {
   return Math.max(1, Math.min(200, Math.floor(n)));
 }
 
+async function listPublicHighbreakClubIds() {
+  const rows = await prisma.clubProfile.findMany({
+    where: { publicEnabled: true, publicShowHighbreak: true },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+async function listPublicHighbreakMemberIds() {
+  const rows = await prisma.member.findMany({
+    where: { public_highbreak_enabled: true },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
 app.get('/api/leaderboard/members/highest', async (req, res) => {
   try {
     const take = parseLimit(req.query.limit, 10);
+    const [clubIds, memberIds] = await Promise.all([listPublicHighbreakClubIds(), listPublicHighbreakMemberIds()]);
+    if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
     const rows = await prisma.breakRecord.groupBy({
       by: ['member_id'],
-      where: { deleted_at: null },
+      where: { deleted_at: null, club_id: { in: clubIds }, member_id: { in: memberIds } },
       _max: { points: true },
       orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
       take,
@@ -4621,9 +4693,11 @@ app.get('/api/leaderboard/members/monthly', async (req, res) => {
     const range = parseMonthRangeUtc(month);
     if (!range) return res.status(400).json({ error: 'month invalid' });
 
+    const [clubIds, memberIds] = await Promise.all([listPublicHighbreakClubIds(), listPublicHighbreakMemberIds()]);
+    if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
     const rows = await prisma.breakRecord.groupBy({
       by: ['member_id'],
-      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds }, member_id: { in: memberIds } },
       _sum: { points: true },
       orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
       take,
@@ -4649,9 +4723,11 @@ app.get('/api/leaderboard/members/monthly', async (req, res) => {
 app.get('/api/leaderboard/clubs/highest', async (req, res) => {
   try {
     const take = parseLimit(req.query.limit, 10);
+    const clubIds = await listPublicHighbreakClubIds();
+    if (clubIds.length === 0) return res.json([]);
     const rows = await prisma.breakRecord.groupBy({
       by: ['club_id'],
-      where: { deleted_at: null },
+      where: { deleted_at: null, club_id: { in: clubIds } },
       _max: { points: true },
       orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
       take,
@@ -4684,9 +4760,11 @@ app.get('/api/leaderboard/clubs/monthly', async (req, res) => {
     const range = parseMonthRangeUtc(month);
     if (!range) return res.status(400).json({ error: 'month invalid' });
 
+    const clubIds = await listPublicHighbreakClubIds();
+    if (clubIds.length === 0) return res.json([]);
     const rows = await prisma.breakRecord.groupBy({
       by: ['club_id'],
-      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end } },
+      where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds } },
       _sum: { points: true },
       orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
       take,
@@ -4721,14 +4799,25 @@ app.put('/api/admin/site/notice', adminAuth, async (req, res) => {
       payload.youtubeEmbedUrl === undefined
         ? undefined
         : (String(payload.youtubeEmbedUrl || '').trim() || null);
+    const homeShowLeaderboard = payload.homeShowLeaderboard === undefined ? undefined : !!payload.homeShowLeaderboard;
+    const homeShowClubList = payload.homeShowClubList === undefined ? undefined : !!payload.homeShowClubList;
 
     const row = await prisma.siteNotice.upsert({
       where: { id: 'main' },
-      create: { id: 'main', enabled: enabled ?? true, message: message ?? '', youtubeEmbedUrl: youtubeEmbedUrl ?? null },
+      create: {
+        id: 'main',
+        enabled: enabled ?? true,
+        message: message ?? '',
+        youtubeEmbedUrl: youtubeEmbedUrl ?? null,
+        homeShowLeaderboard: homeShowLeaderboard ?? true,
+        homeShowClubList: homeShowClubList ?? true,
+      },
       update: {
         ...(enabled === undefined ? {} : { enabled }),
         ...(message === undefined ? {} : { message }),
         ...(youtubeEmbedUrl === undefined ? {} : { youtubeEmbedUrl }),
+        ...(homeShowLeaderboard === undefined ? {} : { homeShowLeaderboard }),
+        ...(homeShowClubList === undefined ? {} : { homeShowClubList }),
       },
     });
     res.json(row);

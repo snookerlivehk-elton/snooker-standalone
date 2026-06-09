@@ -438,6 +438,8 @@ const AdminMembers: React.FC = () => {
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">啟用</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">場館限期</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">電話</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">地方</th>
+                        <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">分區</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">出生日期</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">建立時間</th>
                         <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">操作</th>
@@ -544,6 +546,12 @@ const AdminMembers: React.FC = () => {
                               ) : (
                                 <span className="block max-w-[160px] truncate" title={String(m.phone ?? '')}>{m.phone ?? '-'}</span>
                               )}
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              <span className="whitespace-nowrap">{String(m.region_code ?? m.regionCode ?? '-') || '-'}</span>
+                            </td>
+                            <td className="border-b border-slate-100 px-3 py-2 align-top">
+                              <span className="whitespace-nowrap">{String(m.district_code ?? m.districtCode ?? '-') || '-'}</span>
                             </td>
                             <td className="border-b border-slate-100 px-3 py-2 align-top">
                               {isEditing ? (

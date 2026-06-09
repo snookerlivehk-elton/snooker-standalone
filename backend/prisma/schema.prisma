@@ -56,6 +56,7 @@ model Member {
   email        String?      @unique
   region_code  String?
   district_code String?
+  public_highbreak_enabled Boolean @default(false)
   phone        String?
   phone_country String?
   phone_number  String?
@@ -123,6 +124,10 @@ model ClubProfile {
   galleryUrls Json?
   facilities  Json?
   policies    String?
+  publicEnabled Boolean @default(false)
+  publicShowHighbreak Boolean @default(true)
+  publicShowTournaments Boolean @default(true)
+  publicShowLive Boolean @default(true)
   
   members     ClubMember[]
   messages    ClubMessage[]
@@ -246,6 +251,8 @@ model SiteNotice {
   enabled         Boolean  @default(true)
   message         String   @default("")
   youtubeEmbedUrl String?
+  homeShowLeaderboard Boolean @default(true)
+  homeShowClubList Boolean @default(true)
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 }

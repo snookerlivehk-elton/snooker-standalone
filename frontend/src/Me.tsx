@@ -5,6 +5,7 @@ import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
 import {
   getMember,
+  getClubProfile,
   getMyBreaks,
   getMyClubMessages,
   getMyClubPointsBalances,
@@ -17,6 +18,7 @@ import {
   listMemberRegions,
   hideClubMessages,
   markClubMessageRead,
+  updateClubProfile,
   updateMemberSelf,
 } from './lib/api';
 import Tabs from './components/Tabs';
@@ -53,6 +55,9 @@ const Me: React.FC = () => {
   })() as { id?: string; email?: string };
   const memberId = session?.id;
   const [profile, setProfile] = useState<any>(null);
+  const [myClubProfile, setMyClubProfile] = useState<any>(null);
+  const [myClubProfileLoading, setMyClubProfileLoading] = useState(false);
+  const [myClubProfileSaving, setMyClubProfileSaving] = useState(false);
   const [joinedClubs, setJoinedClubs] = useState<any[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
   const [clubPointsMap, setClubPointsMap] = useState<Record<string, { balance: number; updatedAt: string | null }>>({});
@@ -80,6 +85,7 @@ const Me: React.FC = () => {
   const [editBirthDate, setEditBirthDate] = useState('');
   const [editRegionCode, setEditRegionCode] = useState('');
   const [editDistrictCode, setEditDistrictCode] = useState('');
+  const [editPublicHighbreak, setEditPublicHighbreak] = useState(false);
   const [regions, setRegions] = useState<Array<{ code3: string; name: string }>>([]);
   const [districts, setDistricts] = useState<Array<{ code3: string; name: string; regionCode?: string }>>([]);
   const [locLoading, setLocLoading] = useState(false);
@@ -136,6 +142,27 @@ const Me: React.FC = () => {
   }, [memberId]);
 
   useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!memberId || !profile) return;
+      if (String(profile?.role || '').toUpperCase() !== 'ADMIN') {
+        if (mounted) setMyClubProfile(null);
+        return;
+      }
+      if (mounted) setMyClubProfileLoading(true);
+      try {
+        const row = await getClubProfile(API_URL, memberId);
+        if (mounted) setMyClubProfile(row && typeof row === 'object' ? row : null);
+      } catch {
+        if (mounted) setMyClubProfile(null);
+      } finally {
+        if (mounted) setMyClubProfileLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId, profile]);
+
+  useEffect(() => {
     if (!memberId) return;
     try {
       const raw = localStorage.getItem(`meMessageState:${memberId}`) || '{}';
@@ -155,6 +182,7 @@ const Me: React.FC = () => {
     setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
     setEditRegionCode(String(profile?.region_code ?? profile?.regionCode ?? '') || '');
     setEditDistrictCode(String(profile?.district_code ?? profile?.districtCode ?? '') || '');
+    setEditPublicHighbreak(!!(profile?.public_highbreak_enabled ?? profile?.publicHighbreakEnabled));
     const bd = profile?.birthDate ?? profile?.birth_date;
     if (bd) {
       const d = new Date(bd);
@@ -1222,6 +1250,23 @@ const Me: React.FC = () => {
                       )}
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">公開單杆</div>
+                      {editMode ? (
+                        <label className="flex items-center gap-2 text-sm font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={editPublicHighbreak}
+                            onChange={(e) => setEditPublicHighbreak(e.target.checked)}
+                          />
+                          <span>允許在首頁顯示我的單杆紀錄/累計</span>
+                        </label>
+                      ) : (
+                        <div className="text-sm font-semibold text-right">
+                          {(profile?.public_highbreak_enabled ?? profile?.publicHighbreakEnabled) ? '公開' : '不公開'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">地方</div>
                       {editMode ? (
                         <select
@@ -1276,6 +1321,86 @@ const Me: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {String(profile?.role || '').toUpperCase() === 'ADMIN' && (
+                    <div className="mt-3 cue-surface-strong rounded-lg p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">場館公開設定</div>
+                        <button
+                          type="button"
+                          disabled={myClubProfileSaving || myClubProfileLoading || !myClubProfile}
+                          onClick={async () => {
+                            if (!memberId || !myClubProfile) return;
+                            try {
+                              setMyClubProfileSaving(true);
+                              const payload = {
+                                ...myClubProfile,
+                                publicEnabled: myClubProfile.publicEnabled === true,
+                                publicShowHighbreak: myClubProfile.publicShowHighbreak !== false,
+                                publicShowTournaments: myClubProfile.publicShowTournaments !== false,
+                                publicShowLive: myClubProfile.publicShowLive !== false,
+                              };
+                              const res = await updateClubProfile(API_URL, memberId, payload);
+                              setMyClubProfile(res && typeof res === 'object' ? res : payload);
+                              setToast('已更新場館公開設定');
+                            } catch (e: any) {
+                              setToast(String(e?.message || '更新失敗'));
+                            } finally {
+                              setMyClubProfileSaving(false);
+                            }
+                          }}
+                          className={`px-3 py-2 rounded text-sm font-semibold ${myClubProfileSaving ? 'cue-surface cue-muted' : 'cue-button'}`}
+                        >
+                          儲存
+                        </button>
+                      </div>
+                      {myClubProfileLoading ? (
+                        <div className="text-sm cue-muted mt-2">讀取中…</div>
+                      ) : !myClubProfile ? (
+                        <div className="text-sm cue-muted mt-2">尚未建立場館資料。</div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <label className="flex items-center gap-2 text-sm font-semibold">
+                            <input
+                              type="checkbox"
+                              checked={myClubProfile.publicEnabled === true}
+                              onChange={(e) => setMyClubProfile((p: any) => ({ ...(p || {}), publicEnabled: e.target.checked }))}
+                            />
+                            <span>公開顯示於首頁「場館列表」</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label className={`flex items-center gap-2 text-sm ${myClubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                              <input
+                                type="checkbox"
+                                disabled={myClubProfile.publicEnabled !== true}
+                                checked={myClubProfile.publicShowHighbreak !== false}
+                                onChange={(e) => setMyClubProfile((p: any) => ({ ...(p || {}), publicShowHighbreak: e.target.checked }))}
+                              />
+                              <span>公開單杆數據</span>
+                            </label>
+                            <label className={`flex items-center gap-2 text-sm ${myClubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                              <input
+                                type="checkbox"
+                                disabled={myClubProfile.publicEnabled !== true}
+                                checked={myClubProfile.publicShowTournaments !== false}
+                                onChange={(e) => setMyClubProfile((p: any) => ({ ...(p || {}), publicShowTournaments: e.target.checked }))}
+                              />
+                              <span>公開比賽入口</span>
+                            </label>
+                            <label className={`flex items-center gap-2 text-sm ${myClubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                              <input
+                                type="checkbox"
+                                disabled={myClubProfile.publicEnabled !== true}
+                                checked={myClubProfile.publicShowLive !== false}
+                                onChange={(e) => setMyClubProfile((p: any) => ({ ...(p || {}), publicShowLive: e.target.checked }))}
+                              />
+                              <span>公開直播訊息</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {toast && <div className="mt-3 text-sm cue-muted">{toast}</div>}
                   {editMode && (
                     <div className="mt-3 flex gap-2">
@@ -1296,6 +1421,7 @@ const Me: React.FC = () => {
                               birthDate: String(editBirthDate || '').trim(),
                               regionCode: rc ? rc : null,
                               districtCode: dc ? dc : null,
+                              publicHighbreakEnabled: !!editPublicHighbreak,
                             });
                             const next = (res as any)?.member ?? res;
                             setProfile(next);
@@ -1327,6 +1453,7 @@ const Me: React.FC = () => {
                           setEditPhone(String(profile?.phone ?? profile?.phone_e164 ?? profile?.phoneE164 ?? '') || '');
                           setEditRegionCode(String(profile?.region_code ?? profile?.regionCode ?? '') || '');
                           setEditDistrictCode(String(profile?.district_code ?? profile?.districtCode ?? '') || '');
+                          setEditPublicHighbreak(!!(profile?.public_highbreak_enabled ?? profile?.publicHighbreakEnabled));
                           setEditBirthDate('');
                           const bd = profile?.birthDate ?? profile?.birth_date;
                           if (bd) {

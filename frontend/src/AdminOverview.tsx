@@ -10,10 +10,12 @@ const AdminOverview: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [noticeLoading, setNoticeLoading] = useState<boolean>(true);
   const [noticeError, setNoticeError] = useState<string | null>(null);
-  const [noticeDraft, setNoticeDraft] = useState<{ enabled: boolean; message: string; youtubeEmbedUrl: string }>({
+  const [noticeDraft, setNoticeDraft] = useState<{ enabled: boolean; message: string; youtubeEmbedUrl: string; homeShowLeaderboard: boolean; homeShowClubList: boolean }>({
     enabled: true,
     message: '',
     youtubeEmbedUrl: '',
+    homeShowLeaderboard: true,
+    homeShowClubList: true,
   });
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
@@ -410,6 +412,8 @@ const AdminOverview: React.FC = () => {
             enabled: row?.enabled !== false,
             message: String(row?.message || ''),
             youtubeEmbedUrl: String(row?.youtubeEmbedUrl || ''),
+            homeShowLeaderboard: row?.homeShowLeaderboard !== false,
+            homeShowClubList: row?.homeShowClubList !== false,
           });
         }
       } catch (e: any) {
@@ -904,6 +908,8 @@ const AdminOverview: React.FC = () => {
                         enabled: noticeDraft.enabled,
                         message: noticeDraft.message,
                         youtubeEmbedUrl: noticeDraft.youtubeEmbedUrl.trim() ? noticeDraft.youtubeEmbedUrl.trim() : null,
+                        homeShowLeaderboard: noticeDraft.homeShowLeaderboard,
+                        homeShowClubList: noticeDraft.homeShowClubList,
                       });
                       setSaveResult('已儲存');
                     } catch (e: any) {
@@ -945,6 +951,27 @@ const AdminOverview: React.FC = () => {
                       className="w-full cue-input rounded px-3 py-2 text-sm"
                       placeholder="例如：https://www.youtube.com/embed/xxxxxxxx"
                     />
+                  </div>
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="text-sm cue-muted mb-2">首頁設定</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={noticeDraft.homeShowLeaderboard}
+                          onChange={(e) => setNoticeDraft((s) => ({ ...s, homeShowLeaderboard: e.target.checked }))}
+                        />
+                        <span>顯示：綜合單杆龍虎榜</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={noticeDraft.homeShowClubList}
+                          onChange={(e) => setNoticeDraft((s) => ({ ...s, homeShowClubList: e.target.checked }))}
+                        />
+                        <span>顯示：場館列表</span>
+                      </label>
+                    </div>
                   </div>
                   {saveResult && <div className="text-sm cue-muted">{saveResult}</div>}
                 </div>
