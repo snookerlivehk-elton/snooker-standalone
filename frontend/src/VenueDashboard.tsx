@@ -976,6 +976,48 @@ const VenueDashboard: React.FC = () => {
                />
             </div>
             <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">公開設定（主頁 / 公開頁）</label>
+              <div className="cue-surface-strong rounded-lg p-3 space-y-2">
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={clubProfile.publicEnabled === true}
+                    onChange={(e) => setClubProfile({ ...clubProfile, publicEnabled: e.target.checked })}
+                  />
+                  <span>公開顯示於首頁「場館列表」</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className={`flex items-center gap-2 text-sm ${clubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      disabled={clubProfile.publicEnabled !== true}
+                      checked={clubProfile.publicShowHighbreak !== false}
+                      onChange={(e) => setClubProfile({ ...clubProfile, publicShowHighbreak: e.target.checked })}
+                    />
+                    <span>公開單杆數據</span>
+                  </label>
+                  <label className={`flex items-center gap-2 text-sm ${clubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      disabled={clubProfile.publicEnabled !== true}
+                      checked={clubProfile.publicShowTournaments !== false}
+                      onChange={(e) => setClubProfile({ ...clubProfile, publicShowTournaments: e.target.checked })}
+                    />
+                    <span>公開比賽入口</span>
+                  </label>
+                  <label className={`flex items-center gap-2 text-sm ${clubProfile.publicEnabled === true ? '' : 'opacity-50'}`}>
+                    <input
+                      type="checkbox"
+                      disabled={clubProfile.publicEnabled !== true}
+                      checked={clubProfile.publicShowLive !== false}
+                      onChange={(e) => setClubProfile({ ...clubProfile, publicShowLive: e.target.checked })}
+                    />
+                    <span>公開直播訊息</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="md:col-span-2">
                <label className="block text-sm mb-1 cue-muted">地址 (Address)</label>
                <input 
                  value={clubProfile.address || ''} 
