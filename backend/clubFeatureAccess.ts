@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
-export const CLUB_SCOPED_FEATURE_KEYS = ['points', 'tournaments', 'booking'] as const;
+export const CLUB_SCOPED_FEATURE_KEYS = ['points', 'tournaments', 'booking', 'qr_session'] as const;
 
 export type ClubScopedFeatureKey = typeof CLUB_SCOPED_FEATURE_KEYS[number];
 export type ClubFeatureSource = 'explicit' | 'legacy' | 'default_off';
@@ -92,6 +92,33 @@ async function getLegacyBookingClubIds(prisma: PrismaClient | Prisma.Transaction
   ]);
 }
 
+async function getLegacyQrSessionClubIds(prisma: PrismaClient | Prisma.TransactionClient, clubIds: string[]) {
+  const ids = uniqIds(clubIds);
+  if (ids.length === 0) return new Set<string>();
+  const [qrRows, sessionRows, confirmRows] = await Promise.all([
+    prisma.tableQrToken.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+    prisma.tableSession.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+    prisma.tableSessionConfirm.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+  ]);
+  return new Set<string>([
+    ...qrRows.map((x) => x.clubId),
+    ...sessionRows.map((x) => x.clubId),
+    ...confirmRows.map((x) => x.clubId),
+  ]);
+}
+
 export async function getClubFeatureAssignments(
   prisma: PrismaClient | Prisma.TransactionClient,
   clubIds: string[],
@@ -115,6 +142,8 @@ export async function getClubFeatureAssignments(
           ? await getLegacyTournamentsClubIds(prisma, unresolved)
           : featureKey === 'booking'
             ? await getLegacyBookingClubIds(prisma, unresolved)
+            : featureKey === 'qr_session'
+              ? await getLegacyQrSessionClubIds(prisma, unresolved)
           : new Set<string>()
       : new Set<string>();
 

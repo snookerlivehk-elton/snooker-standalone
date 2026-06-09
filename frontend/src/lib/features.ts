@@ -185,7 +185,7 @@ export function useFeatureEnabled(apiUrl: string, key: FeatureKey) {
       .then(([m, clubAccess]) => {
         if (cancelled) return;
         const globalEnabled = m[key] !== false;
-        if (key === 'booking' || key === 'points' || key === 'tournaments') {
+        if (key === 'booking' || key === 'qr_session' || key === 'points' || key === 'tournaments') {
           const eff = clubAccess?.features?.[key]?.effectiveEnabled;
           if (typeof eff === 'boolean') {
             setEnabled(eff);

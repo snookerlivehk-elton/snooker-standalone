@@ -526,6 +526,9 @@ export async function getQrTableInfo(apiUrl: string, memberId: string, token: st
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && err?.feature === 'qr_session') {
+      throw new Error('此場館未開放掃碼起鐘功能');
+    }
     throw new Error(err.error || '讀取球枱資料失敗');
   }
   return res.json();
@@ -539,6 +542,9 @@ export async function qrTableStartInit(apiUrl: string, memberId: string, token: 
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && err?.feature === 'qr_session') {
+      throw new Error('此場館未開放掃碼起鐘功能');
+    }
     throw new Error(err.error || '起鐘失敗');
   }
   return res.json();
@@ -552,6 +558,9 @@ export async function qrTableStartConfirm(apiUrl: string, memberId: string, conf
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && (err?.feature === 'qr_session' || err?.error === 'feature_disabled')) {
+      throw new Error('此場館未開放掃碼起鐘功能');
+    }
     throw new Error(err.error || '起鐘確認失敗');
   }
   return res.json();
@@ -565,6 +574,9 @@ export async function qrTableEndInit(apiUrl: string, memberId: string, token: st
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && err?.feature === 'qr_session') {
+      throw new Error('此場館未開放掃碼起鐘功能');
+    }
     throw new Error(err.error || '落鐘失敗');
   }
   return res.json();
@@ -578,6 +590,9 @@ export async function qrTableEndConfirm(apiUrl: string, memberId: string, confir
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && (err?.feature === 'qr_session' || err?.error === 'feature_disabled')) {
+      throw new Error('此場館未開放掃碼起鐘功能');
+    }
     throw new Error(err.error || '落鐘確認失敗');
   }
   return res.json();

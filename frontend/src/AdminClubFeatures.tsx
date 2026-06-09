@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
 import { getAdminClubFeatureAssignments, updateAdminClubFeatureAssignment } from './lib/api';
 
-type FeatureKey = 'booking' | 'points' | 'tournaments';
+type FeatureKey = 'booking' | 'qr_session' | 'points' | 'tournaments';
 
 function resolveAdminToken(): string {
   try {
@@ -23,10 +23,12 @@ function resolveFeatureKey(): FeatureKey {
     const params = new URLSearchParams(window.location.search);
     const k = String(params.get('feature') || '').trim();
     if (k === 'booking') return 'booking';
+    if (k === 'qr_session') return 'qr_session';
     if (k === 'points') return 'points';
     if (k === 'tournaments') return 'tournaments';
     const saved = String(localStorage.getItem('adminClubFeatureKey') || '').trim();
     if (saved === 'booking') return 'booking';
+    if (saved === 'qr_session') return 'qr_session';
     if (saved === 'points') return 'points';
     if (saved === 'tournaments') return 'tournaments';
     return 'points';
@@ -116,11 +118,13 @@ const AdminClubFeatures: React.FC = () => {
 
   const title = featureKey === 'booking'
     ? '訂台預約（booking）'
-    : featureKey === 'points'
-      ? '消費積分（points）'
-      : featureKey === 'tournaments'
-        ? '賽事報名（tournaments）'
-        : featureKey;
+    : featureKey === 'qr_session'
+      ? '掃碼起鐘及結算（qr_session）'
+      : featureKey === 'points'
+        ? '消費積分（points）'
+        : featureKey === 'tournaments'
+          ? '賽事報名（tournaments）'
+          : featureKey;
 
   return (
     <div className="brand-page min-h-screen text-white">
@@ -177,6 +181,7 @@ const AdminClubFeatures: React.FC = () => {
                   className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 >
                   <option value="booking">訂台預約（booking）</option>
+                  <option value="qr_session">掃碼起鐘（qr_session）</option>
                   <option value="points">消費積分（points）</option>
                   <option value="tournaments">賽事報名（tournaments）</option>
                 </select>

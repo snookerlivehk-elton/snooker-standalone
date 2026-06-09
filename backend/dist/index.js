@@ -221,10 +221,11 @@ app.get('/api/club/features/access', async (req, res) => {
         return res.status(404).json({ error: 'Club not found' });
     try {
         const map = await getFeatureMap();
-        const [pointsAssignment, tournamentsAssignment, bookingAssignment] = await Promise.all([
+        const [pointsAssignment, tournamentsAssignment, bookingAssignment, qrSessionAssignment] = await Promise.all([
             getClubFeatureAssignment(prisma, clubId, 'points'),
             getClubFeatureAssignment(prisma, clubId, 'tournaments'),
             getClubFeatureAssignment(prisma, clubId, 'booking'),
+            getClubFeatureAssignment(prisma, clubId, 'qr_session'),
         ]);
         res.json({
             clubId,
@@ -236,6 +237,14 @@ app.get('/api/club/features/access', async (req, res) => {
                     explicitEnabled: bookingAssignment.explicitEnabled,
                     source: bookingAssignment.source,
                     updatedAt: bookingAssignment.updatedAt,
+                },
+                qr_session: {
+                    globalEnabled: map.qr_session !== false,
+                    assignedEnabled: qrSessionAssignment.assignedEnabled,
+                    effectiveEnabled: map.qr_session !== false && qrSessionAssignment.assignedEnabled,
+                    explicitEnabled: qrSessionAssignment.explicitEnabled,
+                    source: qrSessionAssignment.source,
+                    updatedAt: qrSessionAssignment.updatedAt,
                 },
                 points: {
                     globalEnabled: map.points !== false,
@@ -266,10 +275,11 @@ app.get('/api/club/:clubId/features/public', async (req, res) => {
         return res.status(400).json({ error: 'clubId required' });
     try {
         const map = await getFeatureMap();
-        const [pointsAssignment, tournamentsAssignment, bookingAssignment] = await Promise.all([
+        const [pointsAssignment, tournamentsAssignment, bookingAssignment, qrSessionAssignment] = await Promise.all([
             getClubFeatureAssignment(prisma, clubId, 'points'),
             getClubFeatureAssignment(prisma, clubId, 'tournaments'),
             getClubFeatureAssignment(prisma, clubId, 'booking'),
+            getClubFeatureAssignment(prisma, clubId, 'qr_session'),
         ]);
         res.json({
             clubId,
@@ -281,6 +291,14 @@ app.get('/api/club/:clubId/features/public', async (req, res) => {
                     explicitEnabled: bookingAssignment.explicitEnabled,
                     source: bookingAssignment.source,
                     updatedAt: bookingAssignment.updatedAt,
+                },
+                qr_session: {
+                    globalEnabled: map.qr_session !== false,
+                    assignedEnabled: qrSessionAssignment.assignedEnabled,
+                    effectiveEnabled: map.qr_session !== false && qrSessionAssignment.assignedEnabled,
+                    explicitEnabled: qrSessionAssignment.explicitEnabled,
+                    source: qrSessionAssignment.source,
+                    updatedAt: qrSessionAssignment.updatedAt,
                 },
                 points: {
                     globalEnabled: map.points !== false,
@@ -371,6 +389,26 @@ app.use('/api/club', async (req, res, next) => {
     catch { }
     next();
 });
+app.use('/api/club', async (req, res, next) => {
+    const p = String(req.path || '');
+    const isQrAdmin = p.startsWith('/sessions') || (p.startsWith('/tables') && p.includes('/qr/'));
+    if (!isQrAdmin)
+        return next();
+    try {
+        const map = await getFeatureMap();
+        if (map.qr_session === false)
+            return res.status(403).json({ error: 'feature_disabled', feature: 'qr_session' });
+        const clubId = await resolveAdminClubIdFromHeader(req);
+        if (!clubId)
+            return next();
+        const assignment = await getClubFeatureAssignment(prisma, clubId, 'qr_session');
+        if (!assignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'qr_session', scope: 'club', clubId });
+        }
+    }
+    catch { }
+    next();
+});
 // Mount Club Router
 app.use('/api/club', clubRouter);
 async function requireActiveMember(req, res) {
@@ -438,6 +476,10 @@ app.get('/api/qr/table/info', requireFeature('qr_session'), async (req, res) => 
         });
         if (!qr || qr.active === false)
             return res.status(404).json({ error: 'Not found' });
+        const qrAssignment = await getClubFeatureAssignment(prisma, qr.clubId, 'qr_session');
+        if (!qrAssignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'qr_session', scope: 'club', clubId: qr.clubId });
+        }
         if (qr.table.active === false)
             return res.status(409).json({ error: 'Table disabled' });
         const session = await prisma.tableSession.findFirst({
@@ -464,6 +506,10 @@ app.post('/api/qr/table/start-init', requireFeature('qr_session'), async (req, r
         });
         if (!qr || qr.active === false)
             return res.status(404).json({ error: 'Not found' });
+        const qrAssignment = await getClubFeatureAssignment(prisma, qr.clubId, 'qr_session');
+        if (!qrAssignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'qr_session', scope: 'club', clubId: qr.clubId });
+        }
         if (qr.table.active === false)
             return res.status(409).json({ error: 'Table disabled' });
         const active = await prisma.tableSession.findFirst({ where: { tableId: qr.tableId, status: 'ACTIVE' }, select: { id: true } });
@@ -518,6 +564,9 @@ app.post('/api/qr/table/start-confirm', requireFeature('qr_session'), async (req
                 throw new Error('already_consumed');
             if (new Date(c.expiresAt).getTime() < now.getTime())
                 throw new Error('expired');
+            const qrAssignment = await getClubFeatureAssignment(tx, c.clubId, 'qr_session');
+            if (!qrAssignment.assignedEnabled)
+                throw new Error('feature_disabled');
             const qr = await tx.tableQrToken.findUnique({
                 where: { token: c.token },
                 include: { table: { select: { id: true, active: true } } }
@@ -539,7 +588,7 @@ app.post('/api/qr/table/start-confirm', requireFeature('qr_session'), async (req
     }
     catch (e) {
         const msg = String(e?.message || e);
-        const code = msg === 'already_active' ? 409 : msg === 'expired' ? 410 : msg === 'forbidden' ? 403 : 400;
+        const code = msg === 'already_active' ? 409 : msg === 'expired' ? 410 : msg === 'forbidden' || msg === 'feature_disabled' ? 403 : 400;
         res.status(code).json({ error: msg });
     }
 });
@@ -557,6 +606,10 @@ app.post('/api/qr/table/end-init', requireFeature('qr_session'), async (req, res
         });
         if (!qr || qr.active === false)
             return res.status(404).json({ error: 'Not found' });
+        const qrAssignment = await getClubFeatureAssignment(prisma, qr.clubId, 'qr_session');
+        if (!qrAssignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'qr_session', scope: 'club', clubId: qr.clubId });
+        }
         const session = await prisma.tableSession.findFirst({
             where: { tableId: qr.tableId, status: 'ACTIVE', startedByMemberId: member.id },
             orderBy: [{ startAt: 'desc' }],
@@ -636,6 +689,9 @@ app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, 
                 throw new Error('not_active');
             if (s.startedByMemberId !== member.id)
                 throw new Error('forbidden');
+            const qrAssignment = await getClubFeatureAssignment(tx, s.clubId, 'qr_session');
+            if (!qrAssignment.assignedEnabled)
+                throw new Error('feature_disabled');
             const pointsAssignment = await getClubFeatureAssignment(tx, s.clubId, 'points');
             const enablePoints = featureMap.points !== false && pointsAssignment.assignedEnabled;
             const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId: s.clubId } });
