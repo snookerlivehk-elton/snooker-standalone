@@ -209,6 +209,34 @@ export async function getSiteNotice(apiUrl: string) {
   return res.json();
 }
 
+export async function getNewsSources(apiUrl: string) {
+  const res = await fetch(`${apiUrl}/api/news/sources`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to load news sources');
+  return res.json() as Promise<{ sources: Array<{ id: string; name: string; siteUrl?: string | null; language?: string | null; region?: string | null; updatedAt?: string }> }>;
+}
+
+export async function getNewsItems(apiUrl: string, params?: { limit?: number; sourceId?: string }) {
+  const sp = new URLSearchParams();
+  if (typeof params?.limit === 'number' && Number.isFinite(params.limit)) sp.set('limit', String(Math.max(1, Math.min(100, Math.floor(params.limit)))));
+  if (params?.sourceId) sp.set('sourceId', String(params.sourceId));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/news${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to load news');
+  return res.json() as Promise<{
+    items: Array<{
+      id: string;
+      title: string;
+      url: string;
+      publishedAt?: string | null;
+      author?: string | null;
+      summary?: string | null;
+      imageUrl?: string | null;
+      tags?: any;
+      source: { id: string; name: string; siteUrl?: string | null };
+    }>;
+  }>;
+}
+
 export async function updateSiteNotice(
   apiUrl: string,
   adminToken: string,
@@ -224,6 +252,73 @@ export async function updateSiteNotice(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '更新公告失敗');
+  }
+  return res.json();
+}
+
+export async function getAdminNewsSources(apiUrl: string, adminToken: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/news/sources?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取新聞來源失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ sources: Array<any> }>;
+}
+
+export async function createAdminNewsSource(apiUrl: string, adminToken: string, payload: any) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/news/sources?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `新增新聞來源失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateAdminNewsSource(apiUrl: string, adminToken: string, id: string, patch: any) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/news/sources/${encodeURIComponent(id)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify(patch || {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新新聞來源失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function deleteAdminNewsSource(apiUrl: string, adminToken: string, id: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/news/sources/${encodeURIComponent(id)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { method: 'DELETE', headers: { 'x-admin-token': adminToken || '' } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `刪除新聞來源失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function adminFetchNewsNow(apiUrl: string, adminToken: string, sourceId?: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/news/fetch?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify({ sourceId: sourceId || '' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `手動拉取新聞失敗 (${res.status})`);
   }
   return res.json();
 }

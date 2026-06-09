@@ -499,6 +499,17 @@ const AdminOverview: React.FC = () => {
               onClick={() => {
                 const base = resolveBasePath();
                 const tok = resolveToken();
+                window.location.href = `${window.location.origin}${base}/admin/news-sources${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+              }}
+            >
+              新聞來源
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+              onClick={() => {
+                const base = resolveBasePath();
+                const tok = resolveToken();
                 window.location.href = `${window.location.origin}${base}/admin/breaks${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
               }}
             >

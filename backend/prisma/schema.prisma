@@ -308,6 +308,69 @@ model ClubFeatureAccess {
   @@index([featureKey, enabled])
 }
 
+model AppLock {
+  key        String   @id
+  lockedUntil DateTime?
+  lockedBy   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model NewsSource {
+  id                 String   @id
+  name               String
+  feedUrl            String
+  siteUrl            String?
+  enabled            Boolean  @default(true)
+  language           String?
+  region             String?
+  fetchEveryHours    Int      @default(72)
+  lastFetchAttemptAt DateTime?
+  lastFetchedAt      DateTime?
+  lastError          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  items    NewsItem[]
+  fetchLogs NewsFetchLog[]
+
+  @@index([enabled, lastFetchedAt])
+}
+
+model NewsItem {
+  id          String      @id @default(uuid())
+  sourceId    String
+  source      NewsSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  title       String
+  url         String      @unique
+  publishedAt DateTime?
+  author      String?
+  summary     String?
+  imageUrl    String?
+  tags        Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([sourceId, publishedAt])
+  @@index([publishedAt])
+}
+
+model NewsFetchLog {
+  id         String     @id @default(uuid())
+  sourceId   String
+  source     NewsSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt  DateTime   @default(now())
+  finishedAt DateTime?
+  ok         Boolean    @default(false)
+  newCount   Int        @default(0)
+  error      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([sourceId, startedAt])
+  @@index([startedAt])
+}
+
 model ClubPointsConfig {
   id              String   @id @default(uuid())
   clubId          String   @unique

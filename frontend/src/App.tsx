@@ -14,12 +14,14 @@ import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import AdminVenues from './AdminVenues';
 import AdminClubFeatures from './AdminClubFeatures';
+import AdminNewsSources from './AdminNewsSources';
 import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
 import TableQrPage from './TableQrPage';
 import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
 import AdminBreaks from './AdminBreaks';
+import NewsPage from './NewsPage';
 import MemberRegisterSimple from './MemberRegisterSimple';
 import Rooms from './Rooms';
 import Me from './Me';
@@ -98,6 +100,7 @@ function App() {
         <Route path="/rooms" element={<FeatureGate feature="scoring"><Rooms /></FeatureGate>} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
         <Route path="/android" element={<AndroidGuide />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
         <Route path="/admin/legacy" element={<AdminAuth><FeatureGate feature="scoring"><Admin /></FeatureGate></AdminAuth>} />
@@ -117,6 +120,7 @@ function App() {
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
         <Route path="/admin/club-features" element={<AdminAuth><AdminClubFeatures /></AdminAuth>} />
+        <Route path="/admin/news-sources" element={<AdminAuth><AdminNewsSources /></AdminAuth>} />
         <Route path="/room/:roomId" element={<FeatureGate feature="scoring"><Scoreboard gameState={gameState} setGameState={setGameState} /></FeatureGate>} />
         <Route path="/room/:roomId/setup" element={<FeatureGate feature="scoring"><Setup onStartMatch={handleStartMatch} /></FeatureGate>} />
         <Route path="/room/:roomId/live" element={<FeatureGate feature="live"><LiveView /></FeatureGate>} />

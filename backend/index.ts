@@ -16,6 +16,7 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
 import clubRouter from './routes/club.js';
 import { createClubTables } from './scripts/create_club_tables.js';
 import { getClubFeatureAssignment, getClubFeatureAssignments, isClubScopedFeatureKey } from './clubFeatureAccess.js';
+import { startNewsScheduler, runNewsFetchOnce } from './news/newsScheduler.js';
 
 export interface Room {
   id: string;
@@ -138,6 +139,8 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 
 // Prisma client for DB connectivity
 const prisma = new PrismaClient();
+
+startNewsScheduler(prisma);
 createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
 
 const FEATURE_CATALOG = [
@@ -783,6 +786,45 @@ app.get('/api/features', async (_req, res) => {
   });
 });
 
+app.get('/api/news/sources', async (_req, res) => {
+  try {
+    const rows = await prisma.newsSource.findMany({
+      where: { enabled: true },
+      select: { id: true, name: true, siteUrl: true, language: true, region: true, updatedAt: true },
+      orderBy: [{ name: 'asc' }],
+    });
+    res.json({ sources: rows });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.get('/api/news', async (req, res) => {
+  try {
+    const limitRaw = String((req.query as any).limit || '').trim();
+    const sourceId = String((req.query as any).sourceId || '').trim();
+    let limit = 30;
+    if (limitRaw) {
+      const n = Number(limitRaw);
+      if (Number.isFinite(n)) limit = Math.max(1, Math.min(100, Math.floor(n)));
+    }
+
+    const where: any = {};
+    if (sourceId) where.sourceId = sourceId;
+
+    const items = await prisma.newsItem.findMany({
+      where,
+      include: { source: { select: { id: true, name: true, siteUrl: true } } },
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      take: limit,
+    });
+
+    res.json({ items });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
 app.post('/api/matches/strict', requireFeature('scoring'), writeAuth, async (req, res) => {
   try {
@@ -1422,6 +1464,82 @@ app.put('/api/admin/club-features/:featureKey/:clubId', adminAuth, async (req, r
     });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
+  }
+});
+
+app.get('/api/admin/news/sources', adminAuth, async (_req, res) => {
+  try {
+    const sources = await prisma.newsSource.findMany({
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+    res.json({ sources });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/news/sources', adminAuth, async (req, res) => {
+  try {
+    const body = (req.body || {}) as any;
+    const id = String(body.id || randomUUID()).trim();
+    const name = String(body.name || '').trim();
+    const feedUrl = String(body.feedUrl || '').trim();
+    const siteUrl = String(body.siteUrl || '').trim() || null;
+    const language = String(body.language || '').trim() || null;
+    const region = String(body.region || '').trim() || null;
+    const enabled = typeof body.enabled === 'boolean' ? Boolean(body.enabled) : true;
+    const fetchEveryHours = Number.isFinite(Number(body.fetchEveryHours)) ? Math.max(1, Math.min(24 * 30, Math.floor(Number(body.fetchEveryHours)))) : 72;
+    if (!name) return res.status(400).json({ error: 'name_required' });
+    if (!feedUrl) return res.status(400).json({ error: 'feedUrl_required' });
+    const row = await prisma.newsSource.create({
+      data: { id, name, feedUrl, siteUrl, language, region, enabled, fetchEveryHours },
+    });
+    res.json({ ok: true, source: row });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.put('/api/admin/news/sources/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id_required' });
+    const body = (req.body || {}) as any;
+    const patch: any = {};
+    if (typeof body.name === 'string') patch.name = String(body.name).trim();
+    if (typeof body.feedUrl === 'string') patch.feedUrl = String(body.feedUrl).trim();
+    if (typeof body.siteUrl === 'string') patch.siteUrl = String(body.siteUrl).trim() || null;
+    if (typeof body.language === 'string') patch.language = String(body.language).trim() || null;
+    if (typeof body.region === 'string') patch.region = String(body.region).trim() || null;
+    if (typeof body.enabled === 'boolean') patch.enabled = Boolean(body.enabled);
+    if (Number.isFinite(Number(body.fetchEveryHours))) patch.fetchEveryHours = Math.max(1, Math.min(24 * 30, Math.floor(Number(body.fetchEveryHours))));
+    const row = await prisma.newsSource.update({ where: { id }, data: patch });
+    res.json({ ok: true, source: row });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.delete('/api/admin/news/sources/:id', adminAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'id_required' });
+    await prisma.newsSource.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/admin/news/fetch', adminAuth, async (req, res) => {
+  try {
+    const sourceId = String((req.body || {}).sourceId || '').trim();
+    const opt: any = { force: true };
+    if (sourceId) opt.sourceId = sourceId;
+    const out = await runNewsFetchOnce(prisma, opt);
+    res.json(out);
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message || e) });
   }
 });
 

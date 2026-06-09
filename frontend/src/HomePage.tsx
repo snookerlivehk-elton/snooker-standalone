@@ -18,6 +18,9 @@ const HomePage: React.FC = () => {
             <a href="/members/register" className="px-4 py-3 rounded cue-surface-strong hover:brightness-95 text-center font-bold">
               註冊
             </a>
+            <a href="/news" className="px-4 py-3 rounded cue-surface-strong hover:brightness-95 text-center font-bold">
+              Snooker 新聞
+            </a>
             <a
               href="https://www.snookerhk.live/"
               target="_blank"
