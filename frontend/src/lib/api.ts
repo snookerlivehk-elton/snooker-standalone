@@ -1222,7 +1222,13 @@ export async function createManualReservation(
 
 export async function getPublicTables(apiUrl: string, clubId: string) {
   const res = await fetch(`${apiUrl}/api/club/${clubId}/tables`);
-  if (!res.ok) throw new Error('讀取球枱失敗');
+  if (!res.ok) {
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      if (err?.feature === 'booking') return [];
+    }
+    throw new Error('讀取球枱失敗');
+  }
   return res.json();
 }
 
@@ -1242,14 +1248,26 @@ export async function getPublicPricing(
   });
   const url = q.toString() ? `${apiUrl}/api/club/${clubId}/pricing?${q}` : `${apiUrl}/api/club/${clubId}/pricing`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error('讀取收費失敗');
+  if (!res.ok) {
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      if (err?.feature === 'booking') return [];
+    }
+    throw new Error('讀取收費失敗');
+  }
   return res.json();
 }
 
 export async function getAvailability(apiUrl: string, clubId: string, from: string, to: string, tableId?: string) {
   const q = new URLSearchParams({ from, to, ...(tableId ? { tableId } : {}) });
   const res = await fetch(`${apiUrl}/api/club/${clubId}/availability?${q.toString()}`);
-  if (!res.ok) throw new Error('讀取可用性失敗');
+  if (!res.ok) {
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      if (err?.feature === 'booking') return [];
+    }
+    throw new Error('讀取可用性失敗');
+  }
   return res.json();
 }
 
@@ -1261,6 +1279,9 @@ export async function createReservation(apiUrl: string, clubId: string, memberId
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && err?.feature === 'booking') {
+      throw new Error('此場館未開放訂台功能');
+    }
     throw new Error(err.error || '預約失敗');
   }
   return res.json();
@@ -1270,7 +1291,13 @@ export async function getMyReservations(apiUrl: string, clubId: string, memberId
   const res = await fetch(`${apiUrl}/api/club/${clubId}/reservations/my`, {
     headers: { 'x-member-id': memberId },
   });
-  if (!res.ok) throw new Error('讀取我的預約失敗');
+  if (!res.ok) {
+    if (res.status === 403) {
+      const err = await res.json().catch(() => ({}));
+      if (err?.feature === 'booking') return [];
+    }
+    throw new Error('讀取我的預約失敗');
+  }
   return res.json();
 }
 
@@ -1282,6 +1309,9 @@ export async function cancelMyReservation(apiUrl: string, clubId: string, member
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    if (res.status === 403 && err?.feature === 'booking') {
+      throw new Error('此場館未開放訂台功能');
+    }
     throw new Error(err.error || '取消預約失敗');
   }
   return res.json();

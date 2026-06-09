@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 
-export const CLUB_SCOPED_FEATURE_KEYS = ['points', 'tournaments'] as const;
+export const CLUB_SCOPED_FEATURE_KEYS = ['points', 'tournaments', 'booking'] as const;
 
 export type ClubScopedFeatureKey = typeof CLUB_SCOPED_FEATURE_KEYS[number];
 export type ClubFeatureSource = 'explicit' | 'legacy' | 'default_off';
@@ -59,6 +59,39 @@ async function getLegacyTournamentsClubIds(prisma: PrismaClient | Prisma.Transac
   return new Set<string>(rows.map((x) => x.clubId));
 }
 
+async function getLegacyBookingClubIds(prisma: PrismaClient | Prisma.TransactionClient, clubIds: string[]) {
+  const ids = uniqIds(clubIds);
+  if (ids.length === 0) return new Set<string>();
+  const [tableRows, pricingRows, reservationRows, sessionRows] = await Promise.all([
+    prisma.clubTable.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+    prisma.tablePricingScheme.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+    prisma.tableReservation.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+    prisma.tableSession.findMany({
+      where: { clubId: { in: ids } },
+      select: { clubId: true },
+      distinct: ['clubId'],
+    }),
+  ]);
+  return new Set<string>([
+    ...tableRows.map((x) => x.clubId),
+    ...pricingRows.map((x) => x.clubId),
+    ...reservationRows.map((x) => x.clubId),
+    ...sessionRows.map((x) => x.clubId),
+  ]);
+}
+
 export async function getClubFeatureAssignments(
   prisma: PrismaClient | Prisma.TransactionClient,
   clubIds: string[],
@@ -80,6 +113,8 @@ export async function getClubFeatureAssignments(
         ? await getLegacyPointsClubIds(prisma, unresolved)
         : featureKey === 'tournaments'
           ? await getLegacyTournamentsClubIds(prisma, unresolved)
+          : featureKey === 'booking'
+            ? await getLegacyBookingClubIds(prisma, unresolved)
           : new Set<string>()
       : new Set<string>();
 

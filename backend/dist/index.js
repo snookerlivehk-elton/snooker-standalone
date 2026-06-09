@@ -221,13 +221,22 @@ app.get('/api/club/features/access', async (req, res) => {
         return res.status(404).json({ error: 'Club not found' });
     try {
         const map = await getFeatureMap();
-        const [pointsAssignment, tournamentsAssignment] = await Promise.all([
+        const [pointsAssignment, tournamentsAssignment, bookingAssignment] = await Promise.all([
             getClubFeatureAssignment(prisma, clubId, 'points'),
             getClubFeatureAssignment(prisma, clubId, 'tournaments'),
+            getClubFeatureAssignment(prisma, clubId, 'booking'),
         ]);
         res.json({
             clubId,
             features: {
+                booking: {
+                    globalEnabled: map.booking !== false,
+                    assignedEnabled: bookingAssignment.assignedEnabled,
+                    effectiveEnabled: map.booking !== false && bookingAssignment.assignedEnabled,
+                    explicitEnabled: bookingAssignment.explicitEnabled,
+                    source: bookingAssignment.source,
+                    updatedAt: bookingAssignment.updatedAt,
+                },
                 points: {
                     globalEnabled: map.points !== false,
                     assignedEnabled: pointsAssignment.assignedEnabled,
@@ -257,13 +266,22 @@ app.get('/api/club/:clubId/features/public', async (req, res) => {
         return res.status(400).json({ error: 'clubId required' });
     try {
         const map = await getFeatureMap();
-        const [pointsAssignment, tournamentsAssignment] = await Promise.all([
+        const [pointsAssignment, tournamentsAssignment, bookingAssignment] = await Promise.all([
             getClubFeatureAssignment(prisma, clubId, 'points'),
             getClubFeatureAssignment(prisma, clubId, 'tournaments'),
+            getClubFeatureAssignment(prisma, clubId, 'booking'),
         ]);
         res.json({
             clubId,
             features: {
+                booking: {
+                    globalEnabled: map.booking !== false,
+                    assignedEnabled: bookingAssignment.assignedEnabled,
+                    effectiveEnabled: map.booking !== false && bookingAssignment.assignedEnabled,
+                    explicitEnabled: bookingAssignment.explicitEnabled,
+                    source: bookingAssignment.source,
+                    updatedAt: bookingAssignment.updatedAt,
+                },
                 points: {
                     globalEnabled: map.points !== false,
                     assignedEnabled: pointsAssignment.assignedEnabled,
@@ -286,6 +304,47 @@ app.get('/api/club/:clubId/features/public', async (req, res) => {
     catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
     }
+});
+app.use('/api/club', async (req, res, next) => {
+    const p = String(req.path || '');
+    if (p.startsWith('/features/'))
+        return next();
+    if (p.includes('/features/public'))
+        return next();
+    const isBookingAdmin = p.startsWith('/tables') ||
+        p.startsWith('/pricing') ||
+        p.startsWith('/reservations') ||
+        p.startsWith('/availability');
+    const isBookingPublic = /^\/[^/]+\/tables(?:\/|$)/.test(p) ||
+        /^\/[^/]+\/pricing(?:\/|$)/.test(p) ||
+        /^\/[^/]+\/availability(?:\/|$)/.test(p) ||
+        /^\/[^/]+\/reservations(?:\/|$)/.test(p);
+    const isQrTableSubpath = p.startsWith('/tables') && p.includes('/qr/');
+    const shouldGate = (isBookingAdmin || isBookingPublic) && !isQrTableSubpath;
+    if (!shouldGate)
+        return next();
+    try {
+        const map = await getFeatureMap();
+        if (map.booking === false)
+            return res.status(403).json({ error: 'feature_disabled', feature: 'booking' });
+        let clubId = null;
+        if (isBookingPublic) {
+            const m = p.match(/^\/([^/]+)\/(?:tables|pricing|availability|reservations)(?:\/|$)/);
+            if (m && m[1])
+                clubId = String(m[1]).trim();
+        }
+        else {
+            clubId = await resolveAdminClubIdFromHeader(req);
+        }
+        if (!clubId)
+            return next();
+        const assignment = await getClubFeatureAssignment(prisma, clubId, 'booking');
+        if (!assignment.assignedEnabled) {
+            return res.status(403).json({ error: 'feature_disabled', feature: 'booking', scope: 'club', clubId });
+        }
+    }
+    catch { }
+    next();
 });
 app.use('/api/club', async (req, res, next) => {
     const p = String(req.path || '');
