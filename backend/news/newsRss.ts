@@ -249,10 +249,11 @@ export async function fetchAndUpsertRssSource(
     const pub = safeDate(it?.pubDate ?? it?.published ?? it?.updated);
     const author = String(textValue(it?.creator ?? it?.author?.name ?? it?.author) || '').trim() || null;
 
-    const descRaw = String(textValue(it?.description ?? it?.summary ?? it?.content) || '').trim();
+    const descRaw = String(textValue(it?.description ?? it?.summary ?? it?.encoded ?? it?.content) || '').trim();
     const summary = descRaw ? truncate(stripHtml(descRaw), summaryMaxLen) : null;
 
-    const imageCandidate = extractImageUrl(it, String(it?.description ?? it?.summary ?? it?.content ?? ''));
+    const rawHtmlForImage = String(textValue(it?.description ?? it?.summary ?? it?.encoded ?? it?.content) || '').trim();
+    const imageCandidate = extractImageUrl(it, rawHtmlForImage);
     const imageUrl = imageCandidate ? canonicalizeUrl(imageCandidate) : null;
 
     const cats = arrayify(it?.category)
@@ -267,10 +268,10 @@ export async function fetchAndUpsertRssSource(
           title,
           author,
           summary,
-          imageUrl,
         };
         if (pub) data.publishedAt = pub;
         if (tags) data.tags = tags as any;
+        if (imageUrl) data.imageUrl = imageUrl;
         await prisma.newsItem.update({
           where: { id: existing.id },
           data,

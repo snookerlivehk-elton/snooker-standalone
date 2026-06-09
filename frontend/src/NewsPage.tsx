@@ -90,6 +90,7 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
           const dt = it?.publishedAt ? new Date(String(it.publishedAt)) : null;
           const dtStr = dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('zh-HK') : '';
           const img = it?.imageUrl ? String(it.imageUrl) : '';
+          const imgProxy = img ? `${API_URL.replace(/\/+$/, '')}/api/news/image?url=${encodeURIComponent(img)}` : '';
           return (
             <a
               key={String(it?.id || it?.url)}
@@ -99,9 +100,9 @@ const NewsPage: React.FC<{ embedded?: boolean }> = ({ embedded }) => {
               className="block glass rounded-xl p-4 hover:brightness-95"
             >
               <div className="flex gap-3">
-                {img ? (
+                {imgProxy ? (
                   <img
-                    src={img}
+                    src={imgProxy}
                     alt=""
                     loading="lazy"
                     className="w-20 h-20 rounded-lg object-cover shrink-0 bg-black/20"

@@ -840,6 +840,82 @@ app.get('/api/news', async (req, res) => {
         res.status(500).json({ error: String(e?.message || e) });
     }
 });
+function isPrivateOrLocalHost(hostname) {
+    const h = String(hostname || '').trim().toLowerCase();
+    if (!h)
+        return true;
+    if (h === 'localhost' || h.endsWith('.localhost'))
+        return true;
+    if (h === '0.0.0.0')
+        return true;
+    if (h === '::1')
+        return true;
+    if (h.startsWith('127.'))
+        return true;
+    if (h.startsWith('10.'))
+        return true;
+    if (h.startsWith('192.168.'))
+        return true;
+    const m = h.match(/^172\.(\d+)\./);
+    if (m) {
+        const n = Number(m[1]);
+        if (Number.isFinite(n) && n >= 16 && n <= 31)
+            return true;
+    }
+    if (h.startsWith('169.254.'))
+        return true;
+    if (h.startsWith('fc') || h.startsWith('fd'))
+        return true;
+    return false;
+}
+app.get('/api/news/image', async (req, res) => {
+    const raw = String(req.query.url || '').trim();
+    if (!raw)
+        return res.status(400).send('missing url');
+    let u;
+    try {
+        u = new URL(raw);
+    }
+    catch {
+        return res.status(400).send('invalid url');
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:')
+        return res.status(400).send('unsupported protocol');
+    if (isPrivateOrLocalHost(u.hostname))
+        return res.status(400).send('blocked host');
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12_000);
+    try {
+        const r = await fetch(u.toString(), {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'SnookerHKLive-NewsBot/1.0 (+https://www.snookerhk.live)',
+                'Accept': 'image/*,*/*;q=0.8',
+            },
+            signal: ctrl.signal,
+        });
+        if (!r.ok)
+            return res.status(404).send('not found');
+        const contentType = String(r.headers.get('content-type') || '').trim();
+        if (contentType && !contentType.toLowerCase().startsWith('image/')) {
+            return res.status(415).send('not an image');
+        }
+        const arr = await r.arrayBuffer();
+        const buf = Buffer.from(arr);
+        const maxBytes = 5 * 1024 * 1024;
+        if (buf.length > maxBytes)
+            return res.status(413).send('image too large');
+        res.setHeader('Content-Type', contentType || 'image/*');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(buf);
+    }
+    catch {
+        res.status(502).send('fetch failed');
+    }
+    finally {
+        clearTimeout(t);
+    }
+});
 // Strict match creation: require valid memberId for both players; if any missing or not found, reject
 app.post('/api/matches/strict', requireFeature('scoring'), writeAuth, async (req, res) => {
     try {
