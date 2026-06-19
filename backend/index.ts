@@ -1088,6 +1088,9 @@ app.get('/api/site-ads', async (req, res) => {
         enabled: x.enabled && (x.item as any)?.enabled !== false,
         imageUrl: (x.item as any)?.imageUrl ?? null,
         linkUrl: (x.item as any)?.linkUrl ?? null,
+        title: (x.item as any)?.title ?? null,
+        subtitle: (x.item as any)?.subtitle ?? null,
+        ctaLabel: (x.item as any)?.ctaLabel ?? null,
         updatedAt: (x.item as any)?.updatedAt ?? null,
         sort: x.sort,
       }))
@@ -1101,6 +1104,9 @@ app.get('/api/site-ads', async (req, res) => {
               enabled: true,
               imageUrl: cfg.imageUrl,
               linkUrl: cfg.linkUrl,
+              title: null,
+              subtitle: null,
+              ctaLabel: null,
               updatedAt: cfg.updatedAt,
               sort: 0,
             },
@@ -1164,7 +1170,7 @@ app.get('/api/admin/site-ads', adminAuth, async (_req, res) => {
           take.flatMap((x, idx) => {
             const itemId = randomUUID();
             return [
-              prisma.siteAdItem.create({ data: { id: itemId, enabled: true, imageUrl: x.imageUrl, linkUrl: x.linkUrl } }),
+              prisma.siteAdItem.create({ data: { id: itemId, enabled: true, imageUrl: x.imageUrl, linkUrl: x.linkUrl, title: null, subtitle: null, ctaLabel: null } }),
               prisma.siteAdPlacementItem.create({ data: { id: randomUUID(), placement: x.placement, itemId, enabled: true, sort: idx } }),
             ];
           }),
@@ -1196,7 +1202,7 @@ app.post('/api/admin/site-ad-items', adminAuth, async (_req, res) => {
     const count = await prisma.siteAdItem.count();
     if (count >= 5) return res.status(400).json({ error: 'max_items_reached' });
     const id = randomUUID();
-    const item = await prisma.siteAdItem.create({ data: { id, enabled: true, imageUrl: null, linkUrl: null } });
+    const item = await prisma.siteAdItem.create({ data: { id, enabled: true, imageUrl: null, linkUrl: null, title: null, subtitle: null, ctaLabel: null } });
     res.json({ item });
   } catch (err: any) {
     res.status(500).json({ error: String(err?.message || err) });
@@ -1207,12 +1213,27 @@ app.put('/api/admin/site-ad-items/:id', adminAuth, async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'id_required' });
-    const body = (req.body || {}) as { enabled?: boolean; linkUrl?: string | null };
+    const body = (req.body || {}) as {
+      enabled?: boolean;
+      linkUrl?: string | null;
+      title?: string | null;
+      subtitle?: string | null;
+      ctaLabel?: string | null;
+    };
     const enabled = body.enabled === undefined ? undefined : Boolean(body.enabled);
     const linkUrl = body.linkUrl === undefined ? undefined : (body.linkUrl ? String(body.linkUrl).trim() : null);
+    const title = body.title === undefined ? undefined : (body.title ? String(body.title).trim() : null);
+    const subtitle = body.subtitle === undefined ? undefined : (body.subtitle ? String(body.subtitle).trim() : null);
+    const ctaLabel = body.ctaLabel === undefined ? undefined : (body.ctaLabel ? String(body.ctaLabel).trim() : null);
     const item = await prisma.siteAdItem.update({
       where: { id },
-      data: { ...(enabled !== undefined ? { enabled } : {}), ...(linkUrl !== undefined ? { linkUrl } : {}) } as any,
+      data: {
+        ...(enabled !== undefined ? { enabled } : {}),
+        ...(linkUrl !== undefined ? { linkUrl } : {}),
+        ...(title !== undefined ? { title } : {}),
+        ...(subtitle !== undefined ? { subtitle } : {}),
+        ...(ctaLabel !== undefined ? { ctaLabel } : {}),
+      } as any,
     });
     res.json({ item });
   } catch (err: any) {

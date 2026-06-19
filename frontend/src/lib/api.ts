@@ -811,6 +811,26 @@ export async function getLiveAnnouncements(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function getPublicLiveAnnouncements(apiUrl: string, limit?: number) {
+  const sp = new URLSearchParams();
+  if (typeof limit === 'number' && Number.isFinite(limit)) {
+    sp.set('limit', String(Math.max(1, Math.min(50, Math.floor(limit)))));
+  }
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/club/live-announcements/public${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取公開直播通告失敗');
+  }
+  return res.json() as Promise<Array<{
+    id: string;
+    title?: string | null;
+    liveUrl?: string | null;
+    startsAt?: string | null;
+    club?: { id: string; name?: string | null; logoUrl?: string | null } | null;
+  }>>;
+}
+
 export async function deleteLiveAnnouncement(apiUrl: string, memberId: string, id: string) {
   const res = await fetch(`${apiUrl}/api/club/live-announcements/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -820,13 +840,6 @@ export async function deleteLiveAnnouncement(apiUrl: string, memberId: string, i
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '刪除直播通告失敗');
   }
-  return res.json();
-}
-
-export async function getPublicLiveAnnouncements(apiUrl: string, limit?: number) {
-  const q = limit != null ? `?limit=${encodeURIComponent(String(limit))}` : '';
-  const res = await fetch(`${apiUrl}/api/club/live-announcements/public${q}`);
-  if (!res.ok) throw new Error('讀取直播通告失敗');
   return res.json();
 }
 
@@ -1526,7 +1539,7 @@ export async function updateAdminSiteAdItem(
   apiUrl: string,
   adminToken: string,
   id: string,
-  payload: { enabled?: boolean; linkUrl?: string | null },
+  payload: { enabled?: boolean; linkUrl?: string | null; title?: string | null; subtitle?: string | null; ctaLabel?: string | null },
 ) {
   const res = await fetch(`${apiUrl}/api/admin/site-ad-items/${encodeURIComponent(id)}`, {
     method: 'PUT',

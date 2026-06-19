@@ -34,7 +34,7 @@ const AdminOverview: React.FC = () => {
     venue: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
     member: { enabled: true, displaySeconds: 15, minIntervalMinutes: 20, maxIntervalMinutes: 30 },
   });
-  const [adItemsDraft, setAdItemsDraft] = useState<Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>>([]);
+  const [adItemsDraft, setAdItemsDraft] = useState<Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; title: string; subtitle: string; ctaLabel: string; updatedAt?: string }>>([]);
   const [placementItemIdsDraft, setPlacementItemIdsDraft] = useState<Record<'system' | 'venue' | 'member', string[]>>({ system: [], venue: [], member: [] });
 
   function resolveBasePath(): string {
@@ -140,6 +140,9 @@ const AdminOverview: React.FC = () => {
       enabled: it?.enabled !== false,
       imageUrl: String(it?.imageUrl || ''),
       linkUrl: String(it?.linkUrl || ''),
+      title: String(it?.title || ''),
+      subtitle: String(it?.subtitle || ''),
+      ctaLabel: String(it?.ctaLabel || ''),
       updatedAt: it?.updatedAt ? String(it.updatedAt) : undefined,
     }));
 
@@ -237,7 +240,13 @@ const AdminOverview: React.FC = () => {
       const tok = resolveToken();
       const it = adItemsDraft.find((x) => x.id === id);
       if (!it) throw new Error('item_not_found');
-      await updateAdminSiteAdItem(API_URL, tok, id, { enabled: it.enabled, linkUrl: it.linkUrl ? String(it.linkUrl).trim() : null });
+      await updateAdminSiteAdItem(API_URL, tok, id, {
+        enabled: it.enabled,
+        linkUrl: it.linkUrl ? String(it.linkUrl).trim() : null,
+        title: it.title ? String(it.title).trim() : null,
+        subtitle: it.subtitle ? String(it.subtitle).trim() : null,
+        ctaLabel: it.ctaLabel ? String(it.ctaLabel).trim() : null,
+      });
       await refreshAds(tok);
       setAdsSaveResult('已儲存廣告');
     } catch (e: any) {
@@ -307,7 +316,7 @@ const AdminOverview: React.FC = () => {
     const selectedIds = Array.isArray(placementItemIdsDraft[placement]) ? placementItemIdsDraft[placement] : [];
     const selectedItems = selectedIds
       .map((id) => adItemsDraft.find((it) => it.id === id))
-      .filter((x) => !!x) as Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; updatedAt?: string }>;
+      .filter((x) => !!x) as Array<{ id: string; enabled: boolean; imageUrl: string; linkUrl: string; title: string; subtitle: string; ctaLabel: string; updatedAt?: string }>;
     const selectedSet = new Set(selectedItems.map((x) => x.id));
     const unselectedItems = adItemsDraft.filter((it) => !selectedSet.has(it.id));
 
@@ -326,7 +335,7 @@ const AdminOverview: React.FC = () => {
                 checked
                 onChange={(e) => togglePlacementItem(placement, it.id, e.target.checked)}
               />
-              <span className="text-sm break-all truncate">{it.id}</span>
+              <span className="text-sm break-all truncate">{it.title || it.id}</span>
             </label>
             <div className="flex items-center gap-1">
               <button
@@ -360,7 +369,7 @@ const AdminOverview: React.FC = () => {
                 checked={false}
                 onChange={(e) => togglePlacementItem(placement, it.id, e.target.checked)}
               />
-              <span className="text-sm break-all truncate">{it.id}</span>
+              <span className="text-sm break-all truncate">{it.title || it.id}</span>
             </label>
             <div className="w-[3.5rem]" />
           </div>
@@ -597,7 +606,7 @@ const AdminOverview: React.FC = () => {
 
             <div className="bg-black/40 border border-white/10 rounded p-4">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-lg font-bold">廣告素材池（最多 5）</div>
+                <div className="text-lg font-bold">首頁輪播素材池（最多 5）</div>
                 <button
                   type="button"
                   className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
@@ -647,13 +656,46 @@ const AdminOverview: React.FC = () => {
                       </div>
 
                       <div>
-                        <div className="text-sm cue-muted mb-1">跳轉連結</div>
+                        <div className="text-sm cue-muted mb-1">輪播標題</div>
                         <input
-                          value={it.linkUrl || ''}
-                          onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, linkUrl: e.target.value } : x))}
+                          value={it.title || ''}
+                          onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, title: e.target.value } : x))}
                           className="w-full cue-input rounded px-3 py-2 text-sm"
-                          placeholder="https://..."
+                          placeholder="例如：焦點賽事直播"
                         />
+                      </div>
+
+                      <div>
+                        <div className="text-sm cue-muted mb-1">輪播副標</div>
+                        <textarea
+                          value={it.subtitle || ''}
+                          onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, subtitle: e.target.value } : x))}
+                          className="w-full cue-input rounded px-3 py-2 text-sm"
+                          placeholder="例如：展示活動亮點、播放時間或導流說明"
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <div className="text-sm cue-muted mb-1">按鈕文字</div>
+                          <input
+                            value={it.ctaLabel || ''}
+                            onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, ctaLabel: e.target.value } : x))}
+                            className="w-full cue-input rounded px-3 py-2 text-sm"
+                            placeholder="例如：立即查看"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="text-sm cue-muted mb-1">輪播點擊連結</div>
+                          <input
+                            value={it.linkUrl || ''}
+                            onChange={(e) => setAdItemsDraft((s) => s.map((x) => x.id === it.id ? { ...x, linkUrl: e.target.value } : x))}
+                            className="w-full cue-input rounded px-3 py-2 text-sm"
+                            placeholder="https://..."
+                          />
+                        </div>
                       </div>
 
                       <label className="block w-full cue-surface rounded-lg p-2 text-left hover:brightness-95 cursor-pointer">
@@ -693,7 +735,7 @@ const AdminOverview: React.FC = () => {
 
             <div className="bg-black/40 border border-white/10 rounded p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-lg font-bold">主頁廣告位（系統）</div>
+                <div className="text-lg font-bold">首頁輪播設定（系統）</div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -723,7 +765,7 @@ const AdminOverview: React.FC = () => {
                       checked={adConfigDraft.system?.enabled !== false}
                       onChange={(e) => setAdConfigDraft((s) => ({ ...s, system: { ...(s.system || {}), enabled: e.target.checked } }))}
                     />
-                    <span>啟用（沒有投放廣告會自動不顯示）</span>
+                    <span>啟用首頁輪播（沒有投放素材會自動不顯示）</span>
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
@@ -762,7 +804,7 @@ const AdminOverview: React.FC = () => {
                   </div>
 
                   <div>
-                    <div className="text-sm cue-muted mb-1">投放（勾選後會輪播）</div>
+                      <div className="text-sm cue-muted mb-1">輪播內容（勾選後會在首頁輪播）</div>
                     {renderPlacementPicker('system')}
                   </div>
 

@@ -75,7 +75,8 @@ function App() {
       <LogoutButton />
       <Routes>
         {/* Public routes for LIVE app */}
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
