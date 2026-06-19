@@ -7,9 +7,18 @@ interface TopBarPublicProps {
   showBack?: boolean;
   onToggleLang?: () => void;
   lang?: 'zh' | 'en';
+  logoSrc?: string;
+  logoAlt?: string;
 }
 
-const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onToggleLang, lang = 'zh' }) => {
+const TopBarPublic: React.FC<TopBarPublicProps> = ({
+  title,
+  showBack = true,
+  onToggleLang,
+  lang = 'zh',
+  logoSrc,
+  logoAlt,
+}) => {
   const nav = useNavigate();
   const loc = useLocation();
   const current = useMemo(() => (lang || getLang()), [lang]);
@@ -31,9 +40,10 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
   };
   return (
     <header className="cue-topbar w-full flex items-center justify-between px-4">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {showBack && (
           <button
+            type="button"
             onClick={() => nav(-1)}
             aria-label="Back"
             className="cue-muted hover:brightness-95 text-xl"
@@ -41,10 +51,26 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
             ←
           </button>
         )}
-        <div className="cue-zh-title text-lg">{title}</div>
+        {logoSrc ? (
+          <button
+            type="button"
+            onClick={() => nav('/home')}
+            aria-label={logoAlt || title}
+            className="flex items-center"
+          >
+            <img
+              src={logoSrc}
+              alt={logoAlt || title}
+              className="block h-7 w-auto max-w-[150px] object-contain sm:h-8 sm:max-w-[180px] md:h-9 md:max-w-[220px]"
+            />
+          </button>
+        ) : (
+          <div className="cue-zh-title truncate text-lg">{title}</div>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={toggle}
           className="cue-button px-3 py-1 text-sm"
           aria-label="Language Toggle"
@@ -53,6 +79,7 @@ const TopBarPublic: React.FC<TopBarPublicProps> = ({ title, showBack = true, onT
         </button>
         {showLogout && (
           <button
+            type="button"
             onClick={() => { try { localStorage.removeItem('memberSession'); } catch {} nav('/members/login'); }}
             className="px-3 py-1 rounded cue-surface-strong hover:brightness-95 text-sm"
           >

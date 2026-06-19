@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import { API_URL } from './config';
 import { getLeaderboardClubsHighest, getLeaderboardMembersHighest, getNewsItems, getPublicClubs, getPublicLiveAnnouncements, getSiteAds, getSiteNotice } from './lib/api';
+import slhkLogo from './assets/slhk-logo.svg';
 
 const HomePage: React.FC = () => {
   const [notice, setNotice] = useState<any>(null);
@@ -188,7 +189,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="brand-page min-h-screen flex flex-col">
-      <TopBarPublic title="SnookerHK Live" showBack={false} />
+      <TopBarPublic title="SnookerHK Live" showBack={false} logoSrc={slhkLogo} logoAlt="SLHK" />
       <main className="flex-1 px-4 pt-4 pb-10 flex items-start justify-center">
         <div className="w-full max-w-7xl space-y-6">
           <section className="grid gap-4 lg:grid-cols-[1.65fr_0.9fr]">
