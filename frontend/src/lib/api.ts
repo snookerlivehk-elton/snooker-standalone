@@ -632,6 +632,19 @@ export async function qrTableEndConfirm(apiUrl: string, memberId: string, confir
   return res.json();
 }
 
+export async function confirmSettlement(apiUrl: string, memberId: string, settlementId: string) {
+  const res = await fetch(`${apiUrl}/api/settlements/${encodeURIComponent(settlementId)}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '確認扣分失敗');
+  }
+  return res.json();
+}
+
 export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));

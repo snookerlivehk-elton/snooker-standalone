@@ -163,4 +163,24 @@ export const pointsService = {
     const result = await pointsRepository.adjustBalance(clubId, targetMemberId, delta, reason, createdByMemberId);
     return { ok: true, memberId: targetMemberId, deltaPoints: delta, balance: result.balance, updatedAt: result.updatedAt };
   },
+
+  async quoteSettlement(settlement: {
+    clubId: string;
+    memberId: string;
+    chargedAmount?: any;
+    baseAmount?: any;
+    chargedCurrency?: string | null;
+  }) {
+    const cfg = await this.getConfigOrDefault(settlement.clubId);
+    const amountValue = Number(settlement.chargedAmount ?? settlement.baseAmount ?? 0);
+    if (!Number.isFinite(amountValue) || amountValue < 0) throw new Error('Settlement amount invalid');
+    const requiredPoints = Math.max(0, Math.ceil(amountValue * Number(cfg.pointsPerCurrency || 1)));
+    const balance = await pointsRepository.getBalance(settlement.clubId, settlement.memberId);
+    return {
+      currencyCode: String(cfg.currencyCode || settlement.chargedCurrency || 'HKD'),
+      pointsPerCurrency: String(cfg.pointsPerCurrency || '1'),
+      requiredPoints,
+      availablePoints: balance?.balance ?? 0,
+    };
+  },
 };

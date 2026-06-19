@@ -2,6 +2,12 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '../../core/db/prisma.js';
 
+type DbClient = typeof prisma | Prisma.TransactionClient;
+
+function getDb(db?: DbClient) {
+  return db || prisma;
+}
+
 const memberSelect = {
   id: true,
   name: true,
@@ -12,8 +18,8 @@ const memberSelect = {
 } as const;
 
 export const pointsRepository = {
-  getConfig(clubId: string) {
-    return prisma.clubPointsConfig.findUnique({ where: { clubId } });
+  getConfig(clubId: string, db?: DbClient) {
+    return getDb(db).clubPointsConfig.findUnique({ where: { clubId } });
   },
 
   getConfigId(clubId: string) {
@@ -73,9 +79,45 @@ export const pointsRepository = {
     return prisma.clubMember.findUnique({ where: { clubId_memberId: { clubId, memberId } } });
   },
 
-  getBalance(clubId: string, memberId: string) {
-    return prisma.pointsBalance.findUnique({
+  getBalance(clubId: string, memberId: string, db?: DbClient) {
+    return getDb(db).pointsBalance.findUnique({
       where: { clubId_memberId: { clubId, memberId } },
+      select: { balance: true, updatedAt: true },
+    });
+  },
+
+  createSettlementLedger(
+    input: {
+      clubId: string;
+      memberId: string;
+      deltaPoints: number;
+      reason: string;
+      refType: string;
+      refId: string;
+      createdByMemberId: string;
+    },
+    db?: DbClient,
+  ) {
+    return getDb(db).pointsLedger.create({
+      data: {
+        id: randomUUID(),
+        clubId: input.clubId,
+        memberId: input.memberId,
+        deltaPoints: input.deltaPoints,
+        reason: input.reason,
+        refType: input.refType,
+        refId: input.refId,
+        createdByMemberId: input.createdByMemberId,
+        createdAt: new Date(),
+      },
+    });
+  },
+
+  incrementBalance(clubId: string, memberId: string, delta: number, db?: DbClient) {
+    return getDb(db).pointsBalance.upsert({
+      where: { clubId_memberId: { clubId, memberId } },
+      update: { balance: { increment: delta } },
+      create: { id: randomUUID(), clubId, memberId, balance: delta },
       select: { balance: true, updatedAt: true },
     });
   },

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from './config';
-import { getQrTableInfo, qrTableEndConfirm, qrTableEndInit, qrTableStartConfirm, qrTableStartInit } from './lib/api';
+import { confirmSettlement, getQrTableInfo, qrTableEndConfirm, qrTableEndInit, qrTableStartConfirm, qrTableStartInit } from './lib/api';
 
 const TableQrPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ const TableQrPage: React.FC = () => {
 
   const [startConfirm, setStartConfirm] = useState<any>(null);
   const [endConfirm, setEndConfirm] = useState<any>(null);
+  const [settlementConfirm, setSettlementConfirm] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ const TableQrPage: React.FC = () => {
   const activeSession = info?.session;
   const club = info?.club;
   const table = info?.table;
+  const settlementQuote = settlementConfirm?.quotePayload || {};
 
   return (
     <div className="brand-page p-4 sm:p-6 flex items-center justify-center min-h-screen">
@@ -102,7 +104,57 @@ const TableQrPage: React.FC = () => {
               </div>
             )}
 
-            {activeSession ? (
+            {settlementConfirm ? (
+              <div className="cue-surface rounded-lg p-3 grid gap-3">
+                <div className="font-semibold">確認扣除消費積分？</div>
+                <div className="text-sm cue-muted">
+                  已落鐘，請確認本次交易。
+                </div>
+                <div className="grid gap-2 text-sm">
+                  <div>計費分鐘：{settlementConfirm?.billableMinutes ?? '-'}</div>
+                  <div>金額：{settlementConfirm?.chargedAmount ?? settlementConfirm?.baseAmount ?? '-'} {settlementConfirm?.chargedCurrency || ''}</div>
+                  <div>所需積分：{settlementQuote?.requiredPoints ?? settlementQuote?.chargedPoints ?? '-'}</div>
+                  <div>目前餘額：{settlementQuote?.availablePoints ?? '-'}</div>
+                </div>
+                {settlementQuote?.canAfford === false && (
+                  <div className="text-sm text-red-600">積分不足，未能完成扣分。</div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-surface-strong hover:brightness-95"
+                    disabled={busy}
+                    onClick={() => setSettlementConfirm(null)}
+                  >
+                    稍後處理
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded cue-button hover:brightness-95 font-bold"
+                    disabled={busy || settlementQuote?.canAfford === false}
+                    onClick={async () => {
+                      if (busy) return;
+                      setBusy(true);
+                      try {
+                        const out = await confirmSettlement(API_URL, memberId, String(settlementConfirm.id));
+                        const requiredPoints = out?.quotePayload?.requiredPoints;
+                        setToast(requiredPoints ? `已完成扣分 ${requiredPoints}` : '已完成交易');
+                        setTimeout(() => setToast(null), 3000);
+                        setSettlementConfirm(null);
+                        await refresh();
+                      } catch (e: any) {
+                        setToast(e?.message || '確認扣分失敗');
+                        setTimeout(() => setToast(null), 3000);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    確認扣分
+                  </button>
+                </div>
+              </div>
+            ) : activeSession ? (
               <>
                 {!endConfirm ? (
                   <button
@@ -150,10 +202,16 @@ const TableQrPage: React.FC = () => {
                           setBusy(true);
                           try {
                             const out = await qrTableEndConfirm(API_URL, memberId, String(endConfirm.confirmId));
-                            setToast(out?.chargedPoints ? `已落鐘，扣分 ${out.chargedPoints}` : '已落鐘');
+                            if (out?.requiresSettlementConfirmation && out?.settlement) {
+                              setSettlementConfirm(out.settlement);
+                              setInfo((prev: any) => prev ? { ...prev, session: null } : prev);
+                              setToast('已落鐘，請確認扣分');
+                            } else {
+                              setToast(out?.chargedPoints ? `已落鐘，扣分 ${out.chargedPoints}` : '已落鐘');
+                              await refresh();
+                            }
                             setTimeout(() => setToast(null), 3000);
                             setEndConfirm(null);
-                            await refresh();
                           } catch (e: any) {
                             setToast(e?.message || '確認落鐘失敗');
                             setTimeout(() => setToast(null), 3000);
@@ -248,4 +306,3 @@ const TableQrPage: React.FC = () => {
 };
 
 export default TableQrPage;
-

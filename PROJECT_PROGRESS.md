@@ -1,6 +1,6 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
-更新日期：2026-05-31（Asia/Hong_Kong）
+更新日期：2026-06-20（Asia/Hong_Kong）
 
 ## 專案定位
 
@@ -14,6 +14,54 @@ SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等�
   - `backend/` 後端 API + Prisma schema/migrations
   - `frontend/` 前端 SPA
   - `bun-service/` 額外服務（目前主流程以 frontend/backend 為主）
+
+## 最新插件化 / 結算架構進度（2026-06-20）
+
+- Backend 已進一步由大型單體重構為插件導向模組：
+  - `content`
+  - `tournaments`
+  - `highbreak`
+  - `points`
+  - `members`
+  - `booking`
+  - `qr-session`
+  - `live`
+  - `club-messages`
+  - `admin-system/features`
+  - `admin-system/members`
+- `booking`、`points`、`qr-session` 已完成 `router + service + repository` 分層，`backend/index.ts` 與 `backend/routes/club.ts` 主要轉為組合 / gateway 角色。
+- 新增 settlement 主線：
+  - `backend/src/plugins/settlement/router.ts`
+  - `backend/src/plugins/settlement/service.ts`
+  - `backend/src/plugins/settlement/repository.ts`
+- Prisma 已新增：
+  - `SessionSettlement`
+  - `SessionSettlementAttempt`
+  - `DomainEventOutbox`
+  - migration：`backend/prisma/migrations/20260620000001_add_session_settlement/`
+- 已新增設計文件：
+  - `BACKEND_PLUGIN_ARCHITECTURE_BLUEPRINT.md`
+  - `QR_SESSION_SETTLEMENT_POINTS_FLOW.md`
+
+## QR Session / Settlement / Points 新流程（2026-06-20）
+
+- 目前後端責任已改為：
+  - `qr-session`：只負責起鐘 / 落鐘 / 計時 / 建立 settlement
+  - `settlement`：負責交易狀態、quote、確認、完成
+  - `points`：負責積分換算、扣分、ledger / balance 更新
+- 會員端流程已改成二段式：
+  1. `POST /api/qr/table/end-confirm`
+     - 結束 session
+     - 建立 `SessionSettlement`
+     - 產生 points quote
+     - 狀態進入 `AWAITING_CONFIRMATION`
+  2. `POST /api/settlements/:id/confirm`
+     - 會員確認扣分
+     - `settlement` 驅動 `points` 完成交易
+- 前端 `frontend/src/TableQrPage.tsx` 已接上新流程：
+  - 掃碼落鐘後先顯示 quote
+  - 再由會員確認扣分
+- 場館 operator 落鐘目前仍維持自動完成，作為過渡方案，避免一次改動過大。
 
 ## 核心概念（已確認需求）
 

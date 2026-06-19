@@ -21,6 +21,7 @@ import { createContentRouter } from './src/plugins/content/router.js';
 import { createSystemHighbreakRouter } from './src/plugins/highbreak/router.js';
 import { createMemberRouter } from './src/plugins/members/router.js';
 import { createMemberQrSessionRouter } from './src/plugins/qr-session/memberRouter.js';
+import { createSettlementRouter } from './src/plugins/settlement/router.js';
 
 import fs from 'fs';
 import path from 'path';
@@ -471,6 +472,9 @@ app.use(createMemberRouter({
   resendApiKey: RESEND_API_KEY,
   resendFromEmail: RESEND_FROM_EMAIL,
   googleClientId: process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com',
+}));
+app.use(createSettlementRouter({
+  adminAuth,
 }));
 
 app.get('/api/admin/news/sources', adminAuth, async (_req, res) => {

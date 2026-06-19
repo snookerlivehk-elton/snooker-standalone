@@ -5,6 +5,12 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: `SessionSettlement`, `SessionSettlementAttempt`, and `DomainEventOutbox` Prisma models plus migration `20260620000001_add_session_settlement` for the new settlement orchestration layer.
+- Added: Backend `settlement` plugin with member/admin APIs for querying and confirming settlements.
+- Changed: `qr-session` no longer writes `PointsLedger` / `PointsBalance` directly; settlement completion now delegates point charging through `settlement -> points`.
+- Changed: Member QR end flow becomes two-step settlement confirmation. `POST /api/qr/table/end-confirm` now prepares a quote, and `POST /api/settlements/:id/confirm` performs the actual point deduction.
+- Changed: Frontend `TableQrPage` now shows settlement quote details before final point deduction confirmation.
+- Added: Architecture note `QR_SESSION_SETTLEMENT_POINTS_FLOW.md` documenting the new `qr-session -> settlement -> points` contract.
 - Changed: Backend enters plugin-oriented modularization checkpoint for `booking`, `qr-session`, `points`, `live`, `club-messages`, `members`, `tournaments`, `highbreak`, and admin/system modules.
 - Added: Core helper layers under `backend/src/core/booking`, `backend/src/core/club`, `backend/src/core/live`, and `backend/src/core/qr-session`.
 - Added: `service` / `repository` split for `booking`, `points`, and `qr-session` plugins to reduce business logic concentration in `backend/index.ts` and `backend/routes/club.ts`.

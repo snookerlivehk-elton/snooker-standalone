@@ -82,6 +82,7 @@ model Member {
   endedTableSessionsAsOperator TableSession[] @relation("table_session_ended_by_operator")
 
   tournamentSignups TournamentSignup[]
+  settlements SessionSettlement[]
 }
 
 model ClubProfile {
@@ -126,6 +127,7 @@ model ClubProfile {
   tableQrTokens TableQrToken[]
   tableSessions TableSession[]
   featureAccesses ClubFeatureAccess[]
+  settlements SessionSettlement[]
 }
 
 model BreakRecord {
@@ -551,6 +553,24 @@ enum TableSessionConfirmAction {
   END
 }
 
+enum SettlementPaymentMethod {
+  POINTS
+  MANUAL
+  CASH
+  WALLET
+  PACKAGE
+}
+
+enum SettlementStatus {
+  PENDING
+  QUOTED
+  AWAITING_CONFIRMATION
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model TableQrToken {
   id        String   @id @default(uuid())
   token     String   @unique
@@ -588,6 +608,7 @@ model TableSession {
   pointsLedgerId   String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  settlement       SessionSettlement?
   @@index([clubId, status])
   @@index([tableId, status])
   @@index([startedByMemberId, startAt])
@@ -607,6 +628,68 @@ model TableSessionConfirm {
   @@index([memberId, createdAt])
   @@index([token, createdAt])
   @@index([expiresAt])
+}
+
+model SessionSettlement {
+  id              String   @id @default(uuid())
+  sessionId       String   @unique
+  session         TableSession @relation(fields: [sessionId], references: [id])
+  clubId          String
+  club            ClubProfile @relation(fields: [clubId], references: [id])
+  memberId        String
+  member          Member   @relation(fields: [memberId], references: [id])
+  tableId         String
+  paymentMethod   SettlementPaymentMethod?
+  status          SettlementStatus @default(PENDING)
+  durationMinutes Int?
+  billableMinutes Int?
+  baseAmount      Decimal?
+  chargedAmount   Decimal?
+  chargedCurrency String?
+  quotePayload    Json?
+  pointsLedgerId  String?
+  confirmedAt     DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attempts        SessionSettlementAttempt[]
+
+  @@index([clubId, status, createdAt])
+  @@index([memberId, status, createdAt])
+  @@index([tableId, createdAt])
+}
+
+model SessionSettlementAttempt {
+  id              String   @id @default(uuid())
+  settlementId    String
+  settlement      SessionSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  providerKey     String
+  status          String
+  requestPayload  Json?
+  responsePayload Json?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+
+  @@index([settlementId, createdAt])
+  @@index([providerKey, createdAt])
+}
+
+model DomainEventOutbox {
+  id            String   @id @default(uuid())
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+  failedAt      DateTime?
+
+  @@index([eventType, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@index([processedAt, failedAt])
 }
 
 model TablePricingScheme {

@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { prisma } from '../../core/db/prisma.js';
+import { settlementRepository } from '../settlement/repository.js';
 
 export const qrSessionRepository = {
   listTablesWithQr(clubId: string) {
@@ -39,6 +39,16 @@ export const qrSessionRepository = {
     return prisma.tableSession.findMany({
       where: { clubId, status: 'ACTIVE' },
       orderBy: [{ startAt: 'desc' }],
+      include: {
+        table: { select: { id: true, name: true } },
+        startedBy: { select: { id: true, name: true, email: true, member_code: true } },
+      },
+    });
+  },
+
+  getSessionById(sessionId: string) {
+    return prisma.tableSession.findUnique({
+      where: { id: sessionId },
       include: {
         table: { select: { id: true, name: true } },
         startedBy: { select: { id: true, name: true, email: true, member_code: true } },
@@ -150,31 +160,74 @@ export const qrSessionRepository = {
       const featurePoints = !!pointsAssignment.assignedEnabled;
       const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId } });
       const billing = calcFn({ session, cfg, featurePoints });
+      const durationMinutes = Math.max(0, Math.ceil((now.getTime() - new Date(session.startAt).getTime()) / 60000));
 
-      let pointsLedgerId: string | null = null;
-      if (featurePoints && billing.chargedPoints > 0) {
-        pointsLedgerId = randomUUID();
-        await tx.pointsLedger.create({
-          data: {
-            id: pointsLedgerId,
-            clubId,
-            memberId: session.startedByMemberId,
-            deltaPoints: -billing.chargedPoints,
-            reason: `台費抵扣（${session.table.name}）`,
-            refType: 'TABLE_SESSION',
-            refId: session.id,
-            createdByMemberId: operatorId,
-            createdAt: now,
-          },
-        });
-        await tx.pointsBalance.upsert({
-          where: { clubId_memberId: { clubId, memberId: session.startedByMemberId } },
-          update: { balance: { increment: -billing.chargedPoints } },
-          create: { id: randomUUID(), clubId, memberId: session.startedByMemberId, balance: -billing.chargedPoints },
-        });
-      }
+      const settlement = await settlementRepository.createSettlement({
+        sessionId: session.id,
+        clubId,
+        memberId: session.startedByMemberId,
+        tableId: session.tableId,
+        paymentMethod: featurePoints && billing.chargedPoints > 0 ? 'POINTS' : 'MANUAL',
+        status: featurePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+        durationMinutes,
+        billableMinutes: billing.billedMinutes,
+        baseAmount: billing.amount == null ? null : String(billing.amount),
+        chargedAmount: billing.amount == null ? null : String(billing.amount),
+        chargedCurrency: billing.currency,
+        quotePayload: {
+          chargedPoints: billing.chargedPoints || 0,
+          mode: featurePoints && billing.chargedPoints > 0 ? 'points_settlement' : 'manual_transition',
+          endedBy: 'operator',
+        },
+        confirmedAt: featurePoints && billing.chargedPoints > 0 ? null : now,
+        completedAt: featurePoints && billing.chargedPoints > 0 ? null : now,
+      }, tx);
 
-      return tx.tableSession.update({
+      await settlementRepository.createAttempt({
+        settlementId: settlement.id,
+        providerKey: featurePoints && billing.chargedPoints > 0 ? 'points' : 'manual',
+        status: featurePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+        requestPayload: {
+          sessionId: session.id,
+          billableMinutes: billing.billedMinutes,
+          chargedAmount: billing.amount == null ? null : String(billing.amount),
+        },
+        responsePayload: {
+          chargedPoints: billing.chargedPoints || 0,
+        },
+      }, tx);
+
+      await settlementRepository.createOutbox({
+        eventType: 'table_session.ended',
+        aggregateType: 'table_session',
+        aggregateId: session.id,
+        payload: {
+          sessionId: session.id,
+          clubId,
+          memberId: session.startedByMemberId,
+          tableId: session.tableId,
+          durationMinutes,
+          billableMinutes: billing.billedMinutes,
+          baseAmount: billing.amount == null ? null : String(billing.amount),
+          currency: billing.currency,
+          endedAt: now.toISOString(),
+        },
+      }, tx);
+
+      await settlementRepository.createOutbox({
+        eventType: featurePoints && billing.chargedPoints > 0 ? 'settlement.created' : 'settlement.completed',
+        aggregateType: 'session_settlement',
+        aggregateId: settlement.id,
+        payload: {
+          settlementId: settlement.id,
+          sessionId: session.id,
+          status: featurePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+          paymentMethod: featurePoints && billing.chargedPoints > 0 ? 'POINTS' : 'MANUAL',
+          createdAt: now.toISOString(),
+        },
+      }, tx);
+
+      const sessionRow = await tx.tableSession.update({
         where: { id: session.id },
         data: {
           status: 'ENDED',
@@ -184,14 +237,15 @@ export const qrSessionRepository = {
           billedMinutes: billing.billedMinutes,
           chargedAmount: billing.amount == null ? null : String(billing.amount),
           chargedCurrency: billing.currency,
-          chargedPoints: billing.chargedPoints || null,
-          pointsLedgerId,
+          chargedPoints: null,
+          pointsLedgerId: null,
         },
         include: {
           table: { select: { id: true, name: true } },
           startedBy: { select: { id: true, name: true, email: true, member_code: true } },
         },
       });
+      return { session: sessionRow, settlement };
     });
   },
 
@@ -229,33 +283,76 @@ export const qrSessionRepository = {
       const enablePoints = featureMap.points !== false && pointsAssignment.assignedEnabled;
       const cfg = await tx.clubPointsConfig.findUnique({ where: { clubId: s.clubId } });
       const billing = calcFn({ session: s, cfg, enablePoints });
+      const durationMinutes = Math.max(0, Math.ceil((now.getTime() - new Date(s.startAt).getTime()) / 60000));
 
       await tx.tableSessionConfirm.update({ where: { id: c.id }, data: { consumedAt: now } });
 
-      let pointsLedgerId: string | null = null;
-      if (enablePoints && billing.chargedPoints > 0) {
-        pointsLedgerId = randomUUID();
-        await tx.pointsLedger.create({
-          data: {
-            id: pointsLedgerId,
-            clubId: s.clubId,
-            memberId,
-            deltaPoints: -billing.chargedPoints,
-            reason: `台費抵扣（${s.table.name}）`,
-            refType: 'TABLE_SESSION',
-            refId: s.id,
-            createdByMemberId: memberId,
-            createdAt: now,
-          },
-        });
-        await tx.pointsBalance.upsert({
-          where: { clubId_memberId: { clubId: s.clubId, memberId } },
-          update: { balance: { increment: -billing.chargedPoints } },
-          create: { id: randomUUID(), clubId: s.clubId, memberId, balance: -billing.chargedPoints },
-        });
-      }
+      const settlement = await settlementRepository.createSettlement({
+        sessionId: s.id,
+        clubId: s.clubId,
+        memberId,
+        tableId: s.tableId,
+        paymentMethod: enablePoints && billing.chargedPoints > 0 ? 'POINTS' : 'MANUAL',
+        status: enablePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+        durationMinutes,
+        billableMinutes: billing.billedMinutes,
+        baseAmount: billing.amount == null ? null : String(billing.amount),
+        chargedAmount: billing.amount == null ? null : String(billing.amount),
+        chargedCurrency: billing.currency,
+        quotePayload: {
+          chargedPoints: billing.chargedPoints || 0,
+          mode: enablePoints && billing.chargedPoints > 0 ? 'points_settlement' : 'manual_transition',
+          endedBy: 'member',
+        },
+        confirmedAt: enablePoints && billing.chargedPoints > 0 ? null : now,
+        completedAt: enablePoints && billing.chargedPoints > 0 ? null : now,
+      }, tx);
 
-      return tx.tableSession.update({
+      await settlementRepository.createAttempt({
+        settlementId: settlement.id,
+        providerKey: enablePoints && billing.chargedPoints > 0 ? 'points' : 'manual',
+        status: enablePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+        requestPayload: {
+          sessionId: s.id,
+          billableMinutes: billing.billedMinutes,
+          chargedAmount: billing.amount == null ? null : String(billing.amount),
+        },
+        responsePayload: {
+          chargedPoints: billing.chargedPoints || 0,
+        },
+      }, tx);
+
+      await settlementRepository.createOutbox({
+        eventType: 'table_session.ended',
+        aggregateType: 'table_session',
+        aggregateId: s.id,
+        payload: {
+          sessionId: s.id,
+          clubId: s.clubId,
+          memberId,
+          tableId: s.tableId,
+          durationMinutes,
+          billableMinutes: billing.billedMinutes,
+          baseAmount: billing.amount == null ? null : String(billing.amount),
+          currency: billing.currency,
+          endedAt: now.toISOString(),
+        },
+      }, tx);
+
+      await settlementRepository.createOutbox({
+        eventType: enablePoints && billing.chargedPoints > 0 ? 'settlement.created' : 'settlement.completed',
+        aggregateType: 'session_settlement',
+        aggregateId: settlement.id,
+        payload: {
+          settlementId: settlement.id,
+          sessionId: s.id,
+          status: enablePoints && billing.chargedPoints > 0 ? 'PENDING' : 'COMPLETED',
+          paymentMethod: enablePoints && billing.chargedPoints > 0 ? 'POINTS' : 'MANUAL',
+          createdAt: now.toISOString(),
+        },
+      }, tx);
+
+      const sessionRow = await tx.tableSession.update({
         where: { id: s.id },
         data: {
           status: 'ENDED',
@@ -265,10 +362,11 @@ export const qrSessionRepository = {
           billedMinutes: billing.billedMinutes,
           chargedAmount: billing.amount == null ? null : String(billing.amount),
           chargedCurrency: billing.currency,
-          chargedPoints: billing.chargedPoints || null,
-          pointsLedgerId,
+          chargedPoints: null,
+          pointsLedgerId: null,
         },
       });
+      return { session: sessionRow, settlement };
     });
   },
 };

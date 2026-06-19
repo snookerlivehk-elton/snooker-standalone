@@ -4,6 +4,7 @@ import { prisma } from '../../core/db/prisma.js';
 import { isFeatureEnabled } from '../../core/features/featureAccess.js';
 import { calcBilledMinutes, calcChargedAmount, calcChargedPoints } from '../../core/qr-session/billing.js';
 import { qrSessionRepository } from './repository.js';
+import { settlementService } from '../settlement/service.js';
 
 export const qrSessionService = {
   async listTablesWithQr(clubId: string) {
@@ -26,7 +27,7 @@ export const qrSessionService = {
   async endSessionByOperator(clubId: string, operatorId: string, sessionId: string) {
     const now = new Date();
     const pointsGlobalEnabled = await isFeatureEnabled('points');
-    return qrSessionRepository.endSessionByOperator(
+    const result = await qrSessionRepository.endSessionByOperator(
       clubId,
       sessionId,
       operatorId,
@@ -45,6 +46,12 @@ export const qrSessionService = {
         } as any;
       },
     );
+    if (result.settlement.paymentMethod === 'POINTS') {
+      const settlement = await settlementService.completeSettlement(result.settlement.id, operatorId);
+      const session = await qrSessionRepository.getSessionById(result.session.id);
+      return { ...(session || result.session), settlement };
+    }
+    return { ...result.session, settlement: result.settlement };
   },
 
   async getTableInfo(memberId: string, token: string) {
@@ -138,7 +145,7 @@ export const qrSessionService = {
 
   async confirmEnd(memberId: string, confirmId: string, featureMap: Record<string, boolean>) {
     const now = new Date();
-    return qrSessionRepository.confirmEnd(
+    const result = await qrSessionRepository.confirmEnd(
       confirmId,
       memberId,
       now,
@@ -155,5 +162,11 @@ export const qrSessionService = {
         };
       },
     );
+    if (result.settlement.paymentMethod === 'POINTS') {
+      const settlement = await settlementService.prepareSettlementQuote(result.settlement.id, memberId);
+      const session = await qrSessionRepository.getSessionById(result.session.id);
+      return { ...(session || result.session), settlement, requiresSettlementConfirmation: true };
+    }
+    return { ...result.session, settlement: result.settlement };
   },
 };
