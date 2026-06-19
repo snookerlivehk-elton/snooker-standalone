@@ -5,6 +5,10 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Changed: Backend enters plugin-oriented modularization checkpoint for `booking`, `qr-session`, `points`, `live`, `club-messages`, `members`, `tournaments`, `highbreak`, and admin/system modules.
+- Added: Core helper layers under `backend/src/core/booking`, `backend/src/core/club`, `backend/src/core/live`, and `backend/src/core/qr-session`.
+- Added: `service` / `repository` split for `booking`, `points`, and `qr-session` plugins to reduce business logic concentration in `backend/index.ts` and `backend/routes/club.ts`.
+- Changed: `backend/index.ts` and `backend/routes/club.ts` now mainly act as composition/gateway layers by mounting plugin routers instead of directly owning large business flows.
 - Added: Postgres service in Compose (port 5433) and `DATABASE_URL`.
 - Added: Prisma schema aligned to DB proposal; migrations and client generation.
 - Added: `/health/db` endpoint for DB connectivity.

@@ -285,3 +285,93 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - frontend：
   - `npm i`
   - `npm run dev` / `npm run build`
+
+## 最新已完成：Backend 插件化重構 Checkpoint（2026-06-20）
+
+### 目標
+
+- 將 backend 從大型單體路由逐步重構成「模組化單體 + 插件式組合」
+- 為之後進一步落地「功能可獨立擴建 / 改動 / 下架 / 拔除」打基礎
+- 先完成 router module 化，再把高耦合模組往 `service / repository` 分層
+
+### 已完成的 plugin / module 拆分
+
+- `content`
+- `members`
+- `admin-system/features`
+- `admin-system/members`
+- `tournaments`
+- `highbreak`
+- `points`
+- `booking`
+- `qr-session`
+- `live`
+- `club-messages`
+
+### 已新增的 core 層
+
+- `backend/src/core/db/prisma.ts`
+- `backend/src/core/auth/adminAuth.ts`
+- `backend/src/core/club/access.ts`
+- `backend/src/core/features/featureAccess.ts`
+- `backend/src/core/utils/query.ts`
+- `backend/src/core/members/utils.ts`
+- `backend/src/core/booking/pricing.ts`
+- `backend/src/core/qr-session/billing.ts`
+- `backend/src/core/live/utils.ts`
+- `backend/src/core/club/messages.ts`
+
+### 本次結構性變更
+
+- `backend/index.ts`
+  - 已由大量業務 API 主檔，收斂為 system router composition / bootstrap 角色
+  - 會員端 QR 掃碼起鐘 / 落鐘流程已抽到 `backend/src/plugins/qr-session/memberRouter.ts`
+- `backend/routes/club.ts`
+  - 已由大型球會業務聚合路由，收斂為 club feature gateway / router composition 角色
+  - 已不再直接承擔以下大段實作：
+    - `points`
+    - `booking`
+    - `qr-session`
+    - `live-announcements`
+    - `club-messages`
+    - `tournaments`
+    - `highbreak`
+
+### 已完成 `service / repository` 分層的模組
+
+- `points`
+  - `backend/src/plugins/points/router.ts`
+  - `backend/src/plugins/points/service.ts`
+  - `backend/src/plugins/points/repository.ts`
+- `qr-session`
+  - `backend/src/plugins/qr-session/clubRouter.ts`
+  - `backend/src/plugins/qr-session/memberRouter.ts`
+  - `backend/src/plugins/qr-session/service.ts`
+  - `backend/src/plugins/qr-session/repository.ts`
+- `booking`
+  - `backend/src/plugins/booking/router.ts`
+  - `backend/src/plugins/booking/service.ts`
+  - `backend/src/plugins/booking/repository.ts`
+
+### 本次對未來插件化的意義
+
+- router 已可逐步改成 plugin registration / manifest 掛載
+- service 已可逐步變成功能合約層（feature contract）
+- repository 已開始形成各功能自己的資料 ownership 邊界
+- 後續若要做「功能可停用 / 拔除 / 收費上架」，風險和改動面已較之前明顯下降
+
+### 本次驗證
+
+- `backend npm run build` 已通過
+- 本階段重構以 source code 為主，暫未改動 Prisma schema 邏輯
+
+### 下一步建議
+
+- 建立 `plugin manifest / registry` 骨架
+- 將現有 plugin 的 feature gate / mount metadata 收斂到 manifest
+- 規劃 core vs plugin 的正式 contract：
+  - `member context`
+  - `club context`
+  - `feature access`
+  - `plugin routes`
+  - `plugin migrations ownership`
