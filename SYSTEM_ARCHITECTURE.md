@@ -2,11 +2,11 @@
 
 ## 1. System Overview
 
-This system is a **Snooker Match Management and Scoring Platform**. It provides real-time scoring, match statistics tracking, member management, and historical data analysis.
+This system is a **Snooker club operations and member platform**. It provides member management, club dashboards, reservations, QR sessions, points, news, leaderboards, and historical match/break data analysis.
 
 ### Tech Stack
 *   **Frontend**: React (Vite), TypeScript, Tailwind CSS.
-*   **Backend**: Node.js, Express, Socket.io.
+*   **Backend**: Node.js, Express.
 *   **Database**: PostgreSQL (via Prisma ORM).
 *   **Deployment**: Railway (Backend + DB), GitHub Pages (Frontend).
 *   **External Services**: Resend (Email Verification).
@@ -18,17 +18,17 @@ This system is a **Snooker Match Management and Scoring Platform**. It provides 
 ```
 snooker-standalone/
 ├── backend/                # Node.js Backend
-│   ├── index.ts            # Main application entry point (API + Socket.io)
+│   ├── index.ts            # Main application entry point (REST API)
 │   ├── prisma/             # Database schema and migrations
 │   │   └── schema.prisma   # Data model definition
 │   └── scripts/            # Utility scripts (e.g., db maintenance)
 ├── frontend/               # React Frontend
 │   ├── src/
-│   │   ├── components/     # UI Components (PlayerCard, etc.)
-│   │   ├── lib/            # Core Logic (Game State, Stats, API wrappers)
-│   │   ├── Scoreboard.tsx  # Main Scoring Interface
-│   │   ├── Setup.tsx       # Match Setup Interface
-│   │   ├── MemberProfile.tsx # Member Stats & History
+│   │   ├── components/     # Shared UI components
+│   │   ├── lib/            # API wrappers, feature flags, shared helpers
+│   │   ├── HomePage.tsx    # System portal entry
+│   │   ├── VenueDashboard.tsx # Club management dashboard
+│   │   ├── Me.tsx          # Member portal
 │   │   └── ...
 └── ...
 ```
@@ -37,99 +37,82 @@ snooker-standalone/
 
 ## 3. Database Schema (PostgreSQL / Prisma)
 
-The database is designed to store member identities, match history, and detailed event logs.
+The database is designed to store member identities, club operations data, match history, and leaderboard-related records.
 
 ### Key Tables
 *   **`Member`**: Stores user info (Email, Name, Password Hash, Role, Member Code).
     *   *Note*: `email` is unique and case-insensitive (via application logic).
-*   **`Room`**: Persistent storage for active match rooms (ID like `AAAAA0001`).
-    *   Used to restore state if the server restarts.
-    *   *Cleanup*: Logic exists to remove rooms older than 7 days.
 *   **`Match`**: The central record for a match.
-    *   Links to `Room` (optional) and `Member` (Winner, Operator).
+    *   Links to `Member` (Winner, Operator).
     *   Stores meta-data: `frames_required`, `red_balls`, `started_at`, `ended_at`.
 *   **`MatchPlayer`**: Performance data for a specific player in a specific match.
     *   Stores computed stats: `pot_rate`, `max_break`, `avg_shot_time`, etc.
-*   **`MatchStats`**: Aggregate stats for the match (e.g., total events).
-*   **`Event`**: Detailed log of every action (Pot, Miss, Foul) for replay and deep analysis.
+*   **`BreakRecord`**: Stores high-break related records and club leaderboard data.
+*   **`Club*` / `Table*` / `Reservation*` / `Points*`**: Support club profile, booking, QR session billing, and points operations.
 *   **`EmailVerification`**: Temporary storage for 6-digit verification codes.
 
 ---
 
 ## 4. Backend Architecture (`backend/index.ts`)
 
-The backend serves as both a REST API and a Real-time WebSocket server.
+The backend serves as a REST API with feature-gated modules for clubs and members.
 
 ### Key Modules
 1.  **Authentication**:
     *   **Login**: `/api/members/login` - Verifies email/password (SHA-256 + Salt). Handles case-sensitivity fallback.
     *   **Register**: `/api/members/register` - Creates new members.
-    *   **Verification**: `/api/match-verification-code` - Sends emails via Resend.
-2.  **Match Management**:
-    *   **Start Match**: `/api/matches` or `/api/matches/partial` - Initializes a match record.
-    *   **Append Events**: `/api/matches/:id/events` - Batched upload of scoring events.
-    *   **Finalize**: `/api/matches/:id/finalize` - Called at match end to compute and save final `MatchStats`.
-3.  **Real-time Sync (Socket.io)**:
-    *   **Rooms**: Clients join rooms (e.g., `socket.join('AAAAA0001')`).
-    *   **State Update**: Server broadcasts `gameState updated` events to keep viewers in sync.
+    *   **Verification**: Password reset and email verification flows use Resend.
+2.  **Club Operations**:
+    *   **Club Dashboard**: Club profile, member management, messaging, live announcements, and pricing/tables.
+    *   **Reservations / QR Sessions**: Booking, table sessions, and billing workflows.
+    *   **Points / Leaderboards**: Points ledger, balances, breaks, and rankings.
+3.  **System Admin**:
+    *   **Feature Flags**: Admin endpoints manage platform-wide feature availability.
+    *   **Overview / Maintenance**: Health checks, admin overview, and controlled maintenance routes.
 
 ### Important Functions
-*   **`finalizeMatch` (API)**: Critical transaction that updates `Match`, `MatchStats`, `MatchPlayer`, and `FoulTotals` atomically.
 *   **`resolveDistrictCode`**: Logic to generate HK district-based member codes (e.g., `N-YL-0001`).
 
 ---
 
 ## 5. Frontend Architecture
 
-The frontend is a Single Page Application (SPA) driven by a robust state machine.
+The frontend is a Single Page Application (SPA) organized around portals and club operations workflows.
 
 ### Core Logic Libraries (`frontend/src/lib/`)
-*   **`State.ts`**: **The Brain**. A class representing the immutable state of a Snooker frame (score, balls on table, current player).
-    *   Methods: `pot(ball)`, `miss()`, `foul()`, `undo()`.
-    *   *Immutability*: Each action returns a *new* `State` instance, enabling easy Undo/Redo.
-*   **`StatsEngine.ts`**: **The Analyst**. Calculates statistics (Pot Success %, Break Building) by replaying the event stream.
-    *   Used by `Scoreboard` to prepare data for upload.
-*   **`RoomStorage.ts`**: **The Persistence Layer**.
-    *   Wraps `localStorage` to save match state locally (prevents data loss on refresh).
-    *   Manages the queue of events waiting to be uploaded to the backend.
+*   **`api.ts`**: Main frontend API wrapper for member, admin, and club operations.
+*   **`features.ts`**: Feature flag loader and cache for conditional UI and route access.
+*   **`i18n.ts`**: Shared labels and localized text utilities.
 
 ### Key Views
-1.  **`Setup.tsx`**:
-    *   Handles Member Lookup (by Email).
-    *   Sends/Verifies Email Codes.
-    *   Configures Match Rules (Red balls, Handicap).
-    *   *Logic*: Decides whether to create a "Ranked Match" (DB record) or "Guest Match".
-2.  **`Scoreboard.tsx`**:
-    *   The main interface.
-    *   Captures user input -> Updates `State` -> Appends to `RoomStorage` -> Triggers Upload.
-    *   Handles "End Frame" and "Match Over" logic (redirects to Live View).
-3.  **`MemberProfile.tsx`**:
-    *   Displays member stats and match history.
+1.  **`HomePage.tsx`**:
+    *   System portal entry that aggregates venue, ranking, and news content.
+2.  **`VenueDashboard.tsx`**:
+    *   Main club management surface for profile, members, messages, reservations, tables, points, and tournaments.
+3.  **`Me.tsx`**:
+    *   Displays member profile, stats, and match history.
     *   Fetches data from `/api/members/:id` and `/api/members/:id/matches`.
 
 ---
 
 ## 6. Key Workflows & Logic
 
-### A. Match Lifecycle
-1.  **Initialization**: User enters emails in `Setup`. System verifies members.
-2.  **Creation**: `startMatchV2` calls backend. Backend creates `Match` and returns `matchId`.
-3.  **Scoring**:
-    *   User clicks ball -> `State.pot(ball)`.
-    *   Event stored in `localStorage`.
-    *   `uploadSegment` runs periodically to sync events to Backend.
-4.  **Completion**:
-    *   Match ends -> Frontend calculates final stats using `StatsEngine`.
-    *   Frontend calls `finalizeMatch` with full stats payload.
-    *   Backend saves stats and marks match as finished.
+### A. Member & Club Lifecycle
+1.  **Authentication**: Members or operators log in via `/members/login`.
+2.  **Club Access**: Feature-gated routes expose club dashboard modules based on system and club-level permissions.
+3.  **Operations**:
+    *   Staff manage profile, members, content, announcements, pricing, tables, and reservations.
+    *   Members view stats, match history, and personal information in the member portal.
+4.  **Billing / QR**:
+    *   QR session and reservation flows connect tables, pricing schemes, points, and settlement logic.
 
 ### B. Verification Logic
-*   To prevent unauthorized ranked matches, players must verify ownership of their Member Email via a 6-digit code sent to their inbox.
+*   Password reset and email verification flows rely on 6-digit codes sent to the member inbox.
 *   Codes expire in 10 minutes.
 
 ### C. Operator Mode
-*   Special `ADMIN` or `Operator` users can manage rooms.
-*   Operators have a dashboard to see active rooms and historical records.
+*   `ADMIN` or operator-capable members can manage their club via `VenueDashboard`.
+*   Operators use the dashboard for club operations instead of legacy room-based match hosting.
 
 ---
 

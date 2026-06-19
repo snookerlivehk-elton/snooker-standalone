@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { API_URL, SOCKET_URL, SOCKET_PATH } from './config';
+import { API_URL } from './config';
 import { listMembers, updateMember, deleteMember } from './lib/api';
 
 const AdminMembers: React.FC = () => {
@@ -199,16 +199,6 @@ const AdminMembers: React.FC = () => {
             >
               會員註冊
             </Link>
-            <button
-              onClick={() => {
-                const tok = localStorage.getItem('adminToken') || '';
-                const url = `${window.location.origin}/admin?apiUrl=${encodeURIComponent(API_URL)}&socketUrl=${encodeURIComponent(SOCKET_URL)}&socketPath=${encodeURIComponent(SOCKET_PATH)}${tok ? `&token=${encodeURIComponent(tok)}` : ''}&v=admin`;
-                window.location.href = url;
-              }}
-              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-            >
-              Admin Panel
-            </button>
           </div>
         </div>
 

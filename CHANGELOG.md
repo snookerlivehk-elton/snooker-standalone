@@ -25,5 +25,5 @@ Unreleased
   - Widened scoreboard bar width (~85vw) without changing height or font.
   - Added left/right yellow triangle indicators with opacity toggle to avoid layout shift.
   - Enlarged central frames font size for readability.
-- LiveView/Scoreboard
-  - Socket.IO client configured with `transports: ['websocket']` and `path: '/socket.io'` to prevent polling aborts.
+- Legacy scoring stack
+  - Historical note only: previous Overlay / LiveView / Scoreboard socket tuning has been superseded because the entire legacy scoring flow was removed in 2026-06.

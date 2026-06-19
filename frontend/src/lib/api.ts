@@ -1,66 +1,3 @@
-// Minimal API helpers for Plan A; future-proofed for B/B+
-type Headers = Record<string, string>;
-
-function buildHeaders(writeToken?: string): Headers {
-  const headers: Headers = { 'Content-Type': 'application/json' };
-  if (writeToken) headers['x-write-token'] = writeToken;
-  return headers;
-}
-
-export async function createMatch(
-  apiUrl: string,
-  roomId: string,
-  match: any,
-  players: any[],
-  timestamps: { start: number | null },
-  writeToken?: string,
-  operatorId?: string,
-) {
-  const res = await fetch(`${apiUrl}/api/matches`, {
-    method: 'POST',
-    headers: buildHeaders(writeToken),
-    body: JSON.stringify({ roomId, match, players, timestamps, operatorId }),
-  });
-  if (!res.ok) throw new Error(`建立比賽失敗 (${res.status})`);
-  return res.json(); // { matchId }
-}
-
-export async function createMatchStrict(
-  apiUrl: string,
-  roomId: string,
-  match: any,
-  players: Array<{ name: string; memberId: string }>,
-  timestamps: { start: number | null },
-  writeToken?: string,
-  operatorId?: string,
-) {
-  const res = await fetch(`${apiUrl}/api/matches/strict`, {
-    method: 'POST',
-    headers: buildHeaders(writeToken),
-    body: JSON.stringify({ roomId, match, players, timestamps, operatorId }),
-  });
-  if (!res.ok) throw new Error(`建立比賽失敗（strict）(${res.status})`);
-  return res.json(); // { matchId }
-}
-
-export async function createMatchPartial(
-  apiUrl: string,
-  roomId: string,
-  match: any,
-  players: Array<{ name: string; memberId: string | null }>,
-  timestamps: { start: number | null },
-  writeToken?: string,
-  operatorId?: string,
-) {
-  const res = await fetch(`${apiUrl}/api/matches/partial`, {
-    method: 'POST',
-    headers: buildHeaders(writeToken),
-    body: JSON.stringify({ roomId, match, players, timestamps, operatorId }),
-  });
-  if (!res.ok) throw new Error(`建立比賽失敗（partial）(${res.status})`);
-  return res.json() as Promise<{ matchId: string; acceptedMemberIds: string[] }>;
-}
-
 // Club API
 export async function getClubProfile(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/my-profile`, {
@@ -1093,21 +1030,6 @@ export async function cancelTournamentSignup(apiUrl: string, memberId: string, t
   return res.json();
 }
 
-// Match Invite APIs
-export async function sendMatchInvites(apiUrl: string, roomId: string, operatorId: string | undefined, emails: string[]) {
-  if (!operatorId) throw new Error('Missing operatorId');
-  const res = await fetch(`${apiUrl}/api/matches/invite`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-member-id': operatorId },
-    body: JSON.stringify({ room_id: roomId, operator_id: operatorId, emails })
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `發送比賽通知失敗 (${res.status})`);
-  }
-  return res.json() as Promise<{ invited: Array<{ email: string; memberId: string; token: string }>; notFound: string[] }>;
-}
-
 export async function getMyInvites(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/matches/invites/my`, {
     headers: { 'x-member-id': memberId }
@@ -1130,71 +1052,6 @@ export async function acceptInvite(apiUrl: string, token: string, memberId?: str
     throw new Error(err.error || `確認邀請失敗 (${res.status})`);
   }
   return res.json() as Promise<{ ok: true; roomId: string }>;
-}
-
-export async function getRoomInvites(apiUrl: string, roomId: string) {
-  const res = await fetch(`${apiUrl}/rooms/${encodeURIComponent(roomId)}/invites`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `讀取房間邀請失敗 (${res.status})`);
-  }
-  return res.json() as Promise<{ invites: Array<{ id: string; memberId: string; status: string; member?: { id: string; name: string; email: string } }> }>;
-}
-
-export async function deleteOperatorRoom(apiUrl: string, roomId: string) {
-  const res = await fetch(`${apiUrl}/api/rooms/${roomId}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok && res.status !== 204) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `刪除房間失敗 (${res.status})`);
-  }
-  return true;
-}
-
-export async function startMatchV2(
-  apiUrl: string,
-  payload: {
-    p1_email?: string;
-    p2_email?: string;
-    room_id: string;
-    operator_id?: string;
-    frames_required: number;
-    red_balls: number;
-    handicap0: number;
-    handicap1: number;
-  }
-) {
-  const res = await fetch(`${apiUrl}/api/matches/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `建立比賽失敗 (${res.status})`);
-  }
-  return res.json() as Promise<{ 
-    mode: 'ranked' | 'guest'; 
-    matchId: string;
-    p1MemberId: string | null;
-    p2MemberId: string | null;
-  }>;
-}
-
-export async function appendEvents(
-  apiUrl: string,
-  matchId: string,
-  events: any[],
-  writeToken?: string,
-) {
-  const res = await fetch(`${apiUrl}/api/matches/${matchId}/events`, {
-    method: 'POST',
-    headers: buildHeaders(writeToken),
-    body: JSON.stringify({ events }),
-  });
-  if (!res.ok) throw new Error(`上傳事件失敗 (${res.status})`);
-  return res.json(); // { accepted }
 }
 
 export async function getMyTables(apiUrl: string, memberId: string) {
@@ -1437,28 +1294,6 @@ export async function cancelMyReservation(apiUrl: string, clubId: string, member
   return res.json();
 }
 
-export async function finalizeMatch(
-  apiUrl: string,
-  matchId: string,
-  payload: {
-    foulTotals: any,
-    stats: any,
-    timestamps: { end: number | null },
-    winnerMemberId: string | null,
-    playersFinal?: Array<{ name: string; memberId?: string | null; framesWon?: number; score?: number }>,
-    match?: any,
-  },
-  writeToken?: string,
-) {
-  const res = await fetch(`${apiUrl}/api/matches/${matchId}/finalize`, {
-    method: 'POST',
-    headers: buildHeaders(writeToken),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Finalize 失敗 (${res.status})`);
-  return res.json();
-}
-
 // Members API
 export async function registerMember(
   apiUrl: string,
@@ -1549,19 +1384,6 @@ export async function getMemberMatches(
   return res.json(); // { matches: [] }
 }
 
-export async function validateMembers(
-  apiUrl: string,
-  identifiers: string[],
-) {
-  const res = await fetch(`${apiUrl}/api/members/validate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifiers }),
-  });
-  if (!res.ok) throw new Error(`驗證會員失敗 (${res.status})`);
-  return res.json() as Promise<{ exists: Record<string, boolean>; names: Record<string, string> }>;
-}
-
 export async function requestPasswordResetCode(apiUrl: string, email: string) {
   const res = await fetch(`${apiUrl}/api/members/request-password-reset-code`, {
     method: 'POST',
@@ -1586,49 +1408,6 @@ export async function resetPasswordWithCode(apiUrl: string, payload: { email: st
     throw new Error(err.error || `重設密碼失敗 (${res.status})`);
   }
   return res.json();
-}
-
-// Operator API
-export async function createOperatorRoom(apiUrl: string, operatorId: string) {
-  const res = await fetch(`${apiUrl}/api/operators/${operatorId}/rooms`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-member-id': operatorId },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `建立房間失敗 (${res.status})`);
-  }
-  return res.json(); // { roomCode }
-}
-
-export async function getOperatorActiveRooms(apiUrl: string, operatorId: string) {
-  const url = new URL(`${apiUrl}/api/operators/${operatorId}/active-rooms`);
-  url.searchParams.set('t', String(Date.now()));
-  const res = await fetch(url.toString(), { cache: 'no-store', headers: { 'x-member-id': operatorId } });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `取得活躍房間失敗 (${res.status})`);
-  }
-  return res.json(); // { rooms: [] }
-}
-
-export async function getOperatorMatches(apiUrl: string, operatorId: string) {
-  const url = new URL(`${apiUrl}/api/operators/${operatorId}/matches`);
-  url.searchParams.set('t', String(Date.now()));
-  const res = await fetch(url.toString(), { cache: 'no-store', headers: { 'x-member-id': operatorId } });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || `取得操作員歷史失敗 (${res.status})`);
-  }
-  return res.json(); // { matches: [] }
-}
-
-export async function listRooms(apiUrl: string) {
-  const url = new URL(`${apiUrl}/api/rooms`);
-  url.searchParams.set('t', String(Date.now()));
-  const res = await fetch(url.toString(), { cache: 'no-store' });
-  if (!res.ok) throw new Error(`讀取房間列表失敗 (${res.status})`);
-  return res.json() as Promise<any[]>;
 }
 
 // Admin / Lists
@@ -1891,32 +1670,6 @@ export async function deleteAdminMemberDistrict(
     headers: { 'x-admin-token': adminToken },
   });
   if (!res.ok) throw new Error(`刪除分區失敗 (${res.status})`);
-  return res.json();
-}
-
-export interface ValidateMembersResponse {
-  exists: Record<string, boolean>;
-  names?: Record<string, string | null>;
-}
-
-// Admin Matches
-export async function listAdminMatches(
-  apiUrl: string,
-  adminToken: string,
-  options?: { memberId?: string; page?: number; pageSize?: number }
-) {
-  const params = new URLSearchParams();
-  if (options?.memberId) params.append('memberId', options.memberId);
-  if (options?.page) params.append('page', String(options.page));
-  if (options?.pageSize) params.append('pageSize', String(options.pageSize));
-
-  const query = params.toString();
-  const url = `${apiUrl}/api/admin/matches${query ? `?${query}` : ''}`;
-
-  const res = await fetch(url, {
-    headers: { 'x-admin-token': adminToken },
-  });
-  if (!res.ok) throw new Error(`取得比賽列表失敗 (${res.status})`);
   return res.json();
 }
 

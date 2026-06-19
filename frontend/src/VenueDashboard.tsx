@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_URL, SOCKET_URL } from './config';
-import { createOperatorRoom, getOperatorMatches, getOperatorActiveRooms, updateMemberSelf, deleteOperatorRoom, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, updateClubMemberNickname, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember, getMyClubFeatureAccess } from './lib/api';
+import { API_URL } from './config';
+import { updateMemberSelf, getClubProfile, updateClubProfile, getClubMembers, updateClubMemberRating, updateClubMemberNickname, removeClubMember, broadcastClubMessage, getClubMessagesManage, updateClubMessageManage, deleteClubMessageManage, createLiveAnnouncement, updateLiveAnnouncement, getLiveAnnouncements, deleteLiveAnnouncement, getMyTables, createTable, updateTable, deleteTable, getMyPricingSchemes, createPricingScheme, updatePricingScheme, deletePricingScheme, getPendingReservations, confirmReservation, cancelReservation, getClubReservations, createManualReservation, createClubBreak, getClubBreaks, getClubLeaderboardHighest, getClubLeaderboardMonthly, searchClubPointsBalances, getClubPointsLedger, adjustClubMemberPoints, rotateClubTableQr, getActiveTableSessions, endTableSessionAsOperator, getMyClubTournaments, createClubTournament, updateClubTournament, publishClubTournament, closeClubTournament, getTournamentSignups, confirmTournamentSignup, cancelTournamentSignup, listMemberRegions, listMemberDistricts, getMember, getMyClubFeatureAccess } from './lib/api';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
@@ -25,13 +25,9 @@ function normalizeVideoHref(raw: any): string | null {
 const VenueDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
   const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [clubProfile, setClubProfile] = useState<any>({});
   const [facilitiesDraft, setFacilitiesDraft] = useState('');
   const [clubMembers, setClubMembers] = useState<any[]>([]);
@@ -153,27 +149,26 @@ const VenueDashboard: React.FC = () => {
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: highbreakEnabled } = useFeatureEnabled(API_URL, 'highbreak');
-  const { enabled: scoringEnabled } = useFeatureEnabled(API_URL, 'scoring');
   const { enabled: pointsGlobalEnabled } = useFeatureEnabled(API_URL, 'points');
   const { enabled: qrEnabled } = useFeatureEnabled(API_URL, 'qr_session');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
   const pointsEnabled = pointsGlobalEnabled && Boolean(clubFeatureAccess.points?.effectiveEnabled);
   const pointsTabVisible = pointsGlobalEnabled && (!clubFeatureAccessLoaded || pointsEnabled);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members'>('home');
 
-  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring' {
+  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' {
     try {
       const params = new URLSearchParams(window.location.search);
       const t = String(params.get('tab') || '').trim();
-      if (t === 'home' || t === 'booking' || t === 'qr' || t === 'points' || t === 'highbreak' || t === 'content' || t === 'members' || t === 'scoring') return t;
+      if (t === 'home' || t === 'booking' || t === 'qr' || t === 'points' || t === 'highbreak' || t === 'content' || t === 'members') return t;
       return (localStorage.getItem('venueDashboardTab') as any) || 'home';
     } catch {
       return 'home';
     }
   }
 
-  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' | 'scoring') {
+  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members') {
     setActiveTab(t);
     try {
       localStorage.setItem('venueDashboardTab', t);
@@ -227,7 +222,6 @@ const VenueDashboard: React.FC = () => {
   }, [memberLocOpen, memberLocRegionCode]);
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
-  const baseUrl = `${window.location.origin}${rawBase}`;
   const joinUrl = clubProfile?.id ? new URL(`/club/${clubProfile.id}`, window.location.origin).toString() : '';
   const joinQrSvgRef = useRef<SVGSVGElement | null>(null);
   const joinQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -509,9 +503,7 @@ const VenueDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [matchesRes, roomsRes, clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes, featureAccessRes, sessionsRes] = await Promise.all([
-        getOperatorMatches(API_URL, operatorId),
-        getOperatorActiveRooms(API_URL, operatorId),
+      const [clubProfileRes, clubMembersRes, liveRes, tablesRes, pricingRes, pendingRes, allRes, featureAccessRes, sessionsRes] = await Promise.all([
         getClubProfile(API_URL, operatorId).catch(() => ({})),
         getClubMembers(API_URL, operatorId).catch(() => []),
         getLiveAnnouncements(API_URL, operatorId).catch(() => []),
@@ -522,8 +514,6 @@ const VenueDashboard: React.FC = () => {
         getMyClubFeatureAccess(API_URL, operatorId).catch(() => ({ features: {} })),
         qrEnabled ? getActiveTableSessions(API_URL, operatorId).catch(() => []) : Promise.resolve([]),
       ]);
-      setMatches(matchesRes.matches || []);
-      setActiveRooms(roomsRes.rooms || []);
       setClubProfile(clubProfileRes || {});
       setClubMembers(clubMembersRes || []);
       setLiveAnnouncements(Array.isArray(liveRes) ? liveRes : []);
@@ -714,8 +704,7 @@ const VenueDashboard: React.FC = () => {
     if (activeTab === 'points' && clubFeatureAccessLoaded && !pointsEnabled) return updateTab('home');
     if (activeTab === 'highbreak' && !highbreakEnabled) return updateTab('home');
     if (activeTab === 'content' && !contentVisible) return updateTab('home');
-    if (activeTab === 'scoring' && !scoringEnabled) return updateTab('home');
-  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled, scoringEnabled]);
+  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) return;
@@ -786,48 +775,6 @@ const VenueDashboard: React.FC = () => {
     };
   }, [activeTab, operatorId, isOperator, pointsBalanceQuery, pointsEnabled]);
 
-  const handleCreateRoom = async () => {
-    if (creating) return;
-    setCreating(true);
-    setError(null);
-    try {
-      await createOperatorRoom(API_URL, operatorId);
-      // 立即重新載入所有資料（避免快取/延遲）
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || '建立房間失敗');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteRoom = async (roomId: string) => {
-    if (deletingId) return;
-    if (!window.confirm('確定要刪除此房間嗎？刪除後無法復原。')) return;
-    
-    setDeletingId(roomId);
-    try {
-      await deleteOperatorRoom(API_URL, roomId);
-      setToast('房間已刪除');
-      setTimeout(() => setToast(null), 2000);
-      
-      // 刪除後同步重新載入（含歷史）
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || '刪除房間失敗');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const copyLink = (path: string) => {
-    const params = `?enableSocket=1&socketUrl=${encodeURIComponent(SOCKET_URL)}&apiUrl=${encodeURIComponent(API_URL)}`;
-    const url = `${baseUrl}${path}${params}`;
-    navigator.clipboard.writeText(url).then(() => {
-      alert(`連結已複製：\n${url}`);
-    });
-  };
-
   if (!operatorId || !isOperator) return null;
 
   return (
@@ -893,7 +840,6 @@ const VenueDashboard: React.FC = () => {
               ...(highbreakEnabled ? [{ key: 'highbreak', label: '單杆' }] : []),
               ...((clubMessagesEnabled || liveEnabled || tournamentsEnabled) ? [{ key: 'content', label: '內容管理' }] : []),
               { key: 'members', label: '會員管理' },
-              ...(scoringEnabled ? [{ key: 'scoring', label: '計分/房間' }] : []),
             ]}
             activeKey={activeTab}
             onChange={(k) => updateTab(k as any)}
@@ -4358,277 +4304,6 @@ const VenueDashboard: React.FC = () => {
         </>
         )}
 
-        {activeTab === 'scoring' && (
-        scoringEnabled ? (
-        <>
-          <div className="glass rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4 border-b cue-border pb-2">
-              <h2 className="text-xl font-bold">進行中的房間</h2>
-              <div className="flex items-center gap-2">
-                <HelpGuide
-                  title="計分/房間"
-                  intro="建立房間用於計分、直播與 Overlay，並可複製主持、觀眾與 Overlay 連結。"
-                  steps={[
-                    '按「建立新房間」建立一個房間（最多 5 個同時進行）。',
-                    '建立後可用「Copy Setup / Copy Live / Copy Overlay」複製主持、觀眾及 Overlay 不同用途連結。',
-                    '如房間已完結，可按「刪除」移除進行中房間。',
-                    '下方「歷史房間記錄」可查看過往房間與結果。',
-                  ]}
-                  tips={[
-                    'Overlay 連結適合 OBS Browser Source；Live 連結適合直播展示；Setup 用於設定玩家/局數等。',
-                    '如連結無法開啟，請確認網域/BASE_PATH 及網絡環境。',
-                  ]}
-                />
-                <span className="text-sm cue-muted">
-                  {activeRooms.length} / 5
-                </span>
-              </div>
-            </div>
-            
-            <p className="cue-muted mb-6 text-sm">
-              您最多可以同時建立 5 個進行中的房間。建立後請使用下方連結進行設置或分享。
-            </p>
-  
-            <button
-              onClick={handleCreateRoom}
-              disabled={creating || activeRooms.length >= 5}
-              className={`w-full py-3 rounded-lg font-bold mb-8 transition-colors ${
-                creating || activeRooms.length >= 5
-                  ? 'cue-surface-strong cursor-not-allowed cue-muted'
-                  : 'brand-button hover:brightness-95 text-black'
-              }`}
-            >
-              {creating ? '建立中...' : activeRooms.length >= 5 ? '已達房間上限' : '建立新房間'}
-            </button>
-  
-            {activeRooms.length > 0 ? (
-              <div className="space-y-4">
-                {activeRooms.map((room) => (
-                  <div key={room.id} className="cue-surface p-4 rounded-lg flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="cue-surface-strong px-3 py-1 rounded font-mono accent-yellow font-bold">
-                        {room.code}
-                      </div>
-                      <div className="text-lg font-semibold">{room.name}</div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      <button
-                        onClick={() => copyLink(`/room/${room.code}/setup`)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
-                      >
-                        Copy Setup
-                      </button>
-                      <button
-                        onClick={() => copyLink(`/room/${room.code}/live`)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-sm font-medium transition-colors"
-                      >
-                        Copy Live
-                      </button>
-                      <button
-                        onClick={() => copyLink(`/room/${room.code}/overlay`)}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors"
-                      >
-                        Copy Overlay
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRoom(room.id)}
-                        disabled={deletingId === room.id}
-                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                          deletingId === room.id
-                            ? 'cue-surface-strong cursor-not-allowed cue-muted'
-                            : 'bg-red-600 hover:bg-red-700 text-white'
-                        }`}
-                      >
-                        {deletingId === room.id ? '...' : '刪除'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center cue-muted py-8 cue-surface rounded-lg border border-dashed cue-border">
-                目前沒有進行中的房間
-              </div>
-            )}
-          </div>
-
-          <details className="glass rounded-xl p-6">
-            <summary className="cursor-pointer text-xl font-bold flex items-center justify-between gap-3">
-              <span>歷史房間記錄（可展開）</span>
-              <HelpGuide
-                title="歷史房間記錄"
-                intro="查看已建立過的房間 / 比賽記錄、比分、局數與單杆資料。"
-                steps={[
-                  '展開後按「重新整理」載入最新記錄。',
-                  '手機版以卡片顯示；桌面版以表格顯示更多欄位。',
-                  '可查看房間 / 比賽代碼、球手資料、比分、結果及用時。',
-                ]}
-                tips={['若記錄較多，可用瀏覽器搜尋（頁內搜尋）快速定位 matchCode/名稱。']}
-              />
-            </summary>
-            <div className="mt-4 flex justify-end">
-              <button 
-                type="button"
-                onClick={loadData}
-                className="text-sm cue-surface-strong hover:brightness-95 px-3 py-1 rounded transition-colors"
-              >
-                重新整理
-              </button>
-            </div>
-
-            {loading && matches.length === 0 ? (
-              <div className="text-center py-8">載入中...</div>
-            ) : matches.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">尚無記錄</div>
-            ) : (
-              <>
-                <div className="sm:hidden mt-3 space-y-2">
-                  {matches.map((m) => {
-                    const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
-                    const duration = m.durationSeconds
-                      ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒`
-                      : '-';
-                    const resultCls = m.result === 'In Progress' ? 'bg-yellow-900 text-yellow-200' : 'bg-green-900 text-green-200';
-                    return (
-                      <div key={m.id} className="cue-surface rounded-lg p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">{m.matchCode || '-'}</span>
-                              <span className={`px-2 py-0.5 rounded text-xs ${resultCls}`}>{m.result}</span>
-                            </div>
-                            <div className="font-semibold break-words mt-1">{m.matchName}</div>
-                            {m.framesRequired > 1 && (
-                              <div className="text-xs cue-muted mt-0.5">{m.framesRequired} 局決</div>
-                            )}
-                            <div className="text-xs cue-muted mt-1">{dateStr}</div>
-                            <div className="mt-2 space-y-1 text-sm">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold">{m.p0.name}</span>
-                                {m.p0.handicap !== 0 && (
-                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">{m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}</span>
-                                )}
-                                {m.p0.maxBreak > 0 && (
-                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">單杆: {m.p0.maxBreak}</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold">{m.p1.name}</span>
-                                {m.p1.handicap !== 0 && (
-                                  <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">{m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}</span>
-                                )}
-                                {m.p1.maxBreak > 0 && (
-                                  <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">單杆: {m.p1.maxBreak}</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex-shrink-0 text-right">
-                            <div className="font-extrabold text-lg">{m.p0.score} - {m.p1.score}</div>
-                            <div className="text-xs cue-muted mt-0.5">{duration}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="hidden sm:block overflow-x-auto mt-3">
-                  <table className="w-full text-sm text-left whitespace-nowrap">
-                    <thead className="cue-muted border-b cue-border">
-                      <tr>
-                        <th className="py-3 px-4">日期</th>
-                        <th className="py-3 px-4">房間/比賽代碼</th>
-                        <th className="py-3 px-4">比賽名稱</th>
-                        <th className="py-3 px-4">球手資料</th>
-                        <th className="py-3 px-4 text-center">比分</th>
-                        <th className="py-3 px-4">結果</th>
-                        <th className="py-3 px-4">用時</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                      {matches.map((m) => {
-                        const dateStr = m.startedAt ? new Date(m.startedAt).toLocaleString() : '-';
-                        const duration = m.durationSeconds 
-                          ? `${Math.floor(m.durationSeconds / 60)}分${m.durationSeconds % 60}秒` 
-                          : '-';
-                        return (
-                          <tr key={m.id} className="hover:brightness-95 transition-colors">
-                            <td className="py-3 px-4 align-top">{dateStr}</td>
-                            <td className="py-3 px-4 align-top">
-                              <span className="font-mono cue-surface-strong px-2 py-0.5 rounded cue-muted">
-                                {m.matchCode || '-'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 align-top">
-                              <div className="font-medium">{m.matchName}</div>
-                              {m.framesRequired > 1 && (
-                                <div className="text-xs text-gray-500 mt-0.5">{m.framesRequired} 局決</div>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 align-top">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{m.p0.name}</span>
-                                  {m.p0.handicap !== 0 && (
-                                    <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                      {m.p0.handicap > 0 ? '+' : ''}{m.p0.handicap}
-                                    </span>
-                                  )}
-                                  {m.p0.maxBreak > 0 && (
-                                    <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                      單杆: {m.p0.maxBreak}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{m.p1.name}</span>
-                                  {m.p1.handicap !== 0 && (
-                                    <span className="text-xs cue-surface-strong px-1.5 rounded cue-muted">
-                                      {m.p1.handicap > 0 ? '+' : ''}{m.p1.handicap}
-                                    </span>
-                                  )}
-                                  {m.p1.maxBreak > 0 && (
-                                    <span className="text-xs text-yellow-400 border border-yellow-400/30 px-1.5 rounded">
-                                      單杆: {m.p1.maxBreak}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-center font-bold text-lg align-top">
-                              {m.p0.score} - {m.p1.score}
-                            </td>
-                            <td className="py-3 px-4 align-top">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                m.result === 'In Progress' 
-                                  ? 'bg-yellow-900 text-yellow-200' 
-                                  : 'bg-green-900 text-green-200'
-                              }`}>
-                                {m.result}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 align-top text-gray-400">
-                              {duration}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </details>
-        </>
-        ) : (
-        <div className="glass rounded-xl p-6">
-          <div className="text-xl font-bold mb-2">進行中的房間</div>
-          <div className="cue-muted text-sm">此功能未開通</div>
-        </div>
-        )
-        )}
       </div>
     </div>
   );

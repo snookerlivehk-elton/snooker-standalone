@@ -33,7 +33,7 @@
 - `Variables` 中新增或確認：
   - `DATABASE_URL`：你的 PostgreSQL 連線，例如 `postgresql://user:pass@host:5432/db?schema=public`
   - `CORS_ORIGIN`：前端公開網址，可多域以逗號分隔，如 `https://snookerhk.live,https://www.snookerhk.live,https://snookerlivehk-elton.github.io`
-  - 可選：`SOCKET_IO_PATH`（預設 `/socket.io`）、`ENV_AUDIT_ENABLED`（預設 `true`）
+  - 可選：`ENV_AUDIT_ENABLED`（預設 `true`）
   - 管理員保護：`ADMIN_TOKEN=wwww5678`（示範值，請於正式環境改為更安全的字串）
 
 注意：
@@ -59,7 +59,7 @@ curl.exe -i https://<你的後端>.up.railway.app/health
 curl.exe -i https://<你的後端>.up.railway.app/health/db
 curl.exe -i https://<你的後端>.up.railway.app/admin/overview -H "x-admin-token: wwww5678"
 ```
-  - 若前端（WebSocket）握手失敗，先確認 `CORS_ORIGIN` 是否包含前端完整公開網址。
+  - 若前端 API 呼叫失敗，先確認 `CORS_ORIGIN` 是否包含前端完整公開網址。
 
 ## 5. 常見狀況
 - 仍看到「@prisma/client did not initialize yet」：
@@ -73,7 +73,7 @@ curl.exe -i https://<你的後端>.up.railway.app/admin/overview -H "x-admin-tok
   - Builder：`Nixpacks`
   - Build：`npm ci && npm run build`
   - Start：使用靜態託管（如 Nginx），或改用 Cloudflare Pages/Netlify 更簡單。
-  - `VITE_SOCKET_URL`：指向後端公開 URL（例如 `https://your-backend.railway.app`）。
+  - 前端 API base URL：指向後端公開 URL（例如 `https://your-backend.railway.app`）。
 
 完成以上步驟，即可用最簡方式在 Railway 部署後端，不需要理解 Docker 細節。
 

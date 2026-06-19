@@ -1,8 +1,8 @@
-# Snooker Scoreboard — 環境設定與啟動說明
+# Snooker Standalone — 環境設定與啟動說明
 
 > **📢 最新部署指南**：關於詳細的生產環境部署、重部署步驟與驗證清單，請參閱 [DEPLOYMENT.md](./DEPLOYMENT.md)。
 
-本文件主要說明開發環境設定。
+本文件主要說明目前系統的開發環境設定。舊版房間計分、LiveView、Overlay 與 Socket 即時同步流程已永久移除。
 
 ## 後端（backend）
 
@@ -31,7 +31,7 @@
 
 ## 常見問題
 
-- 若出現 `Unexpected end of JSON input`，請確認後端正在運行、`GET /api/rooms` 能回傳有效 JSON，並檢查 `CORS_ORIGIN` 是否正確設定。
+- 若前端 API 呼叫失敗，請確認後端正在運行，並檢查 `GET /health`、`GET /health/db` 以及 `CORS_ORIGIN` 是否正確設定。
 - 若編譯 TypeScript 失敗，請確認 `backend/tsconfig.json` 的 `include`、`exclude` 設定，以及已將測試檔案排除在建置之外。
 
 ## 前端部署（GitHub Pages 專案頁）
@@ -45,7 +45,7 @@
 使用步驟：
 1. 在 GitHub Repo → Settings → Pages，Source 選擇「GitHub Actions」。
 2. 推送到 `main` 分支（或手動觸發 Workflow）。
-3. 約數十秒後，於 Actions 看見「Deploy to GitHub Pages」成功；造訪 `https://<你的帳號>.github.io/<repo>/` 驗證載入與路由（例如 `/room/123/setup`）。
+3. 約數十秒後，於 Actions 看見「Deploy to GitHub Pages」成功；造訪 `https://<你的帳號>.github.io/<repo>/` 驗證首頁、會員與場館路由能正常載入。
 
 備用方案（不使用 Actions）：
 - 仍保留 `frontend/package.json` 的 `predeploy`、`deploy`、`deploy:root` 腳本；若需直接用 `gh-pages` 發佈，先設定 `BASE_PATH` 為 `/snooker-standalone/`（專案頁）或 `/`（使用者首頁），再執行：

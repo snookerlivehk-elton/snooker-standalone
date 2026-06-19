@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import Admin from './Admin';
-import Scoreboard from './Scoreboard';
-import Setup from './Setup';
 import AdminAuth from './AdminAuth';
-import LiveView from './LiveView';
-import { State } from './lib/State';
-import Overlay from './Overlay';
 import MemberRegister from './MemberRegister';
 import AdminMembers from './AdminMembers';
-import AdminMatches from './AdminMatches';
 import AdminRegions from './AdminRegions';
 import AdminVenues from './AdminVenues';
 import AdminClubFeatures from './AdminClubFeatures';
@@ -23,10 +16,8 @@ import AdminOverview from './AdminOverview';
 import AdminBreaks from './AdminBreaks';
 import NewsPage from './NewsPage';
 import MemberRegisterSimple from './MemberRegisterSimple';
-import Rooms from './Rooms';
 import Me from './Me';
 import Onboarding from './Onboarding';
-import AndroidGuide from './AndroidGuide';
 import HomePage from './HomePage';
 import { API_URL, GOOGLE_CLIENT_ID } from './config';
 import { FeatureKey, useFeatureEnabled } from './lib/features';
@@ -79,16 +70,6 @@ function FeatureGate({ feature, children }: { feature: FeatureKey; children: Rea
 
 
 function App() {
-  const [gameState, setGameState] = useState<State | null>(null);
-  const handleStartMatch = (settings: any) => {
-    const newGameState = new State({
-      playersInfo: settings.playersInfo,
-      settings: settings.settings,
-      startingPlayerIndex: settings.startingPlayerIndex,
-    });
-    setGameState(newGameState);
-  };
-
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <LogoutButton />
@@ -97,13 +78,10 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
-        <Route path="/rooms" element={<FeatureGate feature="scoring"><Rooms /></FeatureGate>} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
-        <Route path="/android" element={<AndroidGuide />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
-        <Route path="/admin/legacy" element={<AdminAuth><FeatureGate feature="scoring"><Admin /></FeatureGate></AdminAuth>} />
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />
@@ -116,15 +94,10 @@ function App() {
         <Route path="/club/:clubId" element={<ClubPublicPage />} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
-        <Route path="/admin/matches" element={<AdminAuth><FeatureGate feature="scoring"><AdminMatches /></FeatureGate></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
         <Route path="/admin/club-features" element={<AdminAuth><AdminClubFeatures /></AdminAuth>} />
         <Route path="/admin/news-sources" element={<AdminAuth><AdminNewsSources /></AdminAuth>} />
-        <Route path="/room/:roomId" element={<FeatureGate feature="scoring"><Scoreboard gameState={gameState} setGameState={setGameState} /></FeatureGate>} />
-        <Route path="/room/:roomId/setup" element={<FeatureGate feature="scoring"><Setup onStartMatch={handleStartMatch} /></FeatureGate>} />
-        <Route path="/room/:roomId/live" element={<FeatureGate feature="live"><LiveView /></FeatureGate>} />
-        <Route path="/room/:roomId/overlay" element={<FeatureGate feature="scoring"><Overlay /></FeatureGate>} />
         {/* Fallback: any unknown route goes to Admin */}
         <Route path="*" element={<Navigate to="/members/login" replace />} />
       </Routes>

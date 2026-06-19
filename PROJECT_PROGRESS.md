@@ -58,7 +58,7 @@ commit：`491c91d`（admin: redirect /admin to overview）
 
 - `/admin` 會導向 `/admin/overview`（新 Super Admin 手機友善 UI）
 - 保留 `/admin/legacy` 入口（舊版 PANEL；由 `/admin/overview` 的「舊版PANEL」按鈕進入）
-- 避免 `scoring` 關閉時，舊 `/admin` 因呼叫 `/api/rooms` 被 403 導致白屏
+- 當時已修正舊 `/admin` 在 feature flag 切換時的白屏問題；其後舊 `/admin/legacy` 與整套 scoring 流程已退役
 
 更新：`/admin/legacy`（舊版後台）UI 排版對齊新後台
 
@@ -150,7 +150,7 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 
 ## 最新已完成：Phase 0（全站功能上落架 / Feature Flags）
 
-目標：每一項功能可由 Super admin 決定是否上線，方便之後逐項收費；同時保留現有計分/直播但加入上落架選項。
+目標：每一項功能可由 Super admin 決定是否上線，方便之後逐項收費。
 
 ### DB（Prisma）
 
@@ -170,7 +170,6 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - `club_dashboard`（球會主頁管理）
 - `system_portal`（系統主頁）
 - `member_portal`（會員主頁）
-- `scoring`（計分）
 - `live`（直播）
 
 ### 後端（強制封鎖，非只隱藏 UI）
@@ -180,8 +179,6 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
   - `GET /api/admin/features`（需 `ADMIN_TOKEN`：header `x-admin-token` 或 query `?token=`）
   - `PUT /api/admin/features`（批量 updates）
 - 位置：`backend/index.ts`
-- 已套用封鎖範圍（關閉後會回 `403 { error:'feature_disabled' }`）：
-  - `scoring`：`/api/matches*`、`/api/rooms*`、`/rooms/:roomId/*`、`/api/match-verification-code` 等主要計分 API
 - 場館模組封鎖：
   - 位置：`backend/routes/club.ts`
   - `booking`：tables/pricing/reservations
@@ -195,7 +192,7 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
   - `frontend/src/lib/features.ts`
 - 路由閘口（FeatureGate：未開通會導回 `/`）：
   - `frontend/src/App.tsx`
-  - 已套用：`/room/*`（scoring/live）、`/rooms`（scoring）、`/me`（member_portal）、`/venue/dashboard`（club_dashboard）、`/admin/breaks`（highbreak）、`/admin/matches`（scoring）
+  - 已套用：`/me`（member_portal）、`/venue/dashboard`（club_dashboard）、`/admin/breaks`（highbreak）
 - Super admin UI：
   - `frontend/src/AdminOverview.tsx` 加入「功能上落架」區塊
   - 透過 `frontend/src/lib/api.ts` 新增 `getAdminFeatures/updateAdminFeatures`

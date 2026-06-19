@@ -10,7 +10,6 @@ export const FEATURE_CATALOG = [
   { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
   { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
   { key: 'member_portal', label: '會員主頁', defaultEnabled: true },
-  { key: 'scoring', label: '計分', defaultEnabled: true },
   { key: 'live', label: '直播', defaultEnabled: true },
 ] as const;
 

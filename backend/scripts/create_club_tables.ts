@@ -123,35 +123,6 @@ export async function createClubTables(prisma: PrismaClient) {
       if (e.message.includes('already exists')) { /* no-op */ } else console.warn('Error adding ClubMessageRead_messageId_fkey:', e.message);
     }
 
-    // 7. Create MatchInvite table (targeted invitations for members to join a room/match)
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "MatchInvite" (
-        "id" TEXT NOT NULL,
-        "roomId" TEXT NOT NULL,
-        "operatorId" TEXT,
-        "memberId" TEXT NOT NULL,
-        "token" TEXT NOT NULL,
-        "status" TEXT NOT NULL DEFAULT 'PENDING',
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "acceptedAt" TIMESTAMP(3),
-        CONSTRAINT "MatchInvite_pkey" PRIMARY KEY ("id")
-      );
-    `);
-    console.log('Created MatchInvite table');
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MatchInvite_token_key" ON "MatchInvite"("token");`);
-    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MatchInvite_roomId_idx" ON "MatchInvite"("roomId");`);
-    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MatchInvite_memberId_idx" ON "MatchInvite"("memberId");`);
-    // Add FKs best-effort (may fail if already exists)
-    try {
-      await prisma.$executeRawUnsafe(`
-        ALTER TABLE "MatchInvite" ADD CONSTRAINT "MatchInvite_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-      `);
-      console.log('Added MatchInvite_memberId_fkey');
-    } catch (e: any) {
-      if (e.message.includes('already exists')) console.log('MatchInvite_memberId_fkey already exists');
-      else console.warn('Error adding MatchInvite_memberId_fkey:', e.message);
-    }
-
     await prisma.$executeRawUnsafe(`
       DO $$
       BEGIN

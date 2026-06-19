@@ -51,7 +51,6 @@ const FEATURE_DEFAULTS: Record<string, boolean> = {
     club_dashboard: true,
     system_portal: true,
     member_portal: true,
-    scoring: true,
     live: true,
 };
 

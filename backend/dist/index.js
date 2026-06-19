@@ -2,8 +2,6 @@ import 'dotenv/config';
 // Backend API for Snooker Standalone
 // Force backend redeploy
 import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
 import { startEnvAudit, getEnvHistoryTail } from './envAudit.js';
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -16,69 +14,16 @@ import clubRouter from './routes/club.js';
 import { createClubTables } from './scripts/create_club_tables.js';
 import { getClubFeatureAssignment, getClubFeatureAssignments, isClubScopedFeatureKey } from './clubFeatureAccess.js';
 import { startNewsScheduler, runNewsFetchOnce } from './news/newsScheduler.js';
-function incrementLetters(letters) {
-    const arr = letters.split('');
-    for (let i = arr.length - 1; i >= 0; i--) {
-        const ch = arr[i];
-        if (!ch)
-            continue;
-        const code = ch.charCodeAt(0);
-        if (code < 90) {
-            arr[i] = String.fromCharCode(code + 1);
-            for (let j = i + 1; j < arr.length; j++)
-                arr[j] = 'A';
-            return arr.join('');
-        }
-    }
-    return 'A'.repeat(letters.length || 5);
-}
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-async function nextRoomCodeServer() {
-    try {
-        const seq = await prisma.roomCodeSequence.findUnique({ where: { id: 1 } });
-        let last = seq?.last_code || 'AAAAA0000';
-        const patternNew = /^[A-Z]{5}\d{4}$/;
-        if (!patternNew.test(last)) {
-            last = 'AAAAA0000';
-        }
-        const letters = last.slice(0, 5);
-        const digits = last.slice(5);
-        let num = parseInt(digits, 10);
-        if (isNaN(num))
-            num = 0;
-        let nextCode = '';
-        num += 1;
-        if (num > 9999) {
-            const inc = incrementLetters(letters);
-            nextCode = `${inc}0000`;
-        }
-        else {
-            nextCode = `${letters}${String(num).padStart(4, '0')}`;
-        }
-        await prisma.roomCodeSequence.upsert({
-            where: { id: 1 },
-            update: { last_code: nextCode },
-            create: { id: 1, last_code: nextCode },
-        });
-        return nextCode;
-    }
-    catch (err) {
-        console.error('Failed to generate room code from DB:', err);
-        // Fallback to random if DB fails
-        return 'ERR' + Math.floor(Math.random() * 10000);
-    }
-}
 const app = express();
 console.log(`Starting Snooker Backend v1.0.1...`);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-const WRITE_TOKEN = process.env.WRITE_TOKEN || '';
-const SOCKET_IO_PATH = process.env.SOCKET_IO_PATH || '/socket.io';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'no-reply@snookerhk.live';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -107,7 +52,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'x-member-id', 'x-write-token', 'x-admin-token', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'x-member-id', 'x-admin-token', 'Authorization'],
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
@@ -138,7 +83,6 @@ const FEATURE_CATALOG = [
     { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
     { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
     { key: 'member_portal', label: '會員主頁', defaultEnabled: true },
-    { key: 'scoring', label: '計分', defaultEnabled: true },
     { key: 'live', label: '直播', defaultEnabled: true },
 ];
 let featureCache = null;
@@ -797,36 +741,6 @@ app.post('/api/qr/table/end-confirm', requireFeature('qr_session'), async (req, 
         res.status(code).json({ error: msg });
     }
 });
-async function resolveMemberIdentifiers(identifiers) {
-    const trimmed = Array.from(new Set(identifiers
-        .map((v) => String(v ?? '').trim())
-        .filter((v) => v.length > 0)));
-    if (!trimmed.length)
-        return new Map();
-    const members = await prisma.member.findMany({
-        where: {
-            OR: [
-                { id: { in: trimmed } },
-                { email: { in: trimmed } },
-                { member_code: { in: trimmed } },
-            ],
-        },
-        select: { id: true, email: true, member_code: true },
-    });
-    const map = new Map();
-    for (const m of members) {
-        if (m.id && trimmed.includes(m.id)) {
-            map.set(m.id, m.id);
-        }
-        if (m.email && trimmed.includes(m.email)) {
-            map.set(m.email, m.id);
-        }
-        if (m.member_code && trimmed.includes(m.member_code)) {
-            map.set(m.member_code, m.id);
-        }
-    }
-    return map;
-}
 // Health check for cloud deployments
 app.get('/health', (_req, res) => {
     res.json({
@@ -966,490 +880,10 @@ app.get('/api/news/image', async (req, res) => {
         clearTimeout(t);
     }
 });
-// Strict match creation: require valid memberId for both players; if any missing or not found, reject
-app.post('/api/matches/strict', requireFeature('scoring'), writeAuth, async (req, res) => {
-    try {
-        const { roomId, match, players, timestamps, operatorId } = req.body || {};
-        if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
-            return res.status(400).json({ error: 'invalid payload' });
-        }
-        const p0 = players[0]?.memberId;
-        const p1 = players[1]?.memberId;
-        if (!p0 || !p1 || typeof p0 !== 'string' || typeof p1 !== 'string') {
-            return res.status(400).json({ error: 'memberId required for both players' });
-        }
-        const idMap = await resolveMemberIdentifiers([p0, p1, operatorId].filter(Boolean));
-        const p0Resolved = idMap.get(p0) || null;
-        const p1Resolved = idMap.get(p1) || null;
-        const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
-        if (!p0Resolved || !p1Resolved) {
-            return res.status(404).json({ error: 'memberId not found' });
-        }
-        const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
-        const created = await prisma.match.create({
-            data: {
-                room_id: String(roomId),
-                name: String(match.name || 'Snooker Match'),
-                name_part: match.namePart ? String(match.namePart) : null,
-                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
-                match_code: match.matchCode ? String(match.matchCode) : null,
-                frames_required: Number(match.framesRequired || 1),
-                red_balls: Number(match.redBalls || 15),
-                handicap0: Array.isArray(match.handicaps) ? Number(match.handicaps[0] || 0) : 0,
-                handicap1: Array.isArray(match.handicaps) ? Number(match.handicaps[1] || 0) : 0,
-                started_at: startedAt,
-                operator_id: opResolved,
-            },
-        });
-        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-        await prisma.$transaction([
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1Resolved, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-        ]);
-        res.status(201).json({ matchId: created.id });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-app.post('/api/matches/partial', requireFeature('scoring'), writeAuth, async (req, res) => {
-    try {
-        const { roomId, match, players, timestamps, operatorId } = req.body || {};
-        if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
-            return res.status(400).json({ error: 'invalid payload' });
-        }
-        const candidateIds = [players[0]?.memberId, players[1]?.memberId, operatorId].filter((x) => typeof x === 'string');
-        const idMap = await resolveMemberIdentifiers(candidateIds);
-        const acceptedMemberIds = candidateIds.filter(id => idMap.has(id));
-        const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
-        const opResolved = operatorId ? (idMap.get(operatorId) || null) : null;
-        const created = await prisma.match.create({
-            data: {
-                room_id: String(roomId),
-                name: String(match.name || 'Snooker Match'),
-                name_part: match.namePart ? String(match.namePart) : null,
-                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
-                match_code: match.matchCode ? String(match.matchCode) : null,
-                frames_required: Number(match.framesRequired || 1),
-                red_balls: Number(match.redBalls || 15),
-                started_at: startedAt,
-                operator_id: opResolved,
-            },
-        });
-        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-        const txOps = [];
-        for (let i = 0; i < players.length; i++) {
-            const p = players[i];
-            let memberId = null;
-            if (p?.memberId && typeof p.memberId === 'string') {
-                const resolved = idMap.get(p.memberId);
-                if (resolved) {
-                    memberId = resolved;
-                }
-            }
-            else if (!p?.memberId && p?.name) {
-                // const guest = await prisma.member.create({ data: { name: String(p.name), is_guest: true } });
-                const guest = await prisma.member.create({ data: { name: String(p.name) } });
-                memberId = guest.id;
-            }
-            if (memberId) {
-                txOps.push(prisma.matchPlayer.create({
-                    data: { match_id: created.id, member_id: memberId, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] },
-                }));
-            }
-        }
-        if (txOps.length)
-            await prisma.$transaction(txOps);
-        res.status(201).json({ matchId: created.id, acceptedMemberIds });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
 // Start environment audit logging to record every update and snapshot (can be disabled)
 if (process.env.ENV_AUDIT_ENABLED !== 'false') {
     startEnvAudit();
 }
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: corsOrigins,
-    },
-    path: SOCKET_IO_PATH,
-});
-const rooms = [];
-// Initialize rooms from DB (async)
-(async () => {
-    try {
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        // Cleanup old rooms
-        try {
-            await prisma.room.deleteMany({ where: { created_at: { lt: sevenDaysAgo } } });
-            console.log('Cleaned up old rooms');
-        }
-        catch (e) {
-            console.log('Cleanup skipped (table might not exist or permission denied)');
-        }
-        // Load active
-        const active = await prisma.room.findMany({
-            where: { created_at: { gte: sevenDaysAgo } }
-        });
-        active.forEach(r => {
-            rooms.push({
-                id: r.id,
-                name: r.name || 'Unnamed',
-                code: r.code || r.id,
-                scores: r.scores || [0, 0],
-                gameState: r.gameState || undefined,
-                operatorId: r.operator_id || undefined
-            });
-        });
-        console.log(`Loaded ${rooms.length} active rooms from DB.`);
-    }
-    catch (e) {
-        console.error('Failed to load rooms:', e);
-    }
-})();
-app.get('/api/rooms', requireFeature('scoring'), (req, res) => {
-    res.json(rooms);
-});
-app.get('/rooms/:roomId/state', requireFeature('scoring'), async (req, res) => {
-    const roomId = String(req.params.roomId);
-    const room = rooms.find(r => r.id === roomId || r.code === roomId);
-    let operator = null;
-    if (room?.operatorId) {
-        try {
-            const op = await prisma.member.findUnique({ where: { id: room.operatorId }, select: { id: true, name: true, email: true } });
-            if (op)
-                operator = op;
-        }
-        catch (e) {
-            // ignore
-        }
-    }
-    res.json({ roomId, state: room?.gameState ?? null, operator });
-});
-app.post('/rooms/:roomId/reset', requireFeature('scoring'), async (req, res) => {
-    const { roomId } = req.params;
-    const room = rooms.find(r => r.id === roomId || r.code === roomId);
-    if (!room)
-        return res.status(404).json({ error: 'Room not found' });
-    // Reset memory
-    room.gameState = undefined;
-    room.scores = [0, 0];
-    // Reset DB
-    try {
-        await prisma.room.update({
-            where: { id: room.id },
-            data: { gameState: {}, scores: [0, 0] }
-        });
-    }
-    catch (e) {
-        console.error('Failed to reset room in DB:', e);
-    }
-    io.emit('rooms', rooms);
-    res.json({ message: 'Room reset' });
-});
-app.post('/api/rooms', requireFeature('scoring'), async (req, res) => {
-    const { name, operatorId } = req.body;
-    if (!name) {
-        return res.status(400).json({ message: 'Room name is required' });
-    }
-    const code = await nextRoomCodeServer();
-    // Use a unique ID based on timestamp and random number to avoid collisions on server restart
-    const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    const newRoom = { id: newId, name, code, scores: [0, 0], operatorId };
-    rooms.push(newRoom);
-    // Persist
-    try {
-        await prisma.room.create({
-            data: {
-                id: newId,
-                name,
-                code,
-                operator_id: operatorId || null,
-                scores: [0, 0],
-                gameState: {}
-            }
-        });
-    }
-    catch (e) {
-        console.error('Failed to persist room:', e);
-    }
-    io.emit('rooms', rooms);
-    res.status(201).json(newRoom);
-});
-app.delete('/api/rooms/:roomId', requireFeature('scoring'), async (req, res) => {
-    const roomId = String(req.params.roomId || '');
-    if (!roomId)
-        return res.status(400).json({ error: 'roomId required' });
-    const index = rooms.findIndex(room => room.id === roomId);
-    if (index !== -1) {
-        rooms.splice(index, 1);
-        // Delete from DB
-        try {
-            await prisma.room.delete({ where: { id: roomId } });
-        }
-        catch (e) {
-            console.error('Failed to delete room from DB:', e);
-        }
-        io.emit('rooms', rooms); // Notify clients
-        res.status(204).send();
-    }
-    else {
-        res.status(404).json({ error: 'Room not found' });
-    }
-});
-// Verification endpoints
-app.post('/api/match-verification-code', requireFeature('scoring'), async (req, res) => {
-    const { email, purpose } = req.body;
-    if (!email)
-        return res.status(400).json({ error: 'Email required' });
-    // Check if member exists
-    const member = await prisma.member.findFirst({ where: { email } });
-    if (!member)
-        return res.status(404).json({ error: 'Email not registered' });
-    // Generate code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-    await prisma.emailVerification.create({
-        data: {
-            id: randomUUID(),
-            email,
-            code,
-            purpose: purpose || 'match',
-            expires_at: expiresAt
-        }
-    });
-    // Send email
-    if (process.env.RESEND_API_KEY) {
-        try {
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const fromEmail = RESEND_FROM_EMAIL;
-            console.log(`[Email] Sending verification code to ${email} from ${fromEmail}`);
-            await resend.emails.send({
-                from: fromEmail,
-                to: email,
-                subject: '比賽驗證碼',
-                html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼。</p>`
-            });
-            res.json({ message: 'Code sent' });
-        }
-        catch (e) {
-            console.error('Email failed:', e);
-            const isDomainError = e?.message?.includes('domain') || e?.message?.includes('verified');
-            res.status(500).json({
-                error: isDomainError
-                    ? 'Failed to send email: Domain not verified. Please configure RESEND_FROM_EMAIL with a verified domain or use the registered email for testing.'
-                    : 'Failed to send verification email. Please check server logs.'
-            });
-        }
-    }
-    else {
-        console.log(`[DEV] Verification code for ${email}: ${code}`);
-        res.json({ message: 'Code sent (Dev mode)' });
-    }
-});
-app.post('/api/matches/start', requireFeature('scoring'), async (req, res) => {
-    const { p1_email, p2_email, room_id, operator_id, frames_required, red_balls, handicap0, handicap1 } = req.body;
-    console.log(`[StartMatch] P1: ${p1_email}, P2: ${p2_email}, Room: ${room_id}`);
-    let p1_member_id = null;
-    let p2_member_id = null;
-    if (p1_email) {
-        const email = String(p1_email).trim();
-        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
-        if (!m)
-            return res.status(404).json({ error: `Email ${email} is not registered.` });
-        p1_member_id = m.id;
-    }
-    if (p2_email) {
-        const email = String(p2_email).trim();
-        const m = await prisma.member.findFirst({ where: { email }, select: { id: true } });
-        if (!m)
-            return res.status(404).json({ error: `Email ${email} is not registered.` });
-        p2_member_id = m.id;
-    }
-    if (!p1_member_id && !p2_member_id) {
-        return res.status(400).json({ error: '必須至少輸入一位已註冊會員的 Email 才可建立比賽。' });
-    }
-    // Resolve operator_id (support ID or Email) and ensure existence
-    let opResolved = null;
-    if (operator_id) {
-        const opMember = await prisma.member.findFirst({
-            where: {
-                OR: [
-                    { id: operator_id },
-                    { email: operator_id }
-                ]
-            },
-            select: { id: true }
-        });
-        opResolved = opMember ? opMember.id : null;
-    }
-    try {
-        const match = await prisma.match.create({
-            data: {
-                room_id: String(room_id),
-                name: 'Match ' + new Date().toLocaleTimeString(),
-                frames_required: Number(frames_required || 1),
-                red_balls: Number(red_balls || 15),
-                handicap0: Number(handicap0 || 0),
-                handicap1: Number(handicap1 || 0),
-                started_at: new Date(),
-                operator_id: opResolved || null
-            }
-        });
-        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-        // Create MatchPlayers
-        if (p1_member_id) {
-            await prisma.matchPlayer.create({
-                data: { match_id: match.id, member_id: p1_member_id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] }
-            });
-        }
-        if (p2_member_id) {
-            await prisma.matchPlayer.create({
-                data: { match_id: match.id, member_id: p2_member_id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] }
-            });
-        }
-        res.json({
-            mode: 'ranked',
-            matchId: match.id,
-            p1MemberId: p1_member_id,
-            p2MemberId: p2_member_id
-        });
-    }
-    catch (e) {
-        res.status(500).json({ error: String(e) });
-    }
-});
-// Create match invites for specific member emails (operator triggers from Setup page)
-app.post('/api/matches/invite', requireFeature('scoring'), async (req, res) => {
-    try {
-        const { room_id, operator_id, emails } = req.body || {};
-        if (!room_id || !Array.isArray(emails) || emails.length === 0) {
-            return res.status(400).json({ error: 'missing room_id or emails' });
-        }
-        const requesterId = String(req.headers['x-member-id'] || '').trim();
-        if (!requesterId)
-            return res.status(401).json({ error: 'Unauthorized' });
-        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
-        if (!requester)
-            return res.status(401).json({ error: 'Unauthorized' });
-        if (requester.role !== 'ADMIN')
-            return res.status(403).json({ error: 'Forbidden' });
-        // Resolve operator id (id or email acceptable)
-        let opResolved = requesterId;
-        if (operator_id) {
-            const opMember = await prisma.member.findFirst({
-                where: { OR: [{ id: String(operator_id) }, { email: String(operator_id) }] },
-                select: { id: true }
-            });
-            if (!opMember)
-                return res.status(404).json({ error: 'Operator not found' });
-            if (opMember.id !== requesterId)
-                return res.status(403).json({ error: 'operator mismatch' });
-            opResolved = opMember.id;
-        }
-        // Lookup members by email
-        const uniq = Array.from(new Set(emails.map((e) => String(e || '').trim()).filter(Boolean)));
-        if (uniq.length === 0)
-            return res.status(400).json({ error: 'no valid emails' });
-        const foundMembers = await prisma.member.findMany({
-            where: { OR: uniq.map((em) => ({ email: { equals: em, mode: 'insensitive' } })) },
-            select: { id: true, email: true, name: true }
-        });
-        const foundByEmailLower = new Map(foundMembers.map(m => [String(m.email || '').toLowerCase(), m]));
-        const invited = [];
-        const notFound = [];
-        for (const em of uniq) {
-            const m = foundByEmailLower.get(String(em).toLowerCase());
-            if (!m) {
-                notFound.push(em);
-                continue;
-            }
-            const token = randomBytes(16).toString('hex');
-            const id = randomUUID();
-            try {
-                await prisma.$executeRawUnsafe(`INSERT INTO "MatchInvite"("id","roomId","operatorId","memberId","token","status","createdAt") VALUES ($1,$2,$3,$4,$5,'PENDING',CURRENT_TIMESTAMP)`, id, String(room_id), opResolved, m.id, token);
-                invited.push({ email: m.email, memberId: m.id, token });
-            }
-            catch (e) {
-                // Ignore duplicates by token; retry with another
-            }
-        }
-        res.json({ invited, notFound });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// List my invites (member inbox-style)
-app.get('/api/matches/invites/my', requireFeature('scoring'), async (req, res) => {
-    const memberId = req.headers['x-member-id'];
-    if (!memberId)
-        return res.status(401).json({ error: 'Unauthorized' });
-    try {
-        const rows = await prisma.$queryRawUnsafe(`SELECT "id","roomId","operatorId","memberId","token","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "memberId"=$1 ORDER BY "createdAt" DESC`, memberId);
-        // Enrich with operator and room info
-        const roomIds = Array.from(new Set(rows.map(r => String(r.roomId))));
-        const opIds = Array.from(new Set(rows.map(r => r.operatorId).filter(Boolean)));
-        const ops = opIds.length ? await prisma.member.findMany({ where: { id: { in: opIds } }, select: { id: true, name: true, email: true, club_name: true } }) : [];
-        const opMap = new Map(ops.map(o => [o.id, o]));
-        const enriched = rows.map(r => ({
-            ...r,
-            operator: r.operatorId ? opMap.get(r.operatorId) || null : null
-        }));
-        res.json({ invites: enriched });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Accept invite (member confirms to join match)
-app.post('/api/matches/invites/accept', requireFeature('scoring'), async (req, res) => {
-    try {
-        const memberId = req.headers['x-member-id'];
-        const { token } = req.body || {};
-        if (!token)
-            return res.status(400).json({ error: 'missing token' });
-        const rows = await prisma.$queryRawUnsafe(`SELECT "id","roomId","operatorId","memberId","status" FROM "MatchInvite" WHERE "token"=$1 LIMIT 1`, String(token));
-        if (!rows.length)
-            return res.status(404).json({ error: 'invite not found' });
-        const inv = rows[0];
-        if (inv.status !== 'PENDING')
-            return res.status(400).json({ error: 'invite already processed' });
-        if (memberId && String(inv.memberId) !== String(memberId)) {
-            return res.status(403).json({ error: 'member mismatch' });
-        }
-        await prisma.$executeRawUnsafe(`UPDATE "MatchInvite" SET "status"='ACCEPTED',"acceptedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`, inv.id);
-        res.json({ ok: true, roomId: inv.roomId });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Room-level: list invites (for Setup page to auto-fill accepted players)
-app.get('/rooms/:roomId/invites', async (req, res) => {
-    const roomId = String(req.params.roomId);
-    try {
-        const rows = await prisma.$queryRawUnsafe(`SELECT "id","memberId","status","createdAt","acceptedAt" FROM "MatchInvite" WHERE "roomId"=$1 ORDER BY "createdAt" DESC`, roomId);
-        const memberIds = Array.from(new Set(rows.map(r => r.memberId)));
-        const members = memberIds.length ? await prisma.member.findMany({
-            where: { id: { in: memberIds } },
-            select: { id: true, name: true, email: true }
-        }) : [];
-        const mMap = new Map(members.map(m => [m.id, m]));
-        res.json({
-            invites: rows.map(r => ({
-                ...r,
-                member: mMap.get(r.memberId) || null
-            }))
-        });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
 // Admin auth middleware (optional: enabled only when ADMIN_TOKEN is set)
 function adminAuth(req, res, next) {
     if (!ADMIN_TOKEN) {
@@ -2047,17 +1481,7 @@ app.post('/api/admin/site-ads/:id/image', adminAuth, async (req, res) => {
         res.status(status).json({ error: msg });
     }
 });
-// Basic write authorization for match write endpoints
-function writeAuth(req, res, next) {
-    if (!WRITE_TOKEN)
-        return next();
-    const token = req.headers['x-write-token'] || req.query.token || '';
-    if (token !== WRITE_TOKEN) {
-        return res.status(401).json({ error: 'unauthorized' });
-    }
-    next();
-}
-// Admin overview: basic runtime, DB, sockets, rooms
+// Admin overview: basic runtime and DB
 app.get('/admin/overview', adminAuth, async (req, res) => {
     let dbStatus = 'ok';
     let dbError;
@@ -2074,9 +1498,6 @@ app.get('/admin/overview', adminAuth, async (req, res) => {
         uptime: process.uptime(),
         port: PORT,
         corsOrigins,
-        socketPath: SOCKET_IO_PATH,
-        sockets: { clientsCount: io?.engine?.clientsCount ?? null },
-        rooms: { count: rooms.length },
         db: { status: dbStatus, error: dbError }
     };
     // Content negotiation: explicit query param wins; otherwise use Accept header.
@@ -2118,15 +1539,12 @@ app.get('/admin/overview', adminAuth, async (req, res) => {
             <div class="kv"><h3>狀態</h3><div class="v">${payload.status}</div></div>
             <div class="kv"><h3>Uptime</h3><div class="v">${Math.round(payload.uptime)}s</div></div>
             <div class="kv"><h3>埠號</h3><div class="v">${payload.port}</div></div>
-            <div class="kv"><h3>Sockets</h3><div class="v">${payload.sockets.clientsCount ?? 0}</div></div>
-            <div class="kv"><h3>Rooms</h3><div class="v">${payload.rooms.count}</div></div>
             <div class="kv"><h3>DB</h3><div class="v">${payload.db.status}${payload.db.error ? ' (' + payload.db.error + ')' : ''}</div></div>
           </div>
 
           <div class="card">
             <h2 style="margin:0 0 8px; font-size:18px;">CORS Origins</h2>
             <ul>${corsListHtml}</ul>
-            <p class="muted">Socket Path: <code>${payload.socketPath}</code></p>
           </div>
 
           <div class="card">
@@ -2167,7 +1585,6 @@ app.get('/admin/login', (_req, res) => {
         .err { color: #ef4444; }
         .muted { color: #94a3b8; }
       </style>
-      <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
     </head>
     <body>
       <div class="card">
@@ -2180,7 +1597,6 @@ app.get('/admin/login', (_req, res) => {
           <button id="btnHealth">Health</button>
           <button id="btnDb">Health DB</button>
           <button id="btnOverview" class="primary">Admin Overview</button>
-          <button id="btnSocket">Connect Socket</button>
           <button id="btnClear">Clear Log</button>
         </div>
         <div style="height:12px"></div>
@@ -2226,18 +1642,6 @@ app.get('/admin/login', (_req, res) => {
           xfetch('/admin/overview', { headers: { 'x-admin-token': token } });
         };
         document.getElementById('btnClear').onclick = () => { logEl.textContent = ''; };
-        let socket;
-        document.getElementById('btnSocket').onclick = () => {
-          try {
-            socket = io(window.location.origin, { path: ${JSON.stringify(SOCKET_IO_PATH)}, transports: ['websocket','polling'] });
-            socket.on('connect', () => log('Socket connected id=' + socket.id, 'ok'));
-            socket.on('connect_error', (err) => log('Socket connect_error: ' + err.message, 'err'));
-            socket.on('error', (err) => log('Socket error: ' + (err && err.message ? err.message : String(err)), 'err'));
-            socket.on('disconnect', (reason) => log('Socket disconnected: ' + reason));
-          } catch (e) {
-            log('Socket init error: ' + (e && e.message ? e.message : String(e)), 'err');
-          }
-        };
   </script>
   </body>
   </html>`);
@@ -2469,439 +1873,7 @@ app.get('/admin/env-history', adminAuth, (req, res) => {
     });
     res.json({ lines, tail });
 });
-// Temporary online multi-device test page, served from allowed origin
-app.get('/test', (_req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Snooker Multi-Device Room Test</title>
-      <style>
-        body { font-family: system-ui, sans-serif; margin: 24px; }
-        input, button { padding: 8px; font-size: 14px; }
-        .row { margin-bottom: 12px; }
-        #log { border: 1px solid #ccc; padding: 12px; height: 180px; overflow: auto; }
-        code { background: #f5f5f5; padding: 2px 4px; }
-      </style>
-      <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-iZp3tHf7fWnWv0t21fCk3wJb3wHnHnQK+eVYVb6eTjvYQvC8fK5bQ7zvQkK1kH7V" crossorigin="anonymous"></script>
-    </head>
-    <body>
-      <h2>Snooker Multi-Device Room Test</h2>
-      <div class="row">
-        <label>Room ID: <input id="roomId" placeholder="e.g. demo-1" /></label>
-        <button id="joinBtn">Join Room</button>
-        <button id="leaveBtn">Leave Room</button>
-      </div>
-      <div class="row">
-        <label>Game State JSON:</label><br />
-        <textarea id="state" rows="4" cols="60">{"scoreA":0,"scoreB":0}</textarea><br />
-        <button id="broadcastBtn">Broadcast State</button>
-      </div>
-      <div class="row">
-        <strong>Socket:</strong> <code id="socketInfo"></code>
-      </div>
-      <div id="log"></div>
-
-      <script>
-        const path = ${JSON.stringify(SOCKET_IO_PATH)};
-        const socket = io(window.location.origin, { path, transports: ['websocket', 'polling'] });
-        const logEl = document.getElementById('log');
-        const sockEl = document.getElementById('socketInfo');
-        const roomInput = document.getElementById('roomId');
-        const stateInput = document.getElementById('state');
-
-        function log(msg) {
-          const time = new Date().toISOString();
-          logEl.innerHTML += '[' + time + '] ' + msg + '<br />';
-          logEl.scrollTop = logEl.scrollHeight;
-        }
-
-        socket.on('connect', () => {
-          sockEl.textContent = 'connected (' + socket.id + ')';
-          log('connected: ' + socket.id);
-        });
-        socket.on('disconnect', () => { log('disconnected'); });
-        socket.on('gameState updated', (st) => { log('received state: ' + JSON.stringify(st)); });
-
-        document.getElementById('joinBtn').onclick = () => {
-          const room = roomInput.value.trim();
-          if (!room) return alert('Room ID required');
-          socket.emit('join room', room);
-          log('joined room: ' + room);
-        };
-        document.getElementById('leaveBtn').onclick = () => {
-          const room = roomInput.value.trim();
-          if (!room) return alert('Room ID required');
-          socket.emit('leave room', room);
-          log('left room: ' + room);
-        };
-        document.getElementById('broadcastBtn').onclick = () => {
-          const room = roomInput.value.trim();
-          if (!room) return alert('Room ID required');
-          let parsed;
-          try { parsed = JSON.parse(stateInput.value); } catch { return alert('Invalid JSON'); }
-          socket.emit('update gameState', { roomId: room, newState: parsed });
-          log('broadcast state: ' + JSON.stringify(parsed));
-        };
-      </script>
-    </body>
-  </html>`);
-});
-// Match write endpoints (create, events append, finalize)
-app.post('/api/matches', requireFeature('scoring'), writeAuth, async (req, res) => {
-    try {
-        const { roomId, match, players, timestamps } = req.body || {};
-        if (!roomId || !match || !players || !Array.isArray(players) || players.length !== 2) {
-            return res.status(400).json({ error: 'invalid payload' });
-        }
-        const startedAt = timestamps?.start ? new Date(Number(timestamps.start)) : null;
-        // Ensure members exist (create placeholder if memberId is null)
-        const memberIds = [];
-        for (const p of players) {
-            let memberId = p.memberId ?? null;
-            if (memberId && typeof memberId === 'string') {
-                // Upsert member by provided id
-                const m = await prisma.member.upsert({
-                    where: { id: memberId },
-                    update: { name: p.name ?? 'Unknown' },
-                    create: { id: memberId, name: p.name ?? 'Unknown' },
-                });
-                memberIds.push(m.id);
-            }
-            else {
-                const m = await prisma.member.create({ data: { id: randomUUID(), name: p.name ?? 'Unknown' } });
-                memberIds.push(m.id);
-            }
-        }
-        // Create match
-        const created = await prisma.match.create({
-            data: {
-                room_id: String(roomId),
-                name: String(match.name || 'Snooker Match'),
-                // Optional normalized fields from frontend
-                name_part: match.namePart ? String(match.namePart) : null,
-                match_key_normalized: match.matchKeyNormalized ? String(match.matchKeyNormalized) : null,
-                match_code: match.matchCode ? String(match.matchCode) : null,
-                frames_required: Number(match.framesRequired || 1),
-                red_balls: Number(match.redBalls || 15),
-                started_at: startedAt,
-            },
-        });
-        // Create match players
-        const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-        const [p0Id, p1Id] = memberIds;
-        await prisma.$transaction([
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p0Id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-            prisma.matchPlayer.create({ data: { match_id: created.id, member_id: p1Id, pot_by_ball: defaultsPotByBall, shot_time_buckets: [0, 0, 0, 0] } }),
-        ]);
-        res.status(201).json({ matchId: created.id });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Append events to a match (batch)
-app.post('/api/matches/:matchId/events', requireFeature('scoring'), writeAuth, async (req, res) => {
-    try {
-        const matchId = req.params.matchId;
-        const { events } = req.body || {};
-        if (!matchId || !events || !Array.isArray(events)) {
-            return res.status(400).json({ error: 'invalid payload' });
-        }
-        const maxIdxAgg = await prisma.event.aggregate({ where: { match_id: matchId }, _max: { idx: true } });
-        const startIdx = (maxIdxAgg._max?.idx ?? -1) + 1;
-        // Map incoming events to DB rows with sequential idx
-        const rows = events.map((e, i) => ({
-            match_id: matchId,
-            idx: startIdx + i,
-            type: e.type,
-            player_index: Number(e.playerIndex),
-            player_member_id: String(e.playerMemberId),
-            ball_name: e.ballName ?? null,
-            points: e.points == null ? null : Number(e.points),
-            timestamp: e.timestamp == null ? null : BigInt(e.timestamp),
-            shot_time_ms: e.shotTimeMs == null ? null : Number(e.shotTimeMs),
-        }));
-        // Use transaction with createMany for better performance
-        const result = await prisma.event.createMany({ data: rows });
-        res.json({ accepted: result.count });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Finalize a match: persist foul totals, stats, and winner
-app.post('/api/matches/:matchId/finalize', requireFeature('scoring'), writeAuth, async (req, res) => {
-    try {
-        const matchId = req.params.matchId;
-        const { foulTotals, stats, timestamps, winnerMemberId, playersFinal, match: matchMeta } = req.body || {};
-        console.log(`[finalizeMatch] matchId=${matchId}`);
-        if (stats && stats.perPlayer) {
-            console.log('[finalizeMatch] perPlayer stats sample:', JSON.stringify(stats.perPlayer[0]));
-        }
-        if (!matchId || !foulTotals || !Array.isArray(foulTotals) || foulTotals.length !== 2 || !stats) {
-            return res.status(400).json({ error: 'invalid payload' });
-        }
-        const endedAt = timestamps?.end ? new Date(Number(timestamps.end)) : new Date();
-        let winnerMemberIdInternal = null;
-        if (winnerMemberId) {
-            const winnerMap = await resolveMemberIdentifiers([String(winnerMemberId)]);
-            winnerMemberIdInternal = winnerMap.get(String(winnerMemberId)) || null;
-        }
-        const matchUpdateData = {
-            ended_at: endedAt,
-            winner_member_id: winnerMemberIdInternal,
-        };
-        if (Array.isArray(matchMeta?.handicaps)) {
-            matchUpdateData.handicap0 = Number(matchMeta.handicaps[0] || 0);
-            matchUpdateData.handicap1 = Number(matchMeta.handicaps[1] || 0);
-        }
-        const ops = [
-            prisma.foulTotals.upsert({
-                where: { match_id: matchId },
-                update: { player0_total: Number(foulTotals[0] || 0), player1_total: Number(foulTotals[1] || 0) },
-                create: { match_id: matchId, player0_total: Number(foulTotals[0] || 0), player1_total: Number(foulTotals[1] || 0) },
-            }),
-            prisma.matchStats.upsert({
-                where: { match_id: matchId },
-                update: { events_count: Number(stats.eventsCount || 0), per_player: stats.perPlayer },
-                create: { match_id: matchId, events_count: Number(stats.eventsCount || 0), per_player: stats.perPlayer },
-            }),
-            prisma.match.update({
-                where: { id: matchId },
-                data: matchUpdateData,
-            }),
-        ];
-        if (Array.isArray(playersFinal)) {
-            const perPlayerArray = Array.isArray(stats?.perPlayer) ? stats.perPlayer : [];
-            const candidateIds = playersFinal
-                .map((pf) => (pf && pf.memberId ? String(pf.memberId) : null))
-                .filter((id) => typeof id === 'string');
-            const idMap = await resolveMemberIdentifiers(candidateIds);
-            for (let i = 0; i < playersFinal.length; i++) {
-                const pf = playersFinal[i];
-                if (!pf)
-                    continue;
-                const identifier = pf.memberId ? String(pf.memberId) : null;
-                const mid = identifier ? (idMap.get(identifier) || null) : null;
-                if (!mid)
-                    continue;
-                const defaultsPotByBall = { red: 0, yellow: 0, green: 0, brown: 0, blue: 0, pink: 0, black: 0 };
-                const perPlayerStats = perPlayerArray[pf.index ?? i] || null;
-                const avgShotTimeMs = perPlayerStats && typeof perPlayerStats.avgShotTimeMs === 'number'
-                    ? Math.round(perPlayerStats.avgShotTimeMs)
-                    : 0;
-                const avgBreakTimeMs = perPlayerStats && typeof perPlayerStats.avgBreakTimeMs === 'number'
-                    ? Math.round(perPlayerStats.avgBreakTimeMs)
-                    : 0;
-                const maxBreakTimeMs = perPlayerStats && typeof perPlayerStats.maxBreakTimeMs === 'number'
-                    ? Math.round(perPlayerStats.maxBreakTimeMs)
-                    : 0;
-                const breakCount = perPlayerStats && typeof perPlayerStats.breakCount === 'number'
-                    ? perPlayerStats.breakCount
-                    : 0;
-                ops.push(prisma.matchPlayer.upsert({
-                    where: { match_id_member_id: { match_id: matchId, member_id: mid } },
-                    update: {
-                        frames_won: Number(pf.framesWon || 0),
-                        total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
-                        avg_shot_time_ms: avgShotTimeMs,
-                        avg_break_time_ms: avgBreakTimeMs,
-                        max_break_time_ms: maxBreakTimeMs,
-                        break_count: breakCount,
-                        max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
-                            ? perPlayerStats.maxBreakPoints
-                            : undefined,
-                        foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
-                            ? perPlayerStats.foulCount
-                            : undefined,
-                        quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
-                            ? perPlayerStats.quickShotRate
-                            : undefined,
-                        safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
-                            ? perPlayerStats.safeSuccessRate
-                            : undefined,
-                        pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
-                        shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
-                            ? perPlayerStats.shotTimeBuckets
-                            : [0, 0, 0, 0],
-                    },
-                    create: {
-                        match_id: matchId,
-                        member_id: mid,
-                        frames_won: Number(pf.framesWon || 0),
-                        total_points: perPlayerStats && typeof perPlayerStats.totalPoints === 'number' ? perPlayerStats.totalPoints : Number(pf.score || 0),
-                        pot_by_ball: perPlayerStats && perPlayerStats.potByBall ? perPlayerStats.potByBall : defaultsPotByBall,
-                        shot_time_buckets: perPlayerStats && Array.isArray(perPlayerStats.shotTimeBuckets)
-                            ? perPlayerStats.shotTimeBuckets
-                            : [0, 0, 0, 0],
-                        avg_shot_time_ms: avgShotTimeMs,
-                        avg_break_time_ms: avgBreakTimeMs,
-                        max_break_time_ms: maxBreakTimeMs,
-                        break_count: breakCount,
-                        max_break_points: perPlayerStats && typeof perPlayerStats.maxBreakPoints === 'number'
-                            ? perPlayerStats.maxBreakPoints
-                            : 0,
-                        foul_count: perPlayerStats && typeof perPlayerStats.foulCount === 'number'
-                            ? perPlayerStats.foulCount
-                            : 0,
-                        quick_shot_rate: perPlayerStats && typeof perPlayerStats.quickShotRate === 'number'
-                            ? perPlayerStats.quickShotRate
-                            : 0,
-                        safe_success_rate: perPlayerStats && typeof perPlayerStats.safeSuccessRate === 'number'
-                            ? perPlayerStats.safeSuccessRate
-                            : 0,
-                    },
-                }));
-            }
-        }
-        await prisma.$transaction(ops);
-        res.json({ finalized: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Create room via simple GET for convenience, return shareable links
-app.get('/rooms/new', (req, res) => {
-    const name = req.query.name || 'Room';
-    const code = nextRoomCodeServer();
-    const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    const newRoom = { id: newId, name, code };
-    rooms.push(newRoom);
-    io.emit('rooms', rooms);
-    const origin = (req.headers['x-forwarded-proto'] ? String(req.headers['x-forwarded-proto']) : req.protocol) + '://' + req.get('host');
-    const viewerLink = origin + '/room/' + code;
-    const hostLink = viewerLink + '?host=1';
-    res.json({ id: newRoom.id, name: newRoom.name, code, viewerLink, hostLink });
-});
-// Same-origin room page with simple scoreboard and shareable links
-app.get('/room/:roomId', (req, res) => {
-    const roomId = req.params.roomId;
-    const isHost = String(req.query.host || '') === '1';
-    // Ensure room exists for immediate use
-    if (!rooms.find(r => r.id === roomId)) {
-        rooms.push({ id: roomId, name: 'Room ' + roomId });
-        io.emit('rooms', rooms);
-    }
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Snooker Score Room ${roomId}</title>
-      <style>
-        :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
-        body { margin: 0; padding: 24px; background: #0f172a; color: #e2e8f0; }
-        .wrap { max-width: 920px; margin: 0 auto; }
-        .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; }
-        h1 { font-size: 20px; margin: 0 0 12px; }
-        .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .score { display:flex; gap:16px; align-items:center; font-size:28px; }
-        .score .team { background:#0b1220; padding:10px 14px; border-radius:10px; border:1px solid #374151; }
-        button { padding: 10px 14px; border: 1px solid #1f2937; border-radius: 8px; background: #1f2937; color: #e5e7eb; cursor: pointer; }
-        button.primary { background: #2563eb; border-color: #1d4ed8; }
-        input { padding:10px; border-radius:8px; border:1px solid #374151; background:#0b1220; color:#e5e7eb; }
-        .kbd { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: #0b1220; border: 1px solid #1f2937; border-radius: 6px; padding: 1px 6px; }
-        .muted { color:#94a3b8; }
-        .log { background: #0b1220; border: 1px solid #1f2937; border-radius: 12px; padding: 12px; white-space: pre-wrap; overflow: auto; max-height: 240px; }
-      </style>
-      <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4/dist/socket.io.min.js"></script>
-    </head>
-    <body>
-      <div class="wrap">
-        <div class="card">
-          <h1>Score Room #${roomId} ${isHost ? '(Host)' : '(Viewer)'} </h1>
-          <p class="muted">同源頁面，免跨域。分享連結：
-            <span class="kbd" id="viewerLink"></span>
-            <button id="copyViewer">複製 Viewer 連結</button>
-            <span style="margin-left:12px"></span>
-            <span class="kbd" id="hostLink"></span>
-            <button id="copyHost">複製 Host 連結</button>
-          </p>
-          <div class="score">
-            <div class="team">A: <span id="scoreA">0</span></div>
-            <div class="team">B: <span id="scoreB">0</span></div>
-          </div>
-          <div class="row" id="hostControls" style="margin-top:12px; display:${isHost ? 'flex' : 'none'}">
-            <button id="aPlus" class="primary">A +1</button>
-            <button id="aMinus">A -1</button>
-            <button id="bPlus" class="primary">B +1</button>
-            <button id="bMinus">B -1</button>
-            <button id="reset">重設 0:0</button>
-          </div>
-          <div class="row" style="margin-top:12px">
-            <strong>Socket:</strong>
-            <span class="kbd" id="sock"></span>
-          </div>
-          <div class="log" id="log"></div>
-        </div>
-      </div>
-
-      <script>
-        var roomId = ${JSON.stringify(roomId)};
-        var isHost = ${JSON.stringify(isHost)};
-        var sockEl = document.getElementById('sock');
-        var logEl = document.getElementById('log');
-        var aEl = document.getElementById('scoreA');
-        var bEl = document.getElementById('scoreB');
-        var viewerLinkEl = document.getElementById('viewerLink');
-        var hostLinkEl = document.getElementById('hostLink');
-        var viewerLink = window.location.origin + '/room/' + roomId;
-        var hostLink = viewerLink + '?host=1';
-        viewerLinkEl.textContent = viewerLink;
-        hostLinkEl.textContent = hostLink;
-        document.getElementById('copyViewer').onclick = function(){ navigator.clipboard.writeText(viewerLink); };
-        document.getElementById('copyHost').onclick = function(){ navigator.clipboard.writeText(hostLink); };
-
-        function log(msg){ var t = new Date().toLocaleTimeString(); var div = document.createElement('div'); div.textContent = '[' + t + '] ' + msg; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; }
-        function setScores(a,b){ aEl.textContent = String(a); bEl.textContent = String(b); }
-
-        var path = ${JSON.stringify(SOCKET_IO_PATH)};
-        var socket = io(window.location.origin, { path: path, transports: ['websocket','polling'] });
-        socket.on('connect', function(){ sockEl.textContent = 'connected (' + socket.id + ')'; log('connected: ' + socket.id); socket.emit('join room', roomId); });
-        socket.on('disconnect', function(){ log('disconnected'); });
-        socket.on('gameState updated', function(st){ if (st && typeof st.scoreA === 'number' && typeof st.scoreB === 'number') { setScores(st.scoreA, st.scoreB); } log('state: ' + JSON.stringify(st)); });
-
-        function broadcast(a,b){ var st = { scoreA: a, scoreB: b }; socket.emit('update gameState', { roomId: roomId, newState: st }); }
-        var a = 0, b = 0; setScores(a,b);
-        if (isHost) {
-          document.getElementById('aPlus').onclick = function(){ a++; setScores(a,b); broadcast(a,b); };
-          document.getElementById('aMinus').onclick = function(){ a = Math.max(0, a-1); setScores(a,b); broadcast(a,b); };
-          document.getElementById('bPlus').onclick = function(){ b++; setScores(a,b); broadcast(a,b); };
-          document.getElementById('bMinus').onclick = function(){ b = Math.max(0, b-1); setScores(a,b); broadcast(a,b); };
-          document.getElementById('reset').onclick = function(){ a = 0; b = 0; setScores(a,b); broadcast(a,b); };
-        }
-      </script>
-    </body>
-  </html>`);
-});
-io.on('connection', (socket) => {
-    console.log('a user connected');
-    socket.on('join room', (roomId) => {
-        socket.join(roomId);
-        console.log(`a user joined room ${roomId}`);
-        const room = rooms.find(r => r.id === roomId || r.code === roomId);
-        if (room && room.gameState) {
-            socket.emit('gameState updated', room.gameState);
-        }
-    });
-    socket.on('update gameState', ({ roomId, newState }) => {
-        const room = rooms.find(r => r.id === roomId || r.code === roomId);
-        if (room) {
-            room.gameState = newState;
-        }
-        // Broadcast to entire room (include sender) to ensure OBS/browser sources receive updates
-        io.to(roomId).emit('gameState updated', newState);
-    });
-    socket.on('disconnect', () => {
-        console.log('user disconnected');
-    });
-});
-server.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`listening on 0.0.0.0:${PORT}`);
 });
 process.on('SIGINT', async () => {
@@ -3070,8 +2042,7 @@ app.get('/api/members/:id/matches', async (req, res) => {
                             select: { id: true, name: true }
                         }
                     }
-                },
-                stats: true,
+                }
             },
             orderBy: {
                 started_at: 'desc'
@@ -3486,163 +2457,6 @@ app.post('/api/members/register-with-code', async (req, res) => {
         res.status(status).json({ error: msg });
     }
 });
-// Operator: Get match history
-app.get('/api/operators/:id/matches', async (req, res) => {
-    try {
-        const id = String(req.params.id || '').trim();
-        if (!id)
-            return res.status(400).json({ error: 'Missing operator ID' });
-        const requesterId = String(req.headers['x-member-id'] || '').trim();
-        if (!requesterId)
-            return res.status(401).json({ error: 'Unauthorized' });
-        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
-        if (!requester)
-            return res.status(401).json({ error: 'Unauthorized' });
-        if (requester.role !== 'ADMIN')
-            return res.status(403).json({ error: 'Forbidden' });
-        // Resolve ID if email
-        let opId = id;
-        if (id.includes('@')) {
-            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
-            if (!m)
-                return res.status(404).json({ error: 'Operator not found' });
-            opId = m.id;
-        }
-        if (opId !== requesterId)
-            return res.status(403).json({ error: 'operator mismatch' });
-        const matches = await prisma.match.findMany({
-            where: { operator_id: opId },
-            orderBy: { started_at: 'desc' },
-            include: {
-                players: {
-                    include: {
-                        member: { select: { name: true } }
-                    }
-                },
-                operator: { select: { name: true, club_name: true } }
-            }
-        });
-        const result = matches.map(m => {
-            const p0 = m.players[0];
-            const p1 = m.players[1];
-            const p0Name = p0?.member?.name || 'Unknown';
-            const p1Name = p1?.member?.name || 'Unknown';
-            const p0Score = p0?.frames_won || 0;
-            const p1Score = p1?.frames_won || 0;
-            return {
-                id: m.id,
-                startedAt: m.started_at,
-                endedAt: m.ended_at,
-                operator: m.operator ? { name: m.operator.name, clubName: m.operator.club_name } : null,
-                matchName: m.name,
-                matchCode: m.match_code,
-                framesRequired: m.frames_required,
-                p0: { name: p0Name, score: p0Score, handicap: m.handicap0, maxBreak: p0?.max_break_points },
-                p1: { name: p1Name, score: p1Score, handicap: m.handicap1, maxBreak: p1?.max_break_points },
-                result: m.winner_member_id ? (m.winner_member_id === p0?.member_id ? `${p0Name} Win` : `${p1Name} Win`) : 'In Progress',
-                durationSeconds: m.started_at && m.ended_at ? Math.floor((new Date(m.ended_at).getTime() - new Date(m.started_at).getTime()) / 1000) : null,
-            };
-        });
-        res.json({ matches: result });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Operator: Create Room (Limit 5 active rooms)
-app.post('/api/operators/:id/rooms', async (req, res) => {
-    try {
-        const id = String(req.params.id || '').trim();
-        if (!id)
-            return res.status(400).json({ error: 'Missing operator ID' });
-        const requesterId = String(req.headers['x-member-id'] || '').trim();
-        if (!requesterId)
-            return res.status(401).json({ error: 'Unauthorized' });
-        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
-        if (!requester)
-            return res.status(401).json({ error: 'Unauthorized' });
-        if (requester.role !== 'ADMIN')
-            return res.status(403).json({ error: 'Forbidden' });
-        // Resolve ID if email
-        let opId = id;
-        if (id.includes('@')) {
-            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
-            if (!m)
-                return res.status(404).json({ error: 'Operator not found' });
-            opId = m.id;
-        }
-        if (opId !== requesterId)
-            return res.status(403).json({ error: 'operator mismatch' });
-        // Check active in-memory rooms for this operator
-        // We count the rooms currently in the system associated with this operator
-        const activeCount = rooms.filter(r => r.operatorId === opId).length;
-        if (activeCount >= 5) {
-            return res.status(403).json({ error: '已達到房間數量上限 (5)' });
-        }
-        const code = await nextRoomCodeServer();
-        // Create in-memory room immediately so it appears in the active list
-        const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-        const newRoom = {
-            id: newId,
-            name: `Room ${code}`,
-            code,
-            scores: [0, 0],
-            operatorId: opId
-        };
-        rooms.push(newRoom);
-        // Persist to DB
-        try {
-            await prisma.room.create({
-                data: {
-                    id: newId,
-                    name: `Room ${code}`,
-                    code,
-                    operator_id: opId,
-                    scores: [0, 0],
-                    gameState: {}
-                }
-            });
-        }
-        catch (e) {
-            console.error('Failed to persist operator room:', e);
-        }
-        io.emit('rooms', rooms);
-        res.json({ roomCode: code, roomId: newId });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-app.get('/api/operators/:id/active-rooms', async (req, res) => {
-    try {
-        const id = String(req.params.id || '').trim();
-        if (!id)
-            return res.status(400).json({ error: 'Missing operator ID' });
-        const requesterId = String(req.headers['x-member-id'] || '').trim();
-        if (!requesterId)
-            return res.status(401).json({ error: 'Unauthorized' });
-        const requester = await prisma.member.findUnique({ where: { id: requesterId }, select: { id: true, role: true } });
-        if (!requester)
-            return res.status(401).json({ error: 'Unauthorized' });
-        if (requester.role !== 'ADMIN')
-            return res.status(403).json({ error: 'Forbidden' });
-        // Resolve ID if email
-        let opId = id;
-        if (id.includes('@')) {
-            const m = await prisma.member.findUnique({ where: { email: id }, select: { id: true } });
-            if (!m)
-                return res.status(404).json({ error: 'Operator not found' });
-            opId = m.id;
-        }
-        if (opId !== requesterId)
-            return res.status(403).json({ error: 'operator mismatch' });
-        const active = rooms.filter(r => r.operatorId === opId);
-        res.json({ rooms: active });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
 // Simple password hashing helpers (SHA-256 with per-user salt)
 import { OAuth2Client } from 'google-auth-library';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '277887232996-5lfubeh4be5pnrd458buc489uq0h0e1g.apps.googleusercontent.com');
@@ -3858,48 +2672,6 @@ async function findMemberByIdOrEmail(identifier) {
         },
     });
 }
-app.post('/api/members/validate', async (req, res) => {
-    try {
-        const { identifiers } = (req.body || {});
-        const ids = Array.isArray(identifiers) ? identifiers.map(s => String(s).trim()).filter(Boolean) : [];
-        if (ids.length === 0) {
-            return res.status(400).json({ error: 'identifiers is required (array of strings)' });
-        }
-        const exists = {};
-        const names = {};
-        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        for (const rawId of ids) {
-            const id = rawId.trim();
-            if (!id)
-                continue;
-            let member = null;
-            if (id.includes('@')) {
-                member = await prisma.member.findFirst({
-                    where: { email: id },
-                    select: { name: true },
-                });
-            }
-            else if (uuidPattern.test(id)) {
-                member = await prisma.member.findUnique({
-                    where: { id },
-                    select: { name: true },
-                });
-            }
-            else {
-                member = await prisma.member.findFirst({
-                    where: { member_code: id },
-                    select: { name: true },
-                });
-            }
-            exists[id] = !!member;
-            names[id] = member ? member.name : null;
-        }
-        res.json({ exists, names });
-    }
-    catch (err) {
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
 app.get('/api/members/:id', async (req, res) => {
     try {
         const idOrEmail = String(req.params.id || '').trim();
@@ -3943,9 +2715,6 @@ app.post('/api/members/:id/renew', async (req, res) => {
 app.post('/api/admin/wipe-test-data', adminAuth, async (_req, res) => {
     try {
         await prisma.$transaction([
-            prisma.event.deleteMany({}),
-            prisma.foulTotals.deleteMany({}),
-            prisma.matchStats.deleteMany({}),
             prisma.matchPlayer.deleteMany({}),
             prisma.match.deleteMany({}),
             prisma.memberCodeSequence.deleteMany({}),
@@ -4297,11 +3066,6 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
                     select: { id: true },
                 });
                 const clubId = club?.id || null;
-                const rooms = await prisma.room.findMany({
-                    where: { operator_id: id },
-                    select: { id: true },
-                });
-                const roomIds = rooms.map((r) => r.id);
                 const matchPlayers = await prisma.matchPlayer.findMany({
                     where: { member_id: id },
                     select: { match_id: true },
@@ -4312,7 +3076,6 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
                         OR: [
                             { operator_id: id },
                             { winner_member_id: id },
-                            ...(roomIds.length ? [{ room_id: { in: roomIds } }] : []),
                         ],
                     },
                     select: { id: true },
@@ -4341,10 +3104,6 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
                         await tx.clubProfile.deleteMany({ where: { id: clubId } });
                     }
                     await tx.$executeRaw(Prisma.sql `DELETE FROM "ClubMessageRead" WHERE "memberId" = ${id}`);
-                    await tx.$executeRaw(Prisma.sql `DELETE FROM "MatchInvite" WHERE "memberId" = ${id} OR "operatorId" = ${id}`);
-                    if (roomIds.length) {
-                        await tx.$executeRaw(Prisma.sql `DELETE FROM "MatchInvite" WHERE "roomId" IN (${Prisma.join(roomIds)})`);
-                    }
                     await tx.clubMember.deleteMany({ where: { memberId: id } });
                     await tx.tournamentSignup.deleteMany({ where: { memberId: id } });
                     await tx.liveAnnouncement.deleteMany({ where: { createdByMemberId: id } });
@@ -4358,12 +3117,8 @@ app.delete('/api/admin/members/:id', adminAuth, async (req, res) => {
                     await tx.tableSession.deleteMany({ where: { endedByOperatorId: id } });
                     await tx.breakRecord.deleteMany({ where: { member_id: id } });
                     await tx.breakRecord.deleteMany({ where: { created_by_member_id: id } });
-                    await tx.event.deleteMany({ where: { player_member_id: id } });
                     if (matchIds.length) {
                         await tx.match.deleteMany({ where: { id: { in: matchIds } } });
-                    }
-                    if (roomIds.length) {
-                        await tx.room.deleteMany({ where: { id: { in: roomIds } } });
                     }
                     await tx.member.delete({ where: { id } });
                 });
@@ -4752,45 +3507,6 @@ app.delete('/api/admin/breaks/:id', adminAuth, async (req, res) => {
     catch (err) {
         if (err?.code === 'P2025')
             return res.status(404).json({ error: 'break 不存在' });
-        res.status(500).json({ error: String(err?.message || err) });
-    }
-});
-// Admin: list matches (requires admin token, optional filter by memberId)
-app.get('/api/admin/matches', adminAuth, async (req, res) => {
-    try {
-        const page = Number(req.query.page || '1');
-        const pageSize = Number(req.query.pageSize || '20');
-        const take = Math.max(1, Math.min(pageSize, 100));
-        const skip = Math.max(0, (page - 1) * take);
-        const memberId = String(req.query.memberId || '').trim();
-        const where = {};
-        if (memberId) {
-            where.players = { some: { member_id: memberId } };
-        }
-        const [total, matches] = await prisma.$transaction([
-            prisma.match.count({ where }),
-            prisma.match.findMany({
-                where,
-                orderBy: { started_at: 'desc' },
-                skip,
-                take,
-                include: {
-                    players: {
-                        include: {
-                            member: {
-                                select: { id: true, name: true, member_code: true },
-                            },
-                        },
-                    },
-                    winner_member: {
-                        select: { id: true, name: true, member_code: true },
-                    },
-                },
-            }),
-        ]);
-        res.json({ total, page, pageSize: take, matches });
-    }
-    catch (err) {
         res.status(500).json({ error: String(err?.message || err) });
     }
 });

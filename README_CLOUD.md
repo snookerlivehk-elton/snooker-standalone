@@ -22,30 +22,22 @@ Environment Variables
 - Persist audit log by mounting `./backend/env-history.jsonl`.
 
 Cloud Quick Start (Backend-first)
-- Copy `backend/.env.cloud.example` to cloud host and fill values (`PORT`, `CORS_ORIGIN`, `DATABASE_URL`, `SOCKET_IO_PATH`).
+- Copy `backend/.env.cloud.example` to cloud host and fill values (`PORT`, `CORS_ORIGIN`, `DATABASE_URL`).
 - Ensure DB connectivity and open port 3000 or place behind reverse proxy.
 - Start backend via Compose override: `docker compose -f docker-compose.yml -f docker-compose.override.cloud.yml up -d backend`.
-- Keep existing local Overlay for now; set `frontend/.env.cloud.example` -> `VITE_SOCKET_URL` to cloud backend URL.
+- If deploying the frontend container, set its API base URL to the public backend URL.
 
 Docker Compose Override (example)
 - Use `docker-compose.override.cloud.yml` to inject environment variables and expose ports in cloud.
 - Command: `docker compose -f docker-compose.yml -f docker-compose.override.cloud.yml up -d`.
 
 Reverse Proxy Notes
-- Align `SOCKET_IO_PATH` (default `/socket.io`) and enable WebSocket upgrade.
-- Example Nginx config:
-```
-location /socket.io/ {
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
-  proxy_http_version 1.1;
-  proxy_pass http://backend:3000/socket.io/;
-}
-```
+- Standard HTTP reverse proxying is sufficient for the current platform.
+- Ensure `/api`, `/health`, and `/admin` routes reach the backend service.
 
 Production Checklist
-- `CORS_ORIGIN` includes all public domains (frontend, overlay).
-- `VITE_SOCKET_URL` points to backend public URL.
+- `CORS_ORIGIN` includes all public frontend domains.
+- Frontend API base URL points to backend public URL.
 - DB reachable and schema/migrations applied.
 - Ports opened or reverse proxy configured with TLS.
 

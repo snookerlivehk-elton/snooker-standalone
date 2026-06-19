@@ -11,7 +11,7 @@ Railway 設定與重部署行動手冊（snookerhk.live）
 - Variables（不要手動設定 `PORT`）：
   - `DATABASE_URL`：填入 Railway Postgres 連線字串（例如 `postgresql://USER:PASSWORD@HOST:PORT/DB?schema=public`）。
   - `CORS_ORIGIN`：`https://snookerhk.live,http://localhost:5173,http://localhost:8080`
-  - 可選：`SOCKET_IO_PATH`（預設 `/socket.io`）、`ENV_AUDIT_ENABLED=true`（如需關閉可設為 `false`）。
+  - 可選：`ENV_AUDIT_ENABLED=true`（如需關閉可設為 `false`）。
 
 重部署流程
 1) 在 Railway 後端服務頁更新上述設定與變數。
@@ -40,33 +40,13 @@ Railway 設定與重部署行動手冊（snookerhk.live）
 - CORS 錯誤（前端 fetch 失敗）：
   - 將所有前端公開網址加入 `CORS_ORIGIN`（多域用逗號分隔）。
 
-Socket.IO 反向代理（Nginx）
-- 若前端在 Nginx 背後，需啟用 WebSocket 升級並代理到後端：
-```
-location /socket.io/ {
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
-  proxy_http_version 1.1;
-  proxy_pass https://snookerhk.live/socket.io/; # 或後端服務 URL
-}
-```
-- 保持 SPA fallback 將非實體檔案請求導向 `index.html`；避免將 `/test` 代理回前端造成自我回圈。
-
-前端 `/test` 部署與驗收
-- 採用靜態檔案模式：
-  - 確保存在 `frontend/public/test/index.html`（已建立）。
-  - 執行 `npm run build` 後，檢查 `frontend/dist/test/index.html` 是否存在。
-  - 部署時將 `dist/` 内容放到前端 Nginx 的 `/usr/share/nginx/html`，保持 `test/` 目錄結構。
-- 或改用後端 `/test` 路由（在 `backend/index.ts`）：
-  - 確保前端 Nginx 未攔截 `/test` 導致回圈；必要時移除對 `/test` 的代理規則，讓請求直達後端。
-- 驗收：
-  - `https://snookerhk.live/test` 正常顯示目錄版測試頁。
-  - 若使用後端路由，`https://snookerhk.live/test` 返回後端提供的測試頁內容。
+反向代理（Nginx）
+- 目前系統只需將 `/api`、`/health`、`/health/db`、`/admin/*` 正常代理到後端即可。
+- 保持 SPA fallback 將非實體檔案請求導向 `index.html`；避免將後端健康檢查或 admin 路由誤導回前端。
 
 人工實測清單（線上）
 - 後端：`/health`、`/health/db`、`/admin/overview?token=wwww5678` 均為 `200`。
-- Socket：`/socket.io/?EIO=4&transport=polling` 握手返回 200/開局 JSON。
-- 前端：`/test` 可用，Admin 入口可透過直接開啟方式查看（不受 CORS）。
+- 前端：首頁、會員登入、場館後台與 admin 概覽可正常開啟。
 
 交付說明
 - 本手冊已根據本專案與域名 `snookerhk.live` 客製化；完成上述設定與重部署後，請回報驗證結果，我可再進一步協助追蹤故障或優化設定。
