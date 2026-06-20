@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import VenueDashboard from './VenueDashboard';
+import { API_URL } from './config';
+import { useFeatureEnabled } from './lib/features';
+import VenueModuleStandaloneLayout from './venue/modules/VenueModuleStandaloneLayout';
+import VenueLiveModule from './venue/modules/VenueLiveModule';
+import VenueClubMessagesModule from './venue/modules/VenueClubMessagesModule';
+import VenueTournamentsModule from './venue/modules/VenueTournamentsModule';
 
 type VenueDashboardTab = 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members';
 type VenueDashboardContentSection = 'live' | 'club_messages' | 'tournaments';
@@ -59,7 +65,48 @@ const MODULE_PAGE_META: Record<string, { tab: VenueDashboardTab; section?: Venue
 const VenueModulePage: React.FC = () => {
   const { moduleCode = '' } = useParams();
   const meta = MODULE_PAGE_META[String(moduleCode || '').trim()];
+  const session = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('memberSession') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+  const operatorId = String((session as any)?.id || '').trim();
+  const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
+  const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
+  const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
+
   if (!meta) return <Navigate to="/venue/modules" replace />;
+
+  if ((moduleCode === 'live' || moduleCode === 'club_messages' || moduleCode === 'tournaments') && !operatorId) {
+    return <Navigate to={`/members/login?next=${encodeURIComponent(`/venue/manage/${moduleCode}`)}`} replace />;
+  }
+
+  if (moduleCode === 'live') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenueLiveModule operatorId={operatorId} enabled={liveEnabled} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
+  if (moduleCode === 'club_messages') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenueClubMessagesModule operatorId={operatorId} enabled={clubMessagesEnabled} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
+  if (moduleCode === 'tournaments') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenueTournamentsModule operatorId={operatorId} enabled={tournamentsEnabled} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
   return (
     <VenueDashboard
       forcedTab={meta.tab}

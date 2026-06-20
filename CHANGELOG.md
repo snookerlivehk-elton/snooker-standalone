@@ -5,6 +5,9 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: `VenueModuleStandaloneLayout` plus standalone venue module components for `live`, `club_messages`, and `tournaments`.
+- Changed: `/venue/manage/live`, `/venue/manage/club_messages`, and `/venue/manage/tournaments` now render independent module pages instead of routing through `VenueDashboard` as a forced tab wrapper.
+- Changed: `VenueDashboard` content management tab now reuses the extracted venue module components for live announcements, club messages, and tournaments, reducing duplicated implementation between dashboard and standalone routes.
 - Added: New `/venue/manage/:moduleCode` route and `VenueModulePage` wrapper so venue-admin modules can open under dedicated URLs instead of only reusing `VenueDashboard` query tabs.
 - Changed: `VenueModules` "前往管理" actions now navigate to standalone venue module pages.
 - Changed: `VenueDashboard` now supports standalone `forcedTab` rendering for venue module pages and hides the full tab switcher in module-page mode.

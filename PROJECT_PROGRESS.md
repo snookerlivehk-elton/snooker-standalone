@@ -316,6 +316,28 @@
   - 此輪先完成「獨立 URL + 單模組承載 + content 子段落聚焦」
   - 下一輪若要再深化，可把 `VenueDashboard` 內各模組內容真正抽成獨立 component / page，而不只共用容器
 
+## 最新已完成：Venue Admin Module Extraction (Phase 2)（2026-06-20）
+
+- 已升級：
+  - `frontend/src/VenueDashboard.tsx`
+  - `frontend/src/VenueModulePage.tsx`
+  - `frontend/src/venue/modules/VenueModuleStandaloneLayout.tsx`
+  - `frontend/src/venue/modules/VenueLiveModule.tsx`
+  - `frontend/src/venue/modules/VenueClubMessagesModule.tsx`
+  - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+- Frontend
+  - `live`、`club_messages`、`tournaments` 已由 `VenueDashboard` 內聯大段 JSX 抽成真正獨立 module component
+  - `/venue/manage/live`
+  - `/venue/manage/club_messages`
+  - `/venue/manage/tournaments`
+    現已直接渲染 standalone module page，不再經 `VenueDashboard forcedTab` 承載整頁
+  - `VenueDashboard` 的 `content` tab 改為重用上述獨立 component，避免 dashboard 與 standalone page 各自維護一份實作
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 此輪先完成內容型模組的真正抽離，屬風險最低的一批
+  - 下一輪可沿同一模式逐步抽 `members`，再視情況處理 `booking / qr / points / highbreak / home`
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。
