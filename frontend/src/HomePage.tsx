@@ -3,6 +3,7 @@ import TopBarPublic from './components/TopBarPublic';
 import { API_URL } from './config';
 import { getLeaderboardClubsHighest, getLeaderboardMembersHighest, getNewsItems, getPublicClubs, getPublicLiveAnnouncements, getSiteAds, getSiteNotice } from './lib/api';
 import slhkLogo from './assets/slhk-logo.svg';
+import { fetchModuleStates, type ModuleCode } from './lib/features';
 
 const HomePage: React.FC = () => {
   const [notice, setNotice] = useState<any>(null);
@@ -23,8 +24,25 @@ const HomePage: React.FC = () => {
   const [liveAnnouncements, setLiveAnnouncements] = useState<any[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
-  const showLeaderboard = notice?.homeShowLeaderboard !== false;
-  const showClubList = notice?.homeShowClubList !== false;
+  const [moduleStates, setModuleStates] = useState<Record<string, any>>({});
+  const isHomeModuleVisible = (code: ModuleCode) => moduleStates[code]?.effectiveHomeVisible !== false;
+  const showNewsSection = isHomeModuleVisible('content');
+  const showLiveSection = isHomeModuleVisible('live');
+  const showLeaderboard = notice?.homeShowLeaderboard !== false && isHomeModuleVisible('highbreak');
+  const showClubList = notice?.homeShowClubList !== false && isHomeModuleVisible('system_portal');
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const states = await fetchModuleStates(API_URL);
+        if (mounted) setModuleStates(states);
+      } catch {
+        if (mounted) setModuleStates({});
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -168,13 +186,13 @@ const HomePage: React.FC = () => {
   const heroItem = heroAds[heroIndex] || null;
   const quickLinks = useMemo(() => {
     const items = [
-      { label: '最新新聞', href: '#news' },
-      { label: '直播排程', href: '#live' },
-      { label: '排行榜', href: '#leaderboard' },
-      { label: '場館資訊', href: '#clubs' },
+      showNewsSection ? { label: '最新新聞', href: '#news' } : null,
+      showLiveSection ? { label: '直播排程', href: '#live' } : null,
+      showLeaderboard ? { label: '排行榜', href: '#leaderboard' } : null,
+      showClubList ? { label: '場館資訊', href: '#clubs' } : null,
     ];
-    return items;
-  }, []);
+    return items.filter(Boolean) as Array<{ label: string; href: string }>;
+  }, [showClubList, showLeaderboard, showLiveSection, showNewsSection]);
 
   const formatDate = (value?: string | null) => {
     if (!value) return '';
@@ -317,6 +335,7 @@ const HomePage: React.FC = () => {
             </section>
           ) : null}
 
+          {showNewsSection ? (
           <section id="news" className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -365,7 +384,9 @@ const HomePage: React.FC = () => {
               </div>
             )}
           </section>
+          ) : null}
 
+          {showLiveSection ? (
           <section id="live" className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -406,6 +427,7 @@ const HomePage: React.FC = () => {
               </div>
             )}
           </section>
+          ) : null}
 
           {showLeaderboard ? (
             <section id="leaderboard" className="space-y-3">

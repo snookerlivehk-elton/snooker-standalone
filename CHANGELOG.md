@@ -5,6 +5,24 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Changed: `club_messages` module manifest now supports public routes, matching its existing use in `ClubPublicPage`.
+- Changed: Module registry sync now corrects `club_messages` public visibility for existing environments that were seeded before the manifest fix.
+- Changed: `ClubPublicPage` live, tournaments, and club-messages tabs now require both legacy enabled/assignment checks and module public visibility before they render or load public data.
+- Changed: `/news` is now guarded by `content` module public visibility.
+- Changed: `/club/:clubId` is now guarded by `system_portal` module public visibility.
+- Changed: `ClubPublicPage` now uses `useModuleVisible('system_portal', 'public')` for its floating portal-home entry so in-page visibility matches route-level visibility.
+- Changed: Frontend routing now uses module visibility for the system portal entry.
+- Changed: `/` now resolves through `system_portal` public visibility and redirects to `/home` only when the portal is publicly enabled; otherwise it redirects to `/members/login`.
+- Changed: `/home` is now guarded by `system_portal` home visibility instead of being always reachable.
+- Changed: Added frontend `useModuleVisible()` helper so routes can read `effectivePublicVisible` and `effectiveHomeVisible` directly from the shared module state snapshot.
+- Changed: `/api/features` now also returns resolved `moduleStates`, combining module manifests with `SystemModuleConfig` visibility settings and falling back safely to manifest defaults.
+- Changed: Frontend feature caching now stores the shared `/api/features` snapshot and exposes module visibility through `fetchModuleStates()`.
+- Changed: `/home` now starts using module-driven visibility for homepage sections:
+  - `content` controls latest news
+  - `live` controls live schedule
+  - `highbreak` controls leaderboard
+  - `system_portal` currently controls featured clubs
+- Changed: Homepage quick links now hide links for sections that are disabled by module visibility.
 - Changed: `/api/admin/features` now prefers `SystemModuleConfig` for reads and writes, while still mirroring updates into legacy `FeatureFlag` for compatibility.
 - Changed: `/api/admin/club-features/:featureKey` now prefers `ClubModuleConfig` for reads and writes, while still mirroring updates into legacy `ClubFeatureAccess`.
 - Changed: Admin feature management now performs a best-effort module registry sync before reading/writing module config state, so new module rows can be initialized lazily without breaking legacy fallbacks.

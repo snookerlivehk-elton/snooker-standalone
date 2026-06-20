@@ -24,7 +24,7 @@ import {
   signupTournament,
 } from './lib/api';
 import Tabs from './components/Tabs';
-import { useFeatureEnabled } from './lib/features';
+import { useFeatureEnabled, useModuleVisible } from './lib/features';
 
 function normalizeVideoHref(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -108,7 +108,13 @@ const ClubPublicPage: React.FC = () => {
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
   const { enabled: pointsEnabled } = useFeatureEnabled(API_URL, 'points');
-  const { enabled: systemPortalEnabled } = useFeatureEnabled(API_URL, 'system_portal');
+  const { visible: systemPortalVisible } = useModuleVisible(API_URL, 'system_portal', 'public');
+  const { visible: clubMessagesPublicVisible } = useModuleVisible(API_URL, 'club_messages', 'public');
+  const { visible: livePublicVisible } = useModuleVisible(API_URL, 'live', 'public');
+  const { visible: tournamentsPublicVisible } = useModuleVisible(API_URL, 'tournaments', 'public');
+  const clubMessagesTabEnabled = clubMessagesEnabled && clubMessagesPublicVisible;
+  const liveTabEnabled = liveEnabled && livePublicVisible;
+  const tournamentsTabEnabled = tournamentsEnabled && tournamentsPublicVisible;
 
   const [myPoints, setMyPoints] = useState<{ balance: number; updatedAt: string | null } | null>(null);
   const [myPointsLoading, setMyPointsLoading] = useState(false);
@@ -279,10 +285,10 @@ const ClubPublicPage: React.FC = () => {
   }, [siteAdOpen, siteAdConfig, siteAdItems, siteAdCurrent]);
 
   useEffect(() => {
-    if (activeTab === 'messages' && !clubMessagesEnabled) setActiveTab('booking');
-    if (activeTab === 'signup' && !tournamentsEnabled) setActiveTab('booking');
-    if (activeTab === 'live' && !liveEnabled) setActiveTab('booking');
-  }, [activeTab, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
+    if (activeTab === 'messages' && !clubMessagesTabEnabled) setActiveTab('booking');
+    if (activeTab === 'signup' && !tournamentsTabEnabled) setActiveTab('booking');
+    if (activeTab === 'live' && !liveTabEnabled) setActiveTab('booking');
+  }, [activeTab, clubMessagesTabEnabled, liveTabEnabled, tournamentsTabEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -494,7 +500,7 @@ const ClubPublicPage: React.FC = () => {
     let mounted = true;
     (async () => {
       if (!clubId) return;
-      if (!liveEnabled) {
+      if (!liveTabEnabled) {
         if (mounted) setClubLive([]);
         if (mounted) setClubLiveLoading(false);
         return;
@@ -510,13 +516,13 @@ const ClubPublicPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [clubId, liveEnabled]);
+  }, [clubId, liveTabEnabled]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (!clubId) return;
-      if (!tournamentsEnabled) {
+      if (!tournamentsTabEnabled) {
         if (mounted) setTournaments([]);
         if (mounted) setTournamentsLoading(false);
         return;
@@ -532,12 +538,12 @@ const ClubPublicPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [clubId, sessionMemberId, tournamentsEnabled]);
+  }, [clubId, sessionMemberId, tournamentsTabEnabled]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      if (!clubMessagesEnabled) {
+      if (!clubMessagesTabEnabled) {
         if (mounted) setClubMessages([]);
         if (mounted) setClubMessagesLoading(false);
         return;
@@ -557,7 +563,7 @@ const ClubPublicPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [clubId, clubMessagesEnabled]);
+  }, [clubId, clubMessagesTabEnabled]);
 
   useEffect(() => {
     if (!clubId || !session?.id) {
@@ -910,7 +916,7 @@ const ClubPublicPage: React.FC = () => {
           </button>
         )}
       </div>
-      {systemPortalEnabled && (
+      {systemPortalVisible && (
         <a
           href="https://www.snookerhk.live/"
           target="_blank"
@@ -1135,7 +1141,7 @@ const ClubPublicPage: React.FC = () => {
           <Tabs
             items={[
               { key: 'booking', label: '訂台' },
-              ...(clubMessagesEnabled ? [{
+              ...(clubMessagesTabEnabled ? [{
                 key: 'messages',
                 label: (
                   <span className="inline-flex items-center">
@@ -1143,8 +1149,8 @@ const ClubPublicPage: React.FC = () => {
                   </span>
                 ),
               }] : []),
-              ...(tournamentsEnabled ? [{ key: 'signup', label: '報名' }] : []),
-              ...(liveEnabled ? [{
+              ...(tournamentsTabEnabled ? [{ key: 'signup', label: '報名' }] : []),
+              ...(liveTabEnabled ? [{
                 key: 'live',
                 label: (
                   <span className="inline-flex items-center">

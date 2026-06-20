@@ -111,6 +111,94 @@
   - `backend npm run build` 已通過
   - `AdminOverview` / `AdminVenues` 對應 API 型別與回應格式維持相容
 
+## 最新已完成：Home Page Starts Using Module-Driven Visibility（2026-06-20）
+
+- 已升級：
+  - `backend/index.ts`
+  - `backend/src/core/modules/config.ts`
+  - `frontend/src/lib/features.ts`
+  - `frontend/src/HomePage.tsx`
+- `/api/features`
+  - 現在除了 `features`、`catalog`、`modules` 外，也會回傳 `moduleStates`
+  - `moduleStates` 會優先讀 `SystemModuleConfig`
+  - 若新表尚未可用，則回退到 manifest default，不會令前端首頁直接失效
+- `frontend/src/lib/features.ts`
+  - 新增共享 `fetchModuleStates()`，與既有 feature flag 快取共用同一份 `/api/features` snapshot
+  - 保持 `fetchFeatures()` 與 `useFeatureEnabled()` 原有行為不變
+- `frontend/src/HomePage.tsx`
+  - 首頁「最新新聞」區塊改由 `content` 模組控制
+  - 首頁「直播排程」區塊改由 `live` 模組控制
+  - 首頁「排行榜」區塊改由 `highbreak` 模組控制，並保留原本 `notice.homeShowLeaderboard` 條件
+  - 首頁「精選場館」區塊暫以 `system_portal` 模組控制，並保留原本 `notice.homeShowClubList` 條件
+  - 快速連結會跟隨可見區塊動態顯示，不再固定寫死
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+- 備註：
+  - 這一輪先把首頁區塊顯示切到模組驅動
+  - `/home` 路由本身是否要受 `system_portal` 全局關閉後跳轉控制，仍可在下一輪補齊
+
+## 最新已完成：System Portal Route Gate（2026-06-20）
+
+- 已升級：
+  - `frontend/src/lib/features.ts`
+  - `frontend/src/App.tsx`
+- `frontend/src/lib/features.ts`
+  - 新增 `useModuleVisible()`，可按 `public` / `home` scope 讀取模組實際可見狀態
+  - routing 現在可以直接使用 `effectivePublicVisible` / `effectiveHomeVisible`
+- `frontend/src/App.tsx`
+  - `/` 不再固定跳到 `/home`
+  - 改為先判斷 `system_portal` 是否可公開顯示：
+    - 可見時導向 `/home`
+    - 關閉時導向 `/members/login`
+  - `/home` 路由現已加上 `system_portal` 的 `home` scope gate
+  - 避免了直接使用舊 `FeatureGate` 可能造成的 `/ -> /home -> /` redirect loop
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 此輪先收斂在 system portal 入口一致性
+  - 其他公開分頁若未來也要受 module public visibility 控制，可逐步套用同一套 `useModuleVisible()` 邏輯
+
+## 最新已完成：Public Content Routes Use Module Visibility（2026-06-20）
+
+- 已升級：
+  - `frontend/src/App.tsx`
+  - `frontend/src/ClubPublicPage.tsx`
+- `frontend/src/App.tsx`
+  - `/news` 現在已由 `content` 模組的 `public` visibility 控制
+  - `/club/:clubId` 現在已由 `system_portal` 模組的 `public` visibility 控制
+- `frontend/src/ClubPublicPage.tsx`
+  - 頁內的 `snookerhk.live首頁` 浮動入口按鈕，已改為使用 `useModuleVisible('system_portal', 'public')`
+  - 這讓公開頁 route gate 與頁內 portal 入口顯示規則保持一致
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 目前 `ClubPublicPage` 內部各功能 tab 仍主要使用既有 feature/club access 判斷
+  - 下一輪若要再深化，可把 club page 的各模組 tab 進一步對齊 `publicVisible` 與場館授權模型
+
+## 最新已完成：Club Public Tabs Align With Module Visibility（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/registry.ts`
+  - `backend/src/core/modules/config.ts`
+  - `frontend/src/ClubPublicPage.tsx`
+- `backend/src/core/modules/registry.ts`
+  - `club_messages` 模組已修正為 `supportsPublicRoutes: true`
+- `backend/src/core/modules/config.ts`
+  - 為修正既有 seed 出來的錯誤預設，本輪在 `syncModuleRegistry()` 內對 `club_messages` 補上 `publicVisible` 校正
+  - 這樣既有環境在重新讀取 `/api/features` 後，`club_messages` 不會因舊 default 被永久判成不可公開
+- `frontend/src/ClubPublicPage.tsx`
+  - `live` tab 現改為 `liveEnabled && livePublicVisible`
+  - `tournaments` tab 現改為 `tournamentsEnabled && tournamentsPublicVisible`
+  - `club_messages` tab 現改為 `clubMessagesEnabled && clubMessagesPublicVisible`
+  - tab 切換 fallback、資料讀取條件、tab 顯示條件現已使用同一套合併後判斷
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+- 備註：
+  - `tournamentsEnabled` 仍保留既有 club access / global feature gate 效果
+  - 本輪是在其上再疊加 `module public visibility`，因此公開比賽 tab 已較完整地對齊新模型
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

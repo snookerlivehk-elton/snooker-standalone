@@ -14,6 +14,7 @@ import { getClubFeatureAssignment } from './clubFeatureAccess.js';
 import { startNewsScheduler, runNewsFetchOnce } from './news/newsScheduler.js';
 import { prisma } from './src/core/db/prisma.js';
 import { getFeatureEnabledMap } from './src/core/features/featureAccess.js';
+import { listResolvedModuleStates, syncModuleRegistry } from './src/core/modules/config.js';
 import { FEATURE_CATALOG, MODULE_MANIFESTS } from './src/core/modules/registry.js';
 import { createAdminAuth, createRequireSupabaseAdmin } from './src/core/auth/adminAuth.js';
 import { parseMonthRangeUtc } from './src/core/utils/query.js';
@@ -412,10 +413,15 @@ app.get('/health/db', async (_req, res) => {
 
 app.get('/api/features', async (_req, res) => {
   const map = await getFeatureMap();
+  try {
+    await syncModuleRegistry();
+  } catch {}
+  const moduleStates = await listResolvedModuleStates();
   res.json({
     features: map,
     catalog: FEATURE_CATALOG,
     modules: MODULE_MANIFESTS,
+    moduleStates,
   });
 });
 

@@ -14,6 +14,32 @@ export const FEATURE_CATALOG = [
 ] as const;
 
 export type FeatureKey = typeof FEATURE_CATALOG[number]['key'];
+export type ModuleCode =
+  | 'content'
+  | 'members'
+  | 'booking'
+  | 'qr_session'
+  | 'settlement'
+  | 'points'
+  | 'tournaments'
+  | 'highbreak'
+  | 'live'
+  | 'club_messages'
+  | 'club_dashboard'
+  | 'system_portal'
+  | 'member_portal';
+
+export type ModuleState = {
+  code: ModuleCode | string;
+  label: string;
+  enabledGlobally: boolean;
+  publicVisible: boolean;
+  homeVisible: boolean;
+  allowClubEnable: boolean;
+  effectivePublicVisible: boolean;
+  effectiveHomeVisible: boolean;
+  sortOrder: number;
+};
 
 function buildDefaults(): Record<string, boolean> {
   const m: Record<string, boolean> = {};
@@ -24,6 +50,7 @@ function buildDefaults(): Record<string, boolean> {
 let cachedValue: Record<string, boolean> | null = null;
 let cachedAt = 0;
 let inflight: Promise<Record<string, boolean>> | null = null;
+let cachedModuleStates: Record<string, ModuleState> | null = null;
 
 type ClubFeatureAccessMap = Record<string, { effectiveEnabled?: boolean; assignedEnabled?: boolean; globalEnabled?: boolean }>;
 type ClubFeatureAccessResponse = { clubId: string; features: ClubFeatureAccessMap };
@@ -38,6 +65,81 @@ function tryParseMemberSession(): { id?: string; role?: string } {
     return JSON.parse(localStorage.getItem('memberSession') || '{}') || {};
   } catch {
     return {};
+  }
+}
+
+function buildModuleStateMap(input: any): Record<string, ModuleState> {
+  if (!Array.isArray(input)) return {};
+  const out: Record<string, ModuleState> = {};
+  for (const raw of input) {
+    const code = String(raw?.code || '').trim();
+    if (!code) continue;
+    out[code] = {
+      code,
+      label: String(raw?.label || code),
+      enabledGlobally: raw?.enabledGlobally !== false,
+      publicVisible: raw?.publicVisible !== false,
+      homeVisible: raw?.homeVisible !== false,
+      allowClubEnable: !!raw?.allowClubEnable,
+      effectivePublicVisible: raw?.effectivePublicVisible !== false,
+      effectiveHomeVisible: raw?.effectiveHomeVisible !== false,
+      sortOrder: Number(raw?.sortOrder || 0),
+    };
+  }
+  return out;
+}
+
+async function fetchFeatureSnapshot(apiUrl: string): Promise<{
+  features: Record<string, boolean>;
+  moduleStates: Record<string, ModuleState>;
+}> {
+  const now = Date.now();
+  if (cachedValue && cachedModuleStates && (now - cachedAt) < 10_000) {
+    return { features: cachedValue, moduleStates: cachedModuleStates };
+  }
+
+  const defaults = buildDefaults();
+  const fromStorage = () => {
+    try {
+      const raw = localStorage.getItem('featureFlags');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.value || typeof parsed.value !== 'object') return null;
+      const merged = { ...defaults, ...parsed.value };
+      const modules = buildModuleStateMap(parsed?.moduleStates);
+      cachedValue = merged;
+      cachedModuleStates = modules;
+      cachedAt = Date.now();
+      return { features: merged, moduleStates: modules };
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/features`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json().catch(() => ({}));
+    const merged = { ...defaults, ...(json?.features || {}) };
+    const moduleStates = buildModuleStateMap(json?.moduleStates);
+    cachedValue = merged;
+    cachedModuleStates = moduleStates;
+    cachedAt = Date.now();
+    try {
+      localStorage.setItem('featureFlags', JSON.stringify({
+        at: cachedAt,
+        value: merged,
+        moduleStates: Object.values(moduleStates),
+      }));
+    } catch {}
+    return { features: merged, moduleStates };
+  } catch {
+    const stored = fromStorage();
+    if (stored) return stored;
+    cachedValue = defaults;
+    cachedModuleStates = {};
+    cachedAt = Date.now();
+    return { features: defaults, moduleStates: {} };
   }
 }
 
@@ -126,34 +228,9 @@ export async function fetchFeatures(apiUrl: string): Promise<Record<string, bool
   if (cachedValue && (now - cachedAt) < 10_000) return cachedValue;
   if (inflight) return inflight;
   inflight = (async () => {
-    const defaults = buildDefaults();
     try {
-      const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/features`, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json().catch(() => ({}));
-      const merged = { ...defaults, ...(json?.features || {}) };
-      cachedValue = merged;
-      cachedAt = Date.now();
-      try {
-        localStorage.setItem('featureFlags', JSON.stringify({ at: cachedAt, value: merged }));
-      } catch {}
-      return merged;
-    } catch {
-      try {
-        const raw = localStorage.getItem('featureFlags');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.value && typeof parsed.value === 'object') {
-            const merged = { ...defaults, ...parsed.value };
-            cachedValue = merged;
-            cachedAt = Date.now();
-            return merged;
-          }
-        }
-      } catch {}
-      cachedValue = defaults;
-      cachedAt = Date.now();
-      return defaults;
+      const snapshot = await fetchFeatureSnapshot(apiUrl);
+      return snapshot.features;
     } finally {
       inflight = null;
     }
@@ -161,8 +238,49 @@ export async function fetchFeatures(apiUrl: string): Promise<Record<string, bool
   return inflight;
 }
 
+export async function fetchModuleStates(apiUrl: string): Promise<Record<string, ModuleState>> {
+  const snapshot = await fetchFeatureSnapshot(apiUrl);
+  return snapshot.moduleStates;
+}
+
+export function useModuleVisible(
+  apiUrl: string,
+  code: ModuleCode,
+  scope: 'public' | 'home' = 'public',
+) {
+  const [loading, setLoading] = useState(true);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchModuleStates(apiUrl)
+      .then((states) => {
+        if (cancelled) return;
+        const row = states[code];
+        if (!row) {
+          setVisible(true);
+        } else if (scope === 'home') {
+          setVisible(row.effectiveHomeVisible !== false);
+        } else {
+          setVisible(row.effectivePublicVisible !== false);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setVisible(true);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [apiUrl, code, scope]);
+
+  return useMemo(() => ({ loading, visible }), [loading, visible]);
+}
+
 export function clearFeatureCache() {
   cachedValue = null;
+  cachedModuleStates = null;
   cachedAt = 0;
   inflight = null;
   cachedClubAccessKey = null;

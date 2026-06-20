@@ -20,7 +20,7 @@ import Me from './Me';
 import Onboarding from './Onboarding';
 import HomePage from './HomePage';
 import { API_URL, GOOGLE_CLIENT_ID } from './config';
-import { FeatureKey, useFeatureEnabled } from './lib/features';
+import { FeatureKey, type ModuleCode, useFeatureEnabled, useModuleVisible } from './lib/features';
 
 // Force frontend redeploy
 function LogoutButton() {
@@ -68,6 +68,35 @@ function FeatureGate({ feature, children }: { feature: FeatureKey; children: Rea
   return children;
 }
 
+function ModuleVisibilityGate({
+  moduleCode,
+  scope = 'public',
+  redirectTo = '/members/login',
+  children,
+}: {
+  moduleCode: ModuleCode;
+  scope?: 'public' | 'home';
+  redirectTo?: string;
+  children: React.ReactElement;
+}) {
+  const { loading, visible } = useModuleVisible(API_URL, moduleCode, scope);
+  if (loading) {
+    return <div className="min-h-screen brand-page p-8">載入中...</div>;
+  }
+  if (!visible) {
+    return <Navigate to={redirectTo} replace />;
+  }
+  return children;
+}
+
+function RootEntry() {
+  const { loading, visible } = useModuleVisible(API_URL, 'system_portal', 'public');
+  if (loading) {
+    return <div className="min-h-screen brand-page p-8">載入中...</div>;
+  }
+  return <Navigate to={visible ? '/home' : '/members/login'} replace />;
+}
+
 
 function App() {
   return (
@@ -75,12 +104,12 @@ function App() {
       <LogoutButton />
       <Routes>
         {/* Public routes for LIVE app */}
-        <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="/home" element={<HomePage />} />
+        <Route path="/" element={<RootEntry />} />
+        <Route path="/home" element={<ModuleVisibilityGate moduleCode="system_portal" scope="home"><HomePage /></ModuleVisibilityGate>} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
-        <Route path="/news" element={<NewsPage />} />
+        <Route path="/news" element={<ModuleVisibilityGate moduleCode="content" scope="public"><NewsPage /></ModuleVisibilityGate>} />
         <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
@@ -92,7 +121,7 @@ function App() {
         <Route path="/venue/login" element={<MemberLogin />} />
         <Route path="/member/:id" element={<Navigate to="/me" replace />} />
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
-        <Route path="/club/:clubId" element={<ClubPublicPage />} />
+        <Route path="/club/:clubId" element={<ModuleVisibilityGate moduleCode="system_portal" scope="public"><ClubPublicPage /></ModuleVisibilityGate>} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
         <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />

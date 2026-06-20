@@ -155,7 +155,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     pluginId: 'club-messages',
     defaultEnabled: true,
     featureFlagKey: 'club_messages',
-    supportsPublicRoutes: false,
+    supportsPublicRoutes: true,
     supportsHomeSection: false,
     supportsVenueAdmin: true,
     supportsSuperAdmin: true,

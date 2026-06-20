@@ -28,6 +28,7 @@ export function buildDefaultClubModuleConfig(module: ModuleManifest) {
 export async function syncModuleRegistry(db?: DbClient) {
   const runner = getDb(db);
   for (const [index, module] of MODULE_MANIFESTS.entries()) {
+    const defaultConfig = buildDefaultSystemModuleConfig(module, index);
     await runner.systemModule.upsert({
       where: { code: module.code },
       update: {
@@ -56,13 +57,16 @@ export async function syncModuleRegistry(db?: DbClient) {
         supportsSuperAdmin: module.supportsSuperAdmin,
       },
     });
-
-    const defaultConfig = buildDefaultSystemModuleConfig(module, index);
     await runner.systemModuleConfig.upsert({
       where: { moduleCode: module.code },
-      update: {
-        allowClubEnable: defaultConfig.allowClubEnable,
-      },
+      update: module.code === 'club_messages'
+        ? {
+            allowClubEnable: defaultConfig.allowClubEnable,
+            publicVisible: defaultConfig.publicVisible,
+          }
+        : {
+            allowClubEnable: defaultConfig.allowClubEnable,
+          },
       create: {
         moduleCode: module.code,
         ...defaultConfig,
@@ -135,4 +139,62 @@ export async function upsertClubModuleConfig(
       ...patch,
     },
   });
+}
+
+export type ResolvedModuleState = ModuleManifest & {
+  enabledGlobally: boolean;
+  publicVisible: boolean;
+  homeVisible: boolean;
+  allowClubEnable: boolean;
+  sortOrder: number;
+  effectivePublicVisible: boolean;
+  effectiveHomeVisible: boolean;
+};
+
+export async function listResolvedModuleStates(db?: DbClient): Promise<ResolvedModuleState[]> {
+  const defaults = MODULE_MANIFESTS.map((module, index) => {
+    const cfg = buildDefaultSystemModuleConfig(module, index);
+    return {
+      ...module,
+      enabledGlobally: cfg.enabledGlobally,
+      publicVisible: cfg.publicVisible,
+      homeVisible: cfg.homeVisible,
+      allowClubEnable: cfg.allowClubEnable,
+      sortOrder: cfg.sortOrder,
+      effectivePublicVisible: module.supportsPublicRoutes && cfg.enabledGlobally && cfg.publicVisible,
+      effectiveHomeVisible: module.supportsHomeSection && cfg.enabledGlobally && cfg.publicVisible && cfg.homeVisible,
+    } satisfies ResolvedModuleState;
+  });
+
+  try {
+    const rows = await getDb(db).systemModuleConfig.findMany({
+      select: {
+        moduleCode: true,
+        enabledGlobally: true,
+        publicVisible: true,
+        homeVisible: true,
+        allowClubEnable: true,
+        sortOrder: true,
+      },
+    });
+    const byCode = new Map(rows.map((row) => [row.moduleCode, row]));
+    return defaults
+      .map((row) => {
+        const cfg = byCode.get(row.code);
+        if (!cfg) return row;
+        return {
+          ...row,
+          enabledGlobally: cfg.enabledGlobally,
+          publicVisible: cfg.publicVisible,
+          homeVisible: cfg.homeVisible,
+          allowClubEnable: cfg.allowClubEnable,
+          sortOrder: cfg.sortOrder,
+          effectivePublicVisible: row.supportsPublicRoutes && cfg.enabledGlobally && cfg.publicVisible,
+          effectiveHomeVisible: row.supportsHomeSection && cfg.enabledGlobally && cfg.publicVisible && cfg.homeVisible,
+        } satisfies ResolvedModuleState;
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder || String(a.code).localeCompare(String(b.code)));
+  } catch {
+    return defaults.sort((a, b) => a.sortOrder - b.sortOrder || String(a.code).localeCompare(String(b.code)));
+  }
 }
