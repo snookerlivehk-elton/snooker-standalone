@@ -2,6 +2,8 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { getClubFeatureAssignments, isClubScopedFeatureKey } from '../../../clubFeatureAccess.js';
 import { prisma } from '../../core/db/prisma.js';
+import { syncModuleRegistry, upsertClubModuleConfig, upsertSystemModuleConfig } from '../../core/modules/config.js';
+import { getModuleManifestByFeatureKey } from '../../core/modules/registry.js';
 import type { FeatureCatalogItem } from '../../core/modules/registry.js';
 
 type FeatureRouterOptions = {
@@ -15,13 +17,21 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
   const { adminAuth, featureCatalog, getFeatureMap, invalidateFeatureCache } = options;
   const router = express.Router();
 
+  async function trySyncModuleRegistry() {
+    try {
+      await syncModuleRegistry();
+    } catch {}
+  }
+
   router.get('/api/admin/features', adminAuth, async (_req, res) => {
+    await trySyncModuleRegistry();
     const map = await getFeatureMap();
     const rows = featureCatalog.map((f) => ({
       key: f.key,
       label: f.label,
       enabled: map[f.key],
       defaultEnabled: f.defaultEnabled,
+      moduleCode: f.moduleCode,
     }));
     res.json({ features: rows });
   });
@@ -36,11 +46,22 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
     const unique = new Map<string, boolean>();
     for (const u of normalized) unique.set(u.key, u.enabled);
     const items = Array.from(unique.entries());
-    await prisma.$transaction(items.map(([key, enabled]) => prisma.featureFlag.upsert({
-      where: { key },
-      update: { enabled },
-      create: { key, enabled },
-    })));
+    await trySyncModuleRegistry();
+    await prisma.$transaction(async (tx) => {
+      for (const [key, enabled] of items) {
+        const module = getModuleManifestByFeatureKey(key);
+        if (module) {
+          try {
+            await upsertSystemModuleConfig(module.code, { enabledGlobally: enabled }, tx);
+          } catch {}
+        }
+        await tx.featureFlag.upsert({
+          where: { key },
+          update: { enabled },
+          create: { key, enabled },
+        });
+      }
+    });
     invalidateFeatureCache();
     const map = await getFeatureMap();
     res.json({ ok: true, features: map });
@@ -48,6 +69,7 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
 
   router.get('/api/admin/club-features/:featureKey', adminAuth, async (req, res) => {
     try {
+      await trySyncModuleRegistry();
       const featureKey = String(req.params.featureKey || '').trim();
       if (!isClubScopedFeatureKey(featureKey)) {
         return res.status(400).json({ error: 'unsupported_feature_key' });
@@ -103,6 +125,7 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
 
   router.put('/api/admin/club-features/:featureKey/:clubId', adminAuth, async (req, res) => {
     try {
+      await trySyncModuleRegistry();
       const featureKey = String(req.params.featureKey || '').trim();
       const clubId = String(req.params.clubId || '').trim();
       if (!isClubScopedFeatureKey(featureKey)) {
@@ -115,11 +138,19 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
       const club = await prisma.clubProfile.findUnique({ where: { id: clubId }, select: { id: true } });
       if (!club) return res.status(404).json({ error: 'club_not_found' });
       const enabled = Boolean((req.body || {}).enabled);
-      const row = await prisma.clubFeatureAccess.upsert({
-        where: { clubId_featureKey: { clubId, featureKey } },
-        update: { enabled },
-        create: { id: randomUUID(), clubId, featureKey, enabled },
-        select: { clubId: true, featureKey: true, enabled: true, updatedAt: true },
+      const module = getModuleManifestByFeatureKey(featureKey);
+      const row = await prisma.$transaction(async (tx) => {
+        if (module) {
+          try {
+            await upsertClubModuleConfig(clubId, module.code, { enabledForClub: enabled }, tx);
+          } catch {}
+        }
+        return tx.clubFeatureAccess.upsert({
+          where: { clubId_featureKey: { clubId, featureKey } },
+          update: { enabled },
+          create: { id: randomUUID(), clubId, featureKey, enabled },
+          select: { clubId: true, featureKey: true, enabled: true, updatedAt: true },
+        });
       });
       const globalMap = await getFeatureMap();
       res.json({
@@ -130,6 +161,7 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
         assignedEnabled: row.enabled,
         effectiveEnabled: globalMap[featureKey] !== false && row.enabled,
         updatedAt: row.updatedAt,
+        moduleCode: module?.code || null,
       });
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });

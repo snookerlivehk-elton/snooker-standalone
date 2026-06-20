@@ -5,6 +5,9 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Changed: `/api/admin/features` now prefers `SystemModuleConfig` for reads and writes, while still mirroring updates into legacy `FeatureFlag` for compatibility.
+- Changed: `/api/admin/club-features/:featureKey` now prefers `ClubModuleConfig` for reads and writes, while still mirroring updates into legacy `ClubFeatureAccess`.
+- Changed: Admin feature management now performs a best-effort module registry sync before reading/writing module config state, so new module rows can be initialized lazily without breaking legacy fallbacks.
 - Changed: Global feature access now prefers `SystemModuleConfig.enabledGlobally`, falls back to `FeatureFlag`, and finally falls back to registry defaults.
 - Changed: Club-scoped feature assignment now prefers `ClubModuleConfig.enabledForClub`, falls back to legacy `ClubFeatureAccess`, and finally falls back to legacy data detection.
 - Changed: Backend `index.ts` shared feature map now resolves through the common module access helper instead of querying `FeatureFlag` directly.

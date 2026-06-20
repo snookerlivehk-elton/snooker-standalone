@@ -90,6 +90,27 @@
   - `backend npm run build` 已通過
 - 目前已是適合推送 checkpoint 的階段，因為 registry、config schema、access helper 三個核心基礎已串起來。
 
+## 最新已完成：Admin Feature Management Uses Module Config First（2026-06-20）
+
+- 已升級：
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `backend/src/core/modules/config.ts`
+- `/api/admin/features`
+  - 讀取仍保持原本 response shape
+  - 實際 enabled 狀態已透過共用 access helper 優先讀 `SystemModuleConfig`
+  - 更新時已改為優先寫入 `SystemModuleConfig`
+  - 同時仍同步寫入 `FeatureFlag` 作兼容鏡像
+- `/api/admin/club-features/:featureKey`
+  - 讀取時已透過 `clubFeatureAccess` helper 優先讀 `ClubModuleConfig`
+  - 更新時已改為優先寫入 `ClubModuleConfig`
+  - 同時仍同步寫入 `ClubFeatureAccess` 作兼容鏡像
+- 為避免新環境尚未 seed module rows，本輪在 admin feature router 內加入了低風險的 registry sync 嘗試：
+  - 能 sync 就補齊 `SystemModule` / `SystemModuleConfig`
+  - 若 migration 尚未 deploy，仍會自動回退，不致令舊管理流直接報錯
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `AdminOverview` / `AdminVenues` 對應 API 型別與回應格式維持相容
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

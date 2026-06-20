@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { MODULE_MANIFESTS, type ModuleManifest } from './registry.js';
+import { MODULE_MANIFESTS, getModuleManifest, type ModuleManifest } from './registry.js';
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
@@ -81,5 +81,58 @@ export async function listSystemModulesWithConfig(db?: DbClient) {
     const sortB = b.config?.sortOrder ?? Number.MAX_SAFE_INTEGER;
     if (sortA !== sortB) return sortA - sortB;
     return String(a.code).localeCompare(String(b.code));
+  });
+}
+
+export async function upsertSystemModuleConfig(
+  moduleCode: string,
+  patch: Partial<{
+    enabledGlobally: boolean;
+    publicVisible: boolean;
+    homeVisible: boolean;
+    allowClubEnable: boolean;
+    sortOrder: number;
+    settingsJson: any;
+  }>,
+  db?: DbClient,
+) {
+  const module = getModuleManifest(moduleCode);
+  if (!module) throw new Error('module_not_found');
+  const runner = getDb(db);
+  const defaultConfig = buildDefaultSystemModuleConfig(module, 0);
+  return runner.systemModuleConfig.upsert({
+    where: { moduleCode: module.code },
+    update: patch,
+    create: {
+      moduleCode: module.code,
+      ...defaultConfig,
+      ...patch,
+    },
+  });
+}
+
+export async function upsertClubModuleConfig(
+  clubId: string,
+  moduleCode: string,
+  patch: Partial<{
+    enabledForClub: boolean;
+    publicVisible: boolean;
+    settingsJson: any;
+  }>,
+  db?: DbClient,
+) {
+  const module = getModuleManifest(moduleCode);
+  if (!module) throw new Error('module_not_found');
+  const runner = getDb(db);
+  const defaultConfig = buildDefaultClubModuleConfig(module);
+  return runner.clubModuleConfig.upsert({
+    where: { clubId_moduleCode: { clubId, moduleCode: module.code } },
+    update: patch,
+    create: {
+      clubId,
+      moduleCode: module.code,
+      ...defaultConfig,
+      ...patch,
+    },
   });
 }
