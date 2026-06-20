@@ -253,6 +253,40 @@
   - `backend npm run build` 已通過
   - `frontend npm run build` 已通過
 
+## 最新已完成：Venue Admin Module Center (Phase 1)（2026-06-20）
+
+- 已升級：
+  - `backend/routes/club.ts`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/VenueModules.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/VenueDashboard.tsx`
+- Backend
+  - 新增 `GET /api/club/modules/manage`
+  - 以場館管理員身份回傳當前場館可用模組清單
+  - 每個模組包含：
+    - 全局是否啟用
+    - 場館是否授權
+    - 實際是否可用
+    - 公開顯示 / 首頁顯示狀態
+    - 授權來源與最後更新時間
+- Frontend
+  - 新增 `frontend/src/VenueModules.tsx`
+  - 新增 route：
+    - `/venue/modules`
+  - `VenueDashboard` 已加入「模組中心」入口按鈕
+  - 第一版頁面支援：
+    - 依 category 篩選模組
+    - 顯示模組狀態與公開狀態
+    - 快速跳去現有 `VenueDashboard` 對應 tab
+    - 可直接打開場館公開頁
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+- 備註：
+  - 此輪先做場館模組狀態總覽與入口聚合
+  - 尚未把各模組的場館級設定表單完全拆到獨立頁，但後續可沿此中心逐步展開
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

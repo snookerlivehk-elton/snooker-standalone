@@ -817,7 +817,14 @@ const VenueDashboard: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0">
             Cue Aim System - 場館管理後台 <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span>
           </h1>
-          <div className="sm:ml-auto">
+          <div className="sm:ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/venue/modules')}
+              className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
+            >
+              模組中心
+            </button>
             <button 
               onClick={() => {
                 localStorage.removeItem('memberSession');

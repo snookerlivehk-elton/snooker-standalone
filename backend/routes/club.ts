@@ -1,8 +1,9 @@
 import express from 'express';
-import { getClubFeatureAssignment } from '../clubFeatureAccess.js';
+import { CLUB_SCOPED_FEATURE_KEYS, getClubFeatureAssignment, getClubFeatureAssignments } from '../clubFeatureAccess.js';
 import { getMyClubId, requireClubAdmin, requireMember } from '../src/core/club/access.js';
 import { prisma } from '../src/core/db/prisma.js';
 import { isFeatureEnabled } from '../src/core/features/featureAccess.js';
+import { listResolvedModuleStates, syncModuleRegistry } from '../src/core/modules/config.js';
 import { createBookingRouter } from '../src/plugins/booking/router.js';
 import { createClubMessageRouter } from '../src/plugins/club-messages/router.js';
 import { createClubHighbreakRouter } from '../src/plugins/highbreak/router.js';
@@ -50,6 +51,67 @@ router.get('/features/access', async (req, res) => {
                     updatedAt: assignment.updatedAt,
                 },
             },
+        });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+router.get('/modules/manage', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    try {
+        try {
+            await syncModuleRegistry();
+        } catch {}
+        const modules = (await listResolvedModuleStates()).filter((row) => row.supportsVenueAdmin);
+        const featureKeys = modules
+            .map((row) => String(row.featureFlagKey || '').trim())
+            .filter((key): key is typeof CLUB_SCOPED_FEATURE_KEYS[number] => CLUB_SCOPED_FEATURE_KEYS.includes(key as any));
+        const assignmentMapByKey: Record<string, ReturnType<typeof getClubFeatureAssignment> extends Promise<infer T> ? T : never> = {} as any;
+        if (featureKeys.length > 0) {
+            const assignmentRows = await Promise.all(
+                featureKeys.map(async (featureKey) => [featureKey, await getClubFeatureAssignments(prisma, [clubId], featureKey)] as const)
+            );
+            for (const [featureKey, map] of assignmentRows) {
+                assignmentMapByKey[featureKey] = map[clubId] as any;
+            }
+        }
+        res.json({
+            clubId,
+            modules: modules.map((row) => {
+                const featureKey = String(row.featureFlagKey || '').trim();
+                const assignment = featureKey ? assignmentMapByKey[featureKey] : null;
+                const assignedEnabled = row.supportsClubAssignment
+                    ? (assignment?.assignedEnabled ?? false)
+                    : true;
+                const effectiveEnabled = row.enabledGlobally && assignedEnabled;
+                return {
+                    code: row.code,
+                    label: row.label,
+                    description: row.description,
+                    category: row.category,
+                    pluginId: row.pluginId,
+                    featureFlagKey: row.featureFlagKey || null,
+                    supportsClubAssignment: !!row.supportsClubAssignment,
+                    supportsPublicRoutes: row.supportsPublicRoutes,
+                    supportsHomeSection: row.supportsHomeSection,
+                    supportsVenueAdmin: row.supportsVenueAdmin,
+                    enabledGlobally: row.enabledGlobally,
+                    allowClubEnable: row.allowClubEnable,
+                    publicVisible: row.publicVisible,
+                    homeVisible: row.homeVisible,
+                    effectivePublicVisible: row.effectivePublicVisible,
+                    effectiveHomeVisible: row.effectiveHomeVisible,
+                    explicitEnabled: assignment?.explicitEnabled ?? null,
+                    assignedEnabled,
+                    assignmentSource: assignment?.source ?? (row.supportsClubAssignment ? 'default_off' : 'global_only'),
+                    assignmentUpdatedAt: assignment?.updatedAt ?? null,
+                    effectiveEnabled,
+                };
+            }),
         });
     } catch (error) {
         res.status(500).json({ error: String(error) });

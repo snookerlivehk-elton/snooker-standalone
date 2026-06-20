@@ -423,6 +423,43 @@ export async function getMyClubFeatureAccess(apiUrl: string, memberId: string) {
   }>;
 }
 
+export async function getVenueModules(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/modules/manage`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館模組中心失敗');
+  }
+  return res.json() as Promise<{
+    clubId: string;
+    modules: Array<{
+      code: string;
+      label: string;
+      description: string;
+      category: string;
+      pluginId?: string | null;
+      featureFlagKey?: string | null;
+      supportsClubAssignment?: boolean;
+      supportsPublicRoutes: boolean;
+      supportsHomeSection: boolean;
+      supportsVenueAdmin: boolean;
+      enabledGlobally: boolean;
+      allowClubEnable: boolean;
+      publicVisible: boolean;
+      homeVisible: boolean;
+      effectivePublicVisible: boolean;
+      effectiveHomeVisible: boolean;
+      explicitEnabled: boolean | null;
+      assignedEnabled: boolean;
+      assignmentSource: string;
+      assignmentUpdatedAt?: string | null;
+      effectiveEnabled: boolean;
+    }>;
+  }>;
+}
+
 export async function getPublicClubFeatureAccess(apiUrl: string, clubId: string) {
   const base = apiUrl.replace(/\/$/, '');
   const res = await fetch(`${base}/api/club/${encodeURIComponent(clubId)}/features/public`, { cache: 'no-store' });

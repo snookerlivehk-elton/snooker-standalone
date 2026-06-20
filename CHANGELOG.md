@@ -5,6 +5,10 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: `GET /api/club/modules/manage` for venue admins to retrieve module-level availability and assignment status for their own club.
+- Added: New `VenueModules` page and `/venue/modules` route as the first dedicated Venue Admin module center.
+- Changed: `VenueDashboard` now includes a direct entry to the venue module center.
+- Changed: Venue admins can now view per-module global status, club assignment status, public visibility, and jump into existing management tabs from a dedicated page.
 - Fixed: Restored `/home` by marking `system_portal` as a home-capable module again and correcting existing `SystemModuleConfig.homeVisible` values during module registry sync.
 - Added: `GET /api/admin/modules` and `PUT /api/admin/modules/:moduleCode` for superadmin module-level management.
 - Added: New `AdminModules` page and `/admin/modules` route as the first dedicated Super Admin module center.
