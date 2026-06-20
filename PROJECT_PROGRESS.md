@@ -657,6 +657,74 @@
   - 本輪刻意未與模組中心 `publicVisible` 重複，避免公開頁可見性出現兩套互相打架的開關
   - `club_messages` email 開關先保存配置，之後可再按你最終通知流程接實際 delivery
 
+## 最新已完成：Live 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/liveSettings.ts`
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `backend/src/plugins/live/router.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `live` 模組內部設定儲存
+  - 新增 `live` module settings helper，提供 default / normalize / read / update
+  - 已接入 `Super Admin` 共用 module settings handler
+  - 第一版已把以下營運控制接回 `live` router：
+    - `venuePublishingEnabled`
+    - `syncToClubMessagesEnabled`
+  - 當關閉時：
+    - 場館不可再發佈、編輯或刪除直播通告
+    - 建立直播通告時不再自動同步成 `club_messages`
+- Frontend
+  - `live` 已接入共用 `Super Admin` 模組設定頁
+  - 第一版可設定：
+    - `venuePublishingEnabled`
+    - `syncToClubMessagesEnabled`
+    - `announcementCreatedEmailEnabled`
+    - `announcementUpdatedEmailEnabled`
+    - `announcementDeletedEmailEnabled`
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 本輪未重複新增公開頁可見性開關，避免同模組中心 `publicVisible / homeVisible` 互相打架
+  - `live` email 開關先保存配置，之後可再按你最終直播通知流程接實際 delivery
+
+## 最新已完成：Members 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/membersSettings.ts`
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `backend/src/plugins/members/router.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `members` 模組內部設定儲存
+  - 新增 `members` module settings helper，提供 default / normalize / read / update
+  - 已接入 `Super Admin` 共用 module settings handler
+  - 第一版已把以下營運控制接回 `members` router：
+    - `emailRegistrationEnabled`
+    - `phoneRegistrationEnabled`
+    - `googleLoginEnabled`
+    - `passwordResetEnabled`
+    - `selfProfileEditEnabled`
+    - `selfPasswordChangeEnabled`
+  - 當關閉時：
+    - 可分別停用 Email 註冊、手機註冊、Google 登入
+    - 會員不可再申請重設密碼驗證碼或用驗證碼重設密碼
+    - 會員中心不可再自行修改資料或自行更改密碼
+- Frontend
+  - `members` 已接入共用 `Super Admin` 模組設定頁
+  - 第一版可設定：
+    - `emailRegistrationEnabled`
+    - `phoneRegistrationEnabled`
+    - `googleLoginEnabled`
+    - `passwordResetEnabled`
+    - `selfProfileEditEnabled`
+    - `selfPasswordChangeEnabled`
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 本輪先集中處理會員系統的營運控制，不處理 email 文案或通知規則微調
+  - 會員 email 驗證 / resend / verify flow 仍維持現有行為，之後可再獨立配置化
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

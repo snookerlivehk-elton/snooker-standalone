@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { formatHongKongDateTime, normalizeHttpUrl } from '../../core/live/utils.js';
+import { getLiveModuleSettings } from '../../core/modules/liveSettings.js';
 
 export function createLiveRouter() {
   const router = express.Router();
@@ -12,6 +13,10 @@ export function createLiveRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const settings = await getLiveModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'live_publish_disabled' });
+    }
 
     const payload = req.body || {};
     const title = String(payload.title || '').trim();
@@ -33,11 +38,13 @@ export function createLiveRouter() {
         createdByMemberId: member.id,
       },
     });
-    try {
-      const msgTitle = `直播通告：${title}`;
-      const content = `日期時間：${formatHongKongDateTime(startsAt)}\n直播連結：${liveUrl}`;
-      await prisma.clubMessage.create({ data: { clubId, title: msgTitle, content } });
-    } catch {}
+    if (settings?.syncToClubMessagesEnabled !== false) {
+      try {
+        const msgTitle = `直播通告：${title}`;
+        const content = `日期時間：${formatHongKongDateTime(startsAt)}\n直播連結：${liveUrl}`;
+        await prisma.clubMessage.create({ data: { clubId, title: msgTitle, content } });
+      } catch {}
+    }
     res.json(row);
   });
 
@@ -46,6 +53,10 @@ export function createLiveRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const settings = await getLiveModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'live_publish_disabled' });
+    }
 
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'id required' });
@@ -100,6 +111,10 @@ export function createLiveRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const settings = await getLiveModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'live_publish_disabled' });
+    }
     const id = req.params.id;
     const row = await prisma.liveAnnouncement.findUnique({ where: { id } });
     if (!row || row.clubId !== clubId) return res.status(404).json({ error: 'Not found' });

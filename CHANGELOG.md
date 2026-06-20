@@ -5,6 +5,10 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: first `members` module settings page for Super Admin, with configurable member self-service controls for email registration, phone registration, Google login, password reset, self profile editing, and self password change.
+- Changed: members router now reads module settings before allowing email registration, phone registration, Google login, password reset, self profile updates, and self password changes.
+- Added: first `live` module settings page for Super Admin, with configurable live-announcement publishing access, club-message mirroring, and initial live-notification email toggles stored in module settings.
+- Changed: live router now reads module settings before allowing venue-side create/update/delete actions and before mirroring new live announcements into club messages.
 - Added: first `club_messages` module settings page for Super Admin, with configurable venue-publishing access, member-inbox access, and initial announcement email toggles stored in module settings.
 - Changed: club-messages router now reads module settings before allowing venue-side publish/edit/delete actions and before loading the member inbox list.
 - Added: first `points` module settings page for Super Admin, with configurable operational controls for club points-config editing and manual balance adjustments, plus initial notification toggles stored in module settings.

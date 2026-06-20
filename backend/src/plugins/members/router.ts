@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../../core/db/prisma.js';
 import { requireMember } from '../../core/club/access.js';
 import { resolveMemberTier } from '../../core/members/eligibility.js';
+import { getMembersModuleSettings } from '../../core/modules/membersSettings.js';
 import {
   findMemberByIdOrEmail,
   generateEmailCode,
@@ -39,6 +40,10 @@ function buildMemberAuthPayload(member: any) {
 export function createMemberRouter(options: MemberRouterOptions) {
   const router = express.Router();
   const googleClient = new OAuth2Client(options.googleClientId);
+
+  function hasOwnKey(obj: unknown, key: string) {
+    return !!obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key);
+  }
 
   async function issueMemberEmailVerification(options2: {
     memberId: string;
@@ -177,6 +182,10 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/members/request-password-reset-code', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
+      if (moduleSettings?.passwordResetEnabled === false) {
+        return res.status(403).json({ error: 'member_password_reset_disabled' });
+      }
       const { email } = (req.body || {}) as { email?: string };
       const em = String(email || '').trim().normalize('NFKC');
       if (!em) {
@@ -233,6 +242,10 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/members/reset-password-with-code', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
+      if (moduleSettings?.passwordResetEnabled === false) {
+        return res.status(403).json({ error: 'member_password_reset_disabled' });
+      }
       const { email, code, newPassword } = (req.body || {}) as { email?: string; code?: string; newPassword?: string };
       const em = String(email || '').trim().normalize('NFKC');
       const c = String(code || '').trim();
@@ -413,6 +426,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/members/register', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
       const payload = (req.body || {}) as {
         email?: string;
         name?: string;
@@ -445,6 +459,12 @@ export function createMemberRouter(options: MemberRouterOptions) {
       const emailOk = email ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) : false;
       if (email && !emailOk) return res.status(400).json({ error: 'email 格式不正確' });
       if (!email && !phoneE164) return res.status(400).json({ error: '請輸入 email 或 手機號碼' });
+      if (email && moduleSettings?.emailRegistrationEnabled === false) {
+        return res.status(403).json({ error: 'member_email_registration_disabled' });
+      }
+      if (!email && moduleSettings?.phoneRegistrationEnabled === false) {
+        return res.status(403).json({ error: 'member_phone_registration_disabled' });
+      }
 
       const hasPassword = password.length > 0;
       if (hasPassword) {
@@ -525,6 +545,10 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/members/request-register-code', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
+      if (moduleSettings?.emailRegistrationEnabled === false) {
+        return res.status(403).json({ error: 'member_email_registration_disabled' });
+      }
       const { email } = (req.body || {}) as { email?: string };
       const em = String(email || '').trim().normalize('NFKC');
       if (!em) return res.status(400).json({ error: 'email 為必填' });
@@ -572,6 +596,10 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/members/register-with-code', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
+      if (moduleSettings?.emailRegistrationEnabled === false) {
+        return res.status(403).json({ error: 'member_email_registration_disabled' });
+      }
       const payload = (req.body || {}) as {
         email?: string;
         code?: string;
@@ -717,6 +745,10 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.post('/api/auth/google', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
+      if (moduleSettings?.googleLoginEnabled === false) {
+        return res.status(403).json({ error: 'member_google_login_disabled' });
+      }
       const { credential } = req.body;
       if (!credential) return res.status(400).json({ error: 'Missing credential' });
 
@@ -901,6 +933,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
   router.put('/api/members/:id', async (req, res) => {
     try {
+      const moduleSettings = await getMembersModuleSettings().catch(() => null);
       const id = String(req.params.id || '').trim();
       if (!id) return res.status(400).json({ error: '缺少會員 ID' });
 
@@ -918,6 +951,27 @@ export function createMemberRouter(options: MemberRouterOptions) {
         publicHighbreakEnabled?: boolean;
         public_highbreak_enabled?: boolean;
       };
+
+      const wantsProfileEdit =
+        hasOwnKey(body, 'phone') ||
+        hasOwnKey(body, 'birthDate') ||
+        hasOwnKey(body, 'birth_date') ||
+        hasOwnKey(body, 'clubName') ||
+        hasOwnKey(body, 'club_name') ||
+        hasOwnKey(body, 'regionCode') ||
+        hasOwnKey(body, 'region_code') ||
+        hasOwnKey(body, 'districtCode') ||
+        hasOwnKey(body, 'district_code') ||
+        hasOwnKey(body, 'publicHighbreakEnabled') ||
+        hasOwnKey(body, 'public_highbreak_enabled');
+      const wantsPasswordChange = !!body.password;
+
+      if (wantsProfileEdit && moduleSettings?.selfProfileEditEnabled === false) {
+        return res.status(403).json({ error: 'member_self_profile_edit_disabled' });
+      }
+      if (wantsPasswordChange && moduleSettings?.selfPasswordChangeEnabled === false) {
+        return res.status(403).json({ error: 'member_self_password_change_disabled' });
+      }
 
       const data: any = {};
       if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;

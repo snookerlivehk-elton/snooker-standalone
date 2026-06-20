@@ -1,5 +1,7 @@
 import { getBookingModuleSettings, normalizeMemberRequirementLevel, updateBookingModuleSettings } from './bookingSettings.js';
 import { getClubMessagesModuleSettings, updateClubMessagesModuleSettings } from './clubMessagesSettings.js';
+import { getLiveModuleSettings, updateLiveModuleSettings } from './liveSettings.js';
+import { getMembersModuleSettings, updateMembersModuleSettings } from './membersSettings.js';
 import { getPointsModuleSettings, updatePointsModuleSettings } from './pointsSettings.js';
 import {
   getTournamentsModuleSettings,
@@ -112,6 +114,63 @@ const ADMIN_MODULE_SETTINGS_HANDLERS: Record<string, AdminModuleSettingsHandler>
         throw new Error('no_valid_fields');
       }
       return updateClubMessagesModuleSettings(patch);
+    },
+  },
+  live: {
+    moduleCode: 'live',
+    pageLabel: 'Live 設定頁',
+    getSettings: () => getLiveModuleSettings(),
+    updateSettings: async (body) => {
+      const patch: Record<string, any> = {};
+      if (typeof body.venuePublishingEnabled === 'boolean') {
+        patch.venuePublishingEnabled = body.venuePublishingEnabled;
+      }
+      if (typeof body.syncToClubMessagesEnabled === 'boolean') {
+        patch.syncToClubMessagesEnabled = body.syncToClubMessagesEnabled;
+      }
+      if (typeof body.announcementCreatedEmailEnabled === 'boolean') {
+        patch.announcementCreatedEmailEnabled = body.announcementCreatedEmailEnabled;
+      }
+      if (typeof body.announcementUpdatedEmailEnabled === 'boolean') {
+        patch.announcementUpdatedEmailEnabled = body.announcementUpdatedEmailEnabled;
+      }
+      if (typeof body.announcementDeletedEmailEnabled === 'boolean') {
+        patch.announcementDeletedEmailEnabled = body.announcementDeletedEmailEnabled;
+      }
+      if (Object.keys(patch).length === 0) {
+        throw new Error('no_valid_fields');
+      }
+      return updateLiveModuleSettings(patch);
+    },
+  },
+  members: {
+    moduleCode: 'members',
+    pageLabel: 'Members 設定頁',
+    getSettings: () => getMembersModuleSettings(),
+    updateSettings: async (body) => {
+      const patch: Record<string, any> = {};
+      if (typeof body.emailRegistrationEnabled === 'boolean') {
+        patch.emailRegistrationEnabled = body.emailRegistrationEnabled;
+      }
+      if (typeof body.phoneRegistrationEnabled === 'boolean') {
+        patch.phoneRegistrationEnabled = body.phoneRegistrationEnabled;
+      }
+      if (typeof body.googleLoginEnabled === 'boolean') {
+        patch.googleLoginEnabled = body.googleLoginEnabled;
+      }
+      if (typeof body.passwordResetEnabled === 'boolean') {
+        patch.passwordResetEnabled = body.passwordResetEnabled;
+      }
+      if (typeof body.selfProfileEditEnabled === 'boolean') {
+        patch.selfProfileEditEnabled = body.selfProfileEditEnabled;
+      }
+      if (typeof body.selfPasswordChangeEnabled === 'boolean') {
+        patch.selfPasswordChangeEnabled = body.selfPasswordChangeEnabled;
+      }
+      if (Object.keys(patch).length === 0) {
+        throw new Error('no_valid_fields');
+      }
+      return updateMembersModuleSettings(patch);
     },
   },
 };

@@ -187,6 +187,110 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
       messageDeletedEmailEnabled: false,
     },
   },
+  live: {
+    moduleCode: 'live',
+    title: 'Live 模組設定（Super Admin）',
+    description: '集中管理直播通告發佈權限、是否同步到 club messages，以及直播通知策略。',
+    loadErrorMessage: '讀取 live 模組設定失敗',
+    saveSuccessMessage: '已儲存 live 模組設定',
+    sections: [
+      {
+        type: 'toggles',
+        title: '營運控制',
+        description: '控制場館可否發佈直播通告，以及新直播通告是否同步成為會員場館訊息。',
+        toggles: [
+          {
+            field: 'venuePublishingEnabled',
+            label: '允許場館發佈、編輯及刪除直播通告',
+            description: '關閉後，場館後台不可再新增、修改或刪除直播通告。',
+          },
+          {
+            field: 'syncToClubMessagesEnabled',
+            label: '新直播通告同步到 club messages',
+            description: '關閉後，建立直播通告時不再自動寫入會員端場館訊息。',
+          },
+        ],
+      },
+      {
+        type: 'toggles',
+        title: 'Email 通知設定',
+        description: '先保存直播通知策略，之後你可再逐項微調真正寄信規則。',
+        toggles: [
+          { field: 'announcementCreatedEmailEnabled', label: '新直播通告發佈後通知會員' },
+          { field: 'announcementUpdatedEmailEnabled', label: '直播通告更新後通知會員' },
+          { field: 'announcementDeletedEmailEnabled', label: '直播通告刪除後通知會員' },
+        ],
+      },
+    ],
+    defaultSettings: {
+      venuePublishingEnabled: true,
+      syncToClubMessagesEnabled: true,
+      announcementCreatedEmailEnabled: false,
+      announcementUpdatedEmailEnabled: false,
+      announcementDeletedEmailEnabled: false,
+    },
+  },
+  members: {
+    moduleCode: 'members',
+    title: 'Members 模組設定（Super Admin）',
+    description: '集中管理會員系統的自助註冊、登入入口與會員自行修改資料能力。',
+    loadErrorMessage: '讀取 members 模組設定失敗',
+    saveSuccessMessage: '已儲存 members 模組設定',
+    sections: [
+      {
+        type: 'toggles',
+        title: '註冊與登入入口',
+        description: '控制會員可否使用不同註冊方式與 Google 登入。',
+        toggles: [
+          {
+            field: 'emailRegistrationEnabled',
+            label: '允許 Email 註冊',
+            description: '關閉後，Email 註冊與 Email 驗證碼註冊流程會停用。',
+          },
+          {
+            field: 'phoneRegistrationEnabled',
+            label: '允許手機註冊',
+            description: '關閉後，純手機號碼註冊流程會停用。',
+          },
+          {
+            field: 'googleLoginEnabled',
+            label: '允許 Google 登入',
+            description: '關閉後，會員不可再透過 Google 帳戶登入或建立帳號。',
+          },
+        ],
+      },
+      {
+        type: 'toggles',
+        title: '會員自助功能',
+        description: '控制忘記密碼、會員自行改資料，以及會員自行改密碼功能。',
+        toggles: [
+          {
+            field: 'passwordResetEnabled',
+            label: '允許忘記密碼 / 驗證碼重設密碼',
+            description: '關閉後，會員端不可再申請重設密碼驗證碼或使用驗證碼更新密碼。',
+          },
+          {
+            field: 'selfProfileEditEnabled',
+            label: '允許會員自行修改資料',
+            description: '關閉後，會員中心不可再更新電話、出生日期、地方分區及公開單杆設定。',
+          },
+          {
+            field: 'selfPasswordChangeEnabled',
+            label: '允許會員自行更改密碼',
+            description: '關閉後，會員中心不可再直接修改登入密碼。',
+          },
+        ],
+      },
+    ],
+    defaultSettings: {
+      emailRegistrationEnabled: true,
+      phoneRegistrationEnabled: true,
+      googleLoginEnabled: true,
+      passwordResetEnabled: true,
+      selfProfileEditEnabled: true,
+      selfPasswordChangeEnabled: true,
+    },
+  },
 };
 
 export function getModuleSettingsPageConfig(moduleCode: string) {
