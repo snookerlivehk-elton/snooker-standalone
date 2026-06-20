@@ -5,6 +5,14 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: shared backend Resend email helper reused by member verification/reset flows and the booking module.
+- Added: actual booking email delivery for `reservation created / confirmed / cancelled`, controlled by the `booking` module settings toggles.
+- Changed: booking notifications now follow the venue-confirmation flow: `reservation created` emails go to the venue first, while `reservation confirmed / cancelled` emails go to the reservation member.
+- Added: booking notification emails now include role-specific content, with member contact details and a venue-login link for venue notifications, plus club phone and a member-login link for member notifications.
+- Added: backend web-app URL helper so email login links can resolve from `PUBLIC_APP_URL`, `FRONTEND_URL`, or `WEB_APP_URL` with a production fallback.
+- Added: first `booking` module settings page for Super Admin, with configurable `booking.create` member requirement and email-notification toggles stored in module settings.
+- Changed: `booking.create` eligibility now reads the `booking` module's saved requirement instead of only using a hard-coded verified-member rule.
+- Added: admin API endpoints `GET/PUT /api/admin/modules/booking/settings` as the first per-module settings page foundation.
 - Added: Frontend member-session helpers and persistence of `member_tier` / `email_verified_at`.
 - Added: Member-center verification UI in `Me`, including member-tier display and resend-verification-email action.
 - Changed: Public booking and tournament signup flows now surface friendly `member_not_verified` guidance and direct members to `/me`.

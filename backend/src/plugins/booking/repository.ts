@@ -6,6 +6,42 @@ const reservationInclude = {
   pricingScheme: true,
 } as const;
 
+const reservationNotificationInclude = {
+  club: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      member: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          phone_country: true,
+          phone_number: true,
+          phone_e164: true,
+        },
+      },
+    },
+  },
+  table: { select: { id: true, name: true } },
+  member: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      member_code: true,
+      phone: true,
+      phone_country: true,
+      phone_number: true,
+      phone_e164: true,
+    },
+  },
+  pricingScheme: { select: { id: true, title: true } },
+} as const;
+
 export const bookingRepository = {
   createTable(clubId: string, data: { name: string; notes: string | null; basePrice: string | null }) {
     return prisma.clubTable.create({ data: { clubId, ...data } });
@@ -83,6 +119,13 @@ export const bookingRepository = {
 
   findReservation(id: string) {
     return prisma.tableReservation.findUnique({ where: { id } });
+  },
+
+  findReservationForNotification(id: string) {
+    return prisma.tableReservation.findUnique({
+      where: { id },
+      include: reservationNotificationInclude,
+    });
   },
 
   countOverlappingReservations(tableId: string, startAt: Date, endAt: Date, excludeId?: string) {

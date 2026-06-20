@@ -1,5 +1,6 @@
 import express from 'express';
 import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
+import { getBookingModuleSettings } from '../../core/modules/bookingSettings.js';
 import { bookingService } from './service.js';
 
 export function createBookingRouter() {
@@ -171,7 +172,8 @@ export function createBookingRouter() {
   });
 
   router.post('/:clubId/reservations', async (req, res) => {
-    const member = await requireMemberCapability(req, res, 'booking.create');
+    const settings = await getBookingModuleSettings().catch(() => null);
+    const member = await requireMemberCapability(req, res, 'booking.create', settings?.bookingCreateRequirement);
     if (!member) return;
     try {
       res.json(await bookingService.createMemberReservation(req.params.clubId, member.id, req.body || {}));

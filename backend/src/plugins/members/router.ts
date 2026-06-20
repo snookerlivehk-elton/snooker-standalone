@@ -14,6 +14,7 @@ import {
   normalizePhoneE164,
   verifyPassword,
 } from '../../core/members/utils.js';
+import { sendEmailIfConfigured } from '../../core/notifications/email.js';
 import { parseMonthRangeUtc } from '../../core/utils/query.js';
 import { getMemberRegisterPageHtml } from './registerPage.js';
 
@@ -22,29 +23,6 @@ type MemberRouterOptions = {
   resendFromEmail: string;
   googleClientId: string;
 };
-
-async function sendMailIfConfigured(options: {
-  resendApiKey: string;
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-}) {
-  if (!options.resendApiKey) return;
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${options.resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: options.from,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-    }),
-  });
-}
 
 function buildMemberAuthPayload(member: any) {
   return {
@@ -95,9 +73,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
     });
 
     const verifyUrl = `${options2.origin.replace(/\/$/, '')}/verify-email?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
-    await sendMailIfConfigured({
-      resendApiKey: options.resendApiKey,
-      from: options.resendFromEmail,
+    await sendEmailIfConfigured({
       to: email,
       subject: '會員 Email 驗證',
       html: [
@@ -240,9 +216,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
       });
 
       try {
-        await sendMailIfConfigured({
-          resendApiKey: options.resendApiKey,
-          from: options.resendFromEmail,
+        await sendEmailIfConfigured({
           to: em,
           subject: '重設密碼驗證碼',
           html: `<p>你的重設密碼驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內輸入此驗證碼以重設密碼。</p>`,
@@ -582,9 +556,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
         },
       });
       try {
-        await sendMailIfConfigured({
-          resendApiKey: options.resendApiKey,
-          from: options.resendFromEmail,
+        await sendEmailIfConfigured({
           to: em,
           subject: '會員註冊驗證碼',
           html: `<p>你的驗證碼為：<strong>${code}</strong></p><p>請在 10 分鐘內於註冊頁面輸入此驗證碼以完成註冊。</p>`,

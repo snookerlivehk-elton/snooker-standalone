@@ -4,6 +4,8 @@ import {
   isSchemeApplicable,
   toFiniteNumber,
 } from '../../core/booking/pricing.js';
+import { buildWebAppUrl, sendEmailIfConfigured } from '../../core/notifications/email.js';
+import { getBookingModuleSettings } from '../../core/modules/bookingSettings.js';
 import { formatHongKongDateTime } from '../../core/live/utils.js';
 import { bookingRepository } from './repository.js';
 
@@ -17,6 +19,108 @@ function parseReservationWindow(startAt: any, endAt: any, quantityHours: any) {
     ? new Date(String(endAt))
     : new Date(s.getTime() + (Number(quantityHours || 0) || 1) * 60 * 60 * 1000);
   return { s, e };
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function resolvePhone(value: any) {
+  const e164 = String(value?.phone_e164 || '').trim();
+  if (e164) return e164;
+  const plain = String(value?.phone || '').trim();
+  if (plain) return plain;
+  const country = String(value?.phone_country || '').trim();
+  const number = String(value?.phone_number || '').trim();
+  const joined = [country, number].filter(Boolean).join(' ');
+  return joined || '';
+}
+
+async function sendReservationNotificationEmail(
+  type: 'created' | 'confirmed' | 'cancelled',
+  reservationId: string,
+  extra?: { cancelReason?: string | null },
+) {
+  const settings = await getBookingModuleSettings().catch(() => null);
+  const enabled =
+    type === 'created'
+      ? settings?.reservationCreatedEmailEnabled
+      : type === 'confirmed'
+        ? settings?.reservationConfirmedEmailEnabled
+        : settings?.reservationCancelledEmailEnabled;
+  if (!enabled) return;
+
+  const reservation = await bookingRepository.findReservationForNotification(reservationId);
+  if (!reservation) return;
+
+  const clubName = String(reservation.club?.name || '').trim() || '場館';
+  const tableName = String(reservation.table?.name || '').trim() || '球枱';
+  const memberName = String(reservation.member?.name || '').trim() || '會員';
+  const memberCode = String((reservation.member as any)?.member_code || '').trim();
+  const memberEmail = String(reservation.member?.email || '').trim();
+  const memberPhone = resolvePhone(reservation.member);
+  const clubPhone = String(reservation.club?.phone || '').trim() || resolvePhone(reservation.club?.member);
+  const venueEmail = String(reservation.club?.email || '').trim() || String(reservation.club?.member?.email || '').trim();
+  const pricingTitle = String(reservation.pricingScheme?.title || '').trim();
+  const venueLoginUrl = buildWebAppUrl('/venue/login');
+  const memberLoginUrl = buildWebAppUrl('/members/login');
+  const reasonLine =
+    type === 'cancelled' && extra?.cancelReason
+      ? `<p><strong>取消原因：</strong>${escapeHtml(extra.cancelReason)}</p>`
+      : '';
+
+  if (type === 'created') {
+    if (!venueEmail) return;
+    await sendEmailIfConfigured({
+      to: venueEmail,
+      subject: `${clubName} 有新預約待確認`,
+      html: [
+        `<p>你收到一筆新的預約申請，請登入場館後台確認。</p>`,
+        `<p><strong>場館：</strong>${escapeHtml(clubName)}</p>`,
+        `<p><strong>會員：</strong>${escapeHtml([memberCode, memberName].filter(Boolean).join(' '))}</p>`,
+        memberEmail ? `<p><strong>會員 Email：</strong>${escapeHtml(memberEmail)}</p>` : '',
+        memberPhone ? `<p><strong>會員聯絡電話：</strong>${escapeHtml(memberPhone)}</p>` : '',
+        `<p><strong>球枱：</strong>${escapeHtml(tableName)}</p>`,
+        pricingTitle ? `<p><strong>方案：</strong>${escapeHtml(pricingTitle)}</p>` : '',
+        `<p><strong>時段：</strong>${escapeHtml(formatHongKongDateTime(reservation.startAt))} 至 ${escapeHtml(formatHongKongDateTime(reservation.endAt))}</p>`,
+        reservation.priceQuote != null ? `<p><strong>報價：</strong>${escapeHtml(String(reservation.priceQuote))}</p>` : '',
+        `<p><a href="${escapeHtml(venueLoginUrl)}">登入場館後台處理預約</a></p>`,
+      ].filter(Boolean).join(''),
+    });
+    return;
+  }
+
+  const email = memberEmail;
+  if (!email) return;
+  const subject =
+    type === 'confirmed'
+      ? `${clubName} 預約已確認`
+      : `${clubName} 預約已取消`;
+  const title =
+    type === 'confirmed'
+      ? '你的預約已確認'
+      : '你的預約已取消';
+  await sendEmailIfConfigured({
+    to: email,
+    subject,
+    html: [
+      `<p>${escapeHtml(memberName)}，你好。</p>`,
+      `<p>${escapeHtml(title)}</p>`,
+      `<p><strong>場館：</strong>${escapeHtml(clubName)}</p>`,
+      `<p><strong>球枱：</strong>${escapeHtml(tableName)}</p>`,
+      pricingTitle ? `<p><strong>方案：</strong>${escapeHtml(pricingTitle)}</p>` : '',
+      `<p><strong>時段：</strong>${escapeHtml(formatHongKongDateTime(reservation.startAt))} 至 ${escapeHtml(formatHongKongDateTime(reservation.endAt))}</p>`,
+      reservation.priceQuote != null ? `<p><strong>報價：</strong>${escapeHtml(String(reservation.priceQuote))}</p>` : '',
+      clubPhone ? `<p><strong>場館聯絡電話：</strong>${escapeHtml(clubPhone)}</p>` : '',
+      reasonLine,
+      `<p><a href="${escapeHtml(memberLoginUrl)}">登入會員頁面查看預約</a></p>`,
+    ].filter(Boolean).join(''),
+  });
 }
 
 export const bookingService = {
@@ -113,13 +217,26 @@ export const bookingService = {
       id,
     );
     if (overlap > 0) throw new Error('Time slot taken');
-    return bookingRepository.confirmReservation(id);
+    const updated = await bookingRepository.confirmReservation(id);
+    try {
+      await sendReservationNotificationEmail('confirmed', updated.id);
+    } catch (e) {
+      console.warn('Failed to send booking confirmation email:', e);
+    }
+    return updated;
   },
 
   async cancelReservation(clubId: string, id: string, reason: any) {
     const reservation = await bookingRepository.findReservation(id);
     if (!reservation || reservation.clubId !== clubId) throw new Error('Not found');
-    return bookingRepository.cancelReservation(id, reason ? String(reason) : null);
+    const cancelReason = reason ? String(reason) : null;
+    const updated = await bookingRepository.cancelReservation(id, cancelReason);
+    try {
+      await sendReservationNotificationEmail('cancelled', updated.id, { cancelReason });
+    } catch (e) {
+      console.warn('Failed to send booking cancellation email:', e);
+    }
+    return updated;
   },
 
   listPublicTables(clubId: string) {
@@ -255,6 +372,11 @@ export const bookingService = {
       const content = `會員：${who}\n球枱：${tableName}\n時段：${formatHongKongDateTime(s)} 至 ${formatHongKongDateTime(e)}`;
       await bookingRepository.createClubMessage(clubId, '新預約待確認', content);
     } catch {}
+    try {
+      await sendReservationNotificationEmail('created', created.id);
+    } catch (e) {
+      console.warn('Failed to send booking created email:', e);
+    }
     return created;
   },
 
@@ -265,6 +387,13 @@ export const bookingService = {
   async cancelMyReservation(clubId: string, memberId: string, reservationId: string, reason: any) {
     const reservation = await bookingRepository.findReservation(reservationId);
     if (!reservation || reservation.clubId !== clubId || reservation.memberId !== memberId) throw new Error('Not found');
-    return bookingRepository.cancelReservation(reservationId, reason ? String(reason) : null);
+    const cancelReason = reason ? String(reason) : null;
+    const updated = await bookingRepository.cancelReservation(reservationId, cancelReason);
+    try {
+      await sendReservationNotificationEmail('cancelled', updated.id, { cancelReason });
+    } catch (e) {
+      console.warn('Failed to send booking self-cancellation email:', e);
+    }
+    return updated;
   },
 };

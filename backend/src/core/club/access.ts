@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db/prisma.js';
-import { ensureMemberCapability, type MemberCapability } from '../members/eligibility.js';
+import { ensureMemberCapability, type MemberCapability, type MemberRequirementLevel } from '../members/eligibility.js';
 
 export type ClubAuthMember = {
   id: string;
@@ -45,10 +45,11 @@ export async function requireMemberCapability(
   req: express.Request,
   res: express.Response,
   capability: MemberCapability,
+  requirement?: MemberRequirementLevel,
 ): Promise<ClubAuthMember | null> {
   const member = await requireMember(req, res);
   if (!member) return null;
-  const access = ensureMemberCapability(member, capability);
+  const access = ensureMemberCapability(member, capability, requirement);
   if (!access.ok) {
     res.status(access.status).json({ error: access.error, code: access.code });
     return null;

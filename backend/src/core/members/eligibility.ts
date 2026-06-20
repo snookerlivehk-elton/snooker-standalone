@@ -1,4 +1,5 @@
 export type MemberCapability = 'booking.create' | 'tournament.signup';
+export type MemberRequirementLevel = 'BASIC_MEMBER' | 'VERIFIED_MEMBER';
 
 export type MemberEligibilityRecord = {
   id: string;
@@ -15,6 +16,15 @@ export function resolveMemberTier(member: MemberEligibilityRecord | null | undef
 
 export function isVerifiedMember(member: MemberEligibilityRecord | null | undefined): boolean {
   return resolveMemberTier(member) === 'VERIFIED';
+}
+
+export function getDefaultCapabilityRequirement(capability: MemberCapability): MemberRequirementLevel {
+  switch (capability) {
+    case 'booking.create':
+    case 'tournament.signup':
+    default:
+      return 'VERIFIED_MEMBER';
+  }
 }
 
 export function getCapabilityEligibilityError(capability: MemberCapability) {
@@ -40,7 +50,14 @@ export function getCapabilityEligibilityError(capability: MemberCapability) {
   }
 }
 
-export function ensureMemberCapability(member: MemberEligibilityRecord | null | undefined, capability: MemberCapability) {
+export function ensureMemberCapability(
+  member: MemberEligibilityRecord | null | undefined,
+  capability: MemberCapability,
+  requirement: MemberRequirementLevel = getDefaultCapabilityRequirement(capability),
+) {
+  if (requirement === 'BASIC_MEMBER') {
+    return { ok: true as const };
+  }
   if (isVerifiedMember(member)) {
     return { ok: true as const };
   }

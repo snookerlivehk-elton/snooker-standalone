@@ -2,6 +2,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { getClubFeatureAssignments, isClubScopedFeatureKey } from '../../../clubFeatureAccess.js';
 import { prisma } from '../../core/db/prisma.js';
+import { getBookingModuleSettings, normalizeMemberRequirementLevel, updateBookingModuleSettings } from '../../core/modules/bookingSettings.js';
 import { listResolvedModuleStates, syncModuleRegistry, upsertClubModuleConfig, upsertSystemModuleConfig } from '../../core/modules/config.js';
 import { getModuleManifest, getModuleManifestByFeatureKey } from '../../core/modules/registry.js';
 import type { FeatureCatalogItem } from '../../core/modules/registry.js';
@@ -101,6 +102,45 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
       ok: true,
       module: updated || null,
     });
+  });
+
+  router.get('/api/admin/modules/:moduleCode/settings', adminAuth, async (req, res) => {
+    await trySyncModuleRegistry();
+    const moduleCode = String(req.params.moduleCode || '').trim();
+    if (moduleCode === 'booking') {
+      return res.json({
+        moduleCode,
+        settings: await getBookingModuleSettings(),
+      });
+    }
+    return res.status(404).json({ error: 'module_settings_not_supported' });
+  });
+
+  router.put('/api/admin/modules/:moduleCode/settings', adminAuth, async (req, res) => {
+    await trySyncModuleRegistry();
+    const moduleCode = String(req.params.moduleCode || '').trim();
+    if (moduleCode === 'booking') {
+      const body = req.body || {};
+      const patch: Record<string, any> = {};
+      if (body.bookingCreateRequirement !== undefined) {
+        patch.bookingCreateRequirement = normalizeMemberRequirementLevel(body.bookingCreateRequirement);
+      }
+      if (typeof body.reservationCreatedEmailEnabled === 'boolean') {
+        patch.reservationCreatedEmailEnabled = body.reservationCreatedEmailEnabled;
+      }
+      if (typeof body.reservationConfirmedEmailEnabled === 'boolean') {
+        patch.reservationConfirmedEmailEnabled = body.reservationConfirmedEmailEnabled;
+      }
+      if (typeof body.reservationCancelledEmailEnabled === 'boolean') {
+        patch.reservationCancelledEmailEnabled = body.reservationCancelledEmailEnabled;
+      }
+      if (Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: 'no_valid_fields' });
+      }
+      const settings = await updateBookingModuleSettings(patch);
+      return res.json({ ok: true, moduleCode, settings });
+    }
+    return res.status(404).json({ error: 'module_settings_not_supported' });
   });
 
   router.put('/api/admin/features', adminAuth, async (req, res) => {

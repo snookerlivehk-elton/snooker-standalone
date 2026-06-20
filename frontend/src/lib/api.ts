@@ -341,6 +341,44 @@ export async function updateAdminModule(
   return res.json();
 }
 
+export type BookingModuleSettings = {
+  bookingCreateRequirement: 'BASIC_MEMBER' | 'VERIFIED_MEMBER';
+  reservationCreatedEmailEnabled: boolean;
+  reservationConfirmedEmailEnabled: boolean;
+  reservationCancelledEmailEnabled: boolean;
+};
+
+export async function getAdminModuleSettings(apiUrl: string, adminToken: string, moduleCode: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/modules/${encodeURIComponent(moduleCode)}/settings?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取模組設定失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ moduleCode: string; settings: BookingModuleSettings }>;
+}
+
+export async function updateAdminModuleSettings(
+  apiUrl: string,
+  adminToken: string,
+  moduleCode: string,
+  patch: Partial<BookingModuleSettings>,
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/modules/${encodeURIComponent(moduleCode)}/settings?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify(patch || {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新模組設定失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{ ok: true; moduleCode: string; settings: BookingModuleSettings }>;
+}
+
 export async function updateAdminFeatures(
   apiUrl: string,
   adminToken: string,

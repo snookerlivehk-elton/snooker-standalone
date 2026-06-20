@@ -213,6 +213,17 @@ const AdminModules: React.FC = () => {
                   <div className="cue-surface rounded px-3 py-2">實際公開：{row.effectivePublicVisible ? '開啟' : '關閉'}</div>
                   <div className="cue-surface rounded px-3 py-2">實際首頁：{row.effectiveHomeVisible ? '開啟' : '關閉'}</div>
                 </div>
+
+                {row.code === 'booking' ? (
+                  <div className="flex justify-end">
+                    <Link
+                      to={`/admin/modules/booking/settings${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
+                      className="px-3 py-2 rounded cue-button text-sm font-semibold"
+                    >
+                      Booking 設定頁
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

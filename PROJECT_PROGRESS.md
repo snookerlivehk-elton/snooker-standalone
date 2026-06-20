@@ -450,6 +450,84 @@
   - 會員若以純電話註冊，目前會清楚顯示尚未設定 email，因此暫未可升級為認證會員
   - 後續若要支援「電話會員補填 email 後升級」，仍需再補會員修改 email flow
 
+## 最新已完成：Booking 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/bookingSettings.ts`
+  - `backend/src/core/members/eligibility.ts`
+  - `backend/src/core/club/access.ts`
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `backend/src/plugins/booking/router.ts`
+  - `frontend/src/AdminBookingSettings.tsx`
+  - `frontend/src/AdminModules.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/lib/api.ts`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `booking` 模組內部設定儲存
+  - 新增 `booking` module settings helper，提供 default / normalize / read / update
+  - 新增 admin API：
+    - `GET /api/admin/modules/booking/settings`
+    - `PUT /api/admin/modules/booking/settings`
+  - `booking.create` 現已改為讀取 `bookingCreateRequirement`
+    - 可在 `BASIC_MEMBER`
+    - 與 `VERIFIED_MEMBER`
+      之間切換
+- Frontend
+  - 新增 `Super Admin` 專用 `Booking 模組設定頁`
+  - 模組中心 `booking` 卡片已加入「Booking 設定頁」入口
+  - 第一版可設定：
+    - `booking.create` 會員資格要求
+    - `reservation.created.emailEnabled`
+    - `reservation.confirmed.emailEnabled`
+    - `reservation.cancelled.emailEnabled`
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+- 備註：
+  - 本輪 email 通知開關已配置化保存，但 booking 事件的實際寄信流程仍未接線
+  - 下一輪最適合把 `reservation created / confirmed / cancelled` 真正接到 email delivery
+
+## 最新已完成：Booking Email Notifications（Phase 2）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/notifications/email.ts`
+  - `backend/src/plugins/members/router.ts`
+  - `backend/src/plugins/booking/repository.ts`
+  - `backend/src/plugins/booking/service.ts`
+- Backend
+  - 抽出共用 Resend email helper，避免不同模組各自複製寄信邏輯
+  - `booking` 模組現已真正讀取設定頁中的三個 email 開關
+  - 已接上以下 booking 事件 email：
+    - 會員建立預約後先通知場館確認
+    - 場館確認預約後再通知預約會員本人
+    - 預約取消後（包括會員自行取消）
+  - 新預約申請會寄到場館 email；確認與取消通知則寄到預約會員 email
+  - 若未設定 `RESEND_API_KEY` / `RESEND_FROM_EMAIL`、會員沒有 email、或寄信失敗，均不會阻斷原本預約流程
+- 實作細節
+  - 已新增 web app base URL helper，email 內可建立登入超連結：
+    - `/venue/login`
+    - `/members/login`
+  - 場館通知 email 內容包含：
+    - 預約內容
+    - 會員編號 / 名稱
+    - 會員 email（如有）
+    - 會員聯絡電話（如有）
+    - 球枱
+    - 方案（如有）
+    - 時段
+    - 報價（如有）
+    - 場館登入超連結
+  - 會員通知 email 內容包含：
+    - 預約內容
+    - 場館聯絡電話（如有）
+    - 會員登入超連結
+    - 取消原因（如有）
+- 本輪驗證：
+  - `backend npm run build` 已通過
+- 備註：
+  - `manual reservation / blocked slot` 這類場館內部操作，暫未額外接上 email
+  - 下一輪最適合把同一套 pattern 複製到 `tournaments / club_messages / points`
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。
