@@ -5,6 +5,9 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: first-phase highbreak dual-mode data model with `BreakRecord.record_type` (`VENUE` / `TOURNAMENT`) plus a reserved `tournament_id` relation for future tournament-linked official records.
+- Changed: all existing club/public/member highbreak leaderboards now count only `VENUE` records, so venue-side highbreak stays a club-internal marketing/game record instead of mixing with official tournament results.
+- Changed: venue highbreak UI, club leaderboard labels, member history, and the admin breaks console now distinguish venue vs tournament records, while current create flows continue to create venue-internal records only.
 - Added: first `members` module settings page for Super Admin, with configurable member self-service controls for email registration, phone registration, Google login, password reset, self profile editing, and self password change.
 - Changed: members router now reads module settings before allowing email registration, phone registration, Google login, password reset, self profile updates, and self password changes.
 - Added: first `live` module settings page for Super Admin, with configurable live-announcement publishing access, club-message mirroring, and initial live-notification email toggles stored in module settings.

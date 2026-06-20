@@ -725,6 +725,42 @@
   - 本輪先集中處理會員系統的營運控制，不處理 email 文案或通知規則微調
   - 會員 email 驗證 / resend / verify flow 仍維持現有行為，之後可再獨立配置化
 
+## 最新已完成：Highbreak 雙模式第一階段（2026-06-20）
+
+- 已升級：
+  - `backend/prisma/schema.prisma`
+  - `backend/prisma/migrations/20260702000000_add_break_record_type/migration.sql`
+  - `backend/src/plugins/highbreak/router.ts`
+  - `backend/src/plugins/members/router.ts`
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+  - `frontend/src/ClubPublicPage.tsx`
+  - `frontend/src/AdminBreaks.tsx`
+  - `frontend/src/Me.tsx`
+  - `frontend/src/lib/api.ts`
+- Backend
+  - `BreakRecord` 新增 `record_type`
+    - `VENUE`
+    - `TOURNAMENT`
+  - 第一階段先把現有與新建立的場館單杆紀錄全部收口為 `VENUE`
+  - 已為之後正式比賽單杆預留 `tournament_id` 關聯欄位
+  - 所有現有場館排行榜 / 公開排行榜 / 首頁綜合榜單現只統計 `VENUE`
+- Frontend
+  - `VenueHighbreakModule` 已明確改為「場館 Highbreak」
+  - 場館頁排行榜文案改為會內 highbreak 排名，對齊「只作場館營銷/小遊戲」定位
+  - 會員中心歷史記錄現已分：
+    - 全部
+    - 會內
+    - 比賽
+  - 管理員單杆後台現已可按 `recordType` 篩選，並顯示紀錄類型 / 賽事名稱欄位
+- 本輪驗證：
+  - backend `npm run build` 已通過
+  - frontend `npm run build` 已通過
+  - diagnostics 已通過
+- 備註：
+  - 本輪未改 `tournaments` 建立/確認流程
+  - `TOURNAMENT` 類型現屬資料模型預留，之後可在你擴展賽事功能時再正式接線
+  - 你要求的「比賽 highbreak 為正式記錄」方向已先在資料邊界上分開，避免再同會內 highbreak 混在一起
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

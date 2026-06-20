@@ -1874,6 +1874,7 @@ export async function listAdminBreaks(
     month?: string;
     q?: string;
     includeDeleted?: boolean;
+    recordType?: 'VENUE' | 'TOURNAMENT';
   }
 ) {
   const base = apiUrl.replace(/\/$/, '');
@@ -1886,6 +1887,7 @@ export async function listAdminBreaks(
   if (options?.month) params.set('month', options.month);
   if (options?.q) params.set('q', options.q);
   if (options?.includeDeleted) params.set('includeDeleted', '1');
+  if (options?.recordType) params.set('recordType', options.recordType);
 
   const url = `${base}/api/admin/breaks?${params.toString()}`;
   const res = await fetch(url, {

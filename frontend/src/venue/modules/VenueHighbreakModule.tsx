@@ -114,19 +114,23 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   return (
     <div className={`glass rounded-xl p-4 md:p-6 ${className}`.trim()}>
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
-        <h2 className="text-xl font-bold">單杆紀錄</h2>
+        <div>
+          <h2 className="text-xl font-bold">場館 Highbreak</h2>
+          <div className="text-xs cue-muted mt-1">此模式只作場館會內營銷/小遊戲紀錄，不會當作正式比賽單杆。</div>
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <HelpGuide
-            title="單杆紀錄"
-            intro="新增單杆記錄，並按月份/會員查詢與統計。"
+            title="場館 Highbreak"
+            intro="新增場館會內 highbreak 記錄，並按月份/會員查詢與統計。"
             steps={[
               '右上角先選擇月份與會員（可選）作為篩選條件，按「重新整理」更新列表。',
               '要新增記錄：下方選擇會員、輸入分數與日期（可選：影片連結/備註），按「新增」。',
-              '列表可查看已記錄的單杆，包含影片連結（如有）。',
+              '列表可查看已記錄的會內單杆，包含影片連結（如有）。',
             ]}
             tips={[
               '影片連結建議使用可直接開啟的 https:// URL。',
               '如看不到某會員，請先到「會員管理」確認該會員已加入場館。',
+              '正式比賽 highbreak 會保留到之後與 tournaments 流程接線。',
             ]}
           />
           <input
@@ -252,7 +256,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="cue-surface rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">歷史最高單杆 Top 10</div>
+            <div className="font-semibold">會內最高單杆 Top 10</div>
           </div>
           {leaderHighest.length === 0 ? (
             <div className="text-sm cue-muted">暫無資料</div>
@@ -292,7 +296,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
 
         <div className="cue-surface rounded-lg p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
-            <div className="font-semibold">本月累計 Top 10</div>
+            <div className="font-semibold">會內本月累計 Top 10</div>
             <input
               type="month"
               value={leaderMonth}
@@ -326,7 +330,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       </div>
 
       <div className="mt-6">
-        <div className="font-semibold mb-2">紀錄列表</div>
+        <div className="font-semibold mb-2">會內紀錄列表</div>
         {breaksLoading ? (
           <div className="text-sm cue-muted">載入中...</div>
         ) : breaks.length === 0 ? (

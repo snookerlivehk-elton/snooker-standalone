@@ -416,6 +416,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
         orderBy: [{ recorded_at: 'desc' }],
         include: {
           club: { select: { id: true, name: true, logoUrl: true } },
+          tournament: { select: { id: true, title: true, startsAt: true } },
         },
       });
       res.json(rows);

@@ -1600,7 +1600,7 @@ const ClubPublicPage: React.FC = () => {
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4 text-left">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">
-                    <div className="font-semibold text-lg">單杆排行榜</div>
+                    <div className="font-semibold text-lg">場館 Highbreak 排行榜</div>
                     <div className="flex items-center gap-2">
                       <div className="text-xs cue-muted">本月</div>
                       <input
@@ -1617,7 +1617,7 @@ const ClubPublicPage: React.FC = () => {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">歷史最高單杆 Top 10</div>
+                      <div className="font-semibold mb-2">會內最高單杆 Top 10</div>
                       {leaderHighest.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (
@@ -1652,7 +1652,7 @@ const ClubPublicPage: React.FC = () => {
                     </div>
 
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">本月累計 Top 10</div>
+                      <div className="font-semibold mb-2">會內本月累計 Top 10</div>
                       {leaderMonthly.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (

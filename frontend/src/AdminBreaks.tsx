@@ -30,6 +30,7 @@ const AdminBreaks: React.FC = () => {
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [memberId, setMemberId] = useState('');
   const [clubId, setClubId] = useState('');
+  const [recordType, setRecordType] = useState<'ALL' | 'VENUE' | 'TOURNAMENT'>('ALL');
 
   const [editing, setEditing] = useState<Record<string, any>>({});
 
@@ -70,6 +71,7 @@ const AdminBreaks: React.FC = () => {
           includeDeleted,
           memberId: memberId.trim() || undefined,
           clubId: clubId.trim() || undefined,
+          recordType: recordType === 'ALL' ? undefined : recordType,
         });
         setRows(Array.isArray(data.breaks) ? data.breaks : []);
         setTotal(Number(data.total || 0));
@@ -81,7 +83,7 @@ const AdminBreaks: React.FC = () => {
         setLoading(false);
       }
     },
-    [clubId, includeDeleted, memberId, month, pageSize, q, resolveAdminToken]
+    [clubId, includeDeleted, memberId, month, pageSize, q, recordType, resolveAdminToken]
   );
 
   useEffect(() => {
@@ -237,6 +239,15 @@ const AdminBreaks: React.FC = () => {
                 onChange={(e) => setMonth(e.target.value)}
                 className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               />
+              <select
+                value={recordType}
+                onChange={(e) => setRecordType(e.target.value as 'ALL' | 'VENUE' | 'TOURNAMENT')}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              >
+                <option value="ALL">全部類型</option>
+                <option value="VENUE">會內</option>
+                <option value="TOURNAMENT">比賽</option>
+              </select>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} />
                 顯示已刪除
@@ -259,6 +270,7 @@ const AdminBreaks: React.FC = () => {
                   setMemberId('');
                   setClubId('');
                   setMonth(defaultMonthLocal());
+                  setRecordType('ALL');
                   setIncludeDeleted(false);
                   setTimeout(() => load(1), 0);
                 }}
@@ -296,6 +308,7 @@ const AdminBreaks: React.FC = () => {
                     const isEditing = Boolean(editing[r.id]);
                     const e = editing[r.id] || {};
                     const deleted = !!r.deleted_at;
+                    const recordTypeLabel = String(r.record_type || '').toUpperCase() === 'TOURNAMENT' ? '比賽' : '會內';
                     const href = normalizeHttpUrl(r.video_url);
                     return (
                       <div key={r.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900">
@@ -305,6 +318,10 @@ const AdminBreaks: React.FC = () => {
                             <div className="text-xs text-slate-500 truncate">
                               {String(r.member?.name || '-')}
                               {r.member?.member_code ? `（${r.member.member_code}）` : ''}
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              {recordTypeLabel}
+                              {r.tournament?.title ? ` · ${String(r.tournament.title)}` : ''}
                             </div>
                           </div>
                           <div className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${deleted ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -434,6 +451,7 @@ const AdminBreaks: React.FC = () => {
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">時間</th>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">場館</th>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">會員</th>
+                      <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">類型</th>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">分數</th>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">影片</th>
                       <th className="border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-700">備註</th>
@@ -476,6 +494,14 @@ const AdminBreaks: React.FC = () => {
                             <div className="text-xs text-slate-600">
                               {r.member?.member_code ? `(${r.member.member_code})` : ''}{' '}
                               <span className="font-mono text-[10px] text-slate-400">{r.member_id}</span>
+                            </div>
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2 align-top">
+                            <div className="font-medium">
+                              {String(r.record_type || '').toUpperCase() === 'TOURNAMENT' ? '比賽' : '會內'}
+                            </div>
+                            <div className="text-xs text-slate-500 max-w-[220px] truncate" title={String(r.tournament?.title || '')}>
+                              {r.tournament?.title || '-'}
                             </div>
                           </td>
                           <td className="border-b border-slate-100 px-3 py-2 align-top">

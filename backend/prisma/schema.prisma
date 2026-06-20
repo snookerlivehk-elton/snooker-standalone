@@ -32,6 +32,11 @@ enum TournamentSignupStatus {
   CANCELLED
 }
 
+enum BreakRecordType {
+  VENUE
+  TOURNAMENT
+}
+
 model Member {
   id           String       @id @default(uuid())
   name         String
@@ -141,6 +146,8 @@ model BreakRecord {
   id                  String      @id @default(uuid())
   club_id             String
   member_id           String
+  record_type         BreakRecordType @default(VENUE)
+  tournament_id       String?
   points              Int
   recorded_at         DateTime    @default(now())
   video_url           String?
@@ -156,7 +163,12 @@ model BreakRecord {
   club                ClubProfile @relation(fields: [club_id], references: [id])
   member              Member      @relation(fields: [member_id], references: [id])
   created_by          Member      @relation("break_created_by", fields: [created_by_member_id], references: [id])
+  tournament          Tournament? @relation(fields: [tournament_id], references: [id])
 
+  @@index([record_type, recorded_at])
+  @@index([record_type, club_id, recorded_at])
+  @@index([record_type, member_id, recorded_at])
+  @@index([tournament_id, recorded_at])
   @@index([club_id, recorded_at])
   @@index([member_id, recorded_at])
   @@index([club_id, member_id, recorded_at])
@@ -211,6 +223,7 @@ model Tournament {
   updatedAt   DateTime @updatedAt
 
   signups     TournamentSignup[]
+  breakRecords BreakRecord[]
 
   @@index([clubId, status])
   @@index([clubId, startsAt])

@@ -4,6 +4,14 @@ import { getMyClubId, requireClubAdmin } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { parseLimit, parseMonthRangeUtc } from '../../core/utils/query.js';
 
+type BreakRecordType = 'VENUE' | 'TOURNAMENT';
+
+function normalizeBreakRecordType(raw: any): BreakRecordType | null {
+  const value = String(raw || '').trim().toUpperCase();
+  if (value === 'VENUE' || value === 'TOURNAMENT') return value;
+  return null;
+}
+
 export function createClubHighbreakRouter() {
   const router = express.Router();
 
@@ -36,6 +44,7 @@ export function createClubHighbreakRouter() {
         id: randomUUID(),
         club_id: clubId,
         member_id: targetMemberId,
+        record_type: 'VENUE',
         points: Math.floor(points),
         recorded_at,
         video_url: videoUrl,
@@ -44,6 +53,7 @@ export function createClubHighbreakRouter() {
       },
       include: {
         member: { select: { id: true, name: true, email: true, member_code: true } },
+        tournament: { select: { id: true, title: true, startsAt: true } },
       },
     });
     res.json(row);
@@ -55,7 +65,7 @@ export function createClubHighbreakRouter() {
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const { month, memberId } = req.query as any;
-    const where: any = { club_id: clubId, deleted_at: null };
+    const where: any = { club_id: clubId, deleted_at: null, record_type: 'VENUE' };
     if (memberId) where.member_id = String(memberId).trim();
     if (month) {
       const range = parseMonthRangeUtc(String(month));
@@ -65,7 +75,10 @@ export function createClubHighbreakRouter() {
     const rows = await prisma.breakRecord.findMany({
       where,
       orderBy: [{ recorded_at: 'desc' }],
-      include: { member: { select: { id: true, name: true, email: true, member_code: true } } },
+      include: {
+        member: { select: { id: true, name: true, email: true, member_code: true } },
+        tournament: { select: { id: true, title: true, startsAt: true } },
+      },
     });
     res.json(rows);
   });
@@ -77,10 +90,13 @@ export function createClubHighbreakRouter() {
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
 
     const rows = await prisma.breakRecord.findMany({
-      where: { club_id: clubId, deleted_at: null },
+      where: { club_id: clubId, deleted_at: null, record_type: 'VENUE' },
       orderBy: [{ points: 'desc' }, { recorded_at: 'desc' }],
       take: limit,
-      include: { member: { select: { id: true, name: true, email: true, member_code: true } } },
+      include: {
+        member: { select: { id: true, name: true, email: true, member_code: true } },
+        tournament: { select: { id: true, title: true, startsAt: true } },
+      },
     });
     res.json(rows);
   });
@@ -95,7 +111,7 @@ export function createClubHighbreakRouter() {
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
 
-    const where: any = { club_id: clubId, deleted_at: null };
+    const where: any = { club_id: clubId, deleted_at: null, record_type: 'VENUE' };
     if (range) where.recorded_at = { gte: range.start, lt: range.end };
 
     const grouped = await prisma.breakRecord.groupBy({
@@ -164,7 +180,7 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['member_id'],
-        where: { deleted_at: null, club_id: { in: clubIds }, member_id: { in: memberIds } },
+        where: { deleted_at: null, record_type: 'VENUE', club_id: { in: clubIds }, member_id: { in: memberIds } },
         _max: { points: true },
         orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
         take,
@@ -201,7 +217,7 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['member_id'],
-        where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds }, member_id: { in: memberIds } },
+        where: { deleted_at: null, record_type: 'VENUE', recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds }, member_id: { in: memberIds } },
         _sum: { points: true },
         orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
         take,
@@ -231,7 +247,7 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['club_id'],
-        where: { deleted_at: null, club_id: { in: clubIds } },
+        where: { deleted_at: null, record_type: 'VENUE', club_id: { in: clubIds } },
         _max: { points: true },
         orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
         take,
@@ -268,7 +284,7 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['club_id'],
-        where: { deleted_at: null, recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds } },
+        where: { deleted_at: null, record_type: 'VENUE', recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds } },
         _sum: { points: true },
         orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
         take,
@@ -304,12 +320,14 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const clubId = String((req.query.clubId as string) || '').trim();
       const month = String((req.query.month as string) || '').trim();
       const q = String((req.query.q as string) || '').trim();
+      const recordType = normalizeBreakRecordType(req.query.recordType);
       const includeDeleted = String((req.query.includeDeleted as string) || '').trim() === '1';
 
       const where: any = {};
       if (!includeDeleted) where.deleted_at = null;
       if (memberId) where.member_id = memberId;
       if (clubId) where.club_id = clubId;
+      if (recordType) where.record_type = recordType;
       if (month) {
         const range = parseMonthRangeUtc(month);
         if (!range) return res.status(400).json({ error: 'month invalid' });
@@ -335,6 +353,7 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
           include: {
             member: { select: { id: true, name: true, member_code: true } },
             club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+            tournament: { select: { id: true, title: true, startsAt: true } },
           },
         }),
       ]);

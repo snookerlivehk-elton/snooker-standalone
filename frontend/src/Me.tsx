@@ -96,6 +96,7 @@ const Me: React.FC = () => {
   const [sendingVerifyEmail, setSendingVerifyEmail] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [breakQueryMode, setBreakQueryMode] = useState<'range' | 'year' | 'month'>('range');
+  const [breakCategory, setBreakCategory] = useState<'ALL' | 'VENUE' | 'TOURNAMENT'>('ALL');
   const [breakFrom, setBreakFrom] = useState('');
   const [breakTo, setBreakTo] = useState('');
   const [breakYear, setBreakYear] = useState<number | null>(null);
@@ -544,6 +545,22 @@ const Me: React.FC = () => {
       return true;
     });
   }, [parsedBreaks, breakQueryMode, breakYear, breakMonth, breakFrom, breakTo]);
+
+  const categorizedBreaks = useMemo(() => {
+    if (breakCategory === 'ALL') return filteredBreaks;
+    return filteredBreaks.filter((b) => String(b.raw?.record_type || '').toUpperCase() === breakCategory);
+  }, [breakCategory, filteredBreaks]);
+
+  const categorizedBreakSummary = useMemo(() => {
+    if (categorizedBreaks.length === 0) return { highest: 0, total: 0 };
+    let highest = 0;
+    let total = 0;
+    for (const b of categorizedBreaks) {
+      total += b.points;
+      if (b.points > highest) highest = b.points;
+    }
+    return { highest, total };
+  }, [categorizedBreaks]);
 
   useEffect(() => {
     let mounted = true;
@@ -1639,11 +1656,12 @@ const Me: React.FC = () => {
                     <div className="font-semibold text-lg">歷史記錄</div>
                     <HelpGuide
                       title="歷史記錄"
-                      intro="查看歷史單杆統計、每月走勢與查詢記錄。"
+                      intro="查看歷史 highbreak 記錄，並分開會內與比賽兩類資料。"
                       steps={[
-                        '上方顯示歷史最高及累計，下方會顯示每月累計走勢。',
+                        '先切換「全部 / 會內 / 比賽」，再查看對應的歷史最高及累計。',
+                        '下方會顯示每月累計走勢。',
                         '可在「時間段 / 年 / 月」切換篩選方式。',
-                        '下方列表會顯示符合條件的單杆記錄；如有影片連結可點「連結」開啟。',
+                        '下方列表會顯示符合條件的 highbreak 記錄；如有影片連結可點「連結」開啟。',
                       ]}
                       tips={[
                         '表格在手機可左右滑查看欄位。',
@@ -1655,14 +1673,38 @@ const Me: React.FC = () => {
                     <div className="text-sm cue-muted">讀取中…</div>
                   ) : (
                     <div className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBreakCategory('ALL')}
+                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'ALL' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                        >
+                          全部
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBreakCategory('VENUE')}
+                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'VENUE' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                        >
+                          會內
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBreakCategory('TOURNAMENT')}
+                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'TOURNAMENT' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                        >
+                          比賽
+                        </button>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="text-sm cue-muted">歷史單杆最高</div>
-                          <div className="text-3xl font-extrabold accent-yellow mt-1">{breakSummary.highest || 0}</div>
+                          <div className="text-sm cue-muted">目前分類最高</div>
+                          <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.highest || 0}</div>
                         </div>
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="text-sm cue-muted">歷史單杆累計</div>
-                          <div className="text-3xl font-extrabold accent-yellow mt-1">{breakSummary.total || 0}</div>
+                          <div className="text-sm cue-muted">目前分類累計</div>
+                          <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.total || 0}</div>
                         </div>
                       </div>
 
@@ -1770,28 +1812,36 @@ const Me: React.FC = () => {
                           )}
                         </div>
 
-                        <div className="text-xs cue-muted mt-2">共 {filteredBreaks.length} 筆</div>
+                        <div className="text-xs cue-muted mt-2">
+                          目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 共 {categorizedBreaks.length} 筆
+                        </div>
 
                         <div className="mt-3 overflow-x-auto -mx-2 px-2">
                           <table className="w-full text-left border-collapse text-sm">
                             <thead>
                               <tr className="cue-muted border-b cue-border">
                                 <th className="py-2 px-2 whitespace-nowrap">日期</th>
+                                <th className="py-2 px-2 whitespace-nowrap">類型</th>
                                 <th className="py-2 px-2">球館</th>
+                                <th className="py-2 px-2">賽事</th>
                                 <th className="py-2 px-2 whitespace-nowrap">單杆</th>
                                 <th className="py-2 px-2 whitespace-nowrap">影片</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {filteredBreaks.slice(0, 200).map((b) => {
+                              {categorizedBreaks.slice(0, 200).map((b) => {
                                 const clubName = String(b.raw?.club?.name || b.raw?._club?.name || b.raw?.clubName || '-');
                                 const href = normalizeHttpUrl(b.raw?.video_url ?? b.raw?.videoUrl);
+                                const tournamentTitle = String(b.raw?.tournament?.title || '-');
+                                const recordTypeLabel = String(b.raw?.record_type || '').toUpperCase() === 'TOURNAMENT' ? '比賽' : '會內';
                                 return (
                                   <tr key={String(b.raw?.id || `${b.when.getTime()}-${b.points}`)} className="border-b cue-border hover:brightness-95">
                                     <td className="py-2 px-2 cue-muted whitespace-nowrap">
                                       {Number.isFinite(b.when.getTime()) ? b.when.toLocaleDateString() : '-'}
                                     </td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{recordTypeLabel}</td>
                                     <td className="py-2 px-2">{clubName}</td>
+                                    <td className="py-2 px-2">{tournamentTitle}</td>
                                     <td className="py-2 px-2 font-semibold accent-yellow whitespace-nowrap">{b.points}</td>
                                     <td className="py-2 px-2">
                                       {href ? (
@@ -1806,7 +1856,7 @@ const Me: React.FC = () => {
                             </tbody>
                           </table>
                         </div>
-                        {filteredBreaks.length > 200 && <div className="text-xs cue-muted mt-2">只顯示前 200 筆</div>}
+                        {categorizedBreaks.length > 200 && <div className="text-xs cue-muted mt-2">只顯示前 200 筆</div>}
                       </div>
                     </div>
                   )}
