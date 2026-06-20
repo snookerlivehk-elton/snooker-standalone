@@ -7,6 +7,17 @@ import { useFeatureEnabled } from './lib/features';
 import Tabs from './components/Tabs';
 import HelpGuide from './components/HelpGuide';
 
+type VenueDashboardTab = 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members';
+
+type VenueDashboardContentSection = 'live' | 'club_messages' | 'tournaments';
+
+type VenueDashboardProps = {
+  forcedTab?: VenueDashboardTab;
+  forcedSection?: VenueDashboardContentSection;
+  standaloneTitle?: string;
+  standaloneDescription?: string;
+};
+
 type PricingRule = {
   daysOfWeek?: number[];
   start?: string;
@@ -22,7 +33,7 @@ function normalizeVideoHref(raw: any): string | null {
   return `https://${s}`;
 }
 
-const VenueDashboard: React.FC = () => {
+const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSection, standaloneTitle, standaloneDescription }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,9 +166,11 @@ const VenueDashboard: React.FC = () => {
   const pointsEnabled = pointsGlobalEnabled && Boolean(clubFeatureAccess.points?.effectiveEnabled);
   const pointsTabVisible = pointsGlobalEnabled && (!clubFeatureAccessLoaded || pointsEnabled);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members'>('home');
+  const [activeTab, setActiveTab] = useState<VenueDashboardTab>(forcedTab || 'home');
+  const standaloneMode = !!forcedTab;
 
-  function resolveTab(): 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members' {
+  function resolveTab(): VenueDashboardTab {
+    if (forcedTab) return forcedTab;
     try {
       const params = new URLSearchParams(window.location.search);
       const t = String(params.get('tab') || '').trim();
@@ -168,8 +181,13 @@ const VenueDashboard: React.FC = () => {
     }
   }
 
-  function updateTab(t: 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members') {
+  function updateTab(t: VenueDashboardTab) {
+    if (forcedTab && t !== forcedTab) {
+      navigate('/venue/modules', { replace: true });
+      return;
+    }
     setActiveTab(t);
+    if (forcedTab) return;
     try {
       localStorage.setItem('venueDashboardTab', t);
     } catch {}
@@ -225,6 +243,9 @@ const VenueDashboard: React.FC = () => {
   const joinUrl = clubProfile?.id ? new URL(`/club/${clubProfile.id}`, window.location.origin).toString() : '';
   const joinQrSvgRef = useRef<SVGSVGElement | null>(null);
   const joinQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const liveSectionRef = useRef<HTMLDivElement | null>(null);
+  const clubMessagesSectionRef = useRef<HTMLDivElement | null>(null);
+  const tournamentsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const downloadJoinQrSvg = useCallback(() => {
     if (!clubProfile?.id) return;
@@ -695,7 +716,7 @@ const VenueDashboard: React.FC = () => {
 
   useEffect(() => {
     setActiveTab(resolveTab());
-  }, []);
+  }, [forcedTab]);
 
   useEffect(() => {
     const contentVisible = clubMessagesEnabled || liveEnabled || tournamentsEnabled;
@@ -705,6 +726,22 @@ const VenueDashboard: React.FC = () => {
     if (activeTab === 'highbreak' && !highbreakEnabled) return updateTab('home');
     if (activeTab === 'content' && !contentVisible) return updateTab('home');
   }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
+
+  useEffect(() => {
+    if (!standaloneMode || activeTab !== 'content' || !forcedSection) return;
+    const sectionRef =
+      forcedSection === 'live'
+        ? liveSectionRef
+        : forcedSection === 'club_messages'
+          ? clubMessagesSectionRef
+          : tournamentsSectionRef;
+    const node = sectionRef.current;
+    if (!node) return;
+    const timer = window.setTimeout(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, forcedSection, standaloneMode, liveEnabled, clubMessagesEnabled, tournamentsEnabled]);
 
   useEffect(() => {
     if (!operatorId || !isOperator) return;
@@ -814,17 +851,33 @@ const VenueDashboard: React.FC = () => {
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0">
-            Cue Aim System - 場館管理後台 <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span>
-          </h1>
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-words min-w-0">
+              {standaloneTitle || 'Cue Aim System - 場館管理後台'} <span className="text-sm font-normal accent-yellow ml-2">v2.1 Club</span>
+            </h1>
+            {standaloneDescription ? (
+              <div className="text-sm cue-muted mt-1">{standaloneDescription}</div>
+            ) : null}
+          </div>
           <div className="sm:ml-auto flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/venue/modules')}
-              className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
-            >
-              模組中心
-            </button>
+            {standaloneMode ? (
+              <button
+                type="button"
+                onClick={() => navigate('/venue/modules')}
+                className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
+              >
+                返回模組中心
+              </button>
+            ) : null}
+            {!standaloneMode ? (
+              <button
+                type="button"
+                onClick={() => navigate('/venue/modules')}
+                className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
+              >
+                模組中心
+              </button>
+            ) : null}
             <button 
               onClick={() => {
                 localStorage.removeItem('memberSession');
@@ -837,21 +890,23 @@ const VenueDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="glass rounded-xl p-3 sm:p-4">
-          <Tabs
-            items={[
-              { key: 'home', label: '主頁編輯' },
-              ...(bookingEnabled ? [{ key: 'booking', label: '預約/球枱' }] : []),
-              ...(qrEnabled ? [{ key: 'qr', label: '掃碼起鐘' }] : []),
-              ...(pointsTabVisible ? [{ key: 'points', label: '消費積分' }] : []),
-              ...(highbreakEnabled ? [{ key: 'highbreak', label: '單杆' }] : []),
-              ...((clubMessagesEnabled || liveEnabled || tournamentsEnabled) ? [{ key: 'content', label: '內容管理' }] : []),
-              { key: 'members', label: '會員管理' },
-            ]}
-            activeKey={activeTab}
-            onChange={(k) => updateTab(k as any)}
-          />
-        </div>
+        {!standaloneMode && (
+          <div className="glass rounded-xl p-3 sm:p-4">
+            <Tabs
+              items={[
+                { key: 'home', label: '主頁編輯' },
+                ...(bookingEnabled ? [{ key: 'booking', label: '預約/球枱' }] : []),
+                ...(qrEnabled ? [{ key: 'qr', label: '掃碼起鐘' }] : []),
+                ...(pointsTabVisible ? [{ key: 'points', label: '消費積分' }] : []),
+                ...(highbreakEnabled ? [{ key: 'highbreak', label: '單杆' }] : []),
+                ...((clubMessagesEnabled || liveEnabled || tournamentsEnabled) ? [{ key: 'content', label: '內容管理' }] : []),
+                { key: 'members', label: '會員管理' },
+              ]}
+              activeKey={activeTab}
+              onChange={(k) => updateTab(k as any)}
+            />
+          </div>
+        )}
 
         {error && (
           <div className="cue-surface p-3 rounded-lg text-red-600">
@@ -3296,7 +3351,10 @@ const VenueDashboard: React.FC = () => {
         {activeTab === 'content' && (
         <>
         {liveEnabled ? (
-        <div className="glass rounded-xl p-6">
+        <div
+          ref={liveSectionRef}
+          className={`glass rounded-xl p-6 ${forcedSection === 'live' ? 'ring-1 ring-[rgba(255,214,10,0.35)]' : ''}`}
+        >
           <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">比賽直播通告</h2>
             <HelpGuide
@@ -3461,7 +3519,10 @@ const VenueDashboard: React.FC = () => {
         )}
 
         {clubMessagesEnabled ? (
-        <div className="glass rounded-xl p-6">
+        <div
+          ref={clubMessagesSectionRef}
+          className={`glass rounded-xl p-6 ${forcedSection === 'club_messages' ? 'ring-1 ring-[rgba(255,214,10,0.35)]' : ''}`}
+        >
            <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
              <h2 className="text-xl font-bold">發送場館訊息</h2>
              <HelpGuide
@@ -3616,7 +3677,10 @@ const VenueDashboard: React.FC = () => {
         )}
 
         {tournamentsEnabled ? (
-        <div className="glass rounded-xl p-6">
+        <div
+          ref={tournamentsSectionRef}
+          className={`glass rounded-xl p-6 ${forcedSection === 'tournaments' ? 'ring-1 ring-[rgba(255,214,10,0.35)]' : ''}`}
+        >
           <div className="flex items-center justify-between gap-3 mb-4 border-b cue-border pb-2">
             <h2 className="text-xl font-bold">比賽報名（管理）</h2>
             <HelpGuide

@@ -40,18 +40,6 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
   system: '系統',
 };
 
-const TAB_BY_MODULE: Partial<Record<string, string>> = {
-  club_dashboard: 'home',
-  booking: 'booking',
-  qr_session: 'qr',
-  points: 'points',
-  highbreak: 'highbreak',
-  live: 'content',
-  club_messages: 'content',
-  tournaments: 'content',
-  members: 'members',
-};
-
 const VenueModules: React.FC = () => {
   const nav = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -94,8 +82,7 @@ const VenueModules: React.FC = () => {
   }, [category, rows]);
 
   const goManage = (code: string) => {
-    const tab = TAB_BY_MODULE[code] || 'home';
-    nav(`/venue/dashboard?tab=${encodeURIComponent(tab)}`);
+    nav(`/venue/manage/${encodeURIComponent(code)}`);
   };
 
   return (

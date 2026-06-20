@@ -5,6 +5,10 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: New `/venue/manage/:moduleCode` route and `VenueModulePage` wrapper so venue-admin modules can open under dedicated URLs instead of only reusing `VenueDashboard` query tabs.
+- Changed: `VenueModules` "前往管理" actions now navigate to standalone venue module pages.
+- Changed: `VenueDashboard` now supports standalone `forcedTab` rendering for venue module pages and hides the full tab switcher in module-page mode.
+- Changed: Content-oriented venue module pages (`live`, `club_messages`, `tournaments`) now focus and highlight their own section inside the shared content management view, giving each module a clearer independent page flow during the gradual split.
 - Added: `GET /api/club/modules/manage` for venue admins to retrieve module-level availability and assignment status for their own club.
 - Added: New `VenueModules` page and `/venue/modules` route as the first dedicated Venue Admin module center.
 - Changed: `VenueDashboard` now includes a direct entry to the venue module center.

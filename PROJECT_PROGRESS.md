@@ -287,6 +287,35 @@
   - 此輪先做場館模組狀態總覽與入口聚合
   - 尚未把各模組的場館級設定表單完全拆到獨立頁，但後續可沿此中心逐步展開
 
+## 最新已完成：Venue Admin Module Pages (Phase 1)（2026-06-20）
+
+- 已升級：
+  - `frontend/src/VenueDashboard.tsx`
+  - `frontend/src/VenueModulePage.tsx`
+  - `frontend/src/VenueModules.tsx`
+  - `frontend/src/App.tsx`
+- Frontend
+  - 新增 route：
+    - `/venue/manage/:moduleCode`
+  - `VenueModules` 的「前往管理」已由舊 `tab` query 入口改為獨立 route
+  - `VenueDashboard` 已支援 `forcedTab` standalone mode，可在不顯示整組 tabs 的情況下單獨承載指定模組頁
+  - `VenueModulePage` 已建立第一批 module-code 對應：
+    - `club_dashboard`
+    - `booking`
+    - `qr_session`
+    - `points`
+    - `highbreak`
+    - `live`
+    - `club_messages`
+    - `tournaments`
+    - `members`
+  - `live` / `club_messages` / `tournaments` 雖仍共用 `content` tab 內容，但 standalone mode 已可聚焦到對應段落並加上視覺高亮，作為低風險過渡版拆頁
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 此輪先完成「獨立 URL + 單模組承載 + content 子段落聚焦」
+  - 下一輪若要再深化，可把 `VenueDashboard` 內各模組內容真正抽成獨立 component / page，而不只共用容器
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。
