@@ -2,6 +2,94 @@
 
 更新日期：2026-06-20（Asia/Hong_Kong）
 
+## 最新已記錄方案（2026-06-20）
+
+- 已新增方案文件：`MODULE_PLATFORM_ARCHITECTURE_PLAN.md`
+- 本次記錄的方向是：
+  - 不走重型 plugin platform
+  - 採 `modular monolith + module registry / manifest`
+  - 引入 `SystemModule / SystemModuleConfig / ClubModuleConfig`
+  - 以「全局開關 + 場館授權 + 公開顯示 + 首頁顯示」統一管理模組
+  - 將 `/home` 改為模組驅動組裝
+  - 將 superadmin / venue admin 後台改為模組中心
+- 下次開始落地時，建議依以下順序：
+  1. 建立 module registry / manifest 骨架
+  2. 補模組設定資料表
+  3. 升級 feature access helper
+  4. 將 `/home` 改為模組驅動
+  5. 建立 superadmin / venue admin 模組中心
+
+## 最新已完成：Module Registry Skeleton（2026-06-20）
+
+- 已新增：`backend/src/core/modules/registry.ts`
+- 已把現有模組整理成第一版 registry manifest，涵蓋：
+  - `content`
+  - `members`
+  - `booking`
+  - `qr_session`
+  - `settlement`
+  - `points`
+  - `tournaments`
+  - `highbreak`
+  - `live`
+  - `club_messages`
+  - `club_dashboard`
+  - `system_portal`
+  - `member_portal`
+- 已將 backend 內原本分散的 feature catalog / default enabled 設定收斂至 registry。
+- 已接入位置：
+  - `backend/index.ts`
+  - `backend/src/core/features/featureAccess.ts`
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `backend/routes/club.ts`
+- `GET /api/features` 現已額外返回 `modules` manifest 清單，供下一步做首頁與後台模組驅動使用。
+- 本步驟尚未引入新的 Prisma table，也尚未改動現有 feature flag / club feature access 的資料模型，只先完成結構骨架收斂。
+
+## 最新已完成：Module Config Schema Skeleton（2026-06-20）
+
+- Prisma schema 已新增：
+  - `SystemModule`
+  - `SystemModuleConfig`
+  - `ClubModuleConfig`
+- migration 已新增：
+  - `backend/prisma/migrations/20260702000001_add_module_platform_configs/`
+- 已新增 helper：
+  - `backend/src/core/modules/config.ts`
+- 目前 helper 先提供：
+  - 依 registry 產生預設 global config
+  - 同步 `SystemModule` / `SystemModuleConfig` 種子資料
+  - 讀取 module + global config 清單
+- 本步驟刻意保持低風險：
+  - 尚未接管現有 `FeatureFlag`
+  - 尚未接管現有 `ClubFeatureAccess`
+  - 尚未在 app startup 自動執行 sync，避免 production 尚未 deploy migration 時直接報錯
+- 這代表下一步可以安全開始做：
+  - `feature access helper` 升級
+  - 由新表計算全局 / 場館模組有效狀態
+  - 再逐步把舊 `FeatureFlag` / `ClubFeatureAccess` 轉成兼容層
+
+## 最新已完成：Module Access Helper Upgrade（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/features/featureAccess.ts`
+  - `backend/clubFeatureAccess.ts`
+- 目前 access 判斷策略已變為：
+  - 全局狀態：優先讀 `SystemModuleConfig.enabledGlobally`
+  - 若新表未有資料：回退 `FeatureFlag`
+  - 若再沒有：回退 registry default
+- 場館授權狀態已變為：
+  - 優先讀 `ClubModuleConfig.enabledForClub`
+  - 若新表未有資料：回退 `ClubFeatureAccess`
+  - 若再沒有：回退既有 legacy data 偵測
+- `backend/index.ts` 內的 `getFeatureMap()` 已改為使用共用 helper，不再直接自行查 `FeatureFlag`。
+- 現階段效果：
+  - 新模組設定表已真正進入 runtime access 計算路徑
+  - 舊 `FeatureFlag` / `ClubFeatureAccess` 仍作兼容 fallback
+  - 因此仍保持低風險，可逐步切換，不需要一次推翻舊邏輯
+- 本輪驗證：
+  - `backend npm run build` 已通過
+- 目前已是適合推送 checkpoint 的階段，因為 registry、config schema、access helper 三個核心基礎已串起來。
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

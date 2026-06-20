@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { getModuleManifestByFeatureKey } from './src/core/modules/registry.js';
 
 export const CLUB_SCOPED_FEATURE_KEYS = ['points', 'tournaments', 'booking', 'qr_session'] as const;
 
@@ -128,11 +129,35 @@ export async function getClubFeatureAssignments(
   const out: Record<string, ClubFeatureAssignment> = {};
   if (ids.length === 0) return out;
 
-  const explicitRows = await prisma.clubFeatureAccess.findMany({
-    where: { featureKey, clubId: { in: ids } },
+  const moduleCode = getModuleManifestByFeatureKey(featureKey)?.code || null;
+  const explicitMap = new Map<string, { enabled: boolean; updatedAt: Date | null }>();
+
+  if (moduleCode) {
+    try {
+      const moduleRows = await prisma.clubModuleConfig.findMany({
+        where: { moduleCode, clubId: { in: ids } },
+        select: { clubId: true, enabledForClub: true, updatedAt: true },
+      });
+      for (const row of moduleRows) {
+        explicitMap.set(row.clubId, {
+          enabled: row.enabledForClub,
+          updatedAt: row.updatedAt ?? null,
+        });
+      }
+    } catch {}
+  }
+
+  const legacyExplicitRows = await prisma.clubFeatureAccess.findMany({
+    where: { featureKey, clubId: { in: ids.filter((id) => !explicitMap.has(id)) } },
     select: { clubId: true, enabled: true, updatedAt: true },
   });
-  const explicitMap = new Map(explicitRows.map((row) => [row.clubId, row]));
+  for (const row of legacyExplicitRows) {
+    explicitMap.set(row.clubId, {
+      enabled: row.enabled,
+      updatedAt: row.updatedAt ?? null,
+    });
+  }
+
   const unresolved = ids.filter((id) => !explicitMap.has(id));
   const legacyEnabledIds =
     unresolved.length > 0
@@ -156,7 +181,7 @@ export async function getClubFeatureAssignments(
         explicitEnabled: explicit.enabled,
         assignedEnabled: explicit.enabled !== false,
         source: 'explicit',
-        updatedAt: explicit.updatedAt ?? null,
+        updatedAt: explicit.updatedAt,
       };
       continue;
     }

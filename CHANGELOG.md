@@ -5,6 +5,17 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Changed: Global feature access now prefers `SystemModuleConfig.enabledGlobally`, falls back to `FeatureFlag`, and finally falls back to registry defaults.
+- Changed: Club-scoped feature assignment now prefers `ClubModuleConfig.enabledForClub`, falls back to legacy `ClubFeatureAccess`, and finally falls back to legacy data detection.
+- Changed: Backend `index.ts` shared feature map now resolves through the common module access helper instead of querying `FeatureFlag` directly.
+- Added: Prisma models `SystemModule`, `SystemModuleConfig`, and `ClubModuleConfig` plus migration `20260702000001_add_module_platform_configs` as the data-layer skeleton for the module platform.
+- Added: `backend/src/core/modules/config.ts` with initial helpers for deriving default module config values, syncing registry-backed module seed data, and listing module/global config state.
+- Docs: Recorded that module config tables now exist but do not yet replace the current `FeatureFlag` / `ClubFeatureAccess` runtime flow.
+- Added: `backend/src/core/modules/registry.ts` as the first module registry skeleton, centralizing module manifests, feature catalog metadata, and default enabled states.
+- Changed: Backend feature catalog/defaults used by `backend/index.ts`, `featureAccess`, club routes, and admin feature management now read from the shared module registry instead of duplicating values in multiple files.
+- Changed: `GET /api/features` now also returns the current module manifest list to support future module-driven homepage/admin composition.
+- Added: `MODULE_PLATFORM_ARCHITECTURE_PLAN.md` to document the next-stage architecture for module registry, global/club module configuration, module-driven homepage composition, and dedicated module admin surfaces.
+- Docs: Recorded the agreed direction to prefer a modular monolith with registry/config-driven modules over a heavyweight hot-pluggable plugin platform.
 - Added: `SessionSettlement`, `SessionSettlementAttempt`, and `DomainEventOutbox` Prisma models plus migration `20260620000001_add_session_settlement` for the new settlement orchestration layer.
 - Added: Backend `settlement` plugin with member/admin APIs for querying and confirming settlements.
 - Changed: `qr-session` no longer writes `PointsLedger` / `PointsBalance` directly; settlement completion now delegates point charging through `settlement -> points`.

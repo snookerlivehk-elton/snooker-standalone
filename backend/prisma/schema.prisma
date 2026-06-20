@@ -123,6 +123,7 @@ model ClubProfile {
   pointsConfig ClubPointsConfig?
   pointsLedgers PointsLedger[]
   pointsBalances PointsBalance[]
+  moduleConfigs ClubModuleConfig[]
 
   tableQrTokens TableQrToken[]
   tableSessions TableSession[]
@@ -295,6 +296,55 @@ model ClubFeatureAccess {
 
   @@unique([clubId, featureKey])
   @@index([featureKey, enabled])
+}
+
+model SystemModule {
+  code                   String   @id
+  name                   String
+  description            String?
+  category               String
+  pluginId               String?
+  defaultEnabled         Boolean  @default(true)
+  supportsClubAssignment Boolean  @default(false)
+  supportsPublicRoutes   Boolean  @default(false)
+  supportsHomeSection    Boolean  @default(false)
+  supportsVenueAdmin     Boolean  @default(false)
+  supportsSuperAdmin     Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  config      SystemModuleConfig?
+  clubConfigs ClubModuleConfig[]
+}
+
+model SystemModuleConfig {
+  moduleCode      String   @unique
+  module          SystemModule @relation(fields: [moduleCode], references: [code], onDelete: Cascade)
+  enabledGlobally Boolean  @default(true)
+  publicVisible   Boolean  @default(false)
+  homeVisible     Boolean  @default(false)
+  allowClubEnable Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  settingsJson    Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ClubModuleConfig {
+  id             String   @id @default(uuid())
+  clubId         String
+  club           ClubProfile @relation(fields: [clubId], references: [id])
+  moduleCode     String
+  module         SystemModule @relation(fields: [moduleCode], references: [code], onDelete: Cascade)
+  enabledForClub Boolean  @default(false)
+  publicVisible  Boolean  @default(false)
+  settingsJson   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clubId, moduleCode])
+  @@index([moduleCode, enabledForClub])
+  @@index([clubId, enabledForClub])
 }
 
 model AppLock {

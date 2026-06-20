@@ -2,6 +2,7 @@ import express from 'express';
 import { getClubFeatureAssignment } from '../clubFeatureAccess.js';
 import { getMyClubId, requireClubAdmin, requireMember } from '../src/core/club/access.js';
 import { prisma } from '../src/core/db/prisma.js';
+import { isFeatureEnabled } from '../src/core/features/featureAccess.js';
 import { createBookingRouter } from '../src/plugins/booking/router.js';
 import { createClubMessageRouter } from '../src/plugins/club-messages/router.js';
 import { createClubHighbreakRouter } from '../src/plugins/highbreak/router.js';
@@ -11,27 +12,6 @@ import { createClubQrSessionRouter } from '../src/plugins/qr-session/clubRouter.
 import { createTournamentRouter } from '../src/plugins/tournaments/router.js';
 
 const router = express.Router();
-
-const FEATURE_DEFAULTS: Record<string, boolean> = {
-    booking: true,
-    qr_session: true,
-    points: true,
-    highbreak: true,
-    tournaments: true,
-    club_messages: true,
-    club_dashboard: true,
-    system_portal: true,
-    member_portal: true,
-    live: true,
-};
-
-async function isFeatureEnabled(key: string): Promise<boolean> {
-    try {
-        const row = await prisma.featureFlag.findUnique({ where: { key }, select: { enabled: true } });
-        if (row) return row.enabled;
-    } catch {}
-    return FEATURE_DEFAULTS[key] ?? true;
-}
 
 router.use(async (req, res, next) => {
     const p = String(req.path || '');

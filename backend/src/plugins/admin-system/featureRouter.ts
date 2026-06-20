@@ -2,12 +2,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { getClubFeatureAssignments, isClubScopedFeatureKey } from '../../../clubFeatureAccess.js';
 import { prisma } from '../../core/db/prisma.js';
-
-type FeatureCatalogItem = {
-  key: string;
-  label: string;
-  defaultEnabled: boolean;
-};
+import type { FeatureCatalogItem } from '../../core/modules/registry.js';
 
 type FeatureRouterOptions = {
   adminAuth: express.RequestHandler;

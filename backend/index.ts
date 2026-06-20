@@ -13,6 +13,8 @@ import { createClubTables } from './scripts/create_club_tables.js';
 import { getClubFeatureAssignment } from './clubFeatureAccess.js';
 import { startNewsScheduler, runNewsFetchOnce } from './news/newsScheduler.js';
 import { prisma } from './src/core/db/prisma.js';
+import { getFeatureEnabledMap } from './src/core/features/featureAccess.js';
+import { FEATURE_CATALOG, MODULE_MANIFESTS } from './src/core/modules/registry.js';
 import { createAdminAuth, createRequireSupabaseAdmin } from './src/core/auth/adminAuth.js';
 import { parseMonthRangeUtc } from './src/core/utils/query.js';
 import { createAdminFeatureRouter } from './src/plugins/admin-system/featureRouter.js';
@@ -82,42 +84,17 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 startNewsScheduler(prisma);
 createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
 
-const FEATURE_CATALOG = [
-  { key: 'booking', label: '會員預約', defaultEnabled: true },
-  { key: 'qr_session', label: '掃碼起鐘及結算', defaultEnabled: true },
-  { key: 'points', label: '消費積分', defaultEnabled: true },
-  { key: 'highbreak', label: '單杆統計及排名', defaultEnabled: true },
-  { key: 'tournaments', label: '比賽報名入口', defaultEnabled: true },
-  { key: 'club_messages', label: '球會訊息', defaultEnabled: true },
-  { key: 'club_dashboard', label: '球會主頁（管理）', defaultEnabled: true },
-  { key: 'system_portal', label: '系統主頁', defaultEnabled: true },
-  { key: 'member_portal', label: '會員主頁', defaultEnabled: true },
-  { key: 'live', label: '直播', defaultEnabled: true },
-] as const;
-
-type FeatureKey = typeof FEATURE_CATALOG[number]['key'];
-
 let featureCache: { at: number; map: Record<string, boolean> } | null = null;
 
 async function getFeatureMap(): Promise<Record<string, boolean>> {
   const now = Date.now();
   if (featureCache && (now - featureCache.at) < 10_000) return featureCache.map;
-  const defaults: Record<string, boolean> = {};
-  for (const f of FEATURE_CATALOG) defaults[f.key] = f.defaultEnabled;
-  let rows: Array<{ key: string; enabled: boolean }> = [];
-  try {
-    rows = await prisma.featureFlag.findMany({
-      where: { key: { in: FEATURE_CATALOG.map(f => f.key) as any } },
-      select: { key: true, enabled: true },
-    });
-  } catch {}
-  const map: Record<string, boolean> = { ...defaults };
-  for (const r of rows) map[r.key] = r.enabled;
+  const map = await getFeatureEnabledMap();
   featureCache = { at: now, map };
   return map;
 }
 
-function requireFeature(key: FeatureKey) {
+function requireFeature(key: string) {
   return async (_req: express.Request, res: express.Response, next: express.NextFunction) => {
     try {
       const map = await getFeatureMap();
@@ -438,6 +415,7 @@ app.get('/api/features', async (_req, res) => {
   res.json({
     features: map,
     catalog: FEATURE_CATALOG,
+    modules: MODULE_MANIFESTS,
   });
 });
 
