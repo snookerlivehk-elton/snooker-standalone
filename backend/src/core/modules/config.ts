@@ -64,6 +64,12 @@ export async function syncModuleRegistry(db?: DbClient) {
             allowClubEnable: defaultConfig.allowClubEnable,
             publicVisible: defaultConfig.publicVisible,
           }
+        : module.code === 'system_portal'
+          ? {
+              allowClubEnable: defaultConfig.allowClubEnable,
+              publicVisible: defaultConfig.publicVisible,
+              homeVisible: defaultConfig.homeVisible,
+            }
         : {
             allowClubEnable: defaultConfig.allowClubEnable,
           },

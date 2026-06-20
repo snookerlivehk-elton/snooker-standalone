@@ -2,8 +2,8 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { getClubFeatureAssignments, isClubScopedFeatureKey } from '../../../clubFeatureAccess.js';
 import { prisma } from '../../core/db/prisma.js';
-import { syncModuleRegistry, upsertClubModuleConfig, upsertSystemModuleConfig } from '../../core/modules/config.js';
-import { getModuleManifestByFeatureKey } from '../../core/modules/registry.js';
+import { listResolvedModuleStates, syncModuleRegistry, upsertClubModuleConfig, upsertSystemModuleConfig } from '../../core/modules/config.js';
+import { getModuleManifest, getModuleManifestByFeatureKey } from '../../core/modules/registry.js';
 import type { FeatureCatalogItem } from '../../core/modules/registry.js';
 
 type FeatureRouterOptions = {
@@ -34,6 +34,73 @@ export function createAdminFeatureRouter(options: FeatureRouterOptions) {
       moduleCode: f.moduleCode,
     }));
     res.json({ features: rows });
+  });
+
+  router.get('/api/admin/modules', adminAuth, async (_req, res) => {
+    await trySyncModuleRegistry();
+    const modules = await listResolvedModuleStates();
+    res.json({
+      modules: modules.map((row) => ({
+        code: row.code,
+        label: row.label,
+        description: row.description,
+        category: row.category,
+        pluginId: row.pluginId,
+        defaultEnabled: row.defaultEnabled,
+        featureFlagKey: row.featureFlagKey || null,
+        supportsClubAssignment: !!row.supportsClubAssignment,
+        supportsPublicRoutes: row.supportsPublicRoutes,
+        supportsHomeSection: row.supportsHomeSection,
+        supportsVenueAdmin: row.supportsVenueAdmin,
+        supportsSuperAdmin: row.supportsSuperAdmin,
+        enabledGlobally: row.enabledGlobally,
+        publicVisible: row.publicVisible,
+        homeVisible: row.homeVisible,
+        allowClubEnable: row.allowClubEnable,
+        sortOrder: row.sortOrder,
+        effectivePublicVisible: row.effectivePublicVisible,
+        effectiveHomeVisible: row.effectiveHomeVisible,
+      })),
+    });
+  });
+
+  router.put('/api/admin/modules/:moduleCode', adminAuth, async (req, res) => {
+    await trySyncModuleRegistry();
+    const moduleCode = String(req.params.moduleCode || '').trim();
+    const module = getModuleManifest(moduleCode);
+    if (!module) return res.status(404).json({ error: 'module_not_found' });
+
+    const body = req.body || {};
+    const patch: Record<string, any> = {};
+
+    if (typeof body.enabledGlobally === 'boolean') patch.enabledGlobally = body.enabledGlobally;
+    if (typeof body.publicVisible === 'boolean') patch.publicVisible = body.publicVisible;
+    if (typeof body.homeVisible === 'boolean') patch.homeVisible = body.homeVisible;
+    if (typeof body.allowClubEnable === 'boolean') patch.allowClubEnable = body.allowClubEnable;
+    if (typeof body.sortOrder === 'number' && Number.isFinite(body.sortOrder)) patch.sortOrder = Math.trunc(body.sortOrder);
+
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ error: 'no_valid_fields' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await upsertSystemModuleConfig(module.code, patch, tx);
+      if (module.featureFlagKey && typeof patch.enabledGlobally === 'boolean') {
+        await tx.featureFlag.upsert({
+          where: { key: module.featureFlagKey },
+          update: { enabled: patch.enabledGlobally },
+          create: { key: module.featureFlagKey, enabled: patch.enabledGlobally },
+        });
+      }
+    });
+
+    invalidateFeatureCache();
+    const modules = await listResolvedModuleStates();
+    const updated = modules.find((row) => row.code === module.code);
+    res.json({
+      ok: true,
+      module: updated || null,
+    });
   });
 
   router.put('/api/admin/features', adminAuth, async (req, res) => {

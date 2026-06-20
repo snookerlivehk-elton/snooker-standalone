@@ -199,6 +199,60 @@
   - `tournamentsEnabled` 仍保留既有 club access / global feature gate 效果
   - 本輪是在其上再疊加 `module public visibility`，因此公開比賽 tab 已較完整地對齊新模型
 
+## 最新已完成：Super Admin Module Center (Phase 1)（2026-06-20）
+
+- 已升級：
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/AdminModules.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/AdminOverview.tsx`
+- Backend
+  - 新增 `GET /api/admin/modules`
+  - 新增 `PUT /api/admin/modules/:moduleCode`
+  - superadmin 現可直接以模組維度讀取與更新：
+    - `enabledGlobally`
+    - `publicVisible`
+    - `homeVisible`
+    - `allowClubEnable`
+    - `sortOrder`
+  - 當模組具有 `featureFlagKey` 時，更新 `enabledGlobally` 仍會同步鏡像到舊 `FeatureFlag`
+- Frontend
+  - 新增 `frontend/src/AdminModules.tsx`
+  - 第一版模組中心支援：
+    - 依 category 篩選模組
+    - 顯示模組描述、feature flag key、能力標記
+    - 直接切換全局啟用、公開顯示、首頁顯示、允許場館授權
+    - 顯示實際 public/home 生效狀態
+  - 新增 route：
+    - `/admin/modules`
+  - `AdminOverview` 已加入「模組中心」入口按鈕
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+- 備註：
+  - 目前先完成 superadmin 的第一版模組中心
+  - venue admin 的模組中心仍是下一步候選
+
+## 最新修正：Restore `/home` Visibility Under `system_portal`（2026-06-20）
+
+- 已修正：
+  - `backend/src/core/modules/registry.ts`
+  - `backend/src/core/modules/config.ts`
+- 問題原因：
+  - `system_portal` 先前被標記為 `supportsHomeSection: false`
+  - 但 `/home` route gate 已改為使用 `system_portal` 的 `home` scope
+  - 令 `/home` 在新 module visibility 流程下被永久判成不可見
+- 修正內容：
+  - 將 `system_portal` 改回 `supportsHomeSection: true`
+  - 在 `syncModuleRegistry()` 內補上對既有 `SystemModuleConfig.homeVisible` 的校正
+- 效果：
+  - 既有環境在下一次讀取 `/api/features` 時，會自動同步正確的 `system_portal` 首頁可見性
+  - `/home` 恢復為可正常進入
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

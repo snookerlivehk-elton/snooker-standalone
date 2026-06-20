@@ -5,6 +5,11 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Fixed: Restored `/home` by marking `system_portal` as a home-capable module again and correcting existing `SystemModuleConfig.homeVisible` values during module registry sync.
+- Added: `GET /api/admin/modules` and `PUT /api/admin/modules/:moduleCode` for superadmin module-level management.
+- Added: New `AdminModules` page and `/admin/modules` route as the first dedicated Super Admin module center.
+- Changed: `AdminOverview` now includes a direct entry to the new module center.
+- Changed: Superadmin can now manage `enabledGlobally`, `publicVisible`, `homeVisible`, and `allowClubEnable` per module from a dedicated page instead of relying only on grouped feature toggles.
 - Changed: `club_messages` module manifest now supports public routes, matching its existing use in `ClubPublicPage`.
 - Changed: Module registry sync now corrects `club_messages` public visibility for existing environments that were seeded before the manifest fix.
 - Changed: `ClubPublicPage` live, tournaments, and club-messages tabs now require both legacy enabled/assignment checks and module public visibility before they render or load public data.

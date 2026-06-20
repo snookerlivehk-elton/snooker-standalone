@@ -273,6 +273,64 @@ export async function getAdminFeatures(apiUrl: string, adminToken: string) {
   return res.json() as Promise<{ features: Array<{ key: string; label: string; enabled: boolean; defaultEnabled: boolean }> }>;
 }
 
+export async function getAdminModules(apiUrl: string, adminToken: string) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/modules?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `讀取模組清單失敗 (${res.status})`);
+  }
+  return res.json() as Promise<{
+    modules: Array<{
+      code: string;
+      label: string;
+      description: string;
+      category: string;
+      pluginId?: string | null;
+      featureFlagKey?: string | null;
+      supportsClubAssignment?: boolean;
+      supportsPublicRoutes: boolean;
+      supportsHomeSection: boolean;
+      supportsVenueAdmin: boolean;
+      supportsSuperAdmin: boolean;
+      enabledGlobally: boolean;
+      publicVisible: boolean;
+      homeVisible: boolean;
+      allowClubEnable: boolean;
+      sortOrder: number;
+      effectivePublicVisible: boolean;
+      effectiveHomeVisible: boolean;
+    }>;
+  }>;
+}
+
+export async function updateAdminModule(
+  apiUrl: string,
+  adminToken: string,
+  moduleCode: string,
+  patch: Partial<{
+    enabledGlobally: boolean;
+    publicVisible: boolean;
+    homeVisible: boolean;
+    allowClubEnable: boolean;
+    sortOrder: number;
+  }>,
+) {
+  const base = apiUrl.replace(/\/$/, '');
+  const url = `${base}/api/admin/modules/${encodeURIComponent(moduleCode)}?token=${encodeURIComponent(adminToken || '')}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken || '' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `更新模組設定失敗 (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function updateAdminFeatures(
   apiUrl: string,
   adminToken: string,

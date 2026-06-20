@@ -182,7 +182,7 @@ export const MODULE_MANIFESTS: readonly ModuleManifest[] = [
     defaultEnabled: true,
     featureFlagKey: 'system_portal',
     supportsPublicRoutes: true,
-    supportsHomeSection: false,
+    supportsHomeSection: true,
     supportsVenueAdmin: false,
     supportsSuperAdmin: true,
   },
