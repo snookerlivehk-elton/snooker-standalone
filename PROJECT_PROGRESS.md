@@ -528,6 +528,135 @@
   - `manual reservation / blocked slot` 這類場館內部操作，暫未額外接上 email
   - 下一輪最適合把同一套 pattern 複製到 `tournaments / club_messages / points`
 
+## 最新已完成：Tournaments 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/tournamentsSettings.ts`
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `backend/src/plugins/tournaments/router.ts`
+  - `frontend/src/AdminTournamentsSettings.tsx`
+  - `frontend/src/AdminModules.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/lib/api.ts`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `tournaments` 模組內部設定儲存
+  - 新增 `tournaments` module settings helper，提供 default / normalize / read / update
+  - 新增 admin API：
+    - `GET /api/admin/modules/tournaments/settings`
+    - `PUT /api/admin/modules/tournaments/settings`
+  - `tournament.signup` 現已改為讀取 `tournamentSignupRequirement`
+    - 可在 `BASIC_MEMBER`
+    - 與 `VERIFIED_MEMBER`
+      之間切換
+- Frontend
+  - 新增 `Super Admin` 專用 `Tournaments 模組設定頁`
+  - 模組中心 `tournaments` 卡片已加入「Tournaments 設定頁」入口
+  - 第一版可設定：
+    - `tournament.signup` 會員資格要求
+    - `signup.created.emailEnabled`
+    - `signup.confirmed.emailEnabled`
+    - `signup.cancelled.emailEnabled`
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 本輪先把比賽報名資格與通知開關配置化保存
+  - 比賽報名 `created / confirmed / cancelled` 的實際 email delivery 可在下一輪接上
+
+## 最新已完成：Super Admin 模組設定架構優化（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `backend/src/plugins/admin-system/featureRouter.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+  - `frontend/src/AdminModuleSettingsPage.tsx`
+  - `frontend/src/AdminModules.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/lib/api.ts`
+- Backend
+  - 新增 `adminModuleSettings` registry，集中管理哪些模組支援獨立設定頁
+  - `GET /api/admin/modules` 現會回傳：
+    - `supportsSettingsPage`
+    - `settingsPageLabel`
+  - `GET /api/admin/modules/:moduleCode/settings`
+  - `PUT /api/admin/modules/:moduleCode/settings`
+    已改為透過共用 handler registry 分派，不再在 router 內持續堆疊 `if/else`
+- Frontend
+  - 新增共用 `moduleSettingsRegistry`，集中管理各模組設定頁文案、欄位與預設值
+  - 新增單一路由：
+    - `/admin/modules/:moduleCode/settings`
+  - `Booking` 與 `Tournaments` 已改為共用 `AdminModuleSettingsPage`
+  - 模組中心設定頁入口現改為讀 backend 回傳的 `supportsSettingsPage / settingsPageLabel`
+  - 舊的 `AdminBookingSettings.tsx` 與 `AdminTournamentsSettings.tsx` 已移除，避免維護兩份近似頁面
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 之後若要新增 `points / club_messages / live` 等設定頁，只需補：
+    - backend handler
+    - frontend registry
+    即可沿用同一套 Super Admin 設定頁殼層
+
+## 最新已完成：Points 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/pointsSettings.ts`
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `backend/src/plugins/points/router.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+  - `frontend/src/AdminModuleSettingsPage.tsx`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `points` 模組內部設定儲存
+  - 新增 `points` module settings helper，提供 default / normalize / read / update
+  - 已接入 `Super Admin` 共用 module settings handler
+  - 第一版已把以下營運控制接回 `points` router：
+    - `clubPointsConfigEditable`
+    - `manualAdjustmentEnabled`
+  - 當關閉時：
+    - 場館不可再修改積分規則
+    - 場館不可再手動調整會員積分
+- Frontend
+  - `Points` 已接入共用 `Super Admin` 模組設定頁
+  - 第一版可設定：
+    - `clubPointsConfigEditable`
+    - `manualAdjustmentEnabled`
+    - `manualAdjustmentEmailEnabled`
+    - `settlementDeductionEmailEnabled`
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 本輪先把 `points` 的營運控制接線，email 通知開關先保存配置
+  - 之後若你再調整 `points` email 規則，可直接沿用現有 settings storage
+
+## 最新已完成：Club Messages 模組設定頁（Phase 1）（2026-06-20）
+
+- 已升級：
+  - `backend/src/core/modules/clubMessagesSettings.ts`
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `backend/src/plugins/club-messages/router.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+- Backend
+  - 重用既有 `SystemModuleConfig.settingsJson` 作為 `club_messages` 模組內部設定儲存
+  - 新增 `club_messages` module settings helper，提供 default / normalize / read / update
+  - 已接入 `Super Admin` 共用 module settings handler
+  - 第一版已把以下營運控制接回 `club-messages` router：
+    - `venuePublishingEnabled`
+    - `memberInboxEnabled`
+  - 當關閉時：
+    - 場館不可再發佈、編輯或刪除公告
+    - 會員端不再載入場館訊息箱資料
+- Frontend
+  - `club_messages` 已接入共用 `Super Admin` 模組設定頁
+  - 第一版可設定：
+    - `venuePublishingEnabled`
+    - `memberInboxEnabled`
+    - `messageCreatedEmailEnabled`
+    - `messageUpdatedEmailEnabled`
+    - `messageDeletedEmailEnabled`
+- 本輪驗證：
+  - diagnostics 已通過
+- 備註：
+  - 本輪刻意未與模組中心 `publicVisible` 重複，避免公開頁可見性出現兩套互相打架的開關
+  - `club_messages` email 開關先保存配置，之後可再按你最終通知流程接實際 delivery
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

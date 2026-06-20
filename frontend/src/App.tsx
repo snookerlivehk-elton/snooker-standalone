@@ -16,7 +16,7 @@ import TableQrPage from './TableQrPage';
 import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
 import AdminModules from './AdminModules';
-import AdminBookingSettings from './AdminBookingSettings';
+import AdminModuleSettingsPage from './AdminModuleSettingsPage';
 import AdminBreaks from './AdminBreaks';
 import NewsPage from './NewsPage';
 import MemberRegisterSimple from './MemberRegisterSimple';
@@ -117,7 +117,7 @@ function App() {
         <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
         <Route path="/admin/modules" element={<AdminAuth><AdminModules /></AdminAuth>} />
-        <Route path="/admin/modules/booking/settings" element={<AdminAuth><AdminBookingSettings /></AdminAuth>} />
+        <Route path="/admin/modules/:moduleCode/settings" element={<AdminAuth><AdminModuleSettingsPage /></AdminAuth>} />
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
         <Route path="/members/simple-register" element={<MemberRegisterSimple />} />

@@ -1,6 +1,7 @@
 import express from 'express';
 import { getMyClubId, requireClubAdmin, requireMember } from '../../core/club/access.js';
 import { isFeatureEnabled, requireClubFeatureForClubId } from '../../core/features/featureAccess.js';
+import { getPointsModuleSettings } from '../../core/modules/pointsSettings.js';
 import { pointsService } from './service.js';
 
 export function createPointsRouter() {
@@ -21,6 +22,10 @@ export function createPointsRouter() {
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
+    const settings = await getPointsModuleSettings().catch(() => null);
+    if (settings?.clubPointsConfigEditable === false) {
+      return res.status(403).json({ error: 'points_config_edit_disabled' });
+    }
     try {
       res.json(await pointsService.saveConfig(clubId, req.body || {}));
     } catch (e: any) {
@@ -87,6 +92,10 @@ export function createPointsRouter() {
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     if (!(await requireClubFeatureForClubId(res, clubId, 'points'))) return;
+    const settings = await getPointsModuleSettings().catch(() => null);
+    if (settings?.manualAdjustmentEnabled === false) {
+      return res.status(403).json({ error: 'points_manual_adjustment_disabled' });
+    }
     try {
       res.json(await pointsService.adjustBalance(clubId, member.id, req.body || {}));
     } catch (e: any) {

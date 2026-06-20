@@ -24,6 +24,8 @@ type AdminModuleRow = {
   sortOrder: number;
   effectivePublicVisible: boolean;
   effectiveHomeVisible: boolean;
+  supportsSettingsPage?: boolean;
+  settingsPageLabel?: string | null;
 };
 
 type CategoryKey = 'all' | 'content' | 'engagement' | 'operations' | 'payment' | 'membership' | 'system';
@@ -35,17 +37,6 @@ function resolveToken(): string {
   } catch {
     return localStorage.getItem('adminToken') || '';
   }
-}
-
-function resolveBasePath(): string {
-  const rawBase = (import.meta.env.BASE_URL || '/');
-  let base = rawBase.replace(/\/+$/, '');
-  try {
-    const p = window.location.pathname;
-    const m = p.match(/^(.*)\/admin(?:\/.*)?$/);
-    if (m && m[1] !== '') base = m[1];
-  } catch {}
-  return base;
 }
 
 const CATEGORY_LABELS: Record<CategoryKey, string> = {
@@ -214,13 +205,13 @@ const AdminModules: React.FC = () => {
                   <div className="cue-surface rounded px-3 py-2">實際首頁：{row.effectiveHomeVisible ? '開啟' : '關閉'}</div>
                 </div>
 
-                {row.code === 'booking' ? (
+                {row.supportsSettingsPage ? (
                   <div className="flex justify-end">
                     <Link
-                      to={`/admin/modules/booking/settings${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
+                      to={`/admin/modules/${row.code}/settings${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
                       className="px-3 py-2 rounded cue-button text-sm font-semibold"
                     >
-                      Booking 設定頁
+                      {row.settingsPageLabel || '模組設定頁'}
                     </Link>
                   </div>
                 ) : null}

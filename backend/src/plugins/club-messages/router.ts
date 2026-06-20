@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin, requireMember } from '../../core/club/access.js';
 import { isSystemClubMessageTitle } from '../../core/club/messages.js';
 import { prisma } from '../../core/db/prisma.js';
+import { getClubMessagesModuleSettings } from '../../core/modules/clubMessagesSettings.js';
 
 export function createClubMessageRouter() {
   const router = express.Router();
@@ -12,6 +13,10 @@ export function createClubMessageRouter() {
     if (!member) return;
     const memberId = member.id;
     const { title, content } = req.body;
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'club_messages_publish_disabled' });
+    }
 
     try {
       const club = await prisma.clubProfile.findUnique({ where: { memberId } });
@@ -35,6 +40,8 @@ export function createClubMessageRouter() {
     const member = await requireMember(req, res);
     if (!member) return;
     const memberId = member.id;
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.memberInboxEnabled === false) return res.json([]);
 
     try {
       const memberships = await prisma.clubMember.findMany({
@@ -73,6 +80,8 @@ export function createClubMessageRouter() {
     if (!member) return;
     const memberId = member.id;
     const id = req.params.id;
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.memberInboxEnabled === false) return res.status(404).json({ error: 'Not found' });
     try {
       try {
         const hidden: any[] = await prisma.$queryRawUnsafe(
@@ -107,6 +116,8 @@ export function createClubMessageRouter() {
     if (!member) return;
     const memberId = member.id;
     const id = req.params.id;
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.memberInboxEnabled === false) return res.json({ ok: true });
     try {
       const rows: any[] = await prisma.$queryRawUnsafe(
         `SELECT 1 FROM "ClubMessageRead" WHERE "memberId"=$1 AND "messageId"=$2 LIMIT 1`,
@@ -133,6 +144,8 @@ export function createClubMessageRouter() {
     if (!member) return;
     const memberId = member.id;
     const ids = (req.body || {}).ids;
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.memberInboxEnabled === false) return res.json({ ok: true, hidden: 0 });
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
     try {
       await prisma.$executeRawUnsafe(
@@ -208,6 +221,10 @@ export function createClubMessageRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'club_messages_publish_disabled' });
+    }
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'id required' });
     const payload = req.body || {};
@@ -231,6 +248,10 @@ export function createClubMessageRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const settings = await getClubMessagesModuleSettings().catch(() => null);
+    if (settings?.venuePublishingEnabled === false) {
+      return res.status(403).json({ error: 'club_messages_publish_disabled' });
+    }
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'id required' });
     try {

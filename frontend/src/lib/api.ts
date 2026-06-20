@@ -311,6 +311,8 @@ export async function getAdminModules(apiUrl: string, adminToken: string) {
       sortOrder: number;
       effectivePublicVisible: boolean;
       effectiveHomeVisible: boolean;
+      supportsSettingsPage?: boolean;
+      settingsPageLabel?: string | null;
     }>;
   }>;
 }
@@ -348,7 +350,14 @@ export type BookingModuleSettings = {
   reservationCancelledEmailEnabled: boolean;
 };
 
-export async function getAdminModuleSettings(apiUrl: string, adminToken: string, moduleCode: string) {
+export type TournamentsModuleSettings = {
+  tournamentSignupRequirement: 'BASIC_MEMBER' | 'VERIFIED_MEMBER';
+  signupCreatedEmailEnabled: boolean;
+  signupConfirmedEmailEnabled: boolean;
+  signupCancelledEmailEnabled: boolean;
+};
+
+export async function getAdminModuleSettings<T = Record<string, any>>(apiUrl: string, adminToken: string, moduleCode: string) {
   const base = apiUrl.replace(/\/$/, '');
   const url = `${base}/api/admin/modules/${encodeURIComponent(moduleCode)}/settings?token=${encodeURIComponent(adminToken || '')}`;
   const res = await fetch(url, { headers: { 'x-admin-token': adminToken || '' }, cache: 'no-store' });
@@ -356,14 +365,14 @@ export async function getAdminModuleSettings(apiUrl: string, adminToken: string,
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `讀取模組設定失敗 (${res.status})`);
   }
-  return res.json() as Promise<{ moduleCode: string; settings: BookingModuleSettings }>;
+  return res.json() as Promise<{ moduleCode: string; settings: T }>;
 }
 
-export async function updateAdminModuleSettings(
+export async function updateAdminModuleSettings<T = Record<string, any>>(
   apiUrl: string,
   adminToken: string,
   moduleCode: string,
-  patch: Partial<BookingModuleSettings>,
+  patch: Partial<T>,
 ) {
   const base = apiUrl.replace(/\/$/, '');
   const url = `${base}/api/admin/modules/${encodeURIComponent(moduleCode)}/settings?token=${encodeURIComponent(adminToken || '')}`;
@@ -376,7 +385,7 @@ export async function updateAdminModuleSettings(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `更新模組設定失敗 (${res.status})`);
   }
-  return res.json() as Promise<{ ok: true; moduleCode: string; settings: BookingModuleSettings }>;
+  return res.json() as Promise<{ ok: true; moduleCode: string; settings: T }>;
 }
 
 export async function updateAdminFeatures(

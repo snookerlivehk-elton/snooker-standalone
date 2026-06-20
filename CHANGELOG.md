@@ -5,6 +5,17 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: first `club_messages` module settings page for Super Admin, with configurable venue-publishing access, member-inbox access, and initial announcement email toggles stored in module settings.
+- Changed: club-messages router now reads module settings before allowing venue-side publish/edit/delete actions and before loading the member inbox list.
+- Added: first `points` module settings page for Super Admin, with configurable operational controls for club points-config editing and manual balance adjustments, plus initial notification toggles stored in module settings.
+- Changed: points router now reads module settings before allowing venue-side points-config updates and manual balance adjustments.
+- Changed: the generic Super Admin module-settings page now supports mixed section types, so future modules can use toggle-only settings pages without forcing a member-requirement block.
+- Added: backend `adminModuleSettings` registry and frontend `moduleSettingsRegistry` so per-module Super Admin settings pages can scale without duplicating page and router logic.
+- Changed: Super Admin module settings now use a shared `/admin/modules/:moduleCode/settings` route and a generic `AdminModuleSettingsPage` instead of separate near-duplicate page components per module.
+- Changed: `GET /api/admin/modules` now exposes `supportsSettingsPage` and `settingsPageLabel` so the module center can render settings entry points without hard-coded module checks.
+- Added: first `tournaments` module settings page for Super Admin, with configurable `tournament.signup` member requirement and tournament-signup notification toggles stored in module settings.
+- Changed: `tournament.signup` eligibility now reads the `tournaments` module's saved requirement instead of only using a hard-coded verified-member rule.
+- Added: admin API endpoints `GET/PUT /api/admin/modules/tournaments/settings` as the second per-module settings page foundation.
 - Added: shared backend Resend email helper reused by member verification/reset flows and the booking module.
 - Added: actual booking email delivery for `reservation created / confirmed / cancelled`, controlled by the `booking` module settings toggles.
 - Changed: booking notifications now follow the venue-confirmation flow: `reservation created` emails go to the venue first, while `reservation confirmed / cancelled` emails go to the reservation member.
