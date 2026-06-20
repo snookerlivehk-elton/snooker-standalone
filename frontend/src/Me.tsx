@@ -18,9 +18,11 @@ import {
   listMemberRegions,
   hideClubMessages,
   markClubMessageRead,
+  resendMemberVerificationEmail,
   updateClubProfile,
   updateMemberSelf,
 } from './lib/api';
+import { clearMemberSession, readMemberSession, writeMemberSession, type MemberSession } from './lib/auth';
 import Tabs from './components/Tabs';
 import { useFeatureEnabled } from './lib/features';
 import HelpGuide from './components/HelpGuide';
@@ -50,9 +52,7 @@ type InboxItem = {
 
 const Me: React.FC = () => {
   const location = useLocation();
-  const session = (() => {
-    try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
-  })() as { id?: string; email?: string };
+  const session = readMemberSession() as MemberSession;
   const memberId = session?.id;
   const [profile, setProfile] = useState<any>(null);
   const [myClubProfile, setMyClubProfile] = useState<any>(null);
@@ -93,6 +93,7 @@ const Me: React.FC = () => {
   const [editNewPassword2, setEditNewPassword2] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [sendingVerifyEmail, setSendingVerifyEmail] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [breakQueryMode, setBreakQueryMode] = useState<'range' | 'year' | 'month'>('range');
   const [breakFrom, setBreakFrom] = useState('');
@@ -118,6 +119,16 @@ const Me: React.FC = () => {
     return (s.slice(0, 1) || 'M').toUpperCase();
   }, [profile?.name, session?.email]);
 
+  const memberTier = useMemo<'BASIC' | 'VERIFIED'>(() => {
+    const raw = String(profile?.member_tier || profile?.memberTier || session?.member_tier || '').trim().toUpperCase();
+    if (raw === 'VERIFIED') return 'VERIFIED';
+    if (profile?.email_verified_at || profile?.emailVerifiedAt || session?.email_verified_at) return 'VERIFIED';
+    return 'BASIC';
+  }, [profile?.member_tier, profile?.memberTier, profile?.email_verified_at, profile?.emailVerifiedAt, session?.member_tier, session?.email_verified_at]);
+
+  const emailVerifiedAt = profile?.email_verified_at ?? profile?.emailVerifiedAt ?? session?.email_verified_at ?? null;
+  const memberEmail = String(profile?.email || session?.email || '').trim();
+
   const showExpiredBanner = useMemo(() => {
     try {
       const sp = new URLSearchParams(location.search || '');
@@ -140,6 +151,19 @@ const Me: React.FC = () => {
       }
     })();
   }, [memberId]);
+
+  useEffect(() => {
+    if (!memberId || !profile) return;
+    writeMemberSession({
+      ...session,
+      id: memberId,
+      email: String(profile?.email || session?.email || '').trim() || undefined,
+      phone: String(session?.phone || '').trim() || undefined,
+      role: String(profile?.role || session?.role || '').trim() || undefined,
+      member_tier: String(profile?.member_tier || profile?.memberTier || session?.member_tier || 'BASIC').toUpperCase() === 'VERIFIED' ? 'VERIFIED' : 'BASIC',
+      email_verified_at: profile?.email_verified_at ?? profile?.emailVerifiedAt ?? session?.email_verified_at ?? null,
+    });
+  }, [memberId, profile]);
 
   useEffect(() => {
     let mounted = true;
@@ -1182,7 +1206,50 @@ const Me: React.FC = () => {
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">Email</div>
-                      <div className="text-sm font-semibold text-right">{String(profile?.email || session?.email || '-')}</div>
+                      <div className="text-sm font-semibold text-right">{memberEmail || '-'}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">會員身份</div>
+                      <div className="text-sm font-semibold text-right">{memberTier === 'VERIFIED' ? '認證會員' : '普通會員'}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="text-sm cue-muted">Email 驗證</div>
+                      <div className="text-right max-w-[70%]">
+                        <div className="text-sm font-semibold">
+                          {memberTier === 'VERIFIED'
+                            ? `已驗證${emailVerifiedAt ? ` · ${new Date(emailVerifiedAt).toLocaleString()}` : ''}`
+                            : memberEmail
+                              ? '未驗證'
+                              : '未設定 Email'}
+                        </div>
+                        {memberTier !== 'VERIFIED' && memberEmail ? (
+                          <button
+                            type="button"
+                            disabled={sendingVerifyEmail}
+                            onClick={async () => {
+                              if (!memberId) return;
+                              try {
+                                setSendingVerifyEmail(true);
+                                const res = await resendMemberVerificationEmail(API_URL, memberId);
+                                setToast(res?.alreadyVerified ? '此帳戶已完成 Email 驗證' : '驗證信已重新發送，請檢查你的 Email');
+                              } catch (e: any) {
+                                setToast(String(e?.message || '重發驗證信失敗'));
+                              } finally {
+                                setSendingVerifyEmail(false);
+                              }
+                            }}
+                            className={`mt-2 px-3 py-1.5 rounded text-sm font-semibold ${sendingVerifyEmail ? 'cue-surface cue-muted' : 'cue-button'}`}
+                          >
+                            {sendingVerifyEmail ? '發送中...' : '重新發送驗證信'}
+                          </button>
+                        ) : null}
+                        {memberTier !== 'VERIFIED' && !memberEmail ? (
+                          <div className="mt-2 text-xs cue-muted">此帳戶目前未設定 Email，暫時未可升級為認證會員。</div>
+                        ) : null}
+                        {memberTier !== 'VERIFIED' ? (
+                          <div className="mt-2 text-xs cue-muted">完成 Email 驗證後，才可使用預約、比賽報名及後續受限制功能。</div>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="cue-surface-strong rounded-lg px-3 py-2 flex items-start justify-between gap-3">
                       <div className="text-sm cue-muted">會員編碼</div>
@@ -1491,7 +1558,7 @@ const Me: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        try { localStorage.removeItem('memberSession'); } catch {}
+                        clearMemberSession();
                         window.location.href = '/me';
                       }}
                       className="w-full px-4 py-2 rounded bg-red-700 hover:bg-red-600 text-white font-semibold"

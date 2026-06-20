@@ -5,6 +5,20 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: Frontend member-session helpers and persistence of `member_tier` / `email_verified_at`.
+- Added: Member-center verification UI in `Me`, including member-tier display and resend-verification-email action.
+- Changed: Public booking and tournament signup flows now surface friendly `member_not_verified` guidance and direct members to `/me`.
+- Added: `MemberTier` backend foundation with `BASIC` vs `VERIFIED` members plus a migration that backfills existing email-verified members to `VERIFIED`.
+- Added: Shared member eligibility helper and capability gates for `booking.create` and `tournament.signup`.
+- Added: Backend email-verification skeleton for members, including automatic verification email on normal email registration, `POST /api/me/email-verification/resend`, `POST /api/members/verify-email`, and live `GET /verify-email`.
+- Changed: Member login and Google auth responses now include `member_tier` and `email_verified_at`.
+- Added: Architecture note for member tiering and email verification, defining `BASIC` vs `VERIFIED` members, verification-token storage, and first capability gates for `booking.create` and `tournament.signup`.
+- Added: `VenueHighbreakModule` and `VenuePointsModule` as standalone venue-admin module components.
+- Changed: `/venue/manage/highbreak` and `/venue/manage/points` now render independent module pages instead of routing through `VenueDashboard` as forced tab wrappers.
+- Changed: `VenueDashboard` now reuses extracted module components for `highbreak` and `points`, further reducing the size and responsibility of the single dashboard page.
+- Added: `VenueMembersModule` as a standalone venue-admin module component for member management, rating/nickname updates, member removal, and region/district editing.
+- Changed: `/venue/manage/members` now renders an independent module page instead of routing through `VenueDashboard` as a forced tab wrapper.
+- Changed: `VenueDashboard` members tab now reuses the extracted members module component while keeping the simpler member summary inside the home tab unchanged for now.
 - Added: `VenueModuleStandaloneLayout` plus standalone venue module components for `live`, `club_messages`, and `tournaments`.
 - Changed: `/venue/manage/live`, `/venue/manage/club_messages`, and `/venue/manage/tournaments` now render independent module pages instead of routing through `VenueDashboard` as a forced tab wrapper.
 - Changed: `VenueDashboard` content management tab now reuses the extracted venue module components for live announcements, club messages, and tournaments, reducing duplicated implementation between dashboard and standalone routes.

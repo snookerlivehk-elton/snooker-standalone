@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { API_URL } from './config';
 import { listMemberDistricts, listMemberRegions, loginGoogle, loginMember, registerMember } from './lib/api';
+import { writeMemberSession } from './lib/auth';
 import Tabs from './components/Tabs';
 
 const MemberRegister: React.FC = () => {
@@ -111,7 +112,13 @@ const MemberRegister: React.FC = () => {
 
       if (!id) throw new Error('登入失敗');
 
-      localStorage.setItem('memberSession', JSON.stringify({ email: String(email || '').trim().toLowerCase(), id, role }));
+      writeMemberSession({
+        email: String(email || '').trim().toLowerCase(),
+        id,
+        role,
+        member_tier: result?.member?.member_tier,
+        email_verified_at: result?.member?.email_verified_at ?? null,
+      });
       navigate(`/member/${id}`);
     } catch (err: any) {
       setError(err.message || '登入失敗');
@@ -148,7 +155,13 @@ const MemberRegister: React.FC = () => {
       const id = result?.id || result?.member?.id;
       const role = result?.role || result?.member?.role;
       if (!id) throw new Error('登入失敗');
-      localStorage.setItem('memberSession', JSON.stringify({ email: em, id, role }));
+      writeMemberSession({
+        email: em,
+        id,
+        role,
+        member_tier: result?.member?.member_tier,
+        email_verified_at: result?.member?.email_verified_at ?? null,
+      });
       navigate(`/member/${id}`);
     } catch (err: any) {
       setError(err?.message || '註冊失敗');
@@ -190,7 +203,14 @@ const MemberRegister: React.FC = () => {
       const id = result?.id || result?.member?.id;
       const role = result?.role || result?.member?.role;
       if (!id) throw new Error('登入失敗');
-      localStorage.setItem('memberSession', JSON.stringify({ email: '', phone: phoneE164, id, role }));
+      writeMemberSession({
+        email: '',
+        phone: phoneE164,
+        id,
+        role,
+        member_tier: result?.member?.member_tier,
+        email_verified_at: result?.member?.email_verified_at ?? null,
+      });
       navigate(`/member/${id}`);
     } catch (err: any) {
       setError(err?.message || '註冊失敗');

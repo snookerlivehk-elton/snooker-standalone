@@ -2,6 +2,8 @@ import express from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { randomUUID } from 'crypto';
 import { prisma } from '../../core/db/prisma.js';
+import { requireMember } from '../../core/club/access.js';
+import { resolveMemberTier } from '../../core/members/eligibility.js';
 import {
   findMemberByIdOrEmail,
   generateEmailCode,
@@ -44,9 +46,114 @@ async function sendMailIfConfigured(options: {
   });
 }
 
+function buildMemberAuthPayload(member: any) {
+  return {
+    id: member.id,
+    name: member.name,
+    email: member.email,
+    member_code: member.member_code,
+    role: member.role,
+    member_tier: resolveMemberTier(member),
+    email_verified_at: member.email_verified_at ?? null,
+  };
+}
+
 export function createMemberRouter(options: MemberRouterOptions) {
   const router = express.Router();
   const googleClient = new OAuth2Client(options.googleClientId);
+
+  async function issueMemberEmailVerification(options2: {
+    memberId: string;
+    email: string;
+    ip: string | null;
+    origin: string;
+  }) {
+    const email = String(options2.email || '').trim().normalize('NFKC');
+    if (!email) throw new Error('email required');
+
+    const recent = await prisma.emailVerification.findFirst({
+      where: {
+        email,
+        purpose: 'member-verify-email',
+        created_at: { gt: new Date(Date.now() - 60_000) },
+        used_at: null,
+      },
+      orderBy: { created_at: 'desc' },
+    });
+    if (recent) throw new Error('請稍後再試');
+
+    const code = generateEmailCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await prisma.emailVerification.create({
+      data: {
+        email,
+        code,
+        purpose: 'member-verify-email',
+        expires_at: expiresAt,
+        ip: options2.ip,
+      },
+    });
+
+    const verifyUrl = `${options2.origin.replace(/\/$/, '')}/verify-email?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
+    await sendMailIfConfigured({
+      resendApiKey: options.resendApiKey,
+      from: options.resendFromEmail,
+      to: email,
+      subject: '會員 Email 驗證',
+      html: [
+        `<p>請完成你的會員 Email 驗證。</p>`,
+        `<p>驗證碼：<strong>${code}</strong></p>`,
+        `<p>你亦可直接點擊以下連結完成驗證：</p>`,
+        `<p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+        `<p>此驗證碼將於 15 分鐘後失效。</p>`,
+      ].join(''),
+    });
+
+    return { code, expiresAt };
+  }
+
+  async function verifyMemberEmailByCode(emailRaw: string, codeRaw: string) {
+    const email = String(emailRaw || '').trim().normalize('NFKC');
+    const code = String(codeRaw || '').trim();
+    if (!email || !code) throw new Error('缺少 email 或驗證碼');
+
+    const member = await prisma.member.findFirst({ where: { email } });
+    if (!member) throw new Error('會員不存在');
+
+    const now = new Date();
+    const verification = await prisma.emailVerification.findFirst({
+      where: { email, purpose: 'member-verify-email' },
+      orderBy: { created_at: 'desc' },
+    });
+    if (!verification || verification.used_at || verification.expires_at < now || verification.attempts >= 5) {
+      throw new Error('驗證碼錯誤或已過期，請重新取得');
+    }
+    if (verification.code !== code) {
+      await prisma.emailVerification.update({
+        where: { id: verification.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new Error('驗證碼不正確');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.emailVerification.update({
+        where: { id: verification.id },
+        data: { used_at: now },
+      });
+      await tx.member.update({
+        where: { id: member.id },
+        data: {
+          email_verified_at: now,
+          member_tier: 'VERIFIED',
+          email_verification_token: null,
+          email_verification_expires_at: null,
+        },
+      });
+    });
+
+    return prisma.member.findUnique({ where: { id: member.id } });
+  }
 
   router.get('/api/member/regions', async (_req, res) => {
     try {
@@ -408,14 +515,31 @@ export function createMemberRouter(options: MemberRouterOptions) {
             club_name: clubName ?? null,
             birth_date: birthDate ?? null,
             member_code: memberCode,
+            member_tier: 'BASIC',
             membership_expires_at: null,
             password_salt: salt,
             password_hash: digest,
             password_updated_at: hasPassword ? new Date() : null,
           },
         });
-        return { id: created.id, memberCode };
+        return { id: created.id, memberCode, email: created.email };
       });
+
+      if (result.email) {
+        const ipHeader = (req.headers['x-forwarded-for'] as string) || '';
+        const ip = (req.ip || ipHeader || '').toString().slice(0, 255) || null;
+        const origin = `${req.protocol}://${req.get('host') || ''}`;
+        try {
+          await issueMemberEmailVerification({
+            memberId: result.id,
+            email: result.email,
+            ip,
+            origin,
+          });
+        } catch (mailErr) {
+          console.warn('Failed to issue member verification email:', mailErr);
+        }
+      }
 
       res.status(201).json({ id: result.id, memberCode: result.memberCode });
     } catch (err: any) {
@@ -553,6 +677,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
             club_name: clubName ?? null,
             birth_date: birthDate ?? null,
             member_code: memberCode,
+            member_tier: 'VERIFIED',
             membership_expires_at: null,
             password_salt: salt,
             password_hash: hashPassword(password, salt),
@@ -566,6 +691,54 @@ export function createMemberRouter(options: MemberRouterOptions) {
     } catch (err: any) {
       const msg = String(err?.message || err);
       const status = msg.includes('email 已存在') ? 409 : (msg.includes('地方') || msg.includes('分區') || msg.includes('請同時選擇地方及分區')) ? 400 : 500;
+      res.status(status).json({ error: msg });
+    }
+  });
+
+  router.post('/api/me/email-verification/resend', async (req, res) => {
+    const member = await requireMember(req, res);
+    if (!member) return;
+    try {
+      const fullMember = await prisma.member.findUnique({
+        where: { id: member.id },
+        select: {
+          id: true,
+          email: true,
+          email_verified_at: true,
+          member_tier: true,
+        },
+      });
+      if (!fullMember) return res.status(404).json({ error: '會員不存在' });
+      if (!fullMember.email) return res.status(400).json({ error: '此會員尚未設定 email' });
+      if (resolveMemberTier(fullMember) === 'VERIFIED') {
+        return res.json({ ok: true, alreadyVerified: true });
+      }
+      const ipHeader = (req.headers['x-forwarded-for'] as string) || '';
+      const ip = (req.ip || ipHeader || '').toString().slice(0, 255) || null;
+      const origin = `${req.protocol}://${req.get('host') || ''}`;
+      await issueMemberEmailVerification({
+        memberId: fullMember.id,
+        email: fullMember.email,
+        ip,
+        origin,
+      });
+      res.json({ ok: true });
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      const status = msg.includes('請稍後再試') ? 429 : 500;
+      res.status(status).json({ error: msg });
+    }
+  });
+
+  router.post('/api/members/verify-email', async (req, res) => {
+    try {
+      const email = String((req.body || {}).email || '').trim().normalize('NFKC');
+      const code = String((req.body || {}).code || '').trim();
+      const member = await verifyMemberEmailByCode(email, code);
+      res.json({ ok: true, member: member ? buildMemberAuthPayload(member) : null });
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      const status = msg.includes('不存在') ? 404 : msg.includes('驗證碼') ? 400 : 500;
       res.status(status).json({ error: msg });
     }
   });
@@ -591,16 +764,25 @@ export function createMemberRouter(options: MemberRouterOptions) {
         if ((member as any).is_enabled === false) {
           return res.status(403).json({ error: '此帳號已被停用' });
         }
+        if (emailVerified && resolveMemberTier(member) !== 'VERIFIED') {
+          await prisma.member.update({
+            where: { id: member.id },
+            data: {
+              email_verified_at: new Date(),
+              member_tier: 'VERIFIED',
+            },
+          });
+          const refreshed = await prisma.member.findUnique({ where: { id: member.id } });
+          return res.json({
+            ok: true,
+            id: member.id,
+            member: buildMemberAuthPayload(refreshed || member),
+          });
+        }
         return res.json({
           ok: true,
           id: member.id,
-          member: {
-            id: member.id,
-            name: member.name,
-            email: member.email,
-            member_code: member.member_code,
-            role: member.role,
-          },
+          member: buildMemberAuthPayload(member),
         });
       }
 
@@ -620,6 +802,8 @@ export function createMemberRouter(options: MemberRouterOptions) {
             club_name: null,
             birth_date: null,
             member_code: memberCode,
+            member_tier: 'VERIFIED',
+            email_verified_at: new Date(),
             membership_expires_at: null,
             is_enabled: true,
           },
@@ -629,13 +813,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
       return res.status(201).json({
         ok: true,
         id: created.id,
-        member: {
-          id: created.id,
-          name: created.name,
-          email: created.email,
-          member_code: created.member_code,
-          role: created.role,
-        },
+        member: buildMemberAuthPayload(created),
       });
     } catch (err: any) {
       console.error('Google login error:', err);
@@ -677,21 +855,41 @@ export function createMemberRouter(options: MemberRouterOptions) {
       return res.json({
         ok: true,
         id: m.id,
-        member: {
-          id: m.id,
-          name: m.name,
-          email: m.email,
-          member_code: m.member_code,
-          role: m.role,
-        },
+        member: buildMemberAuthPayload(m),
       });
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });
     }
   });
 
-  router.get('/verify-email', async (_req, res) => {
-    res.status(501).send('Email verification is temporarily disabled.');
+  router.get('/verify-email', async (req, res) => {
+    const email = String(req.query.email || '').trim().normalize('NFKC');
+    const code = String(req.query.code || '').trim();
+    try {
+      await verifyMemberEmailByCode(email, code);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.status(200).send([
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8"><title>Email 驗證成功</title></head>',
+        '<body style="font-family:Arial,sans-serif;padding:24px;background:#0f172a;color:#e5e7eb;">',
+        '<div style="max-width:560px;margin:0 auto;background:#111827;padding:24px;border-radius:16px;">',
+        '<h1 style="margin:0 0 12px;">Email 驗證成功</h1>',
+        '<p style="line-height:1.6;">你的會員帳戶已升級為認證會員，現在可使用需要 email 驗證的功能。</p>',
+        '</div></body></html>',
+      ].join(''));
+    } catch (err: any) {
+      const msg = String(err?.message || err || '驗證失敗');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.status(400).send([
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8"><title>Email 驗證失敗</title></head>',
+        '<body style="font-family:Arial,sans-serif;padding:24px;background:#0f172a;color:#e5e7eb;">',
+        '<div style="max-width:560px;margin:0 auto;background:#111827;padding:24px;border-radius:16px;">',
+        '<h1 style="margin:0 0 12px;">Email 驗證失敗</h1>',
+        `<p style="line-height:1.6;">${msg}</p>`,
+        '</div></body></html>',
+      ].join(''));
+    }
   });
 
   router.get('/api/members/:id', async (req, res) => {

@@ -338,6 +338,118 @@
   - 此輪先完成內容型模組的真正抽離，屬風險最低的一批
   - 下一輪可沿同一模式逐步抽 `members`，再視情況處理 `booking / qr / points / highbreak / home`
 
+## 最新已完成：Venue Admin Members Module Extraction (Phase 3)（2026-06-20）
+
+- 已升級：
+  - `frontend/src/VenueDashboard.tsx`
+  - `frontend/src/VenueModulePage.tsx`
+  - `frontend/src/venue/modules/VenueMembersModule.tsx`
+- Frontend
+  - `members` 已由 `VenueDashboard` 內聯 JSX 抽成真正獨立 module component
+  - `/venue/manage/members` 現已直接渲染 standalone module page
+  - `VenueDashboard` 的 `members` tab 已改為重用 `VenueMembersModule`
+  - `home` 內原有的簡版場館會員摘要暫時保留，避免一次牽連首頁編輯區
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 至此 venue admin 的內容型模組與會員管理已開始真正脫離單一大頁
+  - 這是一個適合推 Railway 做線上驗證的 checkpoint，因為未涉及 migration，且新 route / build 已穩定
+
+## 最新已完成：Venue Admin Highbreak + Points Extraction (Phase 4)（2026-06-20）
+
+- 已升級：
+  - `frontend/src/VenueDashboard.tsx`
+  - `frontend/src/VenueModulePage.tsx`
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+  - `frontend/src/venue/modules/VenuePointsModule.tsx`
+- Frontend
+  - `highbreak` 已由 `VenueDashboard` 內聯 JSX 抽成真正獨立 module component
+  - `points` 已由 `VenueDashboard` 內聯 JSX 抽成真正獨立 module component
+  - `/venue/manage/highbreak` 現已直接渲染 standalone module page
+  - `/venue/manage/points` 現已直接渲染 standalone module page
+  - `VenueDashboard` 的 `highbreak` 與 `points` tab 已改為重用新 module component
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 至此 venue admin 的內容型模組、會員管理、單杆與消費積分都已脫離單一大頁主體
+  - 這是另一個適合推 Railway 的 checkpoint，因為未涉及 migration，且新 route / build 已穩定
+
+## 最新記錄：會員分層與 Email 驗證方案（2026-06-20）
+
+- 已記錄架構方向：
+  - 會員分為 `普通會員 (BASIC)` 與 `認證會員 (VERIFIED)`
+  - `普通會員` 只需 `電話號碼` 或 `email`
+  - `認證會員` 必須完成 `email` 驗證
+- 已明確規則：
+  - `phone only` 可成為普通會員
+  - `email but not verified` 仍為普通會員
+  - `email verified` 才升級為認證會員
+- 已記錄建議資料模型：
+  - `Member.emailVerifiedAt`
+  - `Member.memberTier`
+  - `MemberEmailVerificationToken`
+- 已記錄第一批功能 gate：
+  - `booking.create`
+  - `tournament.signup`
+    僅限認證會員
+- 文件位置：
+  - `MODULE_PLATFORM_ARCHITECTURE_PLAN.md`
+- 備註：
+  - 此部分目前先記錄方案，尚未開始 schema / migration / resend flow 落地
+
+## 最新已完成：會員分層與 Email 驗證骨架（2026-06-20）
+
+- 已升級：
+  - `backend/prisma/schema.prisma`
+  - `backend/prisma/migrations/20260620000002_add_member_tier/migration.sql`
+  - `backend/src/core/members/eligibility.ts`
+  - `backend/src/core/club/access.ts`
+  - `backend/src/plugins/members/router.ts`
+  - `backend/src/plugins/booking/router.ts`
+  - `backend/src/plugins/tournaments/router.ts`
+- Backend
+  - 新增 `MemberTier` enum 與 `Member.member_tier`
+  - migration 會把既有 `email_verified_at` 不為空的會員回填為 `VERIFIED`
+  - 新增共用 member eligibility helper，集中處理 `booking.create` / `tournament.signup` 的認證會員檢查
+  - 新增 email 驗證 backend flow 骨架：
+    - 普通會員以 email 註冊後自動寄出第一封驗證信
+    - `POST /api/me/email-verification/resend`
+    - `POST /api/members/verify-email`
+    - `GET /verify-email`
+  - `booking` 建立預約與 `tournaments` 比賽報名已接上 `認證會員` gate
+  - member login / Google auth 回傳已補上 `member_tier` 與 `email_verified_at`
+- 本輪驗證：
+  - `backend npm run build` 已通過
+- 備註：
+  - 此輪仍屬 backend foundation，前端會員中心的驗證狀態顯示與 resend UI 尚未落地
+  - 此輪包含 migration，因此未部署前不建議直接推 Railway
+
+## 最新已完成：會員驗證前端收口（2026-06-20）
+
+- 已升級：
+  - `frontend/src/lib/auth.ts`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/MemberLogin.tsx`
+  - `frontend/src/MemberRegister.tsx`
+  - `frontend/src/Me.tsx`
+  - `frontend/src/ClubPublicPage.tsx`
+- Frontend
+  - `memberSession` 現在會保存：
+    - `member_tier`
+    - `email_verified_at`
+  - 會員中心 `Me` 頁已顯示：
+    - `普通會員 / 認證會員`
+    - email 驗證狀態
+    - 未驗證帳戶的 `重新發送驗證信`
+  - `booking` 與 `tournaments` 前端已補上 `member_not_verified` 友善提示
+  - 場館公開頁遇到未驗證會員時，會提示前往會員中心，而不只顯示 generic error / alert
+  - 前端 API wrapper 已保留 backend `code`，方便之後擴充更多 capability gate
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+- 備註：
+  - 會員若以純電話註冊，目前會清楚顯示尚未設定 email，因此暫未可升級為認證會員
+  - 後續若要支援「電話會員補填 email 後升級」，仍需再補會員修改 email flow
+
 ## 專案定位
 
 SnookerHK Live 系統（與賽馬無關）。用語請避免「跑馬燈」等賽馬相關字眼，統一使用「全站公告／公告／通知」。

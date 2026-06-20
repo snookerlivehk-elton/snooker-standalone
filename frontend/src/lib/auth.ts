@@ -16,3 +16,32 @@ export function getWriteToken(): string | undefined {
     return undefined;
   }
 }
+
+export type MemberSession = {
+  id?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  member_tier?: 'BASIC' | 'VERIFIED';
+  email_verified_at?: string | null;
+};
+
+export function readMemberSession(): MemberSession {
+  try {
+    return JSON.parse(localStorage.getItem('memberSession') || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeMemberSession(session: MemberSession) {
+  try {
+    localStorage.setItem('memberSession', JSON.stringify(session || {}));
+  } catch {}
+}
+
+export function clearMemberSession() {
+  try {
+    localStorage.removeItem('memberSession');
+  } catch {}
+}

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { API_URL } from './config';
 import { GoogleLogin } from '@react-oauth/google';
 import { getMember, loginGoogle, loginMember, requestPasswordResetCode, resetPasswordWithCode } from './lib/api';
+import { writeMemberSession } from './lib/auth';
 
 const MemberLogin: React.FC = () => {
   const [view, setView] = useState<'login' | 'forgot-request' | 'forgot-reset'>('login');
@@ -94,12 +95,14 @@ const MemberLogin: React.FC = () => {
         } catch {}
       }
       
-      localStorage.setItem('memberSession', JSON.stringify({
+      writeMemberSession({
         email: em,
         phone: phoneE164,
         id,
         role,
-      }));
+        member_tier: result?.member?.member_tier,
+        email_verified_at: result?.member?.email_verified_at ?? null,
+      });
       
       navigate(pickPostLoginPath(role, nextPath), { replace: true });
     } catch (err: any) {
@@ -129,7 +132,13 @@ const MemberLogin: React.FC = () => {
         } catch {}
       }
 
-      localStorage.setItem('memberSession', JSON.stringify({ email: String(email || '').trim().toLowerCase(), id, role }));
+      writeMemberSession({
+        email: String(email || '').trim().toLowerCase(),
+        id,
+        role,
+        member_tier: result?.member?.member_tier,
+        email_verified_at: result?.member?.email_verified_at ?? null,
+      });
 
       navigate(pickPostLoginPath(role, nextPath), { replace: true });
     } catch (err: any) {

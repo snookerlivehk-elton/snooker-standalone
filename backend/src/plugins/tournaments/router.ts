@@ -1,6 +1,6 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
-import { getMyClubId, requireClubAdmin, requireMember } from '../../core/club/access.js';
+import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 
 export function createTournamentRouter() {
@@ -277,7 +277,7 @@ export function createTournamentRouter() {
   });
 
   router.post('/:clubId/tournaments/:id/signup', async (req, res) => {
-    const member = await requireMember(req, res);
+    const member = await requireMemberCapability(req, res, 'tournament.signup');
     if (!member) return;
     const memberId = member.id;
     const { clubId, id } = req.params;

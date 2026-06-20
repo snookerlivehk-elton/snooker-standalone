@@ -15,6 +15,11 @@ enum MemberRole {
   ADMIN
 }
 
+enum MemberTier {
+  BASIC
+  VERIFIED
+}
+
 enum TournamentStatus {
   DRAFT
   PUBLISHED
@@ -44,6 +49,7 @@ model Member {
   birth_date   DateTime?
   is_guest     Boolean      @default(false)
   role         MemberRole   @default(MEMBER)
+  member_tier  MemberTier   @default(BASIC)
   is_enabled   Boolean      @default(true)
   membership_expires_at DateTime?
   access_expires_at DateTime?

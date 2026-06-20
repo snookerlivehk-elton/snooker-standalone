@@ -23,6 +23,7 @@ import {
   joinClub,
   signupTournament,
 } from './lib/api';
+import { readMemberSession, type MemberSession } from './lib/auth';
 import Tabs from './components/Tabs';
 import { useFeatureEnabled, useModuleVisible } from './lib/features';
 
@@ -72,6 +73,7 @@ const ClubPublicPage: React.FC = () => {
   const [myResError, setMyResError] = useState<string | null>(null);
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
   const [submitModal, setSubmitModal] = useState<{ open: boolean; quote: number | null }>({ open: false, quote: null });
+  const [memberAccessNotice, setMemberAccessNotice] = useState<string | null>(null);
 
   const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
@@ -96,13 +98,12 @@ const ClubPublicPage: React.FC = () => {
   const [tournamentOpenLoading, setTournamentOpenLoading] = useState(false);
   const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string; guide: string }>({ open: false, title: '', guide: '' });
   
-  const session = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
-  }, []);
+  const session = useMemo(() => readMemberSession() as MemberSession, []);
   const isLoggedIn = !!(session && (session as any).id);
   const sessionMemberId = String((session as any)?.id || '').trim() || null;
   const sessionRole = String((session as any)?.role || '').toUpperCase();
   const isAdminSession = sessionRole === 'ADMIN';
+  const sessionVerified = String((session as any)?.member_tier || '').toUpperCase() === 'VERIFIED' || !!(session as any)?.email_verified_at;
 
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
@@ -1171,6 +1172,31 @@ const ClubPublicPage: React.FC = () => {
             onChange={(k) => setActiveTab(k as any)}
           />
 
+          {memberAccessNotice ? (
+            <div className="mt-4 cue-surface rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="font-semibold accent-yellow">會員資格提示</div>
+                <div className="text-sm cue-muted mt-1">{memberAccessNotice}</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => nav('/me')}
+                  className="px-3 py-2 rounded cue-button text-sm font-semibold"
+                >
+                  前往會員中心
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMemberAccessNotice(null)}
+                  className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                >
+                  關閉
+                </button>
+              </div>
+            </div>
+          ) : null}
+
             {activeTab === 'messages' && (
               <div className="mt-5 space-y-6">
                 <div className="cue-surface rounded-lg p-4">
@@ -1484,6 +1510,12 @@ const ClubPublicPage: React.FC = () => {
                               } catch {}
                               setTournamentOpen(null);
                             } catch (e: any) {
+                              if (String((e as any)?.code || '') === 'member_not_verified') {
+                                setMemberAccessNotice(String(e?.message || '比賽報名只限認證會員使用，請先完成 Email 驗證'));
+                                setTournamentOpen(null);
+                                nav('/me');
+                                return;
+                              }
                               alert(String(e?.message || '報名失敗'));
                             } finally {
                               setTournamentOpenLoading(false);
@@ -1693,6 +1725,11 @@ const ClubPublicPage: React.FC = () => {
                     <div className="text-sm cue-muted mb-3">
                       需登入才能預約。<a href="/members/login" className="accent-yellow underline">登入</a>
                     </div>
+                  ) : !sessionVerified ? (
+                    <div className="text-sm mb-3 px-3 py-2 rounded cue-surface-strong">
+                      <span className="accent-yellow font-semibold">此功能只限認證會員使用。</span>
+                      <button type="button" onClick={() => nav('/me')} className="ml-2 underline">前往會員中心完成 Email 驗證</button>
+                    </div>
                   ) : null}
 
                   {session.id && pointsEnabled && (myPointsLoading || myPoints !== null) ? (
@@ -1849,6 +1886,11 @@ const ClubPublicPage: React.FC = () => {
                               setMyReservations(Array.isArray(myRows) ? myRows : []);
                             } catch {}
                           } catch (err: any) {
+                            if (String((err as any)?.code || '') === 'member_not_verified') {
+                              setMemberAccessNotice(String(err?.message || '此功能只限認證會員使用，請先完成 Email 驗證'));
+                              nav('/me');
+                              return;
+                            }
                             alert(err.message || '預約失敗');
                           }
                         }}

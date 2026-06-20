@@ -1,3 +1,13 @@
+type ApiErrorLike = Error & { code?: string; status?: number; feature?: string };
+
+function throwApiError(err: any, fallbackMessage: string, status?: number): never {
+  const error = new Error(err?.error || fallbackMessage) as ApiErrorLike;
+  if (err?.code) error.code = String(err.code);
+  if (typeof status === 'number') error.status = status;
+  if (err?.feature) error.feature = String(err.feature);
+  throw error;
+}
+
 // Club API
 export async function getClubProfile(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/club/my-profile`, {
@@ -1035,7 +1045,7 @@ export async function signupTournament(apiUrl: string, clubId: string, memberId:
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '報名失敗');
+    throwApiError(err, '報名失敗', res.status);
   }
   return res.json();
 }
@@ -1378,9 +1388,9 @@ export async function createReservation(apiUrl: string, clubId: string, memberId
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     if (res.status === 403 && err?.feature === 'booking') {
-      throw new Error('此場館未開放訂台功能');
+      throwApiError(err, '此場館未開放訂台功能', res.status);
     }
-    throw new Error(err.error || '預約失敗');
+    throwApiError(err, '預約失敗', res.status);
   }
   return res.json();
 }
@@ -1454,7 +1464,7 @@ export async function loginMember(
   });
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || `登入失敗 (${res.status})`);
+    throwApiError(err, `登入失敗 (${res.status})`, res.status);
   }
   return res.json(); // { ok, id, member: {...} }
 }
@@ -1480,11 +1490,11 @@ export async function loginGoogle(
     const fallback = await tryPost(`${apiUrl}/auth/google`);
     if (fallback.ok) return fallback.json();
     const err = await fallback.json().catch(() => ({}));
-    throw new Error(err.error || `登入失敗 (${fallback.status})`);
+    throwApiError(err, `登入失敗 (${fallback.status})`, fallback.status);
   }
 
   const err = await primary.json().catch(() => ({}));
-  throw new Error(err.error || `登入失敗 (${primary.status})`);
+  throwApiError(err, `登入失敗 (${primary.status})`, primary.status);
 }
 
 export async function getMember(
@@ -1529,6 +1539,18 @@ export async function resetPasswordWithCode(apiUrl: string, payload: { email: st
     throw new Error(err.error || `重設密碼失敗 (${res.status})`);
   }
   return res.json();
+}
+
+export async function resendMemberVerificationEmail(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/me/email-verification/resend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throwApiError(err, `重發驗證信失敗 (${res.status})`, res.status);
+  }
+  return res.json() as Promise<{ ok: true; alreadyVerified?: boolean }>;
 }
 
 // Admin / Lists

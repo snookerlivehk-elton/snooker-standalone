@@ -1,5 +1,5 @@
 import express from 'express';
-import { getMyClubId, requireClubAdmin, requireMember } from '../../core/club/access.js';
+import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
 import { bookingService } from './service.js';
 
 export function createBookingRouter() {
@@ -171,7 +171,7 @@ export function createBookingRouter() {
   });
 
   router.post('/:clubId/reservations', async (req, res) => {
-    const member = await requireMember(req, res);
+    const member = await requireMemberCapability(req, res, 'booking.create');
     if (!member) return;
     try {
       res.json(await bookingService.createMemberReservation(req.params.clubId, member.id, req.body || {}));

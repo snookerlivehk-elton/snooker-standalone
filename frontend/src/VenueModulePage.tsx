@@ -6,6 +6,9 @@ import { useFeatureEnabled } from './lib/features';
 import VenueModuleStandaloneLayout from './venue/modules/VenueModuleStandaloneLayout';
 import VenueLiveModule from './venue/modules/VenueLiveModule';
 import VenueClubMessagesModule from './venue/modules/VenueClubMessagesModule';
+import VenueHighbreakModule from './venue/modules/VenueHighbreakModule';
+import VenueMembersModule from './venue/modules/VenueMembersModule';
+import VenuePointsModule from './venue/modules/VenuePointsModule';
 import VenueTournamentsModule from './venue/modules/VenueTournamentsModule';
 
 type VenueDashboardTab = 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members';
@@ -79,7 +82,7 @@ const VenueModulePage: React.FC = () => {
 
   if (!meta) return <Navigate to="/venue/modules" replace />;
 
-  if ((moduleCode === 'live' || moduleCode === 'club_messages' || moduleCode === 'tournaments') && !operatorId) {
+  if ((moduleCode === 'live' || moduleCode === 'club_messages' || moduleCode === 'tournaments' || moduleCode === 'members' || moduleCode === 'highbreak' || moduleCode === 'points') && !operatorId) {
     return <Navigate to={`/members/login?next=${encodeURIComponent(`/venue/manage/${moduleCode}`)}`} replace />;
   }
 
@@ -103,6 +106,30 @@ const VenueModulePage: React.FC = () => {
     return (
       <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
         <VenueTournamentsModule operatorId={operatorId} enabled={tournamentsEnabled} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
+  if (moduleCode === 'members') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenueMembersModule operatorId={operatorId} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
+  if (moduleCode === 'highbreak') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenueHighbreakModule operatorId={operatorId} />
+      </VenueModuleStandaloneLayout>
+    );
+  }
+
+  if (moduleCode === 'points') {
+    return (
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+        <VenuePointsModule operatorId={operatorId} />
       </VenueModuleStandaloneLayout>
     );
   }
