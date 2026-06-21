@@ -1109,7 +1109,7 @@ export async function getMyClubTournaments(apiUrl: string, memberId: string) {
 export async function createClubTournament(
   apiUrl: string,
   memberId: string,
-  payload: { title: string; description?: string | null; signupGuide?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: { title: string; description?: string | null; signupGuide?: string | null; seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM'; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments`, {
     method: 'POST',
@@ -1127,7 +1127,7 @@ export async function updateClubTournament(
   apiUrl: string,
   memberId: string,
   id: string,
-  payload: { title?: string; description?: string | null; signupGuide?: string | null; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: { title?: string; description?: string | null; signupGuide?: string | null; seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM'; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}`, {
     method: 'PUT',
@@ -1248,6 +1248,24 @@ export async function updateTournamentParticipant(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '更新 seed 失敗');
+  }
+  return res.json();
+}
+
+export async function updateTournamentSeedMode(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  payload: { seedMode: 'MANUAL' | 'RANKING' | 'RANDOM' },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/seed-mode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新 seed 模式失敗');
   }
   return res.json();
 }

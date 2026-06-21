@@ -54,6 +54,7 @@ export function createTournamentRouter() {
     const title = String(payload.title || '').trim();
     const description = payload.description == null ? null : String(payload.description).trim() || null;
     const signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
+    const seedMode = String(payload.seedMode || 'MANUAL').trim().toUpperCase();
     const capacity = Number(payload.capacity ?? 32);
     const startsAtRaw = payload.startsAt;
     const signupClosesAtRaw = payload.signupClosesAt ?? payload.deadline;
@@ -72,6 +73,7 @@ export function createTournamentRouter() {
           title,
           description,
           signupGuide,
+          seed_mode: seedMode === 'RANDOM' || seedMode === 'RANKING' ? seedMode : 'MANUAL',
           capacity: cap,
           startsAt,
           signupClosesAt,
@@ -95,6 +97,13 @@ export function createTournamentRouter() {
     if (payload.title != null) patch.title = String(payload.title || '').trim();
     if (payload.description !== undefined) patch.description = payload.description == null ? null : String(payload.description).trim() || null;
     if (payload.signupGuide !== undefined) patch.signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
+    if (payload.seedMode !== undefined) {
+      const seedMode = String(payload.seedMode || '').trim().toUpperCase();
+      if (seedMode && !['MANUAL', 'RANKING', 'RANDOM'].includes(seedMode)) {
+        return res.status(400).json({ error: 'seedMode invalid' });
+      }
+      patch.seed_mode = seedMode || 'MANUAL';
+    }
     if (payload.capacity != null) {
       const n = Number(payload.capacity);
       if (!Number.isFinite(n)) return res.status(400).json({ error: 'capacity invalid' });
@@ -258,6 +267,21 @@ export function createTournamentRouter() {
     try {
       const rows = await tournamentsService.updateParticipantSeed(clubId, id, participantId, req.body?.seed);
       res.json({ ok: true, participants: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.put('/tournaments/:id/seed-mode', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const result = await tournamentsService.updateSeedMode(clubId, id, req.body?.seedMode);
+      res.json({ ok: true, tournament: result.tournament, participants: result.participants });
     } catch (e: any) {
       const message = String(e?.message || e);
       res.status(message === 'Not found' ? 404 : 400).json({ error: message });

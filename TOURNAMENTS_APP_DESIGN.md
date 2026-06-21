@@ -753,8 +753,17 @@ Phase 1 API 目標是先打通「參賽名單 -> 對陣 -> 即時記分 -> 履�
 Phase 1 實作備註：
 
 - 目前已落地的 `Knockout MVP` 骨架可自動升到最近 `2^n` 並補空位
-- 但完整的 `seed -> bye -> 預賽` 正式規則仍應在下一輪補齊
-- 換句話說，現有資料結構已可支援，差的是更正式的 bracket placement 規則與 UI 呈現
+- 已新增 `seedMode` 第一輪落地：
+  - `MANUAL`
+    - 保留目前 seed 次序，可由場館逐個調整
+  - `RANKING`
+    - 目前 Phase 1 先以 `ClubMember.rating` 作排序來源
+    - 同分時再按較早加入場館 / 較早生成 participant 排前
+  - `RANDOM`
+    - 重新隨機分配正式參賽名單 seed
+- 已補 `PUT /tournaments/:id/seed-mode` 與工作台 `套用 seedMode` 操作
+- 手動改單一 participant seed 時，系統會自動切回 `MANUAL`
+- 下一輪主要仍是補更完整 bracket placement 規則與視覺化 tree
 
 ## League 資料流
 

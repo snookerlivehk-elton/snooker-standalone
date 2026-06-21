@@ -131,6 +131,38 @@
     - 驗證狀態：
       - `npm run build`（backend）已通過
       - `npm run build`（frontend）已通過
+  - 2026-06-21 Knockout workbench 再補：
+    - `backend/prisma/schema.prisma`
+      - 已新增 `TournamentSeedMode`
+      - `Tournament.seed_mode` 已正式入 schema，預設 `MANUAL`
+    - `backend/prisma/migrations/20260702000004_add_tournament_seed_mode/migration.sql`
+      - 已新增 `seed_mode` migration 草案
+    - `backend/src/plugins/tournaments/service.ts`
+      - 已新增 `reseedParticipants()` 與 `updateSeedMode()`
+      - `MANUAL`：保留目前 seed 次序
+      - `RANKING`：按 `ClubMember.rating` 高低自動編 seed，同分再按較早加入場館排序
+      - `RANDOM`：隨機重排正式參賽名單 seed
+      - 手動更新單一 participant seed 時，會自動把賽事切回 `MANUAL`
+    - `backend/src/plugins/tournaments/router.ts`
+      - 建立/更新比賽已可保存 `seedMode`
+      - 已新增 `PUT /tournaments/:id/seed-mode`
+    - `frontend/src/lib/api.ts`
+      - 已新增 `updateTournamentSeedMode()`
+      - `createClubTournament()` / `updateClubTournament()` 已可提交 `seedMode`
+    - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+      - 建立/更新比賽表單已新增 `seedMode` 選擇
+      - `Knockout` 工作台已新增摘要卡：
+        - seed 模式
+        - 正式參賽者 / 籤表大小
+        - bye 數量
+        - completed / ready / pending 進度
+      - 正式參賽名單區已可直接套用 `seedMode`
+      - 對賽列表與 bracket card 已顯示 `#seed + 球手名稱`
+    - 驗證狀態：
+      - `npx prisma validate --schema prisma/schema.prisma` 已通過
+      - `npx prisma generate --schema prisma/schema.prisma` 已通過
+      - `npm run build`（backend）已通過
+      - `npm run build`（frontend）已通過
 
 ## 最新已記錄方案（2026-06-20）
 

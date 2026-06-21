@@ -15,6 +15,7 @@ import {
   getTournamentSignups,
   publishClubTournament,
   recordTournamentMatchResult,
+  updateTournamentSeedMode,
   updateTournamentParticipant,
   updateClubTournament,
 } from '../../lib/api';
@@ -34,6 +35,12 @@ type EditableFrame = {
   playerBHighestBreak: string;
 };
 
+type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
+
+const BRACKET_CARD_HEIGHT = 92;
+const BRACKET_BASE_GAP = 18;
+const BRACKET_CONNECTOR_HALF_GAP = 24;
+
 function formatDateTimeLocalInput(raw: any) {
   if (!raw) return '';
   const d = new Date(String(raw));
@@ -51,6 +58,25 @@ function formatMemberLabel(member: any) {
     String(member?.member_code || '').trim(),
     String(member?.name || '').trim(),
   ].filter(Boolean).join(' ') || '-';
+}
+
+function formatParticipantLabel(participant: any) {
+  if (!participant) return 'BYE';
+  const seed = Number(participant?.seed || 0);
+  const prefix = seed > 0 ? `#${seed} ` : '';
+  return `${prefix}${formatMemberLabel(participant?.member)}`;
+}
+
+function normalizeSeedMode(value: any): TournamentSeedMode {
+  const mode = String(value || 'MANUAL').trim().toUpperCase();
+  if (mode === 'RANKING' || mode === 'RANDOM') return mode;
+  return 'MANUAL';
+}
+
+function formatSeedModeLabel(value: TournamentSeedMode) {
+  if (value === 'RANDOM') return '隨機抽籤';
+  if (value === 'RANKING') return '按評分排序';
+  return '手動種子';
 }
 
 function buildFramesFromMatch(match: any): EditableFrame[] {
@@ -100,6 +126,31 @@ function formatKnockoutRoundLabel(match: any, participantCount: number) {
   return `Round ${Math.max(1, roundNo - roundOffset)}`;
 }
 
+function buildKnockoutSummary(participantsRows: any[], matchesRows: any[]) {
+  const participantCount = participantsRows.length;
+  const bracketSize = participantCount > 1 ? nextPowerOfTwo(participantCount) : 0;
+  const byeCount = participantCount > 1 ? Math.max(0, bracketSize - participantCount) : 0;
+  const completedCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
+  const readyCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
+  const pendingCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
+  return { participantCount, bracketSize, byeCount, completedCount, readyCount, pendingCount };
+}
+
+function getBracketColumnPaddingTop(roundIndex: number) {
+  if (roundIndex <= 0) return 0;
+  return ((2 ** roundIndex) - 1) * (BRACKET_CARD_HEIGHT + BRACKET_BASE_GAP) / 2;
+}
+
+function getBracketColumnGap(roundIndex: number) {
+  if (roundIndex <= 0) return BRACKET_BASE_GAP;
+  return (2 ** roundIndex) * (BRACKET_CARD_HEIGHT + BRACKET_BASE_GAP) - BRACKET_CARD_HEIGHT;
+}
+
+function getBracketColumnHeight(matchCount: number) {
+  if (matchCount <= 0) return BRACKET_CARD_HEIGHT;
+  return matchCount * BRACKET_CARD_HEIGHT + Math.max(0, matchCount - 1) * BRACKET_BASE_GAP;
+}
+
 const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   operatorId,
   enabled,
@@ -110,6 +161,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [guide, setGuide] = useState('');
+  const [seedMode, setSeedMode] = useState<TournamentSeedMode>('MANUAL');
   const [capacity, setCapacity] = useState('32');
   const [startsAt, setStartsAt] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -123,6 +175,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const [participantSeedDrafts, setParticipantSeedDrafts] = useState<Record<string, string>>({});
   const [participantSeedSavingId, setParticipantSeedSavingId] = useState('');
+  const [seedModeSaving, setSeedModeSaving] = useState(false);
   const [matchesRows, setMatchesRows] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -155,6 +208,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setTitle('');
     setDescription('');
     setGuide('');
+    setSeedMode('MANUAL');
     setCapacity('32');
     setDeadline('');
     setStartsAt('');
@@ -163,6 +217,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setParticipantsRows([]);
     setParticipantSeedDrafts({});
     setParticipantSeedSavingId('');
+    setSeedModeSaving(false);
     setMatchesRows([]);
     setSelectedMatchId('');
     setResultStartedAt('');
@@ -258,6 +313,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     loadSelectedPhase1Data();
   }, [loadSelectedPhase1Data]);
 
+  const selectedTournament = rows.find((row: any) => String(row?.id || '') === selectedId) || null;
+  useEffect(() => {
+    if (!selectedTournament) return;
+    setSeedMode(normalizeSeedMode(selectedTournament?.seed_mode));
+  }, [selectedTournament]);
+
   const selectedMatch = matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null;
   const selectedMatchMemberOptions = selectedMatch ? [
     {
@@ -270,17 +331,52 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     },
   ].filter((item) => item.value) : [];
   const bracketColumns = useMemo(() => {
-    const grouped = new Map<string, Array<any>>();
+    const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
     for (const row of matchesRows) {
       const key = formatKnockoutRoundLabel(row, participantsRows.length);
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(row);
+      const roundNo = Number(row?.round_no || 0);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.items.push(row);
+        existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
+      } else {
+        grouped.set(key, { roundNo, items: [row] });
+      }
     }
-    return Array.from(grouped.entries()).map(([label, items]) => ({
-      label,
-      items: [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0)),
-    }));
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[1].roundNo - b[1].roundNo)
+      .map(([label, group], roundIndex, allColumns) => {
+      const items = group.items;
+      const sortedItems = [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
+      const paddingTop = getBracketColumnPaddingTop(roundIndex);
+      const gap = getBracketColumnGap(roundIndex);
+      const cardCenters = sortedItems.map((_: any, itemIndex: number) => (
+        paddingTop + itemIndex * (BRACKET_CARD_HEIGHT + gap) + BRACKET_CARD_HEIGHT / 2
+      ));
+      const connectors = roundIndex < allColumns.length - 1
+        ? Array.from({ length: Math.floor(sortedItems.length / 2) }, (_unused, pairIndex) => {
+            const topCenter = cardCenters[pairIndex * 2];
+            const bottomCenter = cardCenters[pairIndex * 2 + 1];
+            if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
+            return {
+              top: topCenter,
+              height: Math.max(0, bottomCenter - topCenter),
+            };
+          }).filter(Boolean)
+        : [];
+        return {
+          label,
+          roundIndex,
+          isFinal: roundIndex === allColumns.length - 1,
+          items: sortedItems,
+          paddingTop,
+          gap,
+          columnHeight: Math.max(getBracketColumnHeight(matchesRows.length), paddingTop + (sortedItems.length * BRACKET_CARD_HEIGHT) + Math.max(0, sortedItems.length - 1) * gap),
+          connectors,
+        };
+      });
   }, [matchesRows, participantsRows.length]);
+  const knockoutSummary = useMemo(() => buildKnockoutSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
 
   if (!enabled) {
     return (
@@ -324,6 +420,14 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <input value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="32" />
         </div>
         <div className="md:col-span-2">
+          <label className="block text-sm mb-1 cue-muted">Seed 模式</label>
+          <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
+            <option value="MANUAL">手動種子</option>
+            <option value="RANKING">按評分排序</option>
+            <option value="RANDOM">隨機抽籤</option>
+          </select>
+        </div>
+        <div className="md:col-span-2">
           <label className="block text-sm mb-1 cue-muted">截止日期</label>
           <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
         </div>
@@ -360,6 +464,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     title: trimmedTitle,
                     description,
                     signupGuide: guide,
+                    seedMode,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
@@ -370,6 +475,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     title: trimmedTitle,
                     description,
                     signupGuide: guide,
+                    seedMode,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
@@ -446,6 +552,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               setTitle(String(row?.title || ''));
                               setDescription(String(row?.description || ''));
                               setGuide(String(row?.signupGuide || ''));
+                              setSeedMode(normalizeSeedMode(row?.seed_mode));
                               setCapacity(String(row?.capacity ?? 32));
                               setDeadline(row?.signupClosesAt ? String(row.signupClosesAt).slice(0, 10) : '');
                               if (row?.startsAt) {
@@ -631,7 +738,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
             <div>
               <div className="font-semibold">正式參賽名單 / 淘汰賽工作台</div>
-              <div className="text-xs cue-muted mt-1">先由已確認報名生成正式名單，再生成 Knockout 賽程。</div>
+              <div className="text-xs cue-muted mt-1">先由已確認報名生成正式名單，再按 `seedMode` 排位並生成 Knockout 賽程。</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -675,11 +782,65 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
+            <div className="cue-surface rounded-lg p-3">
+              <div className="text-xs cue-muted">Seed 模式</div>
+              <div className="font-semibold mt-1">{formatSeedModeLabel(seedMode)}</div>
+            </div>
+            <div className="cue-surface rounded-lg p-3">
+              <div className="text-xs cue-muted">正式參賽者 / 籤表</div>
+              <div className="font-semibold mt-1">{knockoutSummary.participantCount || 0} / {knockoutSummary.bracketSize || '-'}</div>
+            </div>
+            <div className="cue-surface rounded-lg p-3">
+              <div className="text-xs cue-muted">輪空 Bye</div>
+              <div className="font-semibold mt-1">{knockoutSummary.byeCount}</div>
+            </div>
+            <div className="cue-surface rounded-lg p-3">
+              <div className="text-xs cue-muted">賽程進度</div>
+              <div className="font-semibold mt-1">{knockoutSummary.completedCount} 完成 / {knockoutSummary.readyCount} 就緒 / {knockoutSummary.pendingCount} 待定</div>
+            </div>
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="font-semibold">正式參賽名單</div>
-                <div className="text-xs cue-muted">{participantsLoading ? '讀取中…' : `${participantsRows.length} 人`}</div>
+              <div className="flex flex-col gap-3 mb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-semibold">正式參賽名單</div>
+                  <div className="text-xs cue-muted">{participantsLoading ? '讀取中…' : `${participantsRows.length} 人`}</div>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="block text-xs mb-1 cue-muted">目前 seedMode</label>
+                    <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="px-3 py-2 rounded cue-input text-sm min-w-40">
+                      <option value="MANUAL">手動種子</option>
+                      <option value="RANKING">按評分排序</option>
+                      <option value="RANDOM">隨機抽籤</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={seedModeSaving}
+                    className={`px-3 py-2 rounded text-sm font-semibold ${seedModeSaving ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                    onClick={async () => {
+                      try {
+                        setSeedModeSaving(true);
+                        const result = await updateTournamentSeedMode(API_URL, operatorId, selectedId, { seedMode });
+                        const nextParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
+                        setParticipantsRows(nextParticipants);
+                        setParticipantSeedDrafts(Object.fromEntries(nextParticipants.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
+                        await loadRows();
+                        showNotice(`已套用 ${formatSeedModeLabel(seedMode)}`);
+                      } catch (e: any) {
+                        showNotice(e?.message || '套用 seed 模式失敗', 3000);
+                      } finally {
+                        setSeedModeSaving(false);
+                      }
+                    }}
+                  >
+                    {seedModeSaving ? '套用中...' : '套用 seedMode'}
+                  </button>
+                  <div className="text-xs cue-muted">手動改 seed 會自動切回 `MANUAL`。</div>
+                </div>
               </div>
               {participantsLoading ? (
                 <div className="text-sm cue-muted">讀取中…</div>
@@ -713,7 +874,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               disabled={isSaving}
                             />
                           </td>
-                          <td className="py-2 px-2 font-semibold">{formatMemberLabel(row?.member)}</td>
+                          <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row)}</td>
                           <td className="py-2 px-2 cue-muted">{String(row?.status || '-')}</td>
                           <td className="py-2 px-2">
                             <button
@@ -770,8 +931,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     <tbody>
                       {matchesRows.map((row: any) => {
                         const id = String(row?.id || '');
-                        const aLabel = formatMemberLabel(row?.player_a_participant?.member);
-                        const bLabel = formatMemberLabel(row?.player_b_participant?.member);
+                        const aLabel = formatParticipantLabel(row?.player_a_participant);
+                        const bLabel = formatParticipantLabel(row?.player_b_participant);
                         const roundLabel = formatKnockoutRoundLabel(row, participantsRows.length);
                         return (
                           <tr key={id} className={`border-b cue-border hover:brightness-95 ${selectedMatchId === id ? 'bg-white/5' : ''}`}>
@@ -809,43 +970,106 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
           {matchesRows.length > 0 ? (
             <div className="mt-5">
-              <div className="font-semibold mb-2">Knockout Bracket</div>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="font-semibold">Knockout Bracket Tree</div>
+                <div className="text-xs cue-muted">按卡片可直接切換到該場對局記分</div>
+              </div>
               <div className="overflow-x-auto -mx-2 px-2">
-                <div className="flex gap-3 min-w-max">
+                <div className="flex gap-12 min-w-max items-start pb-2">
                   {bracketColumns.map((column) => (
-                    <div key={column.label} className="w-72 cue-surface rounded-lg p-3">
-                      <div className="font-semibold mb-3">{column.label}</div>
-                      <div className="grid gap-3">
+                    <div key={column.label} className="w-72">
+                      <div className="font-semibold mb-3 sticky left-0">{column.label}</div>
+                      <div
+                        className="relative"
+                        style={{
+                          height: `${column.columnHeight}px`,
+                          paddingTop: `${column.paddingTop}px`,
+                        }}
+                      >
+                        {column.connectors.map((connector: any, connectorIndex: number) => (
+                          <React.Fragment key={`${column.label}-connector-${connectorIndex}`}>
+                            <div
+                              className="absolute border-t cue-border"
+                              style={{
+                                left: '100%',
+                                top: `${connector.top}px`,
+                                width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
+                              }}
+                            />
+                            <div
+                              className="absolute border-r cue-border"
+                              style={{
+                                left: `calc(100% + ${BRACKET_CONNECTOR_HALF_GAP}px)`,
+                                top: `${connector.top}px`,
+                                height: `${connector.height}px`,
+                              }}
+                            />
+                            <div
+                              className="absolute border-t cue-border"
+                              style={{
+                                left: '100%',
+                                top: `${connector.top + connector.height}px`,
+                                width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
+                              }}
+                            />
+                          </React.Fragment>
+                        ))}
+                        <div className="flex flex-col" style={{ gap: `${column.gap}px` }}>
                         {column.items.map((row: any) => {
                           const id = String(row?.id || '');
-                          const aLabel = formatMemberLabel(row?.player_a_participant?.member);
-                          const bLabel = formatMemberLabel(row?.player_b_participant?.member);
+                          const aLabel = formatParticipantLabel(row?.player_a_participant);
+                          const bLabel = formatParticipantLabel(row?.player_b_participant);
                           const winnerId = String(row?.winner_participant_id || '');
                           const aParticipantId = String(row?.player_a_participant_id || '');
                           const bParticipantId = String(row?.player_b_participant_id || '');
                           return (
-                            <button
-                              key={id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedMatchId(id);
-                                setResultStartedAt(formatDateTimeLocalInput(row?.started_at));
-                                setResultEndedAt(formatDateTimeLocalInput(row?.ended_at));
-                                setResultFrames(buildFramesFromMatch(row));
-                                setBreakMemberId(String(row?.player_a_participant?.member?.id || row?.player_b_participant?.member?.id || ''));
-                                setBreakFrameNo(String((Array.isArray(row?.frames) && row.frames.length > 0 ? row.frames.length : 1) || 1));
-                              }}
-                              className={`text-left rounded-lg border p-3 transition-colors ${selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border hover:brightness-95'}`}
-                            >
-                              <div className="text-xs cue-muted mb-2">M{row?.match_no || '-'} / {String(row?.status || '-')}</div>
-                              <div className={`font-semibold ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
-                              <div className="text-xs cue-muted my-1">
-                                {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
-                              </div>
-                              <div className={`font-semibold ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{bLabel}</div>
-                            </button>
+                            <div key={id} className="relative" style={{ height: `${BRACKET_CARD_HEIGHT}px` }}>
+                              {column.roundIndex > 0 ? (
+                                <div
+                                  className="absolute border-t cue-border"
+                                  style={{
+                                    right: '100%',
+                                    top: '50%',
+                                    width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
+                                  }}
+                                />
+                              ) : null}
+                              {!column.isFinal ? (
+                                <div
+                                  className="absolute border-t cue-border"
+                                  style={{
+                                    left: '100%',
+                                    top: '50%',
+                                    width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
+                                  }}
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedMatchId(id);
+                                  setResultStartedAt(formatDateTimeLocalInput(row?.started_at));
+                                  setResultEndedAt(formatDateTimeLocalInput(row?.ended_at));
+                                  setResultFrames(buildFramesFromMatch(row));
+                                  setBreakMemberId(String(row?.player_a_participant?.member?.id || row?.player_b_participant?.member?.id || ''));
+                                  setBreakFrameNo(String((Array.isArray(row?.frames) && row.frames.length > 0 ? row.frames.length : 1) || 1));
+                                }}
+                                className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
+                              >
+                                <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
+                                  <span>M{row?.match_no || '-'}</span>
+                                  <span>{String(row?.status || '-')}</span>
+                                </div>
+                                <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
+                                <div className="text-xs cue-muted my-1">
+                                  {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
+                                </div>
+                                <div className={`font-semibold truncate ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{bLabel}</div>
+                              </button>
+                            </div>
                           );
                         })}
+                        </div>
                       </div>
                     </div>
                   ))}

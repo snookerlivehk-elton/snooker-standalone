@@ -4,6 +4,7 @@ import { prisma } from '../../core/db/prisma.js';
 const db = prisma as any;
 
 type Side = 'A' | 'B';
+type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 
 type FrameInput = {
   frameNo?: any;
@@ -50,6 +51,17 @@ function pairParticipants<T extends { id: string }>(items: T[], bracketSize: num
   return pairs;
 }
 
+function shuffleArray<T>(items: T[]) {
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const current = next[i]!;
+    next[i] = next[j]!;
+    next[j] = current;
+  }
+  return next;
+}
+
 function normalizeFrames(framesRaw: any): Array<{
   frame_no: number;
   winner_side: Side | null;
@@ -82,24 +94,61 @@ async function getOwnedTournament(clubId: string, tournamentId: string) {
   return tournament;
 }
 
-async function ensureParticipantSeeds(tx: any, tournamentId: string) {
-  const rows = await tx.tournamentParticipant.findMany({
+function normalizeSeedMode(value: any): TournamentSeedMode {
+  const mode = String(value || 'MANUAL').trim().toUpperCase();
+  if (mode === 'RANKING' || mode === 'RANDOM') return mode;
+  return 'MANUAL';
+}
+
+async function listParticipantsForSeeding(tx: any, tournamentId: string) {
+  return tx.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId },
     orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
   });
-  let nextSeed = 1;
-  for (const row of rows) {
-    const currentSeed = Number(row.seed || 0);
-    if (currentSeed > 0) {
-      nextSeed = Math.max(nextSeed, currentSeed + 1);
-      continue;
-    }
+}
+
+async function reseedParticipants(tx: any, tournament: any) {
+  const rows = await listParticipantsForSeeding(tx, tournament.id);
+  if (rows.length === 0) return rows;
+
+  const mode = normalizeSeedMode(tournament.seed_mode);
+  let ordered = [...rows];
+
+  if (mode === 'RANDOM') {
+    ordered = shuffleArray(rows);
+  } else if (mode === 'RANKING') {
+    const clubMembers = await tx.clubMember.findMany({
+      where: {
+        clubId: tournament.clubId,
+        memberId: { in: rows.map((row: any) => row.member_id) },
+      },
+      select: { memberId: true, rating: true, joinedAt: true },
+    });
+    const byMemberId = new Map<string, { rating: number; joinedAt: Date | null }>(
+      clubMembers.map((row: any) => [String(row.memberId), { rating: Number(row.rating || 0), joinedAt: row.joinedAt || null }]),
+    );
+    ordered = [...rows].sort((a: any, b: any) => {
+      const aMeta = byMemberId.get(String(a.member_id));
+      const bMeta = byMemberId.get(String(b.member_id));
+      const ratingDiff = Number(bMeta?.rating || 0) - Number(aMeta?.rating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
+      const joinedDiff = new Date(aMeta?.joinedAt || a.created_at).getTime() - new Date(bMeta?.joinedAt || b.created_at).getTime();
+      if (joinedDiff !== 0) return joinedDiff;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const row = ordered[index];
+    const seed = index + 1;
+    if (Number(row.seed || 0) === seed) continue;
     await tx.tournamentParticipant.update({
       where: { id: row.id },
-      data: { seed: nextSeed },
+      data: { seed },
     });
-    nextSeed += 1;
   }
+
+  return listParticipantsForSeeding(tx, tournament.id);
 }
 
 async function recomputeMatchBreakStats(tx: any, matchId: string) {
@@ -186,7 +235,7 @@ export const tournamentsService = {
   },
 
   async generateParticipants(clubId: string, tournamentId: string) {
-    await getOwnedTournament(clubId, tournamentId);
+    const tournament = await getOwnedTournament(clubId, tournamentId);
     return db.$transaction(async (tx: any) => {
       const confirmed = await tx.tournamentSignup.findMany({
         where: { tournamentId: tournamentId, status: 'CONFIRMED' },
@@ -222,7 +271,7 @@ export const tournamentsService = {
         });
       }
 
-      await ensureParticipantSeeds(tx, tournamentId);
+      await reseedParticipants(tx, tournament);
 
       await tx.tournament.update({
         where: { id: tournamentId },
@@ -241,7 +290,7 @@ export const tournamentsService = {
   },
 
   async updateParticipantSeed(clubId: string, tournamentId: string, participantId: string, desiredSeedRaw: any) {
-    await getOwnedTournament(clubId, tournamentId);
+    const tournament = await getOwnedTournament(clubId, tournamentId);
     const desiredSeed = Math.max(1, toInt(desiredSeedRaw, 1));
     return db.$transaction(async (tx: any) => {
       const existingCount = await tx.tournamentMatch.count({ where: { tournament_id: tournamentId } });
@@ -275,6 +324,13 @@ export const tournamentsService = {
         });
       }
 
+      if (normalizeSeedMode(tournament.seed_mode) !== 'MANUAL') {
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { seed_mode: 'MANUAL' },
+        });
+      }
+
       return tx.tournamentParticipant.findMany({
         where: { tournament_id: tournamentId },
         orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
@@ -283,6 +339,22 @@ export const tournamentsService = {
           signup: { select: { id: true, status: true, createdAt: true } },
         },
       });
+    });
+  },
+
+  async updateSeedMode(clubId: string, tournamentId: string, seedModeRaw: any) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const seedMode = normalizeSeedMode(seedModeRaw);
+    return db.$transaction(async (tx: any) => {
+      const existingCount = await tx.tournamentMatch.count({ where: { tournament_id: tournamentId } });
+      if (existingCount > 0) throw new Error('Schedule already generated; seed mode cannot be changed now');
+
+      const updatedTournament = await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { seed_mode: seedMode },
+      });
+      const participants = await reseedParticipants(tx, updatedTournament);
+      return { tournament: updatedTournament, participants };
     });
   },
 
