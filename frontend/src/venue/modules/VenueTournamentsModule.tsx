@@ -15,6 +15,7 @@ import {
   getTournamentSignups,
   publishClubTournament,
   recordTournamentMatchResult,
+  resetTournamentKnockoutSchedule,
   updateTournamentSeedMode,
   updateTournamentParticipant,
   updateClubTournament,
@@ -36,6 +37,7 @@ type EditableFrame = {
 };
 
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
+type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
 const BRACKET_CARD_HEIGHT = 92;
 const BRACKET_BASE_GAP = 18;
@@ -77,6 +79,29 @@ function formatSeedModeLabel(value: TournamentSeedMode) {
   if (value === 'RANDOM') return '隨機抽籤';
   if (value === 'RANKING') return '按評分排序';
   return '手動種子';
+}
+
+function formatWorkflowStatusLabel(value: any) {
+  const status = String(value || 'DRAFT').trim().toUpperCase();
+  if (status === 'REGISTRATION') return '已生成名單';
+  if (status === 'SEEDED') return '已生成賽程';
+  if (status === 'IN_PROGRESS') return '進行中';
+  if (status === 'COMPLETED') return '已完成';
+  return '草稿';
+}
+
+function normalizeMatchResultType(value: any): MatchResultType {
+  const resultType = String(value || 'STANDARD').trim().toUpperCase();
+  if (resultType === 'BYE' || resultType === 'WALKOVER' || resultType === 'FORFEIT') return resultType;
+  return 'STANDARD';
+}
+
+function formatMatchResultTypeLabel(value: any) {
+  const resultType = normalizeMatchResultType(value);
+  if (resultType === 'BYE') return 'BYE';
+  if (resultType === 'WALKOVER') return 'W/O';
+  if (resultType === 'FORFEIT') return '棄權';
+  return '正常完賽';
 }
 
 function buildFramesFromMatch(match: any): EditableFrame[] {
@@ -178,9 +203,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [seedModeSaving, setSeedModeSaving] = useState(false);
   const [matchesRows, setMatchesRows] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
+  const [scheduleResetSaving, setScheduleResetSaving] = useState(false);
   const [selectedMatchId, setSelectedMatchId] = useState('');
   const [resultStartedAt, setResultStartedAt] = useState('');
   const [resultEndedAt, setResultEndedAt] = useState('');
+  const [resultQuickType, setResultQuickType] = useState<'WALKOVER' | 'FORFEIT'>('WALKOVER');
+  const [resultQuickWinnerSide, setResultQuickWinnerSide] = useState<'A' | 'B'>('A');
   const [resultFrames, setResultFrames] = useState<EditableFrame[]>([{
     frameNo: 1,
     winnerSide: 'A',
@@ -222,6 +250,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setSelectedMatchId('');
     setResultStartedAt('');
     setResultEndedAt('');
+    setResultQuickType('WALKOVER');
+    setResultQuickWinnerSide('A');
     setResultFrames([{
       frameNo: 1,
       winnerSide: 'A',
@@ -320,6 +350,22 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   }, [selectedTournament]);
 
   const selectedMatch = matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null;
+  const workflowStatus = String(selectedTournament?.workflow_status || 'DRAFT').trim().toUpperCase();
+  const hasParticipants = participantsRows.length > 0;
+  const hasSchedule = matchesRows.length > 0;
+  const canGenerateParticipants = confirmedRows.length > 0 && !hasSchedule;
+  const canGenerateSchedule = participantsRows.length >= 2 && !hasSchedule;
+  const canEditSeeding = hasParticipants && !hasSchedule;
+  const hasPlayedMatches = matchesRows.some((row: any) => {
+    const frames = Array.isArray(row?.frames) ? row.frames : [];
+    return frames.length > 0 || !!row?.started_at || !!row?.ended_at;
+  });
+  const canResetSchedule = hasSchedule && !hasPlayedMatches;
+  const selectedMatchHasPlayers = !!selectedMatch?.player_a_participant_id && !!selectedMatch?.player_b_participant_id;
+  const selectedMatchStatus = String(selectedMatch?.status || '').trim().toUpperCase();
+  const selectedMatchResultType = normalizeMatchResultType(selectedMatch?.result_type);
+  const selectedMatchResultEditable = !!selectedMatch && selectedMatchHasPlayers && selectedMatchStatus !== 'PENDING';
+  const selectedMatchBreakEnabled = !!selectedMatch && selectedMatchHasPlayers && selectedMatchResultType === 'STANDARD';
   const selectedMatchMemberOptions = selectedMatch ? [
     {
       value: String(selectedMatch?.player_a_participant?.member?.id || ''),
@@ -743,7 +789,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="px-3 py-2 rounded cue-button text-sm font-semibold"
+                disabled={!canGenerateParticipants}
+                className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateParticipants ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
                 onClick={async () => {
                   try {
                     await generateTournamentParticipants(API_URL, operatorId, selectedId);
@@ -758,7 +805,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </button>
               <button
                 type="button"
-                className="px-3 py-2 rounded cue-button text-sm font-semibold"
+                disabled={!canGenerateSchedule}
+                className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateSchedule ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
                 onClick={async () => {
                   if (!confirm('確定按目前正式名單生成 Knockout 賽程？')) return;
                   try {
@@ -774,6 +822,29 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </button>
               <button
                 type="button"
+                disabled={!canResetSchedule || scheduleResetSaving}
+                className={`px-3 py-2 rounded text-sm font-semibold ${!canResetSchedule || scheduleResetSaving ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
+                onClick={async () => {
+                  if (!selectedId) return;
+                  if (!confirm('確定要重建 Knockout 賽程？現有 bracket 將被清空，但正式名單會保留。')) return;
+                  if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
+                  try {
+                    setScheduleResetSaving(true);
+                    setSelectedMatchId('');
+                    await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+                    await Promise.all([loadSelectedPhase1Data(), loadRows()]);
+                    showNotice('已重建淘汰賽賽程，可重新調整 seed 與生成 bracket');
+                  } catch (e: any) {
+                    showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
+                  } finally {
+                    setScheduleResetSaving(false);
+                  }
+                }}
+              >
+                {scheduleResetSaving ? '重建中...' : '重建賽程'}
+              </button>
+              <button
+                type="button"
                 className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
                 onClick={loadSelectedPhase1Data}
               >
@@ -783,6 +854,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
+            <div className="cue-surface rounded-lg p-3">
+              <div className="text-xs cue-muted">Workflow</div>
+              <div className="font-semibold mt-1">{formatWorkflowStatusLabel(workflowStatus)}</div>
+            </div>
             <div className="cue-surface rounded-lg p-3">
               <div className="text-xs cue-muted">Seed 模式</div>
               <div className="font-semibold mt-1">{formatSeedModeLabel(seedMode)}</div>
@@ -800,6 +875,19 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <div className="font-semibold mt-1">{knockoutSummary.completedCount} 完成 / {knockoutSummary.readyCount} 就緒 / {knockoutSummary.pendingCount} 待定</div>
             </div>
           </div>
+          <div className="text-xs cue-muted mb-4">
+            {!confirmedRows.length
+              ? '先確認至少 1 位報名者，之後才可生成正式名單。'
+              : hasSchedule
+                ? hasPlayedMatches
+                  ? '賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建 bracket。'
+                  : '賽程已生成但尚未開打，可使用「重建賽程」清空 bracket，回到可調整 seed 的狀態。'
+                : !hasParticipants
+                  ? '先生成正式名單，再決定 seedMode 與 Knockout 賽程。'
+                  : participantsRows.length < 2
+                    ? '正式名單至少需要 2 位有效參賽者才可生成 Knockout 賽程。'
+                    : '目前可調整種子及生成 Knockout 賽程。'}
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
@@ -811,7 +899,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <div className="flex flex-wrap items-end gap-2">
                   <div>
                     <label className="block text-xs mb-1 cue-muted">目前 seedMode</label>
-                    <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="px-3 py-2 rounded cue-input text-sm min-w-40">
+                    <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="px-3 py-2 rounded cue-input text-sm min-w-40" disabled={!canEditSeeding || seedModeSaving}>
                       <option value="MANUAL">手動種子</option>
                       <option value="RANKING">按評分排序</option>
                       <option value="RANDOM">隨機抽籤</option>
@@ -819,8 +907,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   </div>
                   <button
                     type="button"
-                    disabled={seedModeSaving}
-                    className={`px-3 py-2 rounded text-sm font-semibold ${seedModeSaving ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
+                    disabled={seedModeSaving || !canEditSeeding}
+                    className={`px-3 py-2 rounded text-sm font-semibold ${seedModeSaving || !canEditSeeding ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
                     onClick={async () => {
                       try {
                         setSeedModeSaving(true);
@@ -839,7 +927,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   >
                     {seedModeSaving ? '套用中...' : '套用 seedMode'}
                   </button>
-                  <div className="text-xs cue-muted">手動改 seed 會自動切回 `MANUAL`。</div>
+                  <div className="text-xs cue-muted">手動改 seed 會自動切回 `MANUAL`；賽程生成後會鎖定。</div>
                 </div>
               </div>
               {participantsLoading ? (
@@ -871,7 +959,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               value={seedDraft}
                               onChange={(e) => setParticipantSeedDrafts((prev) => ({ ...prev, [rowId]: e.target.value }))}
                               className="w-full px-2 py-1 rounded cue-input"
-                              disabled={isSaving}
+                              disabled={isSaving || !canEditSeeding}
                             />
                           </td>
                           <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row)}</td>
@@ -879,8 +967,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                           <td className="py-2 px-2">
                             <button
                               type="button"
-                              disabled={isSaving}
-                              className={`px-3 py-1 rounded text-sm font-semibold ${isSaving ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
+                              disabled={isSaving || !canEditSeeding}
+                              className={`px-3 py-1 rounded text-sm font-semibold ${isSaving || !canEditSeeding ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
                               onClick={async () => {
                                 try {
                                   const seed = Math.max(1, Math.floor(Number(seedDraft || 1)));
@@ -934,6 +1022,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                         const aLabel = formatParticipantLabel(row?.player_a_participant);
                         const bLabel = formatParticipantLabel(row?.player_b_participant);
                         const roundLabel = formatKnockoutRoundLabel(row, participantsRows.length);
+                        const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
+                        const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
                         return (
                           <tr key={id} className={`border-b cue-border hover:brightness-95 ${selectedMatchId === id ? 'bg-white/5' : ''}`}>
                             <td className="py-2 px-2 whitespace-nowrap">
@@ -941,21 +1031,30 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               <div className="text-xs cue-muted mt-0.5">R{row?.round_no || '-'} / M{row?.match_no || '-'}</div>
                             </td>
                             <td className="py-2 px-2">{aLabel} vs {bLabel}</td>
-                            <td className="py-2 px-2 cue-muted">{String(row?.status || '-')}</td>
+                            <td className="py-2 px-2 cue-muted">
+                              <div>{String(row?.status || '-')}</div>
+                              <div className="text-xs mt-0.5">{resultTypeLabel}</div>
+                            </td>
                             <td className="py-2 px-2">
                               <button
                                 type="button"
-                                className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                                disabled={!canRecordMatch}
+                                className={`px-3 py-1 rounded text-sm font-semibold ${canRecordMatch ? 'cue-surface hover:brightness-95' : 'cue-surface-strong cue-muted'}`}
                                 onClick={() => {
+                                  if (!canRecordMatch) return;
                                   setSelectedMatchId(id);
                                   setResultStartedAt(formatDateTimeLocalInput(row?.started_at));
                                   setResultEndedAt(formatDateTimeLocalInput(row?.ended_at));
+                                  setResultQuickType(normalizeMatchResultType(row?.result_type) === 'FORFEIT' ? 'FORFEIT' : 'WALKOVER');
+                                  setResultQuickWinnerSide(
+                                    String(row?.winner_participant_id || '') === String(row?.player_b_participant_id || '') ? 'B' : 'A',
+                                  );
                                   setResultFrames(buildFramesFromMatch(row));
                                   setBreakMemberId(String(row?.player_a_participant?.member?.id || row?.player_b_participant?.member?.id || ''));
                                   setBreakFrameNo(String((Array.isArray(row?.frames) && row.frames.length > 0 ? row.frames.length : 1) || 1));
                                 }}
                               >
-                                {selectedMatchId === id ? '已選擇' : '記錄賽果'}
+                                {!canRecordMatch ? '未就緒' : selectedMatchId === id ? '已選擇' : '記錄賽果'}
                               </button>
                             </td>
                           </tr>
@@ -1022,6 +1121,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                           const winnerId = String(row?.winner_participant_id || '');
                           const aParticipantId = String(row?.player_a_participant_id || '');
                           const bParticipantId = String(row?.player_b_participant_id || '');
+                          const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
+                          const canSelectMatch = !!aParticipantId && !!bParticipantId && String(row?.status || '').toUpperCase() !== 'PENDING';
                           return (
                             <div key={id} className="relative" style={{ height: `${BRACKET_CARD_HEIGHT}px` }}>
                               {column.roundIndex > 0 ? (
@@ -1047,18 +1148,24 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               <button
                                 type="button"
                                 onClick={() => {
+                                  if (!canSelectMatch) return;
                                   setSelectedMatchId(id);
                                   setResultStartedAt(formatDateTimeLocalInput(row?.started_at));
                                   setResultEndedAt(formatDateTimeLocalInput(row?.ended_at));
+                                  setResultQuickType(normalizeMatchResultType(row?.result_type) === 'FORFEIT' ? 'FORFEIT' : 'WALKOVER');
+                                  setResultQuickWinnerSide(
+                                    String(row?.winner_participant_id || '') === String(row?.player_b_participant_id || '') ? 'B' : 'A',
+                                  );
                                   setResultFrames(buildFramesFromMatch(row));
                                   setBreakMemberId(String(row?.player_a_participant?.member?.id || row?.player_b_participant?.member?.id || ''));
                                   setBreakFrameNo(String((Array.isArray(row?.frames) && row.frames.length > 0 ? row.frames.length : 1) || 1));
                                 }}
-                                className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
+                                disabled={!canSelectMatch}
+                                className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${!canSelectMatch ? 'cue-border cue-surface-strong cue-muted cursor-not-allowed' : selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
                               >
                                 <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
                                   <span>M{row?.match_no || '-'}</span>
-                                  <span>{String(row?.status || '-')}</span>
+                                  <span>{resultTypeLabel}</span>
                                 </div>
                                 <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
                                 <div className="text-xs cue-muted my-1">
@@ -1089,10 +1196,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <div className="text-xs cue-muted mt-1">
                   {formatMemberLabel(selectedMatch?.player_a_participant?.member)} vs {formatMemberLabel(selectedMatch?.player_b_participant?.member)}
                 </div>
+                <div className="text-xs cue-muted mt-1">
+                  目前結果類型：{formatMatchResultTypeLabel(selectedMatch?.result_type)}
+                </div>
+                {!selectedMatchResultEditable ? (
+                  <div className="text-xs cue-muted mt-1">此對局尚未就緒，需待兩位球手已落位並成為 `READY / COMPLETED` 才可記分。</div>
+                ) : null}
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
+                  disabled={!selectedMatchResultEditable}
                   className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
                   onClick={() => {
                     setResultFrames((prev) => [
@@ -1112,6 +1226,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 </button>
                 <button
                   type="button"
+                  disabled={!selectedMatchResultEditable}
                   className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
                   onClick={() => setResultFrames((prev) => prev.length > 1 ? prev.slice(0, -1) : prev)}
                 >
@@ -1128,6 +1243,69 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <div>
                 <label className="block text-sm mb-1 cue-muted">完賽時間（可選）</label>
                 <input type="datetime-local" value={resultEndedAt} onChange={(e) => setResultEndedAt(e.target.value)} className="w-full px-3 py-2 rounded cue-input" />
+              </div>
+            </div>
+
+            <div className="rounded-lg border cue-border p-3 mb-3">
+              <div className="font-semibold mb-2">Walkover / Forfeit</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm mb-1 cue-muted">結果類型</label>
+                  <select
+                    value={resultQuickType}
+                    onChange={(e) => setResultQuickType(e.target.value === 'FORFEIT' ? 'FORFEIT' : 'WALKOVER')}
+                    className="w-full px-3 py-2 rounded cue-input"
+                    disabled={!selectedMatchResultEditable || resultSaving}
+                  >
+                    <option value="WALKOVER">Walkover</option>
+                    <option value="FORFEIT">Forfeit / 棄權</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1 cue-muted">勝方</label>
+                  <select
+                    value={resultQuickWinnerSide}
+                    onChange={(e) => setResultQuickWinnerSide(e.target.value === 'B' ? 'B' : 'A')}
+                    className="w-full px-3 py-2 rounded cue-input"
+                    disabled={!selectedMatchResultEditable || resultSaving}
+                  >
+                    <option value="A">{formatMemberLabel(selectedMatch?.player_a_participant?.member)}</option>
+                    <option value="B">{formatMemberLabel(selectedMatch?.player_b_participant?.member)}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="text-xs cue-muted mt-2">此操作不會建立 frame，並會清空該場既有的逐局賽果與 tournament 20+ 記錄。</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={resultSaving || !selectedMatchResultEditable}
+                  className={`px-4 py-2 rounded font-semibold ${resultSaving || !selectedMatchResultEditable ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
+                  onClick={async () => {
+                    try {
+                      if (!selectedMatchId) throw new Error('請先選擇賽事對局');
+                      const winnerLabel = resultQuickWinnerSide === 'B'
+                        ? formatMemberLabel(selectedMatch?.player_b_participant?.member)
+                        : formatMemberLabel(selectedMatch?.player_a_participant?.member);
+                      if (!confirm(`確定將此場記錄為 ${resultQuickType === 'FORFEIT' ? '棄權' : 'Walkover'}，由 ${winnerLabel} 勝出？`)) return;
+                      setResultSaving(true);
+                      await recordTournamentMatchResult(API_URL, operatorId, selectedId, selectedMatchId, {
+                        startedAt: resultStartedAt ? new Date(resultStartedAt).toISOString() : null,
+                        endedAt: resultEndedAt ? new Date(resultEndedAt).toISOString() : null,
+                        resultType: resultQuickType,
+                        winnerSide: resultQuickWinnerSide,
+                        frames: [],
+                      });
+                      await loadSelectedPhase1Data();
+                      showNotice(`已記錄${resultQuickType === 'FORFEIT' ? '棄權' : 'Walkover'}賽果`);
+                    } catch (e: any) {
+                      showNotice(e?.message || '記錄特殊賽果失敗', 3000);
+                    } finally {
+                      setResultSaving(false);
+                    }
+                  }}
+                >
+                  {resultSaving ? '儲存中...' : `記錄${resultQuickType === 'FORFEIT' ? '棄權' : 'Walkover'}`}
+                </button>
               </div>
             </div>
 
@@ -1174,8 +1352,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={resultSaving}
-                className={`px-4 py-2 rounded font-semibold ${resultSaving ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
+                disabled={resultSaving || !selectedMatchResultEditable}
+                className={`px-4 py-2 rounded font-semibold ${resultSaving || !selectedMatchResultEditable ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
                 onClick={async () => {
                   try {
                     if (!selectedMatchId) throw new Error('請先選擇賽事對局');
@@ -1191,6 +1369,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     await recordTournamentMatchResult(API_URL, operatorId, selectedId, selectedMatchId, {
                       startedAt: resultStartedAt ? new Date(resultStartedAt).toISOString() : null,
                       endedAt: resultEndedAt ? new Date(resultEndedAt).toISOString() : null,
+                      resultType: 'STANDARD',
                       frames,
                     });
                     await loadSelectedPhase1Data();
@@ -1212,7 +1391,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">球手</label>
-                <select value={breakMemberId} onChange={(e) => setBreakMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input">
+                <select value={breakMemberId} onChange={(e) => setBreakMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input" disabled={!selectedMatchBreakEnabled}>
                   <option value="">選擇球手</option>
                   {selectedMatchMemberOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -1221,26 +1400,26 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </div>
               <div>
                 <label className="block text-sm mb-1 cue-muted">第幾局</label>
-                <input value={breakFrameNo} onChange={(e) => setBreakFrameNo(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={1} />
+                <input value={breakFrameNo} onChange={(e) => setBreakFrameNo(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={1} disabled={!selectedMatchBreakEnabled} />
               </div>
               <div>
                 <label className="block text-sm mb-1 cue-muted">Break 分數</label>
-                <input value={breakPoints} onChange={(e) => setBreakPoints(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={20} />
+                <input value={breakPoints} onChange={(e) => setBreakPoints(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={20} disabled={!selectedMatchBreakEnabled} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">記錄時間（可選）</label>
-                <input value={breakRecordedAt} onChange={(e) => setBreakRecordedAt(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="datetime-local" />
+                <input value={breakRecordedAt} onChange={(e) => setBreakRecordedAt(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="datetime-local" disabled={!selectedMatchBreakEnabled} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">備註（可空）</label>
-                <input value={breakNote} onChange={(e) => setBreakNote(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：清枱 34、關鍵局" />
+                <input value={breakNote} onChange={(e) => setBreakNote(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：清枱 34、關鍵局" disabled={!selectedMatchBreakEnabled} />
               </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={breakSaving}
-                className={`px-4 py-2 rounded font-semibold ${breakSaving ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
+                disabled={breakSaving || !selectedMatchBreakEnabled}
+                className={`px-4 py-2 rounded font-semibold ${breakSaving || !selectedMatchBreakEnabled ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
                 onClick={async () => {
                   try {
                     if (!selectedMatchId) throw new Error('請先選擇賽事對局');
@@ -1270,7 +1449,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </button>
             </div>
             <div className="mt-4 text-xs cue-muted">
-              提示：目前 Phase 1 先把 `20+ break` 正式寫入比賽紀錄；League、完整 standings 與更細 live scoring 之後再補。
+              {selectedMatchBreakEnabled
+                ? '提示：目前 Phase 1 先把 `20+ break` 正式寫入比賽紀錄；League、完整 standings 與更細 live scoring 之後再補。'
+                : '此對局目前不是標準逐局賽果，已停用 tournament 20+ 記錄。'}
             </div>
           </div>
         </div>

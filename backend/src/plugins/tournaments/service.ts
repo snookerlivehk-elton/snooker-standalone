@@ -5,6 +5,7 @@ const db = prisma as any;
 
 type Side = 'A' | 'B';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
+type TournamentMatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
 type FrameInput = {
   frameNo?: any;
@@ -86,6 +87,12 @@ function normalizeFrames(framesRaw: any): Array<{
       ended_at: toNullableDate(frame?.endedAt),
     };
   }).sort((a, b) => a.frame_no - b.frame_no);
+}
+
+function normalizeResultType(value: any): TournamentMatchResultType {
+  const resultType = String(value || 'STANDARD').trim().toUpperCase();
+  if (resultType === 'BYE' || resultType === 'WALKOVER' || resultType === 'FORFEIT') return resultType;
+  return 'STANDARD';
 }
 
 async function getOwnedTournament(clubId: string, tournamentId: string) {
@@ -221,6 +228,31 @@ async function advanceKnockoutWinner(tx: any, tournamentId: string, match: any, 
   });
 }
 
+async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, winnerParticipantId: string | null) {
+  await advanceKnockoutWinner(tx, tournamentId, match, winnerParticipantId);
+
+  const finalRound = await tx.tournamentMatch.aggregate({
+    where: { tournament_id: tournamentId },
+    _max: { round_no: true },
+  });
+  const maxRound = Number(finalRound?._max?.round_no || 0);
+  if (winnerParticipantId && Number(match.round_no || 0) >= maxRound) {
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { workflow_status: 'COMPLETED' },
+    });
+    await tx.tournamentParticipant.update({
+      where: { id: winnerParticipantId },
+      data: { status: 'CHAMPION', final_rank: 1 },
+    });
+  } else {
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { workflow_status: 'IN_PROGRESS' },
+    });
+  }
+}
+
 export const tournamentsService = {
   async listParticipants(clubId: string, tournamentId: string) {
     await getOwnedTournament(clubId, tournamentId);
@@ -237,6 +269,13 @@ export const tournamentsService = {
   async generateParticipants(clubId: string, tournamentId: string) {
     const tournament = await getOwnedTournament(clubId, tournamentId);
     return db.$transaction(async (tx: any) => {
+      const existingMatches = await tx.tournamentMatch.count({
+        where: { tournament_id: tournamentId },
+      });
+      if (existingMatches > 0) {
+        throw new Error('Schedule already generated; participants cannot be regenerated now');
+      }
+
       const confirmed = await tx.tournamentSignup.findMany({
         where: { tournamentId: tournamentId, status: 'CONFIRMED' },
         orderBy: [{ createdAt: 'asc' }],
@@ -244,6 +283,8 @@ export const tournamentsService = {
           member: { select: { id: true, name: true, member_code: true, email: true } },
         },
       });
+      if (confirmed.length === 0) throw new Error('No confirmed signups yet');
+
       const existing = await tx.tournamentParticipant.findMany({
         where: { tournament_id: tournamentId },
       });
@@ -400,6 +441,7 @@ export const tournamentsService = {
               player_b_participant_id: b?.id || null,
               winner_participant_id: autoWinner,
               status: autoWinner ? 'COMPLETED' : (a && b ? 'READY' : 'PENDING'),
+              result_type: autoWinner ? 'BYE' : 'STANDARD',
               best_of_frames: tournament.best_of_frames ?? null,
             },
           });
@@ -417,6 +459,62 @@ export const tournamentsService = {
       });
 
       return created;
+    });
+  },
+
+  async resetKnockoutSchedule(clubId: string, tournamentId: string) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const format = String(tournament.format || 'KNOCKOUT').toUpperCase();
+    if (format !== 'KNOCKOUT') throw new Error('Tournament format is not KNOCKOUT');
+
+    return db.$transaction(async (tx: any) => {
+      const matches = await tx.tournamentMatch.findMany({
+        where: { tournament_id: tournamentId },
+        select: {
+          id: true,
+          started_at: true,
+          ended_at: true,
+        },
+      });
+      if (matches.length === 0) throw new Error('Schedule not generated yet');
+
+      const matchIds = matches.map((row: any) => String(row.id || '')).filter(Boolean);
+      const hasStartedMatch = matches.some((row: any) => row?.started_at || row?.ended_at);
+      if (hasStartedMatch) throw new Error('Schedule already started and cannot be reset');
+
+      const framesCount = matchIds.length > 0
+        ? await tx.tournamentFrame.count({
+            where: { tournament_match_id: { in: matchIds } },
+          })
+        : 0;
+      if (framesCount > 0) throw new Error('Schedule already started and cannot be reset');
+
+      const breaksCount = matchIds.length > 0
+        ? await tx.breakRecord.count({
+            where: { tournament_match_id: { in: matchIds } },
+          })
+        : 0;
+      if (breaksCount > 0) throw new Error('Schedule already started and cannot be reset');
+
+      if (matchIds.length > 0) {
+        await tx.tournamentMatch.deleteMany({
+          where: { id: { in: matchIds } },
+        });
+      }
+
+      await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { workflow_status: 'REGISTRATION' },
+      });
+
+      return tx.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true, email: true } },
+          signup: { select: { id: true, status: true, createdAt: true } },
+        },
+      });
     });
   },
 
@@ -451,9 +549,60 @@ export const tournamentsService = {
         },
       });
       if (!match || match.tournament_id !== tournamentId) throw new Error('Not found');
+      if (!match.player_a_participant_id || !match.player_b_participant_id) {
+        throw new Error('Match is not ready for result entry');
+      }
+      if (String(match.status || '').toUpperCase() === 'PENDING') {
+        throw new Error('Match is still pending players');
+      }
+
+      const resultType = normalizeResultType(payload?.resultType);
+      if (resultType === 'WALKOVER' || resultType === 'FORFEIT') {
+        const winnerSide = String(payload?.winnerSide || '').trim().toUpperCase();
+        const winnerParticipantId = winnerSide === 'A'
+          ? match.player_a_participant_id
+          : winnerSide === 'B'
+            ? match.player_b_participant_id
+            : null;
+        if (!winnerParticipantId) throw new Error('winnerSide required for walkover/forfeit');
+
+        await tx.tournamentFrame.deleteMany({
+          where: { tournament_match_id: matchId },
+        });
+        await tx.breakRecord.deleteMany({
+          where: { tournament_match_id: matchId },
+        });
+
+        const updated = await tx.tournamentMatch.update({
+          where: { id: matchId },
+          data: {
+            status: 'COMPLETED',
+            result_type: resultType,
+            started_at: toNullableDate(payload?.startedAt) ?? match.started_at ?? new Date(),
+            ended_at: toNullableDate(payload?.endedAt) ?? new Date(),
+            winner_participant_id: winnerParticipantId,
+            player_a_frames_won: winnerSide === 'A' ? 1 : 0,
+            player_b_frames_won: winnerSide === 'B' ? 1 : 0,
+            player_a_total_points: 0,
+            player_b_total_points: 0,
+            player_a_max_break: 0,
+            player_b_max_break: 0,
+            player_a_20_plus_count: 0,
+            player_b_20_plus_count: 0,
+          },
+        });
+
+        await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
+
+        return tx.tournamentMatch.findUnique({
+          where: { id: matchId },
+          include: { frames: { orderBy: [{ frame_no: 'asc' }] } },
+        });
+      }
 
       const frames = normalizeFrames(payload?.frames);
       if (frames.length === 0) throw new Error('frames required');
+      if (frames.some((frame) => !frame.winner_side)) throw new Error('Every frame must have a winner');
 
       await tx.tournamentFrame.deleteMany({
         where: { tournament_match_id: matchId },
@@ -492,11 +641,13 @@ export const tournamentsService = {
         : playerAFramesWon > playerBFramesWon
           ? match.player_a_participant_id
           : match.player_b_participant_id;
+      if (!winnerParticipantId) throw new Error('Knockout match cannot end in a draw');
 
       const updated = await tx.tournamentMatch.update({
         where: { id: matchId },
         data: {
           status: 'COMPLETED',
+          result_type: 'STANDARD',
           started_at: toNullableDate(payload?.startedAt) ?? match.started_at ?? new Date(),
           ended_at: toNullableDate(payload?.endedAt) ?? new Date(),
           winner_participant_id: winnerParticipantId,
@@ -510,28 +661,7 @@ export const tournamentsService = {
       });
 
       await recomputeMatchBreakStats(tx, matchId);
-      await advanceKnockoutWinner(tx, tournamentId, updated, winnerParticipantId);
-
-      const finalRound = await tx.tournamentMatch.aggregate({
-        where: { tournament_id: tournamentId },
-        _max: { round_no: true },
-      });
-      const maxRound = Number(finalRound?._max?.round_no || 0);
-      if (winnerParticipantId && Number(updated.round_no || 0) >= maxRound) {
-        await tx.tournament.update({
-          where: { id: tournamentId },
-          data: { workflow_status: 'COMPLETED' },
-        });
-        await tx.tournamentParticipant.update({
-          where: { id: winnerParticipantId },
-          data: { status: 'CHAMPION', final_rank: 1 },
-        });
-      } else {
-        await tx.tournament.update({
-          where: { id: tournamentId },
-          data: { workflow_status: 'IN_PROGRESS' },
-        });
-      }
+      await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
 
       return tx.tournamentMatch.findUnique({
         where: { id: matchId },

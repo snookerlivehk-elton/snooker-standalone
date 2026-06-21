@@ -1283,6 +1283,19 @@ export async function generateTournamentKnockoutSchedule(apiUrl: string, memberI
   return res.json();
 }
 
+export async function resetTournamentKnockoutSchedule(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/schedule/knockout/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '重建淘汰賽賽程失敗');
+  }
+  return res.json();
+}
+
 export async function getTournamentMatches(apiUrl: string, memberId: string, tournamentId: string) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/matches`, {
     headers: { 'x-member-id': memberId },
@@ -1303,6 +1316,8 @@ export async function recordTournamentMatchResult(
   payload: {
     startedAt?: string | null;
     endedAt?: string | null;
+    resultType?: 'STANDARD' | 'WALKOVER' | 'FORFEIT';
+    winnerSide?: 'A' | 'B';
     frames: Array<{
       frameNo: number;
       winnerSide: 'A' | 'B';

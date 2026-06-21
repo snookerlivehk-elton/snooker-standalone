@@ -62,6 +62,13 @@ enum TournamentMatchStatus {
   CANCELLED
 }
 
+enum TournamentMatchResultType {
+  STANDARD
+  BYE
+  WALKOVER
+  FORFEIT
+}
+
 enum TournamentSeedMode {
   MANUAL
   RANKING
@@ -349,6 +356,7 @@ model TournamentMatch {
   winner_participant_id   String?
   winner_participant      TournamentParticipant? @relation("tournament_match_winner", fields: [winner_participant_id], references: [id])
   status                  TournamentMatchStatus @default(PENDING)
+  result_type             TournamentMatchResultType @default(STANDARD)
   best_of_frames          Int?
   player_a_frames_won     Int      @default(0)
   player_b_frames_won     Int      @default(0)
