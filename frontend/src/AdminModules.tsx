@@ -5,7 +5,7 @@ import { getAdminModules, updateAdminModule } from './lib/api';
 import { clearFeatureCache } from './lib/features';
 import Tabs from './components/Tabs';
 
-type AdminModuleRow = {
+export type AdminModuleRow = {
   code: string;
   label: string;
   description: string;
@@ -28,7 +28,7 @@ type AdminModuleRow = {
   settingsPageLabel?: string | null;
 };
 
-type CategoryKey = 'all' | 'content' | 'engagement' | 'operations' | 'payment' | 'membership' | 'system';
+export type CategoryKey = 'all' | 'content' | 'engagement' | 'operations' | 'payment' | 'membership' | 'system';
 
 function resolveToken(): string {
   try {
@@ -39,7 +39,7 @@ function resolveToken(): string {
   }
 }
 
-const CATEGORY_LABELS: Record<CategoryKey, string> = {
+export const CATEGORY_LABELS: Record<CategoryKey, string> = {
   all: '全部',
   content: '內容',
   engagement: '互動',
@@ -49,7 +49,23 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
   system: '系統',
 };
 
-const AdminModules: React.FC = () => {
+type AdminModulePanelProps = {
+  categories?: Exclude<CategoryKey, 'all'>[];
+  title?: string;
+  description?: string;
+  showCategoryTabs?: boolean;
+  hideHeader?: boolean;
+  emptyMessage?: string;
+};
+
+export const AdminModulePanel: React.FC<AdminModulePanelProps> = ({
+  categories,
+  title,
+  description,
+  showCategoryTabs = false,
+  hideHeader = false,
+  emptyMessage = '目前沒有符合條件的模組。',
+}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingCode, setSavingCode] = useState<string>('');
@@ -77,9 +93,12 @@ const AdminModules: React.FC = () => {
 
   const visibleRows = useMemo(() => {
     const list = Array.isArray(rows) ? rows : [];
+    if (Array.isArray(categories) && categories.length > 0) {
+      return list.filter((row) => categories.includes(row.category as Exclude<CategoryKey, 'all'>));
+    }
     if (category === 'all') return list;
     return list.filter((row) => row.category === category);
-  }, [category, rows]);
+  }, [categories, category, rows]);
 
   async function saveModule(code: string, patch: Partial<AdminModuleRow>) {
     setSaveResult(null);
@@ -98,20 +117,14 @@ const AdminModules: React.FC = () => {
   }
 
   return (
-    <div className="brand-page min-h-screen p-4 sm:p-6">
-      <div className="w-full max-w-6xl mx-auto glass rounded-xl p-4 sm:p-6">
+    <div className="space-y-4">
+      {!hideHeader ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold accent-yellow">模組中心（Super Admin）</h1>
-            <div className="text-sm cue-muted mt-1">以模組為單位管理全局開關、公開顯示、首頁顯示與場館授權能力。</div>
+            {title ? <h2 className="text-xl font-bold accent-yellow">{title}</h2> : null}
+            {description ? <div className="text-sm cue-muted mt-1">{description}</div> : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              to={`/admin/overview${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
-              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-            >
-              返回總覽
-            </Link>
             <button
               type="button"
               className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
@@ -122,21 +135,26 @@ const AdminModules: React.FC = () => {
             </button>
           </div>
         </div>
+      ) : null}
 
-        <div className="mt-4">
+      {showCategoryTabs ? (
+        <div>
           <Tabs
             items={(Object.keys(CATEGORY_LABELS) as CategoryKey[]).map((key) => ({ key, label: CATEGORY_LABELS[key] }))}
             activeKey={category}
             onChange={(key) => setCategory(key as CategoryKey)}
           />
         </div>
+      ) : null}
 
-        {saveResult ? <div className="mt-4 text-sm cue-muted">{saveResult}</div> : null}
-        {loading ? <div className="mt-4 text-sm cue-muted">讀取中…</div> : null}
-        {!loading && error ? <div className="mt-4 text-sm text-red-400">{error}</div> : null}
+      {saveResult ? <div className="text-sm cue-muted">{saveResult}</div> : null}
+      {loading ? <div className="text-sm cue-muted">讀取中…</div> : null}
+      {!loading && error ? <div className="text-sm text-red-400">{error}</div> : null}
 
-        {!loading && !error ? (
-          <div className="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+      {!loading && !error ? (
+        <>
+          {visibleRows.length === 0 ? <div className="text-sm cue-muted">{emptyMessage}</div> : null}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {visibleRows.map((row) => (
               <div key={row.code} className="bg-black/40 border border-white/10 rounded-xl p-4 space-y-4">
                 <div className="flex items-start justify-between gap-3">
@@ -218,7 +236,39 @@ const AdminModules: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+};
+
+const AdminModules: React.FC = () => {
+  return (
+    <div className="brand-page min-h-screen p-4 sm:p-6">
+      <div className="w-full max-w-6xl mx-auto glass rounded-xl p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold accent-yellow">模組中心（Super Admin）</h1>
+            <div className="text-sm cue-muted mt-1">以模組為單位管理全局開關、公開顯示、首頁顯示與場館授權能力。</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/admin/overview${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+            >
+              返回總覽
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <AdminModulePanel
+            title="全部模組"
+            description="集中查看所有模組，並按分類管理全局開關、公開顯示、首頁顯示與場館授權能力。"
+            showCategoryTabs
+            hideHeader
+          />
+        </div>
       </div>
     </div>
   );

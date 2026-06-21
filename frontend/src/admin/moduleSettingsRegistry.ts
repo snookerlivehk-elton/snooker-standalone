@@ -26,6 +26,7 @@ export type ModuleSettingsPageConfig = {
   moduleCode: string;
   title: string;
   description: string;
+  overviewTab: 'system' | 'venue' | 'member' | 'competition';
   loadErrorMessage: string;
   saveSuccessMessage: string;
   sections: Array<ModuleRequirementSectionConfig | ModuleToggleSectionConfig>;
@@ -37,6 +38,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'booking',
     title: 'Booking 模組設定（Super Admin）',
     description: '集中管理預約建立的會員資格要求，以及 booking 事件的 email 通知策略。',
+    overviewTab: 'venue',
     loadErrorMessage: '讀取 booking 模組設定失敗',
     saveSuccessMessage: '已儲存 booking 模組設定',
     sections: [
@@ -72,6 +74,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'tournaments',
     title: 'Tournaments 模組設定（Super Admin）',
     description: '集中管理比賽報名的會員資格要求，以及比賽報名通知的預設策略。',
+    overviewTab: 'competition',
     loadErrorMessage: '讀取 tournaments 模組設定失敗',
     saveSuccessMessage: '已儲存 tournaments 模組設定',
     sections: [
@@ -107,6 +110,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'points',
     title: 'Points 模組設定（Super Admin）',
     description: '集中管理消費積分模組的場館營運權限，以及後續通知策略預設。',
+    overviewTab: 'venue',
     loadErrorMessage: '讀取 points 模組設定失敗',
     saveSuccessMessage: '已儲存 points 模組設定',
     sections: [
@@ -148,6 +152,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'club_messages',
     title: 'Club Messages 模組設定（Super Admin）',
     description: '集中管理場館公告發佈權限、會員訊息箱可用性，以及公告通知策略。',
+    overviewTab: 'member',
     loadErrorMessage: '讀取 club_messages 模組設定失敗',
     saveSuccessMessage: '已儲存 club_messages 模組設定',
     sections: [
@@ -191,6 +196,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'live',
     title: 'Live 模組設定（Super Admin）',
     description: '集中管理直播通告發佈權限、是否同步到 club messages，以及直播通知策略。',
+    overviewTab: 'member',
     loadErrorMessage: '讀取 live 模組設定失敗',
     saveSuccessMessage: '已儲存 live 模組設定',
     sections: [
@@ -234,6 +240,7 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
     moduleCode: 'members',
     title: 'Members 模組設定（Super Admin）',
     description: '集中管理會員系統的自助註冊、登入入口與會員自行修改資料能力。',
+    overviewTab: 'member',
     loadErrorMessage: '讀取 members 模組設定失敗',
     saveSuccessMessage: '已儲存 members 模組設定',
     sections: [
@@ -295,4 +302,8 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
 
 export function getModuleSettingsPageConfig(moduleCode: string) {
   return MODULE_SETTINGS_PAGE_REGISTRY[String(moduleCode || '').trim()] || null;
+}
+
+export function getModuleSettingsOverviewTab(moduleCode: string) {
+  return getModuleSettingsPageConfig(moduleCode)?.overviewTab || 'system';
 }

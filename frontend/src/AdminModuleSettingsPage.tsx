@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { API_URL } from './config';
 import { getAdminModuleSettings, updateAdminModuleSettings } from './lib/api';
-import { getModuleSettingsPageConfig } from './admin/moduleSettingsRegistry';
+import { getModuleSettingsOverviewTab, getModuleSettingsPageConfig } from './admin/moduleSettingsRegistry';
 
 function resolveToken(): string {
   try {
@@ -16,6 +16,7 @@ function resolveToken(): string {
 const AdminModuleSettingsPage: React.FC = () => {
   const { moduleCode = '' } = useParams();
   const config = getModuleSettingsPageConfig(moduleCode);
+  const overviewTab = getModuleSettingsOverviewTab(moduleCode);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,11 @@ const AdminModuleSettingsPage: React.FC = () => {
     }
   }
 
+  const overviewPath = `/admin/overview?${new URLSearchParams({
+    ...(resolveToken() ? { token: resolveToken() } : {}),
+    tab: overviewTab,
+  }).toString()}`;
+
   return (
     <div className="brand-page min-h-screen p-4 sm:p-6">
       <div className="w-full max-w-4xl mx-auto glass rounded-xl p-4 sm:p-6">
@@ -72,10 +78,10 @@ const AdminModuleSettingsPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              to={`/admin/modules${resolveToken() ? `?token=${encodeURIComponent(resolveToken())}` : ''}`}
+              to={overviewPath}
               className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
             >
-              返回模組中心
+              返回系統管理
             </Link>
             <button
               type="button"

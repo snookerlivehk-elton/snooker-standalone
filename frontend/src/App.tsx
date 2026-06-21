@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import AdminAuth from './AdminAuth';
 import MemberRegister from './MemberRegister';
-import AdminMembers from './AdminMembers';
 import AdminRegions from './AdminRegions';
 import AdminVenues from './AdminVenues';
 import AdminClubFeatures from './AdminClubFeatures';
@@ -14,7 +13,6 @@ import VenueModulePage from './VenueModulePage';
 import TableQrPage from './TableQrPage';
 import ClubPublicPage from './ClubPublicPage';
 import AdminOverview from './AdminOverview';
-import AdminModules from './AdminModules';
 import AdminModuleSettingsPage from './AdminModuleSettingsPage';
 import AdminBreaks from './AdminBreaks';
 import NewsPage from './NewsPage';
@@ -100,6 +98,13 @@ function RootEntry() {
   return <Navigate to={visible ? '/home' : '/members/login'} replace />;
 }
 
+function AdminOverviewRedirect({ tab }: { tab: string }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set('tab', tab);
+  return <Navigate to={`/admin/overview?${params.toString()}`} replace />;
+}
+
 
 function App() {
   return (
@@ -113,9 +118,9 @@ function App() {
         <Route path="/join" element={<Navigate to="/members/login" replace />} />
         <Route path="/me" element={<FeatureGate feature="member_portal"><Me /></FeatureGate>} />
         <Route path="/news" element={<ModuleVisibilityGate moduleCode="content" scope="public"><NewsPage /></ModuleVisibilityGate>} />
-        <Route path="/admin" element={<AdminAuth><Navigate to="/admin/overview" replace /></AdminAuth>} />
+        <Route path="/admin" element={<AdminAuth><AdminOverviewRedirect tab="system" /></AdminAuth>} />
         <Route path="/admin/overview" element={<AdminAuth><AdminOverview /></AdminAuth>} />
-        <Route path="/admin/modules" element={<AdminAuth><AdminModules /></AdminAuth>} />
+        <Route path="/admin/modules" element={<AdminAuth><AdminOverviewRedirect tab="system" /></AdminAuth>} />
         <Route path="/admin/modules/:moduleCode/settings" element={<AdminAuth><AdminModuleSettingsPage /></AdminAuth>} />
         <Route path="/admin/breaks" element={<AdminAuth><FeatureGate feature="highbreak"><AdminBreaks /></FeatureGate></AdminAuth>} />
         <Route path="/members/register" element={<MemberRegister />} />
@@ -130,7 +135,7 @@ function App() {
         <Route path="/venue/manage/:moduleCode" element={<FeatureGate feature="club_dashboard"><VenueModulePage /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ModuleVisibilityGate moduleCode="system_portal" scope="public"><ClubPublicPage /></ModuleVisibilityGate>} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />
-        <Route path="/admin/members" element={<AdminAuth><AdminMembers /></AdminAuth>} />
+        <Route path="/admin/members" element={<AdminAuth><AdminOverviewRedirect tab="members" /></AdminAuth>} />
         <Route path="/admin/regions" element={<AdminAuth><AdminRegions /></AdminAuth>} />
         <Route path="/admin/venues" element={<AdminAuth><AdminVenues /></AdminAuth>} />
         <Route path="/admin/club-features" element={<AdminAuth><AdminClubFeatures /></AdminAuth>} />

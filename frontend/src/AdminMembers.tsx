@@ -3,7 +3,17 @@ import { Link } from 'react-router-dom';
 import { API_URL } from './config';
 import { listMembers, updateMember, deleteMember } from './lib/api';
 
-const AdminMembers: React.FC = () => {
+type AdminMembersPanelProps = {
+  embedded?: boolean;
+  title?: string;
+  description?: string;
+};
+
+export const AdminMembersPanel: React.FC<AdminMembersPanelProps> = ({
+  embedded = false,
+  title = '管理員：會員列表',
+  description = '此列表現已顯示會員的地方與分區資料，可配合首頁龍虎榜與場館列表的分區統計使用。',
+}) => {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -184,13 +194,21 @@ const AdminMembers: React.FC = () => {
     }
   }
 
+  const containerClassName = embedded
+    ? 'w-full'
+    : 'brand-page min-h-screen text-white';
+
+  const innerClassName = embedded
+    ? 'w-full'
+    : 'mx-auto w-full max-w-screen-2xl px-4 py-10';
+
   return (
-    <div className="brand-page min-h-screen text-white">
-      <div className="mx-auto w-full max-w-screen-2xl px-4 py-10">
+    <div className={containerClassName}>
+      <div className={innerClassName}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="accent-yellow text-2xl font-bold">管理員：會員列表</h2>
-            <div className="text-sm text-slate-300 mt-1">此列表現已顯示會員的地方與分區資料，可配合首頁龍虎榜與場館列表的分區統計使用。</div>
+            <h2 className="accent-yellow text-2xl font-bold">{title}</h2>
+            <div className={`mt-1 text-sm ${embedded ? 'cue-muted' : 'text-slate-300'}`}>{description}</div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -606,6 +624,10 @@ const AdminMembers: React.FC = () => {
       </div>
     </div>
   );
+};
+
+const AdminMembers: React.FC = () => {
+  return <AdminMembersPanel />;
 };
 
 export default AdminMembers;

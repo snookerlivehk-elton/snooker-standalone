@@ -3,6 +3,10 @@ import { API_URL } from './config';
 import { createAdminSiteAdItem, deleteAdminSiteAdItem, getAdminFeatures, getAdminSiteAds, getSiteNotice, setAdminSiteAdPlacementItems, updateAdminFeatures, updateAdminSiteAd, updateAdminSiteAdItem, updateSiteNotice, uploadAdminSiteAdItemImage } from './lib/api';
 import { clearFeatureCache } from './lib/features';
 import Tabs from './components/Tabs';
+import { AdminMembersPanel } from './AdminMembers';
+import { AdminModulePanel } from './AdminModules';
+
+type AdminOverviewTab = 'system' | 'venue' | 'member' | 'competition' | 'members';
 
 const AdminOverview: React.FC = () => {
   const [data, setData] = useState<any>(null);
@@ -24,7 +28,7 @@ const AdminOverview: React.FC = () => {
   const [featuresDraft, setFeaturesDraft] = useState<Array<{ key: string; label: string; enabled: boolean }>>([]);
   const [featuresSaving, setFeaturesSaving] = useState(false);
   const [featuresSaveResult, setFeaturesSaveResult] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'system' | 'venue' | 'member' | 'competition'>('system');
+  const [activeTab, setActiveTab] = useState<AdminOverviewTab>('system');
   const [adsLoading, setAdsLoading] = useState(true);
   const [adsError, setAdsError] = useState<string | null>(null);
   const [adsSaving, setAdsSaving] = useState(false);
@@ -57,18 +61,18 @@ const AdminOverview: React.FC = () => {
     }
   }
 
-  function resolveTab(): 'system' | 'venue' | 'member' | 'competition' {
+  function resolveTab(): AdminOverviewTab {
     try {
       const params = new URLSearchParams(window.location.search);
       const t = String(params.get('tab') || '').trim();
-      if (t === 'venue' || t === 'member' || t === 'competition' || t === 'system') return t;
+      if (t === 'venue' || t === 'member' || t === 'competition' || t === 'members' || t === 'system') return t;
       return (localStorage.getItem('adminOverviewTab') as any) || 'system';
     } catch {
       return 'system';
     }
   }
 
-  function updateTab(t: 'system' | 'venue' | 'member' | 'competition') {
+  function updateTab(t: AdminOverviewTab) {
     setActiveTab(t);
     try {
       localStorage.setItem('adminOverviewTab', t);
@@ -96,6 +100,12 @@ const AdminOverview: React.FC = () => {
 
   function getFeaturesForTab(t: 'system' | 'venue' | 'member' | 'competition') {
     return featuresDraft.filter((f) => (featureGroups[f.key] || 'system') === t);
+  }
+
+  function buildAdminPath(path: string) {
+    const base = resolveBasePath();
+    const tok = resolveToken();
+    return `${window.location.origin}${base}${path}${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
   }
 
   async function saveFeatures() {
@@ -481,38 +491,14 @@ const AdminOverview: React.FC = () => {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold accent-yellow">系統管理（Super Admin）</h1>
-            <div className="text-sm cue-muted mt-1">手機可用分頁：系統 / 場館 / 會員內容 / 賽事與單杆</div>
+            <div className="text-sm cue-muted mt-1">主入口已收口為分頁：系統 / 場館營運 / 會員內容 / 賽事單杆 / 會員列表</div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
               onClick={() => {
-                const base = resolveBasePath();
-                const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/modules${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
-              }}
-            >
-              模組中心
-            </button>
-            <button
-              type="button"
-              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-              onClick={() => {
-                const base = resolveBasePath();
-                const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/members${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
-              }}
-            >
-              舊版PANEL
-            </button>
-            <button
-              type="button"
-              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
-              onClick={() => {
-                const base = resolveBasePath();
-                const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/club-features${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+                window.location.href = buildAdminPath('/admin/club-features');
               }}
             >
               場館功能授權
@@ -521,9 +507,7 @@ const AdminOverview: React.FC = () => {
               type="button"
               className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
               onClick={() => {
-                const base = resolveBasePath();
-                const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/news-sources${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+                window.location.href = buildAdminPath('/admin/news-sources');
               }}
             >
               新聞來源
@@ -532,9 +516,7 @@ const AdminOverview: React.FC = () => {
               type="button"
               className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
               onClick={() => {
-                const base = resolveBasePath();
-                const tok = resolveToken();
-                window.location.href = `${window.location.origin}${base}/admin/breaks${tok ? `?token=${encodeURIComponent(tok)}` : ''}`;
+                window.location.href = buildAdminPath('/admin/breaks');
               }}
             >
               單杆管理
@@ -549,6 +531,7 @@ const AdminOverview: React.FC = () => {
               { key: 'venue', label: '場館營運' },
               { key: 'member', label: '會員／內容' },
               { key: 'competition', label: '賽事／單杆' },
+              { key: 'members', label: '會員列表' },
             ]}
             activeKey={activeTab}
             onChange={(k) => updateTab(k as any)}
@@ -823,6 +806,14 @@ const AdminOverview: React.FC = () => {
                 </div>
               )}
             </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <AdminModulePanel
+                categories={['system']}
+                title="系統模組"
+                description="集中管理系統入口與主頁模組的全局開關、公開顯示與首頁顯示。"
+              />
+            </div>
           </div>
         )}
 
@@ -939,6 +930,14 @@ const AdminOverview: React.FC = () => {
                   {adsSaveResult && <div className="text-sm cue-muted">{adsSaveResult}</div>}
                 </div>
               )}
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <AdminModulePanel
+                categories={['operations', 'payment']}
+                title="場館營運模組"
+                description="集中管理預約、掃碼起鐘、結算與積分等場館營運模組。"
+              />
             </div>
           </div>
         )}
@@ -1144,6 +1143,14 @@ const AdminOverview: React.FC = () => {
               )}
               {featuresSaveResult && <div className="text-sm cue-muted mt-2">{featuresSaveResult}</div>}
             </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <AdminModulePanel
+                categories={['membership', 'content']}
+                title="會員／內容模組"
+                description="集中管理會員系統、直播、球會訊息與內容相關模組設定。"
+              />
+            </div>
           </div>
         )}
 
@@ -1182,6 +1189,24 @@ const AdminOverview: React.FC = () => {
               )}
               {featuresSaveResult && <div className="text-sm cue-muted mt-2">{featuresSaveResult}</div>}
             </div>
+
+            <div className="bg-black/40 border border-white/10 rounded p-4">
+              <AdminModulePanel
+                categories={['engagement']}
+                title="賽事／單杆模組"
+                description="集中管理賽事報名、單杆統計與公開排名相關模組。"
+              />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'members' && (
+          <div className="mt-5">
+            <AdminMembersPanel
+              embedded
+              title="會員列表"
+              description="將原本舊版 PANEL 收口為系統管理內的會員列表分頁，方便集中管理會員與場館戶口。"
+            />
           </div>
         )}
       </div>
