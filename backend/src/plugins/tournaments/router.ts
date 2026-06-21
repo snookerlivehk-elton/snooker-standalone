@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { getTournamentsModuleSettings } from '../../core/modules/tournamentsSettings.js';
+import { tournamentsService } from './service.js';
 
 export function createTournamentRouter() {
   const router = express.Router();
@@ -214,6 +215,114 @@ export function createTournamentRouter() {
       res.json(updated);
     } catch (e) {
       res.status(500).json({ error: String(e) });
+    }
+  });
+
+  router.get('/tournaments/:id/participants', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.listParticipants(clubId, id);
+      res.json(rows);
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/participants/generate', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.generateParticipants(clubId, id);
+      res.json({ ok: true, participants: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.put('/tournaments/:id/participants/:participantId', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    const participantId = String(req.params.participantId || '').trim();
+    try {
+      const rows = await tournamentsService.updateParticipantSeed(clubId, id, participantId, req.body?.seed);
+      res.json({ ok: true, participants: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/schedule/knockout/generate', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.generateKnockoutSchedule(clubId, id);
+      res.json({ ok: true, matches: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.get('/tournaments/:id/matches', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.listMatches(clubId, id);
+      res.json(rows);
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/matches/:matchId/result', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    const matchId = String(req.params.matchId || '').trim();
+    try {
+      const row = await tournamentsService.recordMatchResult(clubId, id, matchId, req.body || {});
+      res.json({ ok: true, match: row });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/matches/:matchId/breaks', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    const matchId = String(req.params.matchId || '').trim();
+    try {
+      const row = await tournamentsService.addMatchBreak(clubId, id, matchId, member.id, req.body || {});
+      res.json({ ok: true, breakRecord: row });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
     }
   });
 

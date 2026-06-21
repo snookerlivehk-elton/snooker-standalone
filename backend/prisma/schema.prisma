@@ -32,6 +32,36 @@ enum TournamentSignupStatus {
   CANCELLED
 }
 
+enum TournamentFormat {
+  KNOCKOUT
+  LEAGUE
+}
+
+enum TournamentWorkflowStatus {
+  DRAFT
+  REGISTRATION
+  SEEDED
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum TournamentParticipantStatus {
+  ACTIVE
+  WITHDRAWN
+  DISQUALIFIED
+  ELIMINATED
+  CHAMPION
+}
+
+enum TournamentMatchStatus {
+  PENDING
+  READY
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
 enum BreakRecordType {
   VENUE
   TOURNAMENT
@@ -93,6 +123,7 @@ model Member {
   endedTableSessionsAsOperator TableSession[] @relation("table_session_ended_by_operator")
 
   tournamentSignups TournamentSignup[]
+  tournamentParticipants TournamentParticipant[]
   settlements SessionSettlement[]
 }
 
@@ -148,6 +179,9 @@ model BreakRecord {
   member_id           String
   record_type         BreakRecordType @default(VENUE)
   tournament_id       String?
+  tournament_match_id String?
+  frame_no            Int?
+  threshold_snapshot  Int?
   points              Int
   recorded_at         DateTime    @default(now())
   video_url           String?
@@ -164,11 +198,13 @@ model BreakRecord {
   member              Member      @relation(fields: [member_id], references: [id])
   created_by          Member      @relation("break_created_by", fields: [created_by_member_id], references: [id])
   tournament          Tournament? @relation(fields: [tournament_id], references: [id])
+  tournament_match    TournamentMatch? @relation(fields: [tournament_match_id], references: [id])
 
   @@index([record_type, recorded_at])
   @@index([record_type, club_id, recorded_at])
   @@index([record_type, member_id, recorded_at])
   @@index([tournament_id, recorded_at])
+  @@index([tournament_match_id, recorded_at])
   @@index([club_id, recorded_at])
   @@index([member_id, recorded_at])
   @@index([club_id, member_id, recorded_at])
@@ -219,13 +255,25 @@ model Tournament {
   startsAt    DateTime?
   signupOpensAt DateTime?
   signupClosesAt DateTime?
+  format      TournamentFormat?
+  workflow_status TournamentWorkflowStatus @default(DRAFT)
+  race_to     Int?
+  best_of_frames Int?
+  table_count Int?
+  points_win  Int      @default(3)
+  points_draw Int      @default(1)
+  points_loss Int      @default(0)
+  tracked_break_threshold Int @default(20)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   signups     TournamentSignup[]
+  participants TournamentParticipant[]
+  tournament_matches TournamentMatch[]
   breakRecords BreakRecord[]
 
   @@index([clubId, status])
+  @@index([clubId, workflow_status])
   @@index([clubId, startsAt])
 }
 
@@ -239,10 +287,96 @@ model TournamentSignup {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  participant  TournamentParticipant?
+
   @@unique([tournamentId, memberId])
   @@index([memberId, createdAt])
   @@index([tournamentId, createdAt])
   @@index([status])
+}
+
+model TournamentParticipant {
+  id            String   @id @default(uuid())
+  tournament_id String
+  tournament    Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  member_id     String
+  member        Member   @relation(fields: [member_id], references: [id])
+  signup_id     String?  @unique
+  signup        TournamentSignup? @relation(fields: [signup_id], references: [id])
+  seed          Int?
+  group_no      Int?
+  lane_no       Int?
+  checked_in    Boolean  @default(false)
+  final_rank    Int?
+  status        TournamentParticipantStatus @default(ACTIVE)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  home_matches  TournamentMatch[] @relation("tournament_match_player_a")
+  away_matches  TournamentMatch[] @relation("tournament_match_player_b")
+  won_matches   TournamentMatch[] @relation("tournament_match_winner")
+  won_frames    TournamentFrame[] @relation("tournament_frame_winner")
+
+  @@unique([tournament_id, member_id])
+  @@index([tournament_id, seed])
+  @@index([tournament_id, group_no])
+  @@index([member_id, created_at])
+}
+
+model TournamentMatch {
+  id                      String   @id @default(uuid())
+  tournament_id           String
+  tournament              Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  stage_code              String?
+  round_no                Int?
+  match_no                Int?
+  table_no                String?
+  scheduled_at            DateTime?
+  started_at              DateTime?
+  ended_at                DateTime?
+  player_a_participant_id String?
+  player_a_participant    TournamentParticipant? @relation("tournament_match_player_a", fields: [player_a_participant_id], references: [id])
+  player_b_participant_id String?
+  player_b_participant    TournamentParticipant? @relation("tournament_match_player_b", fields: [player_b_participant_id], references: [id])
+  winner_participant_id   String?
+  winner_participant      TournamentParticipant? @relation("tournament_match_winner", fields: [winner_participant_id], references: [id])
+  status                  TournamentMatchStatus @default(PENDING)
+  best_of_frames          Int?
+  player_a_frames_won     Int      @default(0)
+  player_b_frames_won     Int      @default(0)
+  player_a_total_points   Int      @default(0)
+  player_b_total_points   Int      @default(0)
+  player_a_max_break      Int      @default(0)
+  player_b_max_break      Int      @default(0)
+  player_a_20_plus_count  Int      @default(0)
+  player_b_20_plus_count  Int      @default(0)
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  frames                  TournamentFrame[]
+  break_records           BreakRecord[]
+
+  @@index([tournament_id, stage_code, round_no, match_no])
+  @@index([tournament_id, status, scheduled_at])
+}
+
+model TournamentFrame {
+  id                    String   @id @default(uuid())
+  tournament_match_id   String
+  tournament_match      TournamentMatch @relation(fields: [tournament_match_id], references: [id], onDelete: Cascade)
+  frame_no              Int
+  winner_participant_id String?
+  winner_participant    TournamentParticipant? @relation("tournament_frame_winner", fields: [winner_participant_id], references: [id])
+  player_a_score        Int      @default(0)
+  player_b_score        Int      @default(0)
+  player_a_highest_break Int     @default(0)
+  player_b_highest_break Int     @default(0)
+  started_at            DateTime?
+  ended_at              DateTime?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@unique([tournament_match_id, frame_no])
 }
 
 model SiteNotice {

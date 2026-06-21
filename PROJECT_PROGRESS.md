@@ -2,6 +2,136 @@
 
 更新日期：2026-06-20（Asia/Hong_Kong）
 
+## 最新已記錄方向（2026-06-21）
+
+- 已新增方案文件：`TOURNAMENTS_APP_DESIGN.md`
+- 本次新確認方向是：
+  - 將 `tournaments` 由「比賽報名工具」升級為真正的「場館賽事應用程式」
+  - 目標支援：
+    - `Knockout`（淘汰賽）
+    - `League`（循環聯賽）
+    - 抽籤 / 賽程 / 即時記分 / 積分榜
+    - 球手正式比賽履歷
+  - 已明確確認：
+    - 不應只記錄「每局最高 break」
+    - 應完整記錄每一次 `20+ break`
+    - 同時要保存每局與每場總得分
+    - `20+ break` 與 `總得分` 會成為球手履歷與獎勵系統的兩條核心資料線
+- 本次整理後的 Phase 1 重點：
+  1. 擴充 `Tournament` 為正式賽事容器
+  2. 新增正式參賽名單 / 賽程 / frame / break event
+  3. 先完成 `Knockout` MVP
+  4. 將正式比賽中的 `20+ break` 接入 `TOURNAMENT` 履歷
+  5. 會員中心先顯示正式比賽勝負、得失局、總得分、最高 break、20+ 次數
+- 下一輪正式落地前，應先完成：
+  - Prisma schema 草案
+  - API 清單
+  - Venue 後台賽事工作台 UI 結構
+  - 球手履歷欄位定義
+  - `Knockout / League` 各自資料流
+- 2026-06-21 補充：
+  - 上述內容已進一步整理進 `TOURNAMENTS_APP_DESIGN.md`
+  - 文檔現已包含：
+    - Prisma schema 草案
+    - API 草案
+    - Venue 後台賽事工作台 UI 草案
+    - `Knockout / League` 資料流
+  - 下一輪可直接從 schema / API 設計進入實作，不需再由對話重新整理需求
+  - Prisma schema 草案已再對齊現有 `backend/prisma/schema.prisma` 命名風格：
+    - 保留現有 `Tournament.status`
+    - 新增 `workflow_status` 作賽事生命周期狀態
+    - 新賽事引擎模型改以 `snake_case` 為主
+    - 已補 migration 策略，避免第一輪直接破壞現有 tournaments flow
+  - 已將第一輪 Phase 1 結構正式寫入 `backend/prisma/schema.prisma`
+  - 已新增 migration 草案：
+    - `backend/prisma/migrations/20260702000003_add_tournament_phase1_engine/migration.sql`
+  - 本次 migration 草案包括：
+    - 新 enum：`TournamentFormat` / `TournamentWorkflowStatus` / `TournamentParticipantStatus` / `TournamentMatchStatus`
+    - `Tournament` 新欄位
+    - `BreakRecord` 補 tournament match 關聯欄位
+    - 新表：`TournamentParticipant` / `TournamentMatch` / `TournamentFrame`
+    - 舊 `Tournament.status` 到 `workflow_status` 的初步 backfill
+  - 驗證狀態：
+    - `npx prisma validate --schema prisma/schema.prisma` 已通過
+  - 尚未做：
+    - `prisma migrate deploy`
+    - backend router / service 接線
+  - 2026-06-21 再補：
+    - 已新增 `backend/src/plugins/tournaments/service.ts`
+    - 已把 Phase 1 `Knockout MVP` 第一版 backend 骨架接回 `backend/src/plugins/tournaments/router.ts`
+    - 目前已提供管理端骨架 endpoints：
+      - `GET /tournaments/:id/participants`
+      - `POST /tournaments/:id/participants/generate`
+      - `POST /tournaments/:id/schedule/knockout/generate`
+      - `GET /tournaments/:id/matches`
+      - `POST /tournaments/:id/matches/:matchId/result`
+      - `POST /tournaments/:id/matches/:matchId/breaks`
+    - 已落地的 service 能力：
+      - 由 confirmed signups 生成正式 participants
+      - 生成 Knockout 第一版 bracket / round skeleton
+      - 記錄 match frame 結果並更新摘要
+      - 記錄正式比賽 `20+ break` 到 `BreakRecord(record_type=TOURNAMENT)`
+      - 簡單處理 Knockout 勝方推進下一輪
+    - 驗證狀態：
+      - `npm run build`（backend）已通過
+  - 2026-06-21 前端再補：
+    - `frontend/src/lib/api.ts` 已新增 tournaments Phase 1 管理端 API wrapper
+    - `frontend/src/venue/modules/VenueTournamentsModule.tsx` 已接上第一版賽事工作台 UI
+    - 目前場館後台已可：
+      - 由已確認報名生成正式參賽名單
+      - 生成 Knockout 賽程
+      - 查看正式參賽名單與 matches
+      - 為指定對局輸入逐局賽果
+      - 為指定對局記錄正式比賽 `20+ break`
+    - 驗證狀態：
+      - `npm run build`（frontend）已通過
+    - 尚未做：
+      - League UI / standings
+      - 更完整的 bracket 視覺化
+      - 更細緻的 live scoring 互動
+  - 2026-06-21 規則再補：
+    - 已確認 `Knockout` 在非 `2^n` 參賽人數時，正式產品規則採：
+      - 升到最近 bracket size
+      - 用 `bye` 補足
+      - 高 seed 優先獲得 `bye`
+      - 未獲 `bye` 的低 seed 進入 `預賽 / Preliminary Round`
+    - 已把 `70 -> 128 -> 58 個 bye -> 6 場預賽 -> 64 強` 例子寫入 `TOURNAMENTS_APP_DESIGN.md`
+    - 已補 `seedMode` 設計方向：
+      - `MANUAL`
+      - `RANKING`
+      - `RANDOM`
+    - 現況說明：
+      - 現有 `Knockout MVP` 骨架已可自動升到最近 `2^n`
+      - 但完整 `seed -> bye -> 預賽` placement 規則與 bracket UI 仍未正式落地
+  - 2026-06-21 實作再補：
+    - `backend/src/plugins/tournaments/service.ts`
+      - 已補 `ensureParticipantSeeds()`，會為未指定 seed 的正式參賽者自動補連續 seed
+      - `generateKnockoutSchedule()` 已會在非 `2^n` 人數時把首輪標記為 `KNOCKOUT_PRELIM`
+      - 現有 pairing 結構已符合：
+        - 高 seed 因空位而首輪輪空
+        - 低 seed 在預賽互碰
+        - 勝方再進入下一輪主賽圈
+    - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+      - `Knockout` 賽程列表已顯示 `預賽 / 64 強 / 32 強 / 16 強 / 8 強 / 4 強 / 決賽`
+      - 不再只顯示技術性 `R1 / R2`
+    - 驗證狀態：
+      - `npm run build`（backend）已通過
+      - `npm run build`（frontend）已通過
+  - 2026-06-21 seed / bracket 再補：
+    - `backend/src/plugins/tournaments/service.ts`
+      - 已新增 `updateParticipantSeed()`，會以「重排正式參賽名單」方式更新 seed，避免重複 seed
+      - 若賽程已生成，會拒絕再改 seed，避免已生成 bracket 後資料不一致
+    - `backend/src/plugins/tournaments/router.ts`
+      - 已新增 `PUT /tournaments/:id/participants/:participantId`
+    - `frontend/src/lib/api.ts`
+      - 已新增 `updateTournamentParticipant()`
+    - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+      - 正式參賽名單已可直接編輯 seed
+      - 已新增第一版 `Knockout Bracket` 視圖，可按 match card 直接選中對局
+    - 驗證狀態：
+      - `npm run build`（backend）已通過
+      - `npm run build`（frontend）已通過
+
 ## 最新已記錄方案（2026-06-20）
 
 - 已新增方案文件：`MODULE_PLATFORM_ARCHITECTURE_PLAN.md`

@@ -1208,6 +1208,126 @@ export async function cancelTournamentSignup(apiUrl: string, memberId: string, t
   return res.json();
 }
 
+export async function getTournamentParticipants(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/participants`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取正式參賽名單失敗');
+  }
+  return res.json();
+}
+
+export async function generateTournamentParticipants(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/participants/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '生成正式參賽名單失敗');
+  }
+  return res.json();
+}
+
+export async function updateTournamentParticipant(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  participantId: string,
+  payload: { seed: number },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/participants/${encodeURIComponent(participantId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新 seed 失敗');
+  }
+  return res.json();
+}
+
+export async function generateTournamentKnockoutSchedule(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/schedule/knockout/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '生成淘汰賽賽程失敗');
+  }
+  return res.json();
+}
+
+export async function getTournamentMatches(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/matches`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取賽程失敗');
+  }
+  return res.json();
+}
+
+export async function recordTournamentMatchResult(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  matchId: string,
+  payload: {
+    startedAt?: string | null;
+    endedAt?: string | null;
+    frames: Array<{
+      frameNo: number;
+      winnerSide: 'A' | 'B';
+      playerAScore?: number;
+      playerBScore?: number;
+      playerAHighestBreak?: number;
+      playerBHighestBreak?: number;
+      startedAt?: string | null;
+      endedAt?: string | null;
+    }>;
+  },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '記錄賽果失敗');
+  }
+  return res.json();
+}
+
+export async function createTournamentMatchBreak(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  matchId: string,
+  payload: { memberId: string; points: number; frameNo?: number; recordedAt?: string | null; note?: string | null },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/breaks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '記錄 20+ 失敗');
+  }
+  return res.json();
+}
+
 export async function getMyInvites(apiUrl: string, memberId: string) {
   const res = await fetch(`${apiUrl}/api/matches/invites/my`, {
     headers: { 'x-member-id': memberId }
