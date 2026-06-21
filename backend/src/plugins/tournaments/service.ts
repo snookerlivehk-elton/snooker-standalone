@@ -4,6 +4,7 @@ import { prisma } from '../../core/db/prisma.js';
 const db = prisma as any;
 
 type Side = 'A' | 'B';
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type TournamentMatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
@@ -95,6 +96,10 @@ function normalizeResultType(value: any): TournamentMatchResultType {
   return 'STANDARD';
 }
 
+function normalizeTournamentFormat(value: any): TournamentFormat {
+  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+}
+
 async function getOwnedTournament(clubId: string, tournamentId: string) {
   const tournament = await db.tournament.findUnique({ where: { id: tournamentId } });
   if (!tournament || tournament.clubId !== clubId) throw new Error('Not found');
@@ -105,6 +110,130 @@ function normalizeSeedMode(value: any): TournamentSeedMode {
   const mode = String(value || 'MANUAL').trim().toUpperCase();
   if (mode === 'RANKING' || mode === 'RANDOM') return mode;
   return 'MANUAL';
+}
+
+function buildLeagueRoundRobinPairs<T>(items: Array<T | null>): Array<Array<[T | null, T | null]>> {
+  if (items.length <= 1) return [];
+  const players = [...items];
+  if (players.length % 2 === 1) players.push(null);
+  const rounds: Array<Array<[T | null, T | null]>> = [];
+  let rotation = [...players];
+  const totalRounds = rotation.length - 1;
+  for (let roundIndex = 0; roundIndex < totalRounds; roundIndex += 1) {
+    const pairs: Array<[T | null, T | null]> = [];
+    for (let i = 0; i < rotation.length / 2; i += 1) {
+      const left = rotation[i] ?? null;
+      const right = rotation[rotation.length - 1 - i] ?? null;
+      pairs.push(roundIndex % 2 === 0 ? [left, right] : [right, left]);
+    }
+    rounds.push(pairs);
+    const fixed = rotation[0] ?? null;
+    const rest = rotation.slice(1);
+    rest.unshift(rest.pop() ?? null);
+    rotation = [fixed, ...rest];
+  }
+  return rounds;
+}
+
+function buildLeagueStandings(tournament: any, participants: any[], matches: any[]) {
+  const pointsWin = Math.max(0, Number(tournament?.points_win ?? 3));
+  const pointsDraw = Math.max(0, Number(tournament?.points_draw ?? 1));
+  const pointsLoss = Math.max(0, Number(tournament?.points_loss ?? 0));
+  const map = new Map<string, any>();
+  for (const participant of participants) {
+    map.set(String(participant.id), {
+      participantId: String(participant.id),
+      participant,
+      member: participant.member || null,
+      seed: Number(participant.seed || 0),
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      matchPoints: 0,
+      framesFor: 0,
+      framesAgainst: 0,
+      frameDiff: 0,
+      totalPointsFor: 0,
+      totalPointsAgainst: 0,
+      totalPointsDiff: 0,
+      maxBreak: 0,
+      breaks20Plus: 0,
+    });
+  }
+
+  for (const match of matches) {
+    if (String(match?.status || '').toUpperCase() !== 'COMPLETED') continue;
+    const aId = String(match?.player_a_participant_id || '');
+    const bId = String(match?.player_b_participant_id || '');
+    if (!aId || !bId) continue;
+    const a = map.get(aId);
+    const b = map.get(bId);
+    if (!a || !b) continue;
+    const aFrames = Number(match?.player_a_frames_won || 0);
+    const bFrames = Number(match?.player_b_frames_won || 0);
+    const aScore = Number(match?.player_a_total_points || 0);
+    const bScore = Number(match?.player_b_total_points || 0);
+    const aMaxBreak = Number(match?.player_a_max_break || 0);
+    const bMaxBreak = Number(match?.player_b_max_break || 0);
+    const a20Plus = Number(match?.player_a_20_plus_count || 0);
+    const b20Plus = Number(match?.player_b_20_plus_count || 0);
+
+    a.played += 1;
+    b.played += 1;
+    a.framesFor += aFrames;
+    a.framesAgainst += bFrames;
+    b.framesFor += bFrames;
+    b.framesAgainst += aFrames;
+    a.totalPointsFor += aScore;
+    a.totalPointsAgainst += bScore;
+    b.totalPointsFor += bScore;
+    b.totalPointsAgainst += aScore;
+    a.maxBreak = Math.max(a.maxBreak, aMaxBreak);
+    b.maxBreak = Math.max(b.maxBreak, bMaxBreak);
+    a.breaks20Plus += a20Plus;
+    b.breaks20Plus += b20Plus;
+
+    if (aFrames > bFrames) {
+      a.won += 1;
+      b.lost += 1;
+      a.matchPoints += pointsWin;
+      b.matchPoints += pointsLoss;
+    } else if (bFrames > aFrames) {
+      b.won += 1;
+      a.lost += 1;
+      b.matchPoints += pointsWin;
+      a.matchPoints += pointsLoss;
+    } else {
+      a.drawn += 1;
+      b.drawn += 1;
+      a.matchPoints += pointsDraw;
+      b.matchPoints += pointsDraw;
+    }
+  }
+
+  const rows = Array.from(map.values()).map((row) => ({
+    ...row,
+    frameDiff: row.framesFor - row.framesAgainst,
+    totalPointsDiff: row.totalPointsFor - row.totalPointsAgainst,
+  }));
+
+  rows.sort((a, b) => {
+    if (b.matchPoints !== a.matchPoints) return b.matchPoints - a.matchPoints;
+    if (b.frameDiff !== a.frameDiff) return b.frameDiff - a.frameDiff;
+    if (b.framesFor !== a.framesFor) return b.framesFor - a.framesFor;
+    if (b.totalPointsDiff !== a.totalPointsDiff) return b.totalPointsDiff - a.totalPointsDiff;
+    if (b.totalPointsFor !== a.totalPointsFor) return b.totalPointsFor - a.totalPointsFor;
+    if (b.breaks20Plus !== a.breaks20Plus) return b.breaks20Plus - a.breaks20Plus;
+    if (b.maxBreak !== a.maxBreak) return b.maxBreak - a.maxBreak;
+    if (a.seed > 0 && b.seed > 0 && a.seed !== b.seed) return a.seed - b.seed;
+    return String(a.member?.name || '').localeCompare(String(b.member?.name || ''));
+  });
+
+  return rows.map((row, index) => ({
+    ...row,
+    position: index + 1,
+  }));
 }
 
 async function listParticipantsForSeeding(tx: any, tournamentId: string) {
@@ -236,6 +365,24 @@ async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, 
     _max: { round_no: true },
   });
   const maxRound = Number(finalRound?._max?.round_no || 0);
+  const roundNo = Number(match.round_no || 0);
+  const loserParticipantId = winnerParticipantId
+    ? String(match.player_a_participant_id || '') === String(winnerParticipantId)
+      ? match.player_b_participant_id
+      : match.player_a_participant_id
+    : null;
+  if (loserParticipantId) {
+    const eliminationRank = roundNo > 0 && maxRound > 0
+      ? (2 ** Math.max(0, maxRound - roundNo)) + 1
+      : null;
+    await tx.tournamentParticipant.update({
+      where: { id: loserParticipantId },
+      data: {
+        status: 'ELIMINATED',
+        final_rank: eliminationRank,
+      },
+    });
+  }
   if (winnerParticipantId && Number(match.round_no || 0) >= maxRound) {
     await tx.tournament.update({
       where: { id: tournamentId },
@@ -246,11 +393,61 @@ async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, 
       data: { status: 'CHAMPION', final_rank: 1 },
     });
   } else {
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ACTIVE', final_rank: null },
+      });
+    }
     await tx.tournament.update({
       where: { id: tournamentId },
       data: { workflow_status: 'IN_PROGRESS' },
     });
   }
+}
+
+async function finalizeLeagueProgress(tx: any, tournament: any) {
+  const participants = await tx.tournamentParticipant.findMany({
+    where: { tournament_id: tournament.id },
+    orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+    include: {
+      member: { select: { id: true, name: true, member_code: true, email: true } },
+      signup: { select: { id: true, status: true, createdAt: true } },
+    },
+  });
+  const matches = await tx.tournamentMatch.findMany({
+    where: { tournament_id: tournament.id, stage_code: 'LEAGUE' },
+    orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+  });
+  const standings = buildLeagueStandings(tournament, participants, matches);
+  const standingsByParticipantId = new Map<string, any>(standings.map((row: any) => [String(row.participantId), row]));
+  const totalMatches = matches.filter((row: any) => row?.player_a_participant_id && row?.player_b_participant_id).length;
+  const completedMatches = matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
+  const workflowStatus = totalMatches > 0 && completedMatches >= totalMatches
+    ? 'COMPLETED'
+    : completedMatches > 0
+      ? 'IN_PROGRESS'
+      : 'SEEDED';
+
+  for (const participant of participants) {
+    const currentStatus = String(participant?.status || '').toUpperCase();
+    if (currentStatus === 'WITHDRAWN' || currentStatus === 'DISQUALIFIED') continue;
+    const standing = standingsByParticipantId.get(String(participant.id));
+    await tx.tournamentParticipant.update({
+      where: { id: participant.id },
+      data: {
+        status: workflowStatus === 'COMPLETED' && standing?.position === 1 ? 'CHAMPION' : 'ACTIVE',
+        final_rank: workflowStatus === 'COMPLETED' ? standing?.position || null : null,
+      },
+    });
+  }
+
+  await tx.tournament.update({
+    where: { id: tournament.id },
+    data: { workflow_status: workflowStatus },
+  });
+
+  return standings;
 }
 
 export const tournamentsService = {
@@ -399,9 +596,37 @@ export const tournamentsService = {
     });
   },
 
+  async getLeagueStandings(clubId: string, tournamentId: string) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const format = normalizeTournamentFormat(tournament.format);
+    if (format !== 'LEAGUE') throw new Error('Tournament format is not LEAGUE');
+
+    const [participants, matches] = await Promise.all([
+      db.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true, email: true } },
+          signup: { select: { id: true, status: true, createdAt: true } },
+        },
+      }),
+      db.tournamentMatch.findMany({
+        where: { tournament_id: tournamentId, stage_code: 'LEAGUE' },
+        orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+      }),
+    ]);
+
+    const standings = buildLeagueStandings(tournament, participants, matches);
+    return {
+      standings,
+      completedMatchCount: matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length,
+      totalMatchCount: matches.length,
+    };
+  },
+
   async generateKnockoutSchedule(clubId: string, tournamentId: string) {
     const tournament = await getOwnedTournament(clubId, tournamentId);
-    const format = String(tournament.format || 'KNOCKOUT').toUpperCase();
+    const format = normalizeTournamentFormat(tournament.format);
     if (format !== 'KNOCKOUT') throw new Error('Tournament format is not KNOCKOUT');
 
     return db.$transaction(async (tx: any) => {
@@ -462,9 +687,62 @@ export const tournamentsService = {
     });
   },
 
+  async generateLeagueSchedule(clubId: string, tournamentId: string) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const format = normalizeTournamentFormat(tournament.format);
+    if (format !== 'LEAGUE') throw new Error('Tournament format is not LEAGUE');
+
+    return db.$transaction(async (tx: any) => {
+      const existingCount = await tx.tournamentMatch.count({ where: { tournament_id: tournamentId } });
+      if (existingCount > 0) throw new Error('Schedule already generated');
+
+      const participants = await tx.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId, status: 'ACTIVE' },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true } },
+        },
+      });
+      if (participants.length < 2) throw new Error('At least 2 active participants required');
+
+      const rounds = buildLeagueRoundRobinPairs(participants);
+      const created: any[] = [];
+      for (let roundIndex = 0; roundIndex < rounds.length; roundIndex += 1) {
+        const roundPairs = rounds[roundIndex] || [];
+        let matchNo = 1;
+        for (const [a, b] of roundPairs) {
+          if (!a || !b) continue;
+          const row = await tx.tournamentMatch.create({
+            data: {
+              id: randomUUID(),
+              tournament_id: tournamentId,
+              stage_code: 'LEAGUE',
+              round_no: roundIndex + 1,
+              match_no: matchNo,
+              player_a_participant_id: (a as any)?.id || null,
+              player_b_participant_id: (b as any)?.id || null,
+              status: 'READY',
+              result_type: 'STANDARD',
+              best_of_frames: tournament.best_of_frames ?? null,
+            },
+          });
+          created.push(row);
+          matchNo += 1;
+        }
+      }
+
+      await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { workflow_status: 'SEEDED' },
+      });
+
+      return created;
+    });
+  },
+
   async resetKnockoutSchedule(clubId: string, tournamentId: string) {
     const tournament = await getOwnedTournament(clubId, tournamentId);
-    const format = String(tournament.format || 'KNOCKOUT').toUpperCase();
+    const format = normalizeTournamentFormat(tournament.format);
     if (format !== 'KNOCKOUT') throw new Error('Tournament format is not KNOCKOUT');
 
     return db.$transaction(async (tx: any) => {
@@ -518,6 +796,73 @@ export const tournamentsService = {
     });
   },
 
+  async resetLeagueSchedule(clubId: string, tournamentId: string) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const format = normalizeTournamentFormat(tournament.format);
+    if (format !== 'LEAGUE') throw new Error('Tournament format is not LEAGUE');
+
+    return db.$transaction(async (tx: any) => {
+      const matches = await tx.tournamentMatch.findMany({
+        where: { tournament_id: tournamentId, stage_code: 'LEAGUE' },
+        select: {
+          id: true,
+          started_at: true,
+          ended_at: true,
+        },
+      });
+      if (matches.length === 0) throw new Error('Schedule not generated yet');
+
+      const matchIds = matches.map((row: any) => String(row.id || '')).filter(Boolean);
+      const hasStartedMatch = matches.some((row: any) => row?.started_at || row?.ended_at);
+      if (hasStartedMatch) throw new Error('Schedule already started and cannot be reset');
+
+      const framesCount = matchIds.length > 0
+        ? await tx.tournamentFrame.count({
+            where: { tournament_match_id: { in: matchIds } },
+          })
+        : 0;
+      if (framesCount > 0) throw new Error('Schedule already started and cannot be reset');
+
+      const breaksCount = matchIds.length > 0
+        ? await tx.breakRecord.count({
+            where: { tournament_match_id: { in: matchIds } },
+          })
+        : 0;
+      if (breaksCount > 0) throw new Error('Schedule already started and cannot be reset');
+
+      if (matchIds.length > 0) {
+        await tx.tournamentMatch.deleteMany({
+          where: { id: { in: matchIds } },
+        });
+      }
+
+      await tx.tournamentParticipant.updateMany({
+        where: {
+          tournament_id: tournamentId,
+          status: { in: ['ACTIVE', 'CHAMPION'] },
+        },
+        data: {
+          status: 'ACTIVE',
+          final_rank: null,
+        },
+      });
+
+      await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { workflow_status: 'REGISTRATION' },
+      });
+
+      return tx.tournamentParticipant.findMany({
+        where: { tournament_id: tournamentId },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true, email: true } },
+          signup: { select: { id: true, status: true, createdAt: true } },
+        },
+      });
+    });
+  },
+
   async listMatches(clubId: string, tournamentId: string) {
     await getOwnedTournament(clubId, tournamentId);
     return db.tournamentMatch.findMany({
@@ -541,6 +886,11 @@ export const tournamentsService = {
   async recordMatchResult(clubId: string, tournamentId: string, matchId: string, payload: any) {
     await getOwnedTournament(clubId, tournamentId);
     return db.$transaction(async (tx: any) => {
+      const tournament = await tx.tournament.findUnique({
+        where: { id: tournamentId },
+      });
+      if (!tournament) throw new Error('Not found');
+      const format = normalizeTournamentFormat(tournament.format);
       const match = await tx.tournamentMatch.findUnique({
         where: { id: matchId },
         include: {
@@ -592,7 +942,11 @@ export const tournamentsService = {
           },
         });
 
-        await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
+        if (format === 'KNOCKOUT') {
+          await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
+        } else {
+          await finalizeLeagueProgress(tx, tournament);
+        }
 
         return tx.tournamentMatch.findUnique({
           where: { id: matchId },
@@ -641,7 +995,7 @@ export const tournamentsService = {
         : playerAFramesWon > playerBFramesWon
           ? match.player_a_participant_id
           : match.player_b_participant_id;
-      if (!winnerParticipantId) throw new Error('Knockout match cannot end in a draw');
+      if (!winnerParticipantId && format === 'KNOCKOUT') throw new Error('Knockout match cannot end in a draw');
 
       const updated = await tx.tournamentMatch.update({
         where: { id: matchId },
@@ -661,7 +1015,11 @@ export const tournamentsService = {
       });
 
       await recomputeMatchBreakStats(tx, matchId);
-      await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
+      if (format === 'KNOCKOUT') {
+        await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
+      } else {
+        await finalizeLeagueProgress(tx, tournament);
+      }
 
       return tx.tournamentMatch.findUnique({
         where: { id: matchId },

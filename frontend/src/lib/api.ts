@@ -1109,7 +1109,20 @@ export async function getMyClubTournaments(apiUrl: string, memberId: string) {
 export async function createClubTournament(
   apiUrl: string,
   memberId: string,
-  payload: { title: string; description?: string | null; signupGuide?: string | null; seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM'; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: {
+    title: string;
+    description?: string | null;
+    signupGuide?: string | null;
+    format?: 'KNOCKOUT' | 'LEAGUE';
+    seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM';
+    bestOfFrames?: number | null;
+    pointsWin?: number;
+    pointsDraw?: number;
+    pointsLoss?: number;
+    capacity?: number;
+    startsAt?: string | null;
+    signupClosesAt?: string | null;
+  }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments`, {
     method: 'POST',
@@ -1127,7 +1140,20 @@ export async function updateClubTournament(
   apiUrl: string,
   memberId: string,
   id: string,
-  payload: { title?: string; description?: string | null; signupGuide?: string | null; seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM'; capacity?: number; startsAt?: string | null; signupClosesAt?: string | null }
+  payload: {
+    title?: string;
+    description?: string | null;
+    signupGuide?: string | null;
+    format?: 'KNOCKOUT' | 'LEAGUE';
+    seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM';
+    bestOfFrames?: number | null;
+    pointsWin?: number;
+    pointsDraw?: number;
+    pointsLoss?: number;
+    capacity?: number;
+    startsAt?: string | null;
+    signupClosesAt?: string | null;
+  }
 ) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(id)}`, {
     method: 'PUT',
@@ -1283,6 +1309,19 @@ export async function generateTournamentKnockoutSchedule(apiUrl: string, memberI
   return res.json();
 }
 
+export async function generateTournamentLeagueSchedule(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/schedule/league/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '生成循環賽賽程失敗');
+  }
+  return res.json();
+}
+
 export async function resetTournamentKnockoutSchedule(apiUrl: string, memberId: string, tournamentId: string) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/schedule/knockout/reset`, {
     method: 'POST',
@@ -1296,6 +1335,19 @@ export async function resetTournamentKnockoutSchedule(apiUrl: string, memberId: 
   return res.json();
 }
 
+export async function resetTournamentLeagueSchedule(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/schedule/league/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '重建循環賽賽程失敗');
+  }
+  return res.json();
+}
+
 export async function getTournamentMatches(apiUrl: string, memberId: string, tournamentId: string) {
   const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/matches`, {
     headers: { 'x-member-id': memberId },
@@ -1304,6 +1356,18 @@ export async function getTournamentMatches(apiUrl: string, memberId: string, tou
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '讀取賽程失敗');
+  }
+  return res.json();
+}
+
+export async function getTournamentStandings(apiUrl: string, memberId: string, tournamentId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/standings`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取積分榜失敗');
   }
   return res.json();
 }

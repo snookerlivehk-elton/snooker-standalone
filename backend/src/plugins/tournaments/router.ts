@@ -54,12 +54,22 @@ export function createTournamentRouter() {
     const title = String(payload.title || '').trim();
     const description = payload.description == null ? null : String(payload.description).trim() || null;
     const signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
+    const format = String(payload.format || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
     const seedMode = String(payload.seedMode || 'MANUAL').trim().toUpperCase();
     const capacity = Number(payload.capacity ?? 32);
+    const bestOfFrames = payload.bestOfFrames == null || payload.bestOfFrames === '' ? null : Number(payload.bestOfFrames);
+    const pointsWin = payload.pointsWin == null || payload.pointsWin === '' ? 3 : Number(payload.pointsWin);
+    const pointsDraw = payload.pointsDraw == null || payload.pointsDraw === '' ? 1 : Number(payload.pointsDraw);
+    const pointsLoss = payload.pointsLoss == null || payload.pointsLoss === '' ? 0 : Number(payload.pointsLoss);
     const startsAtRaw = payload.startsAt;
     const signupClosesAtRaw = payload.signupClosesAt ?? payload.deadline;
     if (!title) return res.status(400).json({ error: 'title required' });
+    if (!['KNOCKOUT', 'LEAGUE'].includes(format)) return res.status(400).json({ error: 'format invalid' });
     const cap = Number.isFinite(capacity) ? Math.max(1, Math.min(512, Math.floor(capacity))) : 32;
+    if (bestOfFrames != null && (!Number.isFinite(bestOfFrames) || bestOfFrames <= 0)) return res.status(400).json({ error: 'bestOfFrames invalid' });
+    if (!Number.isFinite(pointsWin)) return res.status(400).json({ error: 'pointsWin invalid' });
+    if (!Number.isFinite(pointsDraw)) return res.status(400).json({ error: 'pointsDraw invalid' });
+    if (!Number.isFinite(pointsLoss)) return res.status(400).json({ error: 'pointsLoss invalid' });
     const startsAt = startsAtRaw ? new Date(String(startsAtRaw)) : null;
     if (startsAtRaw && (!startsAt || Number.isNaN(startsAt.getTime()))) return res.status(400).json({ error: 'startsAt invalid' });
     const signupClosesAt = signupClosesAtRaw ? new Date(String(signupClosesAtRaw)) : null;
@@ -73,7 +83,12 @@ export function createTournamentRouter() {
           title,
           description,
           signupGuide,
+          format,
           seed_mode: seedMode === 'RANDOM' || seedMode === 'RANKING' ? seedMode : 'MANUAL',
+          best_of_frames: bestOfFrames == null ? null : Math.max(1, Math.floor(bestOfFrames)),
+          points_win: Math.max(0, Math.floor(pointsWin)),
+          points_draw: Math.max(0, Math.floor(pointsDraw)),
+          points_loss: Math.max(0, Math.floor(pointsLoss)),
           capacity: cap,
           startsAt,
           signupClosesAt,
@@ -97,6 +112,13 @@ export function createTournamentRouter() {
     if (payload.title != null) patch.title = String(payload.title || '').trim();
     if (payload.description !== undefined) patch.description = payload.description == null ? null : String(payload.description).trim() || null;
     if (payload.signupGuide !== undefined) patch.signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
+    if (payload.format !== undefined) {
+      const format = String(payload.format || '').trim().toUpperCase();
+      if (format && !['KNOCKOUT', 'LEAGUE'].includes(format)) {
+        return res.status(400).json({ error: 'format invalid' });
+      }
+      patch.format = format || 'KNOCKOUT';
+    }
     if (payload.seedMode !== undefined) {
       const seedMode = String(payload.seedMode || '').trim().toUpperCase();
       if (seedMode && !['MANUAL', 'RANKING', 'RANDOM'].includes(seedMode)) {
@@ -108,6 +130,31 @@ export function createTournamentRouter() {
       const n = Number(payload.capacity);
       if (!Number.isFinite(n)) return res.status(400).json({ error: 'capacity invalid' });
       patch.capacity = Math.max(1, Math.min(512, Math.floor(n)));
+    }
+    if (payload.bestOfFrames !== undefined) {
+      const v = payload.bestOfFrames;
+      if (v == null || String(v).trim() === '') {
+        patch.best_of_frames = null;
+      } else {
+        const n = Number(v);
+        if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'bestOfFrames invalid' });
+        patch.best_of_frames = Math.max(1, Math.floor(n));
+      }
+    }
+    if (payload.pointsWin !== undefined) {
+      const n = Number(payload.pointsWin);
+      if (!Number.isFinite(n)) return res.status(400).json({ error: 'pointsWin invalid' });
+      patch.points_win = Math.max(0, Math.floor(n));
+    }
+    if (payload.pointsDraw !== undefined) {
+      const n = Number(payload.pointsDraw);
+      if (!Number.isFinite(n)) return res.status(400).json({ error: 'pointsDraw invalid' });
+      patch.points_draw = Math.max(0, Math.floor(n));
+    }
+    if (payload.pointsLoss !== undefined) {
+      const n = Number(payload.pointsLoss);
+      if (!Number.isFinite(n)) return res.status(400).json({ error: 'pointsLoss invalid' });
+      patch.points_loss = Math.max(0, Math.floor(n));
     }
     if (payload.startsAt !== undefined) {
       const v = payload.startsAt;
@@ -318,6 +365,36 @@ export function createTournamentRouter() {
     }
   });
 
+  router.post('/tournaments/:id/schedule/league/generate', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.generateLeagueSchedule(clubId, id);
+      res.json({ ok: true, matches: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/schedule/league/reset', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const rows = await tournamentsService.resetLeagueSchedule(clubId, id);
+      res.json({ ok: true, participants: rows });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
   router.get('/tournaments/:id/matches', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
@@ -327,6 +404,21 @@ export function createTournamentRouter() {
     try {
       const rows = await tournamentsService.listMatches(clubId, id);
       res.json(rows);
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.get('/tournaments/:id/standings', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const result = await tournamentsService.getLeagueStandings(clubId, id);
+      res.json(result);
     } catch (e: any) {
       const message = String(e?.message || e);
       res.status(message === 'Not found' ? 404 : 400).json({ error: message });

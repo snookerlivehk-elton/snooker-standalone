@@ -7,14 +7,17 @@ import {
   confirmTournamentSignup,
   createTournamentMatchBreak,
   createClubTournament,
+  generateTournamentLeagueSchedule,
   generateTournamentKnockoutSchedule,
   generateTournamentParticipants,
   getMyClubTournaments,
   getTournamentMatches,
   getTournamentParticipants,
   getTournamentSignups,
+  getTournamentStandings,
   publishClubTournament,
   recordTournamentMatchResult,
+  resetTournamentLeagueSchedule,
   resetTournamentKnockoutSchedule,
   updateTournamentSeedMode,
   updateTournamentParticipant,
@@ -36,6 +39,7 @@ type EditableFrame = {
   playerBHighestBreak: string;
 };
 
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
@@ -67,6 +71,14 @@ function formatParticipantLabel(participant: any) {
   const seed = Number(participant?.seed || 0);
   const prefix = seed > 0 ? `#${seed} ` : '';
   return `${prefix}${formatMemberLabel(participant?.member)}`;
+}
+
+function normalizeTournamentFormat(value: any): TournamentFormat {
+  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+}
+
+function formatTournamentFormatLabel(value: any) {
+  return normalizeTournamentFormat(value) === 'LEAGUE' ? 'League' : 'Knockout';
 }
 
 function normalizeSeedMode(value: any): TournamentSeedMode {
@@ -102,6 +114,24 @@ function formatMatchResultTypeLabel(value: any) {
   if (resultType === 'WALKOVER') return 'W/O';
   if (resultType === 'FORFEIT') return '棄權';
   return '正常完賽';
+}
+
+function formatParticipantStatusLabel(value: any) {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === 'CHAMPION') return '冠軍';
+  if (status === 'ELIMINATED') return '已淘汰';
+  if (status === 'WITHDRAWN') return '退出';
+  if (status === 'DISQUALIFIED') return '取消資格';
+  return status || '-';
+}
+
+function formatFinalRankLabel(value: any) {
+  const rank = Number(value || 0);
+  if (!Number.isFinite(rank) || rank <= 0) return '-';
+  if (rank === 1) return '冠軍';
+  if (rank === 2) return '亞軍';
+  if (rank === 3) return '四強';
+  return `第 ${rank} 名`;
 }
 
 function buildFramesFromMatch(match: any): EditableFrame[] {
@@ -151,6 +181,11 @@ function formatKnockoutRoundLabel(match: any, participantCount: number) {
   return `Round ${Math.max(1, roundNo - roundOffset)}`;
 }
 
+function formatLeagueRoundLabel(match: any) {
+  const roundNo = Number(match?.round_no || 0);
+  return roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽';
+}
+
 function buildKnockoutSummary(participantsRows: any[], matchesRows: any[]) {
   const participantCount = participantsRows.length;
   const bracketSize = participantCount > 1 ? nextPowerOfTwo(participantCount) : 0;
@@ -159,6 +194,15 @@ function buildKnockoutSummary(participantsRows: any[], matchesRows: any[]) {
   const readyCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
   const pendingCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
   return { participantCount, bracketSize, byeCount, completedCount, readyCount, pendingCount };
+}
+
+function buildLeagueSummary(participantsRows: any[], matchesRows: any[]) {
+  const participantCount = participantsRows.length;
+  const totalRounds = participantCount > 1 ? participantCount - 1 + (participantCount % 2 === 1 ? 1 : 0) : 0;
+  const completedCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
+  const readyCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
+  const pendingCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
+  return { participantCount, totalRounds, totalMatches: matchesRows.length, completedCount, readyCount, pendingCount };
 }
 
 function getBracketColumnPaddingTop(roundIndex: number) {
@@ -186,7 +230,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [guide, setGuide] = useState('');
+  const [format, setFormat] = useState<TournamentFormat>('KNOCKOUT');
   const [seedMode, setSeedMode] = useState<TournamentSeedMode>('MANUAL');
+  const [bestOfFrames, setBestOfFrames] = useState('5');
+  const [pointsWin, setPointsWin] = useState('3');
+  const [pointsDraw, setPointsDraw] = useState('1');
+  const [pointsLoss, setPointsLoss] = useState('0');
   const [capacity, setCapacity] = useState('32');
   const [startsAt, setStartsAt] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -202,6 +251,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [participantSeedSavingId, setParticipantSeedSavingId] = useState('');
   const [seedModeSaving, setSeedModeSaving] = useState(false);
   const [matchesRows, setMatchesRows] = useState<any[]>([]);
+  const [standingsRows, setStandingsRows] = useState<any[]>([]);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [scheduleResetSaving, setScheduleResetSaving] = useState(false);
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -236,7 +286,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setTitle('');
     setDescription('');
     setGuide('');
+    setFormat('KNOCKOUT');
     setSeedMode('MANUAL');
+    setBestOfFrames('5');
+    setPointsWin('3');
+    setPointsDraw('1');
+    setPointsLoss('0');
     setCapacity('32');
     setDeadline('');
     setStartsAt('');
@@ -247,6 +302,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setParticipantSeedSavingId('');
     setSeedModeSaving(false);
     setMatchesRows([]);
+    setStandingsRows([]);
     setSelectedMatchId('');
     setResultStartedAt('');
     setResultEndedAt('');
@@ -310,26 +366,34 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     if (!operatorId || !enabled || !selectedId) {
       setParticipantsRows([]);
       setMatchesRows([]);
+      setStandingsRows([]);
       return;
     }
+    const selectedRow = rows.find((row: any) => String(row?.id || '') === selectedId) || null;
+    const selectedFormat = normalizeTournamentFormat(selectedRow?.format);
     setParticipantsLoading(true);
     setMatchesLoading(true);
     try {
-      const [participantsNext, matchesNext] = await Promise.all([
+      const requests: Promise<any>[] = [
         getTournamentParticipants(API_URL, operatorId, selectedId).catch(() => []),
         getTournamentMatches(API_URL, operatorId, selectedId).catch(() => []),
-      ]);
+      ];
+      if (selectedFormat === 'LEAGUE') {
+        requests.push(getTournamentStandings(API_URL, operatorId, selectedId).catch(() => ({ standings: [] })));
+      }
+      const [participantsNext, matchesNext, standingsNext] = await Promise.all(requests);
       const normalizedParticipants = Array.isArray(participantsNext) ? participantsNext : [];
       setParticipantsRows(normalizedParticipants);
       setParticipantSeedDrafts(Object.fromEntries(normalizedParticipants.map((row: any, index: number) => [String(row?.id || index), String(row?.seed ?? index + 1)])));
       setMatchesRows(Array.isArray(matchesNext) ? matchesNext : []);
+      setStandingsRows(selectedFormat === 'LEAGUE' && Array.isArray((standingsNext as any)?.standings) ? (standingsNext as any).standings : []);
     } catch (e: any) {
       showNotice(e?.message || '載入賽程資料失敗', 3000);
     } finally {
       setParticipantsLoading(false);
       setMatchesLoading(false);
     }
-  }, [enabled, operatorId, selectedId, showNotice]);
+  }, [enabled, operatorId, rows, selectedId, showNotice]);
 
   useEffect(() => {
     loadRows();
@@ -346,10 +410,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedTournament = rows.find((row: any) => String(row?.id || '') === selectedId) || null;
   useEffect(() => {
     if (!selectedTournament) return;
+    setFormat(normalizeTournamentFormat(selectedTournament?.format));
     setSeedMode(normalizeSeedMode(selectedTournament?.seed_mode));
+    setBestOfFrames(String(selectedTournament?.best_of_frames ?? 5));
+    setPointsWin(String(selectedTournament?.points_win ?? 3));
+    setPointsDraw(String(selectedTournament?.points_draw ?? 1));
+    setPointsLoss(String(selectedTournament?.points_loss ?? 0));
   }, [selectedTournament]);
 
   const selectedMatch = matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null;
+  const tournamentFormat = normalizeTournamentFormat(selectedTournament?.format || format);
+  const isLeague = tournamentFormat === 'LEAGUE';
   const workflowStatus = String(selectedTournament?.workflow_status || 'DRAFT').trim().toUpperCase();
   const hasParticipants = participantsRows.length > 0;
   const hasSchedule = matchesRows.length > 0;
@@ -423,6 +494,30 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       });
   }, [matchesRows, participantsRows.length]);
   const knockoutSummary = useMemo(() => buildKnockoutSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
+  const leagueSummary = useMemo(() => buildLeagueSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
+  const leagueRounds = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    for (const row of matchesRows) {
+      const roundNo = Number(row?.round_no || 0);
+      if (!grouped.has(roundNo)) grouped.set(roundNo, []);
+      grouped.get(roundNo)!.push(row);
+    }
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([roundNo, items]) => ({
+        roundNo,
+        label: roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽',
+        items: [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0)),
+      }));
+  }, [matchesRows]);
+  const podiumSummary = useMemo(() => {
+    const champion = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 1) || null;
+    const runnerUp = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 2) || null;
+    const semiFinalists = participantsRows
+      .filter((row: any) => Number(row?.final_rank || 0) === 3)
+      .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0));
+    return { champion, runnerUp, semiFinalists };
+  }, [participantsRows]);
 
   if (!enabled) {
     return (
@@ -439,17 +534,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         <h2 className="text-xl font-bold">比賽報名（管理）</h2>
         <HelpGuide
           title="比賽報名（管理）"
-            intro="建立、更新、上架或關閉比賽報名，並逐步管理待確認報名、正式參賽名單、淘汰賽賽程、賽果與比賽 20+。"
+            intro="建立、更新、上架或關閉比賽報名，並逐步管理待確認報名、正式參賽名單、Knockout / League 賽程、賽果與比賽 20+。"
           steps={[
-            '填寫標題、上限、截止日期、比賽時間（可選）、詳情與參賽指引後按「新增」。',
+            '填寫標題、賽制、局數、上限、截止日期、比賽時間（可選）、詳情與參賽指引後按「新增」。',
               '在下方列表可「選擇」某個比賽以查看報名名單與賽事工作台。',
             '按「上架」讓會員端可見並可報名；按「關閉」停止報名與後續操作。',
-              '確認報名後，可生成正式參賽名單與淘汰賽賽程，再在同頁輸入每局賽果與記錄比賽 20+。',
+              '確認報名後，可生成正式名單與對應賽制賽程，再在同頁輸入每局賽果與記錄比賽 20+。',
           ]}
           tips={[
             '建議先完成內容後再上架，避免會員看到未完成資訊。',
             '如要在場館公開頁顯示比賽入口，請同時於場館公開設定開啟「公開比賽入口」。',
-              'Phase 1 目前先接上 Knockout MVP；League 積分榜與更多賽事工作流之後再補。',
+              'Phase 1 現已支援 Knockout bracket 與 League round-robin + standings，之後再補 live scoring 與更完整統計。',
           ]}
         />
       </div>
@@ -462,6 +557,13 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：週末公開賽" />
         </div>
         <div className="md:col-span-1">
+          <label className="block text-sm mb-1 cue-muted">賽制</label>
+          <select value={format} onChange={(e) => setFormat(normalizeTournamentFormat(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
+            <option value="KNOCKOUT">Knockout</option>
+            <option value="LEAGUE">League</option>
+          </select>
+        </div>
+        <div className="md:col-span-1">
           <label className="block text-sm mb-1 cue-muted">上限</label>
           <input value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="32" />
         </div>
@@ -472,6 +574,22 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <option value="RANKING">按評分排序</option>
             <option value="RANDOM">隨機抽籤</option>
           </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm mb-1 cue-muted">每場局數 / Best Of</label>
+          <input value={bestOfFrames} onChange={(e) => setBestOfFrames(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="5" type="number" min={1} />
+        </div>
+        <div className="md:col-span-1">
+          <label className="block text-sm mb-1 cue-muted">勝分</label>
+          <input value={pointsWin} onChange={(e) => setPointsWin(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+        </div>
+        <div className="md:col-span-1">
+          <label className="block text-sm mb-1 cue-muted">和分</label>
+          <input value={pointsDraw} onChange={(e) => setPointsDraw(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+        </div>
+        <div className="md:col-span-1">
+          <label className="block text-sm mb-1 cue-muted">負分</label>
+          <input value={pointsLoss} onChange={(e) => setPointsLoss(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm mb-1 cue-muted">截止日期</label>
@@ -500,6 +618,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 if (!trimmedTitle) throw new Error('請輸入標題');
                 const cap = Number(capacity || 32);
                 if (!Number.isFinite(cap) || cap <= 0) throw new Error('上限不正確');
+                const bestOf = Math.max(1, Math.floor(Number(bestOfFrames || 1)));
+                if (!Number.isFinite(bestOf) || bestOf <= 0) throw new Error('局數設定不正確');
+                const pw = Math.max(0, Math.floor(Number(pointsWin || 0)));
+                const pd = Math.max(0, Math.floor(Number(pointsDraw || 0)));
+                const pl = Math.max(0, Math.floor(Number(pointsLoss || 0)));
+                if (!Number.isFinite(pw) || !Number.isFinite(pd) || !Number.isFinite(pl)) throw new Error('League 計分設定不正確');
                 const deadlineIso = deadline ? new Date(`${deadline}T23:59:59`).toISOString() : null;
                 const startsIso = startsAt ? new Date(startsAt).toISOString() : null;
                 if (startsAt && !Number.isFinite(new Date(startsAt).getTime())) throw new Error('比賽時間格式不正確');
@@ -510,7 +634,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     title: trimmedTitle,
                     description,
                     signupGuide: guide,
+                    format,
                     seedMode,
+                    bestOfFrames: bestOf,
+                    pointsWin: pw,
+                    pointsDraw: pd,
+                    pointsLoss: pl,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
@@ -521,7 +650,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     title: trimmedTitle,
                     description,
                     signupGuide: guide,
+                    format,
                     seedMode,
+                    bestOfFrames: bestOf,
+                    pointsWin: pw,
+                    pointsDraw: pd,
+                    pointsLoss: pl,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
@@ -568,6 +702,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <tr className="cue-muted border-b cue-border">
                   <th className="py-2 px-2">狀態</th>
                   <th className="py-2 px-2">標題</th>
+                  <th className="py-2 px-2">賽制</th>
                   <th className="py-2 px-2">上限</th>
                   <th className="py-2 px-2">截止</th>
                   <th className="py-2 px-2">操作</th>
@@ -586,6 +721,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     <tr key={id} className={`border-b cue-border hover:brightness-95 ${isSelected ? 'bg-white/5' : ''}`}>
                       <td className="py-2 px-2 whitespace-nowrap">{status || '-'}</td>
                       <td className="py-2 px-2 font-semibold">{String(row?.title || '')}</td>
+                      <td className="py-2 px-2 cue-muted">{formatTournamentFormatLabel(row?.format)}</td>
                       <td className="py-2 px-2">{cap}</td>
                       <td className="py-2 px-2">{closes}</td>
                       <td className="py-2 px-2">
@@ -598,7 +734,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               setTitle(String(row?.title || ''));
                               setDescription(String(row?.description || ''));
                               setGuide(String(row?.signupGuide || ''));
+                              setFormat(normalizeTournamentFormat(row?.format));
                               setSeedMode(normalizeSeedMode(row?.seed_mode));
+                              setBestOfFrames(String(row?.best_of_frames ?? 5));
+                              setPointsWin(String(row?.points_win ?? 3));
+                              setPointsDraw(String(row?.points_draw ?? 1));
+                              setPointsLoss(String(row?.points_loss ?? 0));
                               setCapacity(String(row?.capacity ?? 32));
                               setDeadline(row?.signupClosesAt ? String(row.signupClosesAt).slice(0, 10) : '');
                               if (row?.startsAt) {
@@ -783,8 +924,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         <div className="mt-4 cue-surface-strong rounded-lg p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
             <div>
-              <div className="font-semibold">正式參賽名單 / 淘汰賽工作台</div>
-              <div className="text-xs cue-muted mt-1">先由已確認報名生成正式名單，再按 `seedMode` 排位並生成 Knockout 賽程。</div>
+              <div className="font-semibold">正式參賽名單 / {isLeague ? 'League' : 'Knockout'} 工作台</div>
+              <div className="text-xs cue-muted mt-1">
+                先由已確認報名生成正式名單，再按目前設定生成 {isLeague ? 'League round-robin' : 'Knockout'} 賽程。
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -808,17 +951,21 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 disabled={!canGenerateSchedule}
                 className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateSchedule ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
                 onClick={async () => {
-                  if (!confirm('確定按目前正式名單生成 Knockout 賽程？')) return;
+                  if (!confirm(`確定按目前正式名單生成 ${isLeague ? 'League' : 'Knockout'} 賽程？`)) return;
                   try {
-                    await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+                    if (isLeague) {
+                      await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+                    } else {
+                      await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+                    }
                     await loadSelectedPhase1Data();
-                    showNotice('已生成淘汰賽賽程');
+                    showNotice(`已生成${isLeague ? '循環賽' : '淘汰賽'}賽程`);
                   } catch (e: any) {
-                    showNotice(e?.message || '生成淘汰賽賽程失敗', 3000);
+                    showNotice(e?.message || `生成${isLeague ? '循環賽' : '淘汰賽'}賽程失敗`, 3000);
                   }
                 }}
               >
-                生成 Knockout 賽程
+                {isLeague ? '生成 League 賽程' : '生成 Knockout 賽程'}
               </button>
               <button
                 type="button"
@@ -826,16 +973,20 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 className={`px-3 py-2 rounded text-sm font-semibold ${!canResetSchedule || scheduleResetSaving ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
                 onClick={async () => {
                   if (!selectedId) return;
-                  if (!confirm('確定要重建 Knockout 賽程？現有 bracket 將被清空，但正式名單會保留。')) return;
+                  if (!confirm(`確定要重建${isLeague ? ' League ' : ' Knockout '}賽程？現有賽程將被清空，但正式名單會保留。`)) return;
                   if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
                   try {
                     setScheduleResetSaving(true);
                     setSelectedMatchId('');
-                    await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+                    if (isLeague) {
+                      await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+                    } else {
+                      await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+                    }
                     await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-                    showNotice('已重建淘汰賽賽程，可重新調整 seed 與生成 bracket');
+                    showNotice(`已重建${isLeague ? '循環賽' : '淘汰賽'}賽程，可重新調整 seed 與重新生成`);
                   } catch (e: any) {
-                    showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
+                    showNotice(e?.message || `重建${isLeague ? '循環賽' : '淘汰賽'}賽程失敗`, 3500);
                   } finally {
                     setScheduleResetSaving(false);
                   }
@@ -859,34 +1010,68 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <div className="font-semibold mt-1">{formatWorkflowStatusLabel(workflowStatus)}</div>
             </div>
             <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">Seed 模式</div>
-              <div className="font-semibold mt-1">{formatSeedModeLabel(seedMode)}</div>
+              <div className="text-xs cue-muted">賽制</div>
+              <div className="font-semibold mt-1">{formatTournamentFormatLabel(tournamentFormat)}</div>
             </div>
             <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">正式參賽者 / 籤表</div>
-              <div className="font-semibold mt-1">{knockoutSummary.participantCount || 0} / {knockoutSummary.bracketSize || '-'}</div>
+              <div className="text-xs cue-muted">{isLeague ? '正式參賽者 / 輪次' : '正式參賽者 / 籤表'}</div>
+              <div className="font-semibold mt-1">
+                {isLeague
+                  ? `${leagueSummary.participantCount || 0} / ${leagueSummary.totalRounds || '-'}`
+                  : `${knockoutSummary.participantCount || 0} / ${knockoutSummary.bracketSize || '-'}`
+                }
+              </div>
             </div>
             <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">輪空 Bye</div>
-              <div className="font-semibold mt-1">{knockoutSummary.byeCount}</div>
+              <div className="text-xs cue-muted">{isLeague ? 'Best Of / 計分' : '輪空 Bye'}</div>
+              <div className="font-semibold mt-1">
+                {isLeague
+                  ? `BO${bestOfFrames || '-'} / ${pointsWin}-${pointsDraw}-${pointsLoss}`
+                  : knockoutSummary.byeCount}
+              </div>
             </div>
             <div className="cue-surface rounded-lg p-3">
               <div className="text-xs cue-muted">賽程進度</div>
-              <div className="font-semibold mt-1">{knockoutSummary.completedCount} 完成 / {knockoutSummary.readyCount} 就緒 / {knockoutSummary.pendingCount} 待定</div>
+              <div className="font-semibold mt-1">
+                {isLeague
+                  ? `${leagueSummary.completedCount} 完成 / ${leagueSummary.readyCount} 就緒 / ${leagueSummary.pendingCount} 待定`
+                  : `${knockoutSummary.completedCount} 完成 / ${knockoutSummary.readyCount} 就緒 / ${knockoutSummary.pendingCount} 待定`
+                }
+              </div>
             </div>
           </div>
+          {!isLeague && (podiumSummary.champion || podiumSummary.runnerUp || podiumSummary.semiFinalists.length > 0) ? (
+            <div className="grid gap-3 md:grid-cols-3 mb-4">
+              <div className="cue-surface rounded-lg p-3">
+                <div className="text-xs cue-muted">冠軍</div>
+                <div className="font-semibold mt-1">{podiumSummary.champion ? formatParticipantLabel(podiumSummary.champion) : '-'}</div>
+              </div>
+              <div className="cue-surface rounded-lg p-3">
+                <div className="text-xs cue-muted">亞軍</div>
+                <div className="font-semibold mt-1">{podiumSummary.runnerUp ? formatParticipantLabel(podiumSummary.runnerUp) : '-'}</div>
+              </div>
+              <div className="cue-surface rounded-lg p-3">
+                <div className="text-xs cue-muted">四強</div>
+                <div className="font-semibold mt-1">
+                  {podiumSummary.semiFinalists.length > 0
+                    ? podiumSummary.semiFinalists.map((row: any) => formatParticipantLabel(row)).join(' / ')
+                    : '-'}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="text-xs cue-muted mb-4">
             {!confirmedRows.length
               ? '先確認至少 1 位報名者，之後才可生成正式名單。'
               : hasSchedule
                 ? hasPlayedMatches
-                  ? '賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建 bracket。'
-                  : '賽程已生成但尚未開打，可使用「重建賽程」清空 bracket，回到可調整 seed 的狀態。'
+                  ? `賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
+                  : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? 'League' : 'Knockout'}賽程。`
                 : !hasParticipants
-                  ? '先生成正式名單，再決定 seedMode 與 Knockout 賽程。'
+                  ? `先生成正式名單，再決定 seedMode 與${isLeague ? ' League' : ' Knockout'}賽程。`
                   : participantsRows.length < 2
-                    ? '正式名單至少需要 2 位有效參賽者才可生成 Knockout 賽程。'
-                    : '目前可調整種子及生成 Knockout 賽程。'}
+                    ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? ' League' : ' Knockout'}賽程。`
+                    : `目前可調整種子及生成${isLeague ? ' League' : ' Knockout'}賽程。`}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -942,6 +1127,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                         <th className="py-2 px-2">Seed</th>
                         <th className="py-2 px-2">球手</th>
                         <th className="py-2 px-2">狀態</th>
+                        <th className="py-2 px-2">名次</th>
                         <th className="py-2 px-2">操作</th>
                       </tr>
                     </thead>
@@ -963,7 +1149,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                             />
                           </td>
                           <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row)}</td>
-                          <td className="py-2 px-2 cue-muted">{String(row?.status || '-')}</td>
+                          <td className="py-2 px-2 cue-muted">{formatParticipantStatusLabel(row?.status)}</td>
+                          <td className="py-2 px-2 cue-muted">{formatFinalRankLabel(row?.final_rank)}</td>
                           <td className="py-2 px-2">
                             <button
                               type="button"
@@ -997,8 +1184,46 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
 
             <div>
+              {isLeague ? (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="font-semibold">League 積分榜</div>
+                    <div className="text-xs cue-muted">{standingsRows.length} 人</div>
+                  </div>
+                  {standingsRows.length === 0 ? (
+                    <div className="text-sm cue-muted">賽程生成後會在這裡顯示 standings</div>
+                  ) : (
+                    <div className="overflow-x-auto -mx-2 px-2">
+                      <table className="w-full text-left border-collapse text-sm">
+                        <thead>
+                          <tr className="cue-muted border-b cue-border">
+                            <th className="py-2 px-2">名次</th>
+                            <th className="py-2 px-2">球手</th>
+                            <th className="py-2 px-2">賽</th>
+                            <th className="py-2 px-2">勝和負</th>
+                            <th className="py-2 px-2">局差</th>
+                            <th className="py-2 px-2">積分</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {standingsRows.map((row: any) => (
+                            <tr key={String(row?.participantId || '')} className="border-b cue-border hover:brightness-95">
+                              <td className="py-2 px-2 font-semibold">{row?.position || '-'}</td>
+                              <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row?.participant)}</td>
+                              <td className="py-2 px-2 cue-muted">{Number(row?.played || 0)}</td>
+                              <td className="py-2 px-2 cue-muted">{Number(row?.won || 0)} / {Number(row?.drawn || 0)} / {Number(row?.lost || 0)}</td>
+                              <td className="py-2 px-2 cue-muted">{Number(row?.framesFor || 0)} - {Number(row?.framesAgainst || 0)} ({Number(row?.frameDiff || 0)})</td>
+                              <td className="py-2 px-2">{Number(row?.matchPoints || 0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="font-semibold">Knockout 賽程</div>
+                <div className="font-semibold">{isLeague ? 'League 賽程' : 'Knockout 賽程'}</div>
                 <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${matchesRows.length} 場`}</div>
               </div>
               {matchesLoading ? (
@@ -1021,7 +1246,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                         const id = String(row?.id || '');
                         const aLabel = formatParticipantLabel(row?.player_a_participant);
                         const bLabel = formatParticipantLabel(row?.player_b_participant);
-                        const roundLabel = formatKnockoutRoundLabel(row, participantsRows.length);
+                        const roundLabel = isLeague ? formatLeagueRoundLabel(row) : formatKnockoutRoundLabel(row, participantsRows.length);
                         const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
                         const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
                         return (
@@ -1067,7 +1292,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
           </div>
 
-          {matchesRows.length > 0 ? (
+          {!isLeague && matchesRows.length > 0 ? (
             <div className="mt-5">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="font-semibold">Knockout Bracket Tree</div>
@@ -1181,6 +1406,56 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          ) : null}
+          {isLeague && leagueRounds.length > 0 ? (
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="font-semibold">League Rounds</div>
+                <div className="text-xs cue-muted">依輪次排列，按卡片可直接切換到該場對局記分</div>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {leagueRounds.map((round) => (
+                  <div key={round.label} className="cue-surface rounded-lg p-3">
+                    <div className="font-semibold mb-2">{round.label}</div>
+                    <div className="grid gap-2">
+                      {round.items.map((row: any) => {
+                        const id = String(row?.id || '');
+                        const canSelectMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            disabled={!canSelectMatch}
+                            onClick={() => {
+                              if (!canSelectMatch) return;
+                              setSelectedMatchId(id);
+                              setResultStartedAt(formatDateTimeLocalInput(row?.started_at));
+                              setResultEndedAt(formatDateTimeLocalInput(row?.ended_at));
+                              setResultQuickType(normalizeMatchResultType(row?.result_type) === 'FORFEIT' ? 'FORFEIT' : 'WALKOVER');
+                              setResultQuickWinnerSide(
+                                String(row?.winner_participant_id || '') === String(row?.player_b_participant_id || '') ? 'B' : 'A',
+                              );
+                              setResultFrames(buildFramesFromMatch(row));
+                              setBreakMemberId(String(row?.player_a_participant?.member?.id || row?.player_b_participant?.member?.id || ''));
+                              setBreakFrameNo(String((Array.isArray(row?.frames) && row.frames.length > 0 ? row.frames.length : 1) || 1));
+                            }}
+                            className={`w-full rounded-lg border p-3 text-left ${!canSelectMatch ? 'cue-border cue-surface-strong cue-muted cursor-not-allowed' : selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
+                              <span>M{row?.match_no || '-'}</span>
+                              <span>{formatMatchResultTypeLabel(row?.result_type)}</span>
+                            </div>
+                            <div className="font-semibold truncate">{formatParticipantLabel(row?.player_a_participant)}</div>
+                            <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                            <div className="font-semibold truncate">{formatParticipantLabel(row?.player_b_participant)}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}
@@ -1450,7 +1725,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
             <div className="mt-4 text-xs cue-muted">
               {selectedMatchBreakEnabled
-                ? '提示：目前 Phase 1 先把 `20+ break` 正式寫入比賽紀錄；League、完整 standings 與更細 live scoring 之後再補。'
+                ? '提示：Phase 1 會把 `20+ break` 正式寫入比賽紀錄，並同時支援 Knockout 與 League 的賽果沉澱。'
                 : '此對局目前不是標準逐局賽果，已停用 tournament 20+ 記錄。'}
             </div>
           </div>
