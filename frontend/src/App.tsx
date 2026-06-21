@@ -10,7 +10,6 @@ import AdminClubFeatures from './AdminClubFeatures';
 import AdminNewsSources from './AdminNewsSources';
 import MemberLogin from './MemberLogin';
 import VenueDashboard from './VenueDashboard';
-import VenueModules from './VenueModules';
 import VenueModulePage from './VenueModulePage';
 import TableQrPage from './TableQrPage';
 import ClubPublicPage from './ClubPublicPage';
@@ -127,7 +126,7 @@ function App() {
         <Route path="/venue/login" element={<MemberLogin />} />
         <Route path="/member/:id" element={<Navigate to="/me" replace />} />
         <Route path="/venue/dashboard" element={<FeatureGate feature="club_dashboard"><VenueDashboard /></FeatureGate>} />
-        <Route path="/venue/modules" element={<FeatureGate feature="club_dashboard"><VenueModules /></FeatureGate>} />
+        <Route path="/venue/modules" element={<FeatureGate feature="club_dashboard"><Navigate to="/venue/dashboard" replace /></FeatureGate>} />
         <Route path="/venue/manage/:moduleCode" element={<FeatureGate feature="club_dashboard"><VenueModulePage /></FeatureGate>} />
         <Route path="/club/:clubId" element={<ModuleVisibilityGate moduleCode="system_portal" scope="public"><ClubPublicPage /></ModuleVisibilityGate>} />
         <Route path="/qr/table/:token" element={<FeatureGate feature="qr_session"><TableQrPage /></FeatureGate>} />

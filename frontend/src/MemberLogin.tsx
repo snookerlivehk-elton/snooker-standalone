@@ -154,6 +154,9 @@ const MemberLogin: React.FC = () => {
     setLoading(true);
     try {
       await requestPasswordResetCode(API_URL, email.trim().toLowerCase());
+      setResetCode('');
+      setNewPassword('');
+      setConfirmPassword('');
       setView('forgot-reset');
       setSuccessMsg('驗證碼已發送至您的 Email，請查收');
     } catch (err: any) {
@@ -293,15 +296,17 @@ const MemberLogin: React.FC = () => {
         )}
 
         {view === 'forgot-request' && (
-          <form onSubmit={onRequestCode} className="grid gap-4">
+          <form onSubmit={onRequestCode} className="grid gap-4" autoComplete="on">
             <p className="text-sm cue-muted">請輸入您的註冊 Email，我們將發送驗證碼給您。</p>
             <div>
               <label className="block text-sm font-medium mb-1">Email</label>
               <input
                 type="email"
+                name="resetEmail"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
                 className="w-full px-3 py-2 rounded cue-input lowercase"
+                autoComplete="email"
                 required
               />
             </div>
@@ -329,7 +334,7 @@ const MemberLogin: React.FC = () => {
         )}
 
         {view === 'forgot-reset' && (
-          <form onSubmit={onResetPassword} className="grid gap-4">
+          <form onSubmit={onResetPassword} className="grid gap-4" autoComplete="off">
             <div className="cue-surface rounded p-3 text-sm mb-2">
               驗證碼已發送至 <span className="text-yellow-400 font-mono">{email}</span>
             </div>
@@ -337,10 +342,15 @@ const MemberLogin: React.FC = () => {
               <label className="block text-sm font-medium mb-1">驗證碼</label>
               <input
                 type="text"
+                name="resetCode"
                 value={resetCode}
                 onChange={(e) => setResetCode(e.target.value)}
                 className="w-full px-3 py-2 rounded cue-input"
                 placeholder="6位數字"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoCapitalize="off"
+                spellCheck={false}
                 required
               />
             </div>
@@ -348,10 +358,12 @@ const MemberLogin: React.FC = () => {
               <label className="block text-sm font-medium mb-1">新密碼</label>
               <input
                 type="password"
+                name="newPassword"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full px-3 py-2 rounded cue-input"
                 placeholder="至少8位，含英數"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -359,9 +371,11 @@ const MemberLogin: React.FC = () => {
               <label className="block text-sm font-medium mb-1">確認新密碼</label>
               <input
                 type="password"
+                name="confirmNewPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full px-3 py-2 rounded cue-input"
+                autoComplete="new-password"
                 required
               />
             </div>

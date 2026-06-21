@@ -760,6 +760,11 @@
   - 本輪未改 `tournaments` 建立/確認流程
   - `TOURNAMENT` 類型現屬資料模型預留，之後可在你擴展賽事功能時再正式接線
   - 你要求的「比賽 highbreak 為正式記錄」方向已先在資料邊界上分開，避免再同會內 highbreak 混在一起
+  - 本輪包含 migration，上線前需執行 `prisma migrate deploy`
+  - 若 Railway 已自動 redeploy backend / frontend，仍建議手動驗證：
+    - 場館端新增單杆後應記錄為 `VENUE`
+    - 管理員後台可用 `recordType` 篩選
+    - 會員中心歷史記錄可見 `全部 / 會內 / 比賽` 分類
 
 ## 專案定位
 

@@ -4,12 +4,16 @@ import { useNavigate } from 'react-router-dom';
 type VenueModuleStandaloneLayoutProps = {
   title: string;
   description?: string;
+  backTo?: string;
+  backLabel?: string;
   children: React.ReactNode;
 };
 
 const VenueModuleStandaloneLayout: React.FC<VenueModuleStandaloneLayoutProps> = ({
   title,
   description,
+  backTo = '/venue/dashboard',
+  backLabel = '返回後台',
   children,
 }) => {
   const navigate = useNavigate();
@@ -28,17 +32,10 @@ const VenueModuleStandaloneLayout: React.FC<VenueModuleStandaloneLayoutProps> = 
             <div className="flex flex-wrap gap-2 sm:justify-end">
               <button
                 type="button"
-                onClick={() => navigate('/venue/modules')}
+                onClick={() => navigate(backTo)}
                 className="px-4 py-2 rounded-lg cue-surface-strong hover:brightness-95 transition-colors w-full sm:w-auto"
               >
-                返回模組中心
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/venue/dashboard')}
-                className="px-4 py-2 rounded-lg cue-surface hover:brightness-95 transition-colors w-full sm:w-auto"
-              >
-                返回後台
+                {backLabel}
               </button>
             </div>
           </div>

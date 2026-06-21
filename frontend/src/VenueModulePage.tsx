@@ -14,6 +14,13 @@ import VenueTournamentsModule from './venue/modules/VenueTournamentsModule';
 type VenueDashboardTab = 'home' | 'booking' | 'qr' | 'points' | 'highbreak' | 'content' | 'members';
 type VenueDashboardContentSection = 'live' | 'club_messages' | 'tournaments';
 
+function buildVenueDashboardPath(tab: VenueDashboardTab, section?: VenueDashboardContentSection) {
+  const sp = new URLSearchParams();
+  sp.set('tab', tab);
+  if (section) sp.set('section', section);
+  return `/venue/dashboard?${sp.toString()}`;
+}
+
 const MODULE_PAGE_META: Record<string, { tab: VenueDashboardTab; section?: VenueDashboardContentSection; title: string; description: string }> = {
   club_dashboard: {
     tab: 'home',
@@ -79,8 +86,9 @@ const VenueModulePage: React.FC = () => {
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: tournamentsEnabled } = useFeatureEnabled(API_URL, 'tournaments');
+  const dashboardPath = meta ? buildVenueDashboardPath(meta.tab, meta.section) : '/venue/dashboard';
 
-  if (!meta) return <Navigate to="/venue/modules" replace />;
+  if (!meta) return <Navigate to="/venue/dashboard" replace />;
 
   if ((moduleCode === 'live' || moduleCode === 'club_messages' || moduleCode === 'tournaments' || moduleCode === 'members' || moduleCode === 'highbreak' || moduleCode === 'points') && !operatorId) {
     return <Navigate to={`/members/login?next=${encodeURIComponent(`/venue/manage/${moduleCode}`)}`} replace />;
@@ -88,7 +96,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'live') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenueLiveModule operatorId={operatorId} enabled={liveEnabled} />
       </VenueModuleStandaloneLayout>
     );
@@ -96,7 +104,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'club_messages') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenueClubMessagesModule operatorId={operatorId} enabled={clubMessagesEnabled} />
       </VenueModuleStandaloneLayout>
     );
@@ -104,7 +112,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'tournaments') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenueTournamentsModule operatorId={operatorId} enabled={tournamentsEnabled} />
       </VenueModuleStandaloneLayout>
     );
@@ -112,7 +120,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'members') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenueMembersModule operatorId={operatorId} />
       </VenueModuleStandaloneLayout>
     );
@@ -120,7 +128,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'highbreak') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenueHighbreakModule operatorId={operatorId} />
       </VenueModuleStandaloneLayout>
     );
@@ -128,7 +136,7 @@ const VenueModulePage: React.FC = () => {
 
   if (moduleCode === 'points') {
     return (
-      <VenueModuleStandaloneLayout title={meta.title} description={meta.description}>
+      <VenueModuleStandaloneLayout title={meta.title} description={meta.description} backTo={dashboardPath}>
         <VenuePointsModule operatorId={operatorId} />
       </VenueModuleStandaloneLayout>
     );
@@ -140,6 +148,7 @@ const VenueModulePage: React.FC = () => {
       forcedSection={meta.section}
       standaloneTitle={meta.title}
       standaloneDescription={meta.description}
+      standaloneBackTo={dashboardPath}
     />
   );
 };
