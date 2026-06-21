@@ -1788,6 +1788,37 @@ export async function getMemberTournamentCareer(
   return res.json();
 }
 
+export async function getMemberTournamentHistory(
+  apiUrl: string,
+  id: string,
+  params?: { format?: 'ALL' | 'KNOCKOUT' | 'LEAGUE'; result?: 'ALL' | 'WIN' | 'LOSS' | 'DRAW' | 'BYE'; year?: number | null; limit?: number },
+) {
+  const sp = new URLSearchParams();
+  if (params?.format) sp.set('format', params.format);
+  if (params?.result) sp.set('result', params.result);
+  if (typeof params?.year === 'number' && Number.isFinite(params.year) && params.year > 0) sp.set('year', String(Math.floor(params.year)));
+  if (typeof params?.limit === 'number' && Number.isFinite(params.limit) && params.limit > 0) sp.set('limit', String(Math.floor(params.limit)));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/members/${id}/tournament-history${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`取得正式賽歷史失敗 (${res.status})`);
+  return res.json();
+}
+
+export async function getMemberTournamentHeadToHead(
+  apiUrl: string,
+  id: string,
+  params?: { format?: 'ALL' | 'KNOCKOUT' | 'LEAGUE'; year?: number | null; limit?: number },
+) {
+  const sp = new URLSearchParams();
+  if (params?.format) sp.set('format', params.format);
+  if (typeof params?.year === 'number' && Number.isFinite(params.year) && params.year > 0) sp.set('year', String(Math.floor(params.year)));
+  if (typeof params?.limit === 'number' && Number.isFinite(params.limit) && params.limit > 0) sp.set('limit', String(Math.floor(params.limit)));
+  const qs = sp.toString();
+  const res = await fetch(`${apiUrl}/api/members/${id}/tournament-head-to-head${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`取得對手戰績失敗 (${res.status})`);
+  return res.json();
+}
+
 export async function requestPasswordResetCode(apiUrl: string, email: string) {
   const res = await fetch(`${apiUrl}/api/members/request-password-reset-code`, {
     method: 'POST',

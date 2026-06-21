@@ -136,6 +136,173 @@ export function createMemberRouter(options: MemberRouterOptions) {
     return prisma.member.findUnique({ where: { id: member.id } });
   }
 
+  function normalizeTournamentFormatFilter(value: any): 'ALL' | 'KNOCKOUT' | 'LEAGUE' {
+    const normalized = String(value || 'ALL').trim().toUpperCase();
+    if (normalized === 'KNOCKOUT' || normalized === 'LEAGUE') return normalized;
+    return 'ALL';
+  }
+
+  function normalizeTournamentHistoryResultFilter(value: any): 'ALL' | 'WIN' | 'LOSS' | 'DRAW' | 'BYE' {
+    const normalized = String(value || 'ALL').trim().toUpperCase();
+    if (normalized === 'WIN' || normalized === 'LOSS' || normalized === 'DRAW' || normalized === 'BYE') return normalized;
+    return 'ALL';
+  }
+
+  function buildTournamentMatchHistoryRows(matches: any[], targetId: string) {
+    return matches.map((match) => {
+      const mySide = String(match?.player_a_participant?.member_id || '') === targetId ? 'A' : 'B';
+      const mine = mySide === 'A' ? match?.player_a_participant : match?.player_b_participant;
+      const opponent = mySide === 'A' ? match?.player_b_participant : match?.player_a_participant;
+      const resultType = String(match?.result_type || 'STANDARD').toUpperCase();
+      const format = String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+      const framesWon = Number(mySide === 'A' ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0);
+      const framesLost = Number(mySide === 'A' ? match?.player_b_frames_won || 0 : match?.player_a_frames_won || 0);
+      const totalPointsFor = Number(mySide === 'A' ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0);
+      const totalPointsAgainst = Number(mySide === 'A' ? match?.player_b_total_points || 0 : match?.player_a_total_points || 0);
+      const maxBreak = Number(mySide === 'A' ? match?.player_a_max_break || 0 : match?.player_b_max_break || 0);
+      const breaks20Plus = Number(mySide === 'A' ? match?.player_a_20_plus_count || 0 : match?.player_b_20_plus_count || 0);
+      const winnerParticipantId = String(match?.winner_participant_id || '');
+      const myParticipantId = String(mine?.id || '');
+      const isBye = resultType === 'BYE' || !opponent?.member;
+      const playedAt = match?.ended_at ?? match?.started_at ?? null;
+      const playedDate = playedAt ? new Date(playedAt) : new Date(NaN);
+      const year = Number.isFinite(playedDate.getTime()) ? playedDate.getFullYear() : null;
+      let roundLabel = '-';
+      const roundNo = Number(match?.round_no || 0);
+      const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+      if (format === 'LEAGUE') {
+        roundLabel = roundNo > 0 ? `第 ${roundNo} 輪` : 'League';
+      } else if (stageCode === 'KNOCKOUT_PRELIM') {
+        roundLabel = '預賽';
+      } else if (roundNo > 0) {
+        roundLabel = `R${roundNo}`;
+      } else if (stageCode) {
+        roundLabel = stageCode;
+      }
+
+      const resultKey = isBye
+        ? 'BYE'
+        : winnerParticipantId
+          ? winnerParticipantId === myParticipantId ? 'WIN' : 'LOSS'
+          : 'DRAW';
+
+      return {
+        id: String(match.id),
+        tournamentId: String(match?.tournament?.id || ''),
+        tournamentTitle: String(match?.tournament?.title || '-'),
+        format,
+        club: match?.tournament?.club || null,
+        roundNo,
+        matchNo: Number(match?.match_no || 0),
+        roundLabel,
+        stageCode,
+        resultType,
+        resultKey,
+        result:
+          resultKey === 'BYE'
+            ? '輪空'
+            : resultKey === 'WIN'
+              ? '勝'
+              : resultKey === 'LOSS'
+                ? '負'
+                : '和',
+        opponent: opponent?.member ? {
+          id: String(opponent.member.id),
+          name: String(opponent.member.name || ''),
+          memberCode: String(opponent.member.member_code || ''),
+        } : null,
+        framesWon,
+        framesLost,
+        scoreLabel: `${framesWon}-${framesLost}`,
+        totalPointsFor,
+        totalPointsAgainst,
+        maxBreak,
+        breaks20Plus,
+        startedAt: match?.started_at ?? null,
+        endedAt: match?.ended_at ?? null,
+        playedAt,
+        year,
+      };
+    });
+  }
+
+  function buildTournamentHeadToHeadRows(rows: any[]) {
+    const map = new Map<string, any>();
+    for (const row of rows) {
+      const opponentId = String(row?.opponent?.id || '').trim();
+      if (!opponentId) continue;
+      const key = opponentId;
+      const current = map.get(key) || {
+        opponent: row.opponent,
+        matchesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        framesWon: 0,
+        framesLost: 0,
+        frameDiff: 0,
+        totalPointsFor: 0,
+        totalPointsAgainst: 0,
+        totalPointsDiff: 0,
+        maxBreak: 0,
+        breaks20Plus: 0,
+        recentMatchAt: null,
+        recentMatch: null,
+      };
+
+      current.matchesPlayed += 1;
+      current.framesWon += Number(row?.framesWon || 0);
+      current.framesLost += Number(row?.framesLost || 0);
+      current.totalPointsFor += Number(row?.totalPointsFor || 0);
+      current.totalPointsAgainst += Number(row?.totalPointsAgainst || 0);
+      current.maxBreak = Math.max(current.maxBreak, Number(row?.maxBreak || 0));
+      current.breaks20Plus += Number(row?.breaks20Plus || 0);
+      if (row?.resultKey === 'WIN') current.wins += 1;
+      else if (row?.resultKey === 'LOSS') current.losses += 1;
+      else if (row?.resultKey === 'DRAW') current.draws += 1;
+
+      const recentTime = row?.playedAt ? new Date(row.playedAt).getTime() : 0;
+      const currentRecentTime = current.recentMatchAt ? new Date(current.recentMatchAt).getTime() : 0;
+      if (recentTime >= currentRecentTime) {
+        current.recentMatchAt = row?.playedAt ?? null;
+        current.recentMatch = {
+          id: row?.id,
+          tournamentId: row?.tournamentId,
+          tournamentTitle: row?.tournamentTitle,
+          format: row?.format,
+          roundLabel: row?.roundLabel,
+          result: row?.result,
+          scoreLabel: row?.scoreLabel,
+          playedAt: row?.playedAt ?? null,
+        };
+      }
+
+      current.frameDiff = current.framesWon - current.framesLost;
+      current.totalPointsDiff = current.totalPointsFor - current.totalPointsAgainst;
+      current.winRate = current.matchesPlayed > 0 ? Number(((current.wins / current.matchesPlayed) * 100).toFixed(1)) : 0;
+      map.set(key, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.matchesPlayed !== a.matchesPlayed) return b.matchesPlayed - a.matchesPlayed;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.frameDiff !== a.frameDiff) return b.frameDiff - a.frameDiff;
+      if (b.maxBreak !== a.maxBreak) return b.maxBreak - a.maxBreak;
+      return String(a?.opponent?.name || '').localeCompare(String(b?.opponent?.name || ''));
+    });
+  }
+
+  function getTournamentFinishLabel(rankRaw: any) {
+    const rank = Number(rankRaw || 0);
+    if (!Number.isFinite(rank) || rank <= 0) return '-';
+    if (rank === 1) return '冠軍';
+    if (rank === 2) return '亞軍';
+    if (rank === 3) return '四強';
+    if (rank === 5) return '八強';
+    if (rank === 9) return '16 強';
+    return `#${rank}`;
+  }
+
   router.get('/api/member/regions', async (_req, res) => {
     try {
       const regions = await prisma.memberRegion.findMany({
@@ -481,6 +648,14 @@ export function createMemberRouter(options: MemberRouterOptions) {
         championships: 0,
         runnerUps: 0,
         semiFinals: 0,
+        finals: 0,
+        podiums: 0,
+        bestFinishRank: null as number | null,
+        bestFinishLabel: '-',
+        longestWinStreak: 0,
+        currentWinStreak: 0,
+        firstChampionshipAt: null as string | null,
+        latestChampionshipAt: null as string | null,
       };
       const byFormat: Record<'KNOCKOUT' | 'LEAGUE', any> = {
         KNOCKOUT: {
@@ -510,86 +685,81 @@ export function createMemberRouter(options: MemberRouterOptions) {
           summary.completedTournaments += 1;
         }
         const finalRank = Number(participant?.final_rank || 0);
-        if (finalRank === 1 || String(participant?.status || '').toUpperCase() === 'CHAMPION') summary.championships += 1;
+        const isChampion = finalRank === 1 || String(participant?.status || '').toUpperCase() === 'CHAMPION';
+        if (isChampion) summary.championships += 1;
         if (finalRank === 2) summary.runnerUps += 1;
         if (finalRank === 3) summary.semiFinals += 1;
-      }
-
-      const recentMatches = matches
-        .map((match) => {
-          const mySide = String(match?.player_a_participant?.member_id || '') === targetId ? 'A' : 'B';
-          const mine = mySide === 'A' ? match?.player_a_participant : match?.player_b_participant;
-          const opponent = mySide === 'A' ? match?.player_b_participant : match?.player_a_participant;
-          const resultType = String(match?.result_type || 'STANDARD').toUpperCase();
-          const format = String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
-          const framesWon = Number(mySide === 'A' ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0);
-          const framesLost = Number(mySide === 'A' ? match?.player_b_frames_won || 0 : match?.player_a_frames_won || 0);
-          const totalPointsFor = Number(mySide === 'A' ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0);
-          const totalPointsAgainst = Number(mySide === 'A' ? match?.player_b_total_points || 0 : match?.player_a_total_points || 0);
-          const maxBreak = Number(mySide === 'A' ? match?.player_a_max_break || 0 : match?.player_b_max_break || 0);
-          const breaks20Plus = Number(mySide === 'A' ? match?.player_a_20_plus_count || 0 : match?.player_b_20_plus_count || 0);
-          const winnerParticipantId = String(match?.winner_participant_id || '');
-          const myParticipantId = String(mine?.id || '');
-          const isBye = resultType === 'BYE' || !opponent?.member;
-
-          if (!isBye) {
-            summary.matchesPlayed += 1;
-            summary.framesWon += framesWon;
-            summary.framesLost += framesLost;
-            summary.totalPointsFor += totalPointsFor;
-            summary.totalPointsAgainst += totalPointsAgainst;
-            summary.highestBreak = Math.max(summary.highestBreak, maxBreak);
-            byFormat[format].matchesPlayed += 1;
-            byFormat[format].highestBreak = Math.max(byFormat[format].highestBreak, maxBreak);
-
-            if (winnerParticipantId && winnerParticipantId === myParticipantId) {
-              summary.wins += 1;
-              byFormat[format].wins += 1;
-            } else if (winnerParticipantId && winnerParticipantId !== myParticipantId) {
-              summary.losses += 1;
-              byFormat[format].losses += 1;
-            } else {
-              summary.draws += 1;
-              byFormat[format].draws += 1;
+        if (finalRank > 0 && (summary.bestFinishRank == null || finalRank < summary.bestFinishRank)) {
+          summary.bestFinishRank = finalRank;
+        }
+        if (isChampion) {
+          const championAt = participant?.tournament?.startsAt ? new Date(participant.tournament.startsAt) : new Date(NaN);
+          if (Number.isFinite(championAt.getTime())) {
+            const iso = championAt.toISOString();
+            if (!summary.firstChampionshipAt || new Date(iso).getTime() < new Date(summary.firstChampionshipAt).getTime()) {
+              summary.firstChampionshipAt = iso;
+            }
+            if (!summary.latestChampionshipAt || new Date(iso).getTime() > new Date(summary.latestChampionshipAt).getTime()) {
+              summary.latestChampionshipAt = iso;
             }
           }
+        }
+      }
 
-          return {
-            id: String(match.id),
-            tournamentId: String(match?.tournament?.id || ''),
-            tournamentTitle: String(match?.tournament?.title || '-'),
-            format,
-            club: match?.tournament?.club || null,
-            roundNo: Number(match?.round_no || 0),
-            matchNo: Number(match?.match_no || 0),
-            stageCode: String(match?.stage_code || ''),
-            resultType,
-            result:
-              isBye
-                ? '輪空'
-                : winnerParticipantId
-                  ? winnerParticipantId === myParticipantId ? '勝' : '負'
-                  : '和',
-            opponent: opponent?.member ? {
-              id: String(opponent.member.id),
-              name: String(opponent.member.name || ''),
-              memberCode: String(opponent.member.member_code || ''),
-            } : null,
-            framesWon,
-            framesLost,
-            totalPointsFor,
-            totalPointsAgainst,
-            maxBreak,
-            breaks20Plus,
-            startedAt: match?.started_at ?? null,
-            endedAt: match?.ended_at ?? null,
-          };
-        });
+      summary.finals = summary.championships + summary.runnerUps;
+      summary.podiums = summary.championships + summary.runnerUps + summary.semiFinals;
+      summary.bestFinishLabel = getTournamentFinishLabel(summary.bestFinishRank);
+
+      const recentMatches = buildTournamentMatchHistoryRows(matches, targetId);
 
       for (const row of recentMatches) {
-        if (row.resultType === 'BYE') continue;
+        if (row.resultKey === 'BYE') continue;
         if (row.format !== 'KNOCKOUT' && row.format !== 'LEAGUE') continue;
+        const format = row.format;
         summary.highestBreak = Math.max(summary.highestBreak, Number(row.maxBreak || 0));
+        summary.matchesPlayed += 1;
+        summary.framesWon += Number(row.framesWon || 0);
+        summary.framesLost += Number(row.framesLost || 0);
+        summary.totalPointsFor += Number(row.totalPointsFor || 0);
+        summary.totalPointsAgainst += Number(row.totalPointsAgainst || 0);
+        byFormat[format].matchesPlayed += 1;
+        byFormat[format].highestBreak = Math.max(byFormat[format].highestBreak, Number(row.maxBreak || 0));
+        if (row.resultKey === 'WIN') {
+          summary.wins += 1;
+          byFormat[format].wins += 1;
+        } else if (row.resultKey === 'LOSS') {
+          summary.losses += 1;
+          byFormat[format].losses += 1;
+        } else if (row.resultKey === 'DRAW') {
+          summary.draws += 1;
+          byFormat[format].draws += 1;
+        }
+      }
+
+      const chronologicalMatches = [...recentMatches]
+        .filter((row) => row.resultKey !== 'BYE')
+        .sort((a, b) => {
+          const aTime = a.playedAt ? new Date(a.playedAt).getTime() : 0;
+          const bTime = b.playedAt ? new Date(b.playedAt).getTime() : 0;
+          if (aTime !== bTime) return aTime - bTime;
+          return Number(a.matchNo || 0) - Number(b.matchNo || 0);
+        });
+      let runningWinStreak = 0;
+      for (const row of chronologicalMatches) {
+        if (row.resultKey === 'WIN') {
+          runningWinStreak += 1;
+          summary.longestWinStreak = Math.max(summary.longestWinStreak, runningWinStreak);
+        } else {
+          runningWinStreak = 0;
+        }
+      }
+      for (const row of recentMatches) {
+        if (row.resultKey === 'BYE') continue;
+        if (row.resultKey === 'WIN') {
+          summary.currentWinStreak += 1;
+        } else {
+          break;
+        }
       }
 
       for (const row of breaks) {
@@ -634,6 +804,166 @@ export function createMemberRouter(options: MemberRouterOptions) {
         byFormat,
         recentMatches: recentMatches.slice(0, 10),
         recentTournaments,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err?.message || err) });
+    }
+  });
+
+  router.get('/api/members/:id/tournament-history', async (req, res) => {
+    try {
+      const idOrEmail = String(req.params.id || '').trim();
+      if (!idOrEmail) return res.status(400).json({ error: 'id required' });
+
+      const member = await findMemberByIdOrEmail(idOrEmail);
+      if (!member) return res.status(404).json({ error: 'not found' });
+      const targetId = String(member.id);
+      const formatFilter = normalizeTournamentFormatFilter(req.query.format);
+      const resultFilter = normalizeTournamentHistoryResultFilter(req.query.result);
+      const yearFilter = Number(req.query.year);
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, Math.floor(limitRaw))) : 50;
+
+      const matches = await prisma.tournamentMatch.findMany({
+        where: {
+          status: 'COMPLETED',
+          OR: [
+            { player_a_participant: { is: { member_id: targetId } } },
+            { player_b_participant: { is: { member_id: targetId } } },
+          ],
+        },
+        include: {
+          tournament: {
+            select: {
+              id: true,
+              title: true,
+              format: true,
+              startsAt: true,
+              club: { select: { id: true, name: true, logoUrl: true } },
+            },
+          },
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+        },
+        orderBy: [{ ended_at: 'desc' }, { updated_at: 'desc' }],
+      });
+
+      const rows = buildTournamentMatchHistoryRows(matches, targetId);
+      const availableYears = Array.from(new Set(
+        rows
+          .map((row) => Number(row.year || 0))
+          .filter((value) => Number.isFinite(value) && value > 0),
+      )).sort((a, b) => b - a);
+
+      const filtered = rows.filter((row) => {
+        if (formatFilter !== 'ALL' && row.format !== formatFilter) return false;
+        if (resultFilter !== 'ALL' && row.resultKey !== resultFilter) return false;
+        if (Number.isFinite(yearFilter) && yearFilter > 0 && row.year !== yearFilter) return false;
+        return true;
+      });
+
+      res.json({
+        member: {
+          id: member.id,
+          name: member.name,
+          memberCode: member.member_code,
+        },
+        filters: {
+          format: formatFilter,
+          result: resultFilter,
+          year: Number.isFinite(yearFilter) && yearFilter > 0 ? yearFilter : null,
+          limit,
+        },
+        availableYears,
+        total: filtered.length,
+        history: filtered.slice(0, limit),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err?.message || err) });
+    }
+  });
+
+  router.get('/api/members/:id/tournament-head-to-head', async (req, res) => {
+    try {
+      const idOrEmail = String(req.params.id || '').trim();
+      if (!idOrEmail) return res.status(400).json({ error: 'id required' });
+
+      const member = await findMemberByIdOrEmail(idOrEmail);
+      if (!member) return res.status(404).json({ error: 'not found' });
+      const targetId = String(member.id);
+      const formatFilter = normalizeTournamentFormatFilter(req.query.format);
+      const yearFilter = Number(req.query.year);
+      const limitRaw = Number(req.query.limit);
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 30;
+
+      const matches = await prisma.tournamentMatch.findMany({
+        where: {
+          status: 'COMPLETED',
+          OR: [
+            { player_a_participant: { is: { member_id: targetId } } },
+            { player_b_participant: { is: { member_id: targetId } } },
+          ],
+        },
+        include: {
+          tournament: {
+            select: {
+              id: true,
+              title: true,
+              format: true,
+              startsAt: true,
+              club: { select: { id: true, name: true, logoUrl: true } },
+            },
+          },
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+        },
+        orderBy: [{ ended_at: 'desc' }, { updated_at: 'desc' }],
+      });
+
+      const historyRows = buildTournamentMatchHistoryRows(matches, targetId);
+      const availableYears = Array.from(new Set(
+        historyRows
+          .map((row) => Number(row.year || 0))
+          .filter((value) => Number.isFinite(value) && value > 0),
+      )).sort((a, b) => b - a);
+
+      const filteredHistory = historyRows.filter((row) => {
+        if (!row?.opponent?.id) return false;
+        if (row.resultKey === 'BYE') return false;
+        if (formatFilter !== 'ALL' && row.format !== formatFilter) return false;
+        if (Number.isFinite(yearFilter) && yearFilter > 0 && row.year !== yearFilter) return false;
+        return true;
+      });
+
+      const rows = buildTournamentHeadToHeadRows(filteredHistory);
+      res.json({
+        member: {
+          id: member.id,
+          name: member.name,
+          memberCode: member.member_code,
+        },
+        filters: {
+          format: formatFilter,
+          year: Number.isFinite(yearFilter) && yearFilter > 0 ? yearFilter : null,
+          limit,
+        },
+        availableYears,
+        total: rows.length,
+        headToHead: rows.slice(0, limit),
       });
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });

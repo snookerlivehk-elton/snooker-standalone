@@ -7,6 +7,8 @@ import {
   getMember,
   getClubProfile,
   getMemberTournamentCareer,
+  getMemberTournamentHeadToHead,
+  getMemberTournamentHistory,
   getMyBreaks,
   getMyClubMessages,
   getMyClubPointsBalances,
@@ -34,6 +36,13 @@ function normalizeHttpUrl(raw: any): string | null {
   if (/^https?:\/\//i.test(s)) return s;
   if (s.startsWith('//')) return `https:${s}`;
   return `https://${s}`;
+}
+
+function formatDateLabel(raw: any): string {
+  if (!raw) return '未有';
+  const date = new Date(String(raw));
+  if (!Number.isFinite(date.getTime())) return '未有';
+  return date.toLocaleDateString();
 }
 
 type LocalMsgState = { read: Record<string, boolean>; hidden: Record<string, boolean> };
@@ -67,6 +76,10 @@ const Me: React.FC = () => {
   const [breaksLoading, setBreaksLoading] = useState(false);
   const [tournamentCareer, setTournamentCareer] = useState<any>(null);
   const [tournamentCareerLoading, setTournamentCareerLoading] = useState(false);
+  const [tournamentHistory, setTournamentHistory] = useState<any>(null);
+  const [tournamentHistoryLoading, setTournamentHistoryLoading] = useState(false);
+  const [tournamentHeadToHead, setTournamentHeadToHead] = useState<any>(null);
+  const [tournamentHeadToHeadLoading, setTournamentHeadToHeadLoading] = useState(false);
   const [clubMessages, setClubMessages] = useState<any[]>([]);
   const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
   const [publicLiveAnnouncements, setPublicLiveAnnouncements] = useState<any[]>([]);
@@ -104,6 +117,11 @@ const Me: React.FC = () => {
   const [breakTo, setBreakTo] = useState('');
   const [breakYear, setBreakYear] = useState<number | null>(null);
   const [breakMonth, setBreakMonth] = useState<string>('');
+  const [historyFormatFilter, setHistoryFormatFilter] = useState<'ALL' | 'KNOCKOUT' | 'LEAGUE'>('ALL');
+  const [historyResultFilter, setHistoryResultFilter] = useState<'ALL' | 'WIN' | 'LOSS' | 'DRAW' | 'BYE'>('ALL');
+  const [historyYearFilter, setHistoryYearFilter] = useState<number | null>(null);
+  const [headToHeadFormatFilter, setHeadToHeadFormatFilter] = useState<'ALL' | 'KNOCKOUT' | 'LEAGUE'>('ALL');
+  const [headToHeadYearFilter, setHeadToHeadYearFilter] = useState<number | null>(null);
   const [localMsgState, setLocalMsgState] = useState<LocalMsgState>({ read: {}, hidden: {} });
   const [selectedMsgKeys, setSelectedMsgKeys] = useState<Record<string, boolean>>({});
   const [openMsgKey, setOpenMsgKey] = useState<string | null>(null);
@@ -416,6 +434,49 @@ const Me: React.FC = () => {
     let mounted = true;
     (async () => {
       if (!memberId) return;
+      setTournamentHistoryLoading(true);
+      try {
+        const row = await getMemberTournamentHistory(API_URL, memberId, {
+          format: historyFormatFilter,
+          result: historyResultFilter,
+          year: historyYearFilter,
+          limit: 100,
+        });
+        if (mounted) setTournamentHistory(row && typeof row === 'object' ? row : null);
+      } catch {
+        if (mounted) setTournamentHistory(null);
+      } finally {
+        if (mounted) setTournamentHistoryLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId, historyFormatFilter, historyResultFilter, historyYearFilter]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!memberId) return;
+      setTournamentHeadToHeadLoading(true);
+      try {
+        const row = await getMemberTournamentHeadToHead(API_URL, memberId, {
+          format: headToHeadFormatFilter,
+          year: headToHeadYearFilter,
+          limit: 30,
+        });
+        if (mounted) setTournamentHeadToHead(row && typeof row === 'object' ? row : null);
+      } catch {
+        if (mounted) setTournamentHeadToHead(null);
+      } finally {
+        if (mounted) setTournamentHeadToHeadLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId, headToHeadFormatFilter, headToHeadYearFilter]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!memberId) return;
       if (!clubMessagesEnabled) {
         if (mounted) setClubMessages([]);
         if (mounted) setClubMessagesLoading(false);
@@ -599,6 +660,14 @@ const Me: React.FC = () => {
       championships: Number(summary?.championships || 0),
       runnerUps: Number(summary?.runnerUps || 0),
       semiFinals: Number(summary?.semiFinals || 0),
+      finals: Number(summary?.finals || 0),
+      podiums: Number(summary?.podiums || 0),
+      bestFinishRank: summary?.bestFinishRank == null ? null : Number(summary.bestFinishRank || 0),
+      bestFinishLabel: String(summary?.bestFinishLabel || '-'),
+      longestWinStreak: Number(summary?.longestWinStreak || 0),
+      currentWinStreak: Number(summary?.currentWinStreak || 0),
+      firstChampionshipAt: summary?.firstChampionshipAt ? String(summary.firstChampionshipAt) : null,
+      latestChampionshipAt: summary?.latestChampionshipAt ? String(summary.latestChampionshipAt) : null,
     };
   }, [tournamentCareer]);
 
@@ -617,6 +686,22 @@ const Me: React.FC = () => {
   const recentTournaments = useMemo(() => (
     Array.isArray(tournamentCareer?.recentTournaments) ? tournamentCareer.recentTournaments : []
   ), [tournamentCareer]);
+
+  const tournamentHistoryRows = useMemo(() => (
+    Array.isArray(tournamentHistory?.history) ? tournamentHistory.history : []
+  ), [tournamentHistory]);
+
+  const tournamentHistoryYears = useMemo(() => (
+    Array.isArray(tournamentHistory?.availableYears) ? tournamentHistory.availableYears : []
+  ), [tournamentHistory]);
+
+  const tournamentHeadToHeadRows = useMemo(() => (
+    Array.isArray(tournamentHeadToHead?.headToHead) ? tournamentHeadToHead.headToHead : []
+  ), [tournamentHeadToHead]);
+
+  const tournamentHeadToHeadYears = useMemo(() => (
+    Array.isArray(tournamentHeadToHead?.availableYears) ? tournamentHeadToHead.availableYears : []
+  ), [tournamentHeadToHead]);
 
   useEffect(() => {
     let mounted = true;
@@ -1772,6 +1857,51 @@ const Me: React.FC = () => {
                         </div>
                       </div>
 
+                      <div className="cue-surface-strong rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="font-semibold">履歷里程碑</div>
+                          <div className="text-xs cue-muted">Phase 2 Batch C</div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                          <div className="rounded-lg p-4 cue-surface">
+                            <div className="text-sm cue-muted">最佳成績</div>
+                            <div className="text-2xl font-extrabold accent-yellow mt-1">
+                              {tournamentCareerSummary.bestFinishLabel}
+                            </div>
+                            <div className="text-xs cue-muted mt-2">
+                              決賽 {tournamentCareerSummary.finals} 次
+                            </div>
+                          </div>
+                          <div className="rounded-lg p-4 cue-surface">
+                            <div className="text-sm cue-muted">頒獎台</div>
+                            <div className="text-2xl font-extrabold accent-yellow mt-1">
+                              {tournamentCareerSummary.podiums}
+                            </div>
+                            <div className="text-xs cue-muted mt-2">
+                              冠軍 {tournamentCareerSummary.championships} · 亞軍 {tournamentCareerSummary.runnerUps} · 四強 {tournamentCareerSummary.semiFinals}
+                            </div>
+                          </div>
+                          <div className="rounded-lg p-4 cue-surface">
+                            <div className="text-sm cue-muted">連勝</div>
+                            <div className="text-2xl font-extrabold accent-yellow mt-1">
+                              {tournamentCareerSummary.longestWinStreak}
+                            </div>
+                            <div className="text-xs cue-muted mt-2">
+                              目前連勝 {tournamentCareerSummary.currentWinStreak} 場
+                            </div>
+                          </div>
+                          <div className="rounded-lg p-4 cue-surface">
+                            <div className="text-sm cue-muted">冠軍里程碑</div>
+                            <div className="text-sm font-semibold mt-2">
+                              首冠：{formatDateLabel(tournamentCareerSummary.firstChampionshipAt)}
+                            </div>
+                            <div className="text-xs cue-muted mt-2">
+                              最近冠軍：{formatDateLabel(tournamentCareerSummary.latestChampionshipAt)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <div className="cue-surface-strong rounded-lg p-4">
                           <div className="font-semibold mb-2">Knockout 履歷</div>
@@ -1877,6 +2007,224 @@ const Me: React.FC = () => {
                             </tbody>
                           </table>
                         </div>
+                        )}
+                      </div>
+
+                      <div className="cue-surface-strong rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="font-semibold">正式賽歷史</div>
+                          <div className="text-xs cue-muted">最多顯示 100 場</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          <select
+                            value={historyFormatFilter}
+                            onChange={(e) => setHistoryFormatFilter(e.target.value as 'ALL' | 'KNOCKOUT' | 'LEAGUE')}
+                            className="px-3 py-2 rounded cue-surface text-sm"
+                          >
+                            <option value="ALL">全部賽制</option>
+                            <option value="KNOCKOUT">Knockout</option>
+                            <option value="LEAGUE">League</option>
+                          </select>
+                          <select
+                            value={historyResultFilter}
+                            onChange={(e) => setHistoryResultFilter(e.target.value as 'ALL' | 'WIN' | 'LOSS' | 'DRAW' | 'BYE')}
+                            className="px-3 py-2 rounded cue-surface text-sm"
+                          >
+                            <option value="ALL">全部結果</option>
+                            <option value="WIN">勝</option>
+                            <option value="LOSS">負</option>
+                            <option value="DRAW">和</option>
+                            <option value="BYE">輪空</option>
+                          </select>
+                          <select
+                            value={historyYearFilter ?? ''}
+                            onChange={(e) => setHistoryYearFilter(e.target.value ? Number(e.target.value) : null)}
+                            className="px-3 py-2 rounded cue-surface text-sm"
+                          >
+                            <option value="">全部年份</option>
+                            {tournamentHistoryYears.map((year) => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHistoryFormatFilter('ALL');
+                              setHistoryResultFilter('ALL');
+                              setHistoryYearFilter(null);
+                            }}
+                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                          >
+                            清除篩選
+                          </button>
+                        </div>
+
+                        <div className="text-xs cue-muted mb-3">
+                          目前結果：{Number(tournamentHistory?.total || 0)} 場
+                        </div>
+
+                        {tournamentHistoryLoading ? (
+                          <div className="text-sm cue-muted">讀取中…</div>
+                        ) : tournamentHistoryRows.length === 0 ? (
+                          <div className="text-sm cue-muted">未找到符合條件的正式賽記錄</div>
+                        ) : (
+                          <div className="overflow-x-auto -mx-2 px-2">
+                            <table className="w-full text-left border-collapse text-sm">
+                              <thead>
+                                <tr className="cue-muted border-b cue-border">
+                                  <th className="py-2 px-2 whitespace-nowrap">日期</th>
+                                  <th className="py-2 px-2">賽事</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">Round</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">對手</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">結果</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">局數</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">得分</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tournamentHistoryRows.map((row: any) => {
+                                  const dateValue = row.playedAt || row.endedAt || row.startedAt;
+                                  return (
+                                    <tr key={String(row.id)} className="border-b cue-border hover:brightness-95">
+                                      <td className="py-2 px-2 cue-muted whitespace-nowrap">
+                                        {dateValue ? new Date(dateValue).toLocaleDateString() : '-'}
+                                      </td>
+                                      <td className="py-2 px-2">
+                                        <div className="font-semibold">{row.tournamentTitle}</div>
+                                        <div className="text-xs cue-muted mt-1">
+                                          {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                          {row.club?.name ? ` · ${row.club.name}` : ''}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-2 whitespace-nowrap">{row.roundLabel || '-'}</td>
+                                      <td className="py-2 px-2 whitespace-nowrap">{row.opponent?.name || '-'}</td>
+                                      <td className="py-2 px-2 whitespace-nowrap">
+                                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          row.resultKey === 'WIN'
+                                            ? 'bg-emerald-500/15 text-emerald-300'
+                                            : row.resultKey === 'LOSS'
+                                              ? 'bg-rose-500/15 text-rose-300'
+                                              : row.resultKey === 'DRAW'
+                                                ? 'bg-sky-500/15 text-sky-300'
+                                                : 'bg-white/10 text-white/80'
+                                        }`}
+                                        >
+                                          {row.result}
+                                          {row.resultType && row.resultType !== 'STANDARD' ? ` · ${row.resultType}` : ''}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-2 whitespace-nowrap font-semibold">{row.scoreLabel}</td>
+                                      <td className="py-2 px-2 whitespace-nowrap">{row.totalPointsFor}-{row.totalPointsAgainst}</td>
+                                      <td className="py-2 px-2 whitespace-nowrap">{row.breaks20Plus} / {row.maxBreak}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="cue-surface-strong rounded-lg p-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="font-semibold">對手戰績</div>
+                          <div className="text-xs cue-muted">最多顯示 30 位對手</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          <select
+                            value={headToHeadFormatFilter}
+                            onChange={(e) => setHeadToHeadFormatFilter(e.target.value as 'ALL' | 'KNOCKOUT' | 'LEAGUE')}
+                            className="px-3 py-2 rounded cue-surface text-sm"
+                          >
+                            <option value="ALL">全部賽制</option>
+                            <option value="KNOCKOUT">Knockout</option>
+                            <option value="LEAGUE">League</option>
+                          </select>
+                          <select
+                            value={headToHeadYearFilter ?? ''}
+                            onChange={(e) => setHeadToHeadYearFilter(e.target.value ? Number(e.target.value) : null)}
+                            className="px-3 py-2 rounded cue-surface text-sm"
+                          >
+                            <option value="">全部年份</option>
+                            {tournamentHeadToHeadYears.map((year) => (
+                              <option key={year} value={year}>{year}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHeadToHeadFormatFilter('ALL');
+                              setHeadToHeadYearFilter(null);
+                            }}
+                            className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                          >
+                            清除篩選
+                          </button>
+                        </div>
+
+                        <div className="text-xs cue-muted mb-3">
+                          目前結果：{Number(tournamentHeadToHead?.total || 0)} 位對手
+                        </div>
+
+                        {tournamentHeadToHeadLoading ? (
+                          <div className="text-sm cue-muted">讀取中…</div>
+                        ) : tournamentHeadToHeadRows.length === 0 ? (
+                          <div className="text-sm cue-muted">未找到符合條件的對手戰績</div>
+                        ) : (
+                          <div className="overflow-x-auto -mx-2 px-2">
+                            <table className="w-full text-left border-collapse text-sm">
+                              <thead>
+                                <tr className="cue-muted border-b cue-border">
+                                  <th className="py-2 px-2 whitespace-nowrap">對手</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">場數</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">勝負和</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">局數</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">勝率</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                  <th className="py-2 px-2">最近一次對賽</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tournamentHeadToHeadRows.map((row: any) => (
+                                  <tr key={String(row.opponent?.id || row.opponent?.name || Math.random())} className="border-b cue-border hover:brightness-95">
+                                    <td className="py-2 px-2 whitespace-nowrap">
+                                      <div className="font-semibold">{row.opponent?.name || '-'}</div>
+                                      <div className="text-xs cue-muted mt-1">{row.opponent?.memberCode || ''}</div>
+                                    </td>
+                                    <td className="py-2 px-2 whitespace-nowrap font-semibold">{row.matchesPlayed}</td>
+                                    <td className="py-2 px-2 whitespace-nowrap">
+                                      <span className="text-emerald-300">{row.wins}</span>
+                                      {' / '}
+                                      <span className="text-rose-300">{row.losses}</span>
+                                      {' / '}
+                                      <span className="text-sky-300">{row.draws}</span>
+                                    </td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{row.framesWon}-{row.framesLost}</td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{row.winRate}%</td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{row.breaks20Plus} / {row.maxBreak}</td>
+                                    <td className="py-2 px-2">
+                                      {row.recentMatch ? (
+                                        <div>
+                                          <div className="font-semibold">{row.recentMatch.tournamentTitle}</div>
+                                          <div className="text-xs cue-muted mt-1">
+                                            {row.recentMatch.playedAt ? new Date(row.recentMatch.playedAt).toLocaleDateString() : '-'}
+                                            {row.recentMatch.roundLabel ? ` · ${row.recentMatch.roundLabel}` : ''}
+                                            {row.recentMatch.scoreLabel ? ` · ${row.recentMatch.scoreLabel}` : ''}
+                                            {row.recentMatch.result ? ` · ${row.recentMatch.result}` : ''}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="cue-muted">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                     </div>
