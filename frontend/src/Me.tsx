@@ -6,6 +6,7 @@ import { API_URL } from './config';
 import {
   getMember,
   getClubProfile,
+  getMemberTournamentCareer,
   getMyBreaks,
   getMyClubMessages,
   getMyClubPointsBalances,
@@ -64,6 +65,8 @@ const Me: React.FC = () => {
   const [clubPointsLoading, setClubPointsLoading] = useState(false);
   const [breaks, setBreaks] = useState<any[]>([]);
   const [breaksLoading, setBreaksLoading] = useState(false);
+  const [tournamentCareer, setTournamentCareer] = useState<any>(null);
+  const [tournamentCareerLoading, setTournamentCareerLoading] = useState(false);
   const [clubMessages, setClubMessages] = useState<any[]>([]);
   const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
   const [publicLiveAnnouncements, setPublicLiveAnnouncements] = useState<any[]>([]);
@@ -110,10 +113,6 @@ const Me: React.FC = () => {
   const { enabled: clubMessagesEnabled } = useFeatureEnabled(API_URL, 'club_messages');
   const { enabled: liveEnabled } = useFeatureEnabled(API_URL, 'live');
   const { enabled: systemPortalEnabled } = useFeatureEnabled(API_URL, 'system_portal');
-
-  useEffect(() => {
-    if (activeTab === 'history' && !highbreakEnabled) setActiveTab('clubs');
-  }, [activeTab, highbreakEnabled]);
 
   const avatarText = useMemo(() => {
     const s = String(profile?.name || session?.email || 'M').trim();
@@ -400,6 +399,23 @@ const Me: React.FC = () => {
     let mounted = true;
     (async () => {
       if (!memberId) return;
+      setTournamentCareerLoading(true);
+      try {
+        const row = await getMemberTournamentCareer(API_URL, memberId);
+        if (mounted) setTournamentCareer(row && typeof row === 'object' ? row : null);
+      } catch {
+        if (mounted) setTournamentCareer(null);
+      } finally {
+        if (mounted) setTournamentCareerLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!memberId) return;
       if (!clubMessagesEnabled) {
         if (mounted) setClubMessages([]);
         if (mounted) setClubMessagesLoading(false);
@@ -561,6 +577,46 @@ const Me: React.FC = () => {
     }
     return { highest, total };
   }, [categorizedBreaks]);
+
+  const tournamentCareerSummary = useMemo(() => {
+    const summary = tournamentCareer?.summary;
+    return {
+      tournamentsEntered: Number(summary?.tournamentsEntered || 0),
+      completedTournaments: Number(summary?.completedTournaments || 0),
+      matchesPlayed: Number(summary?.matchesPlayed || 0),
+      wins: Number(summary?.wins || 0),
+      losses: Number(summary?.losses || 0),
+      draws: Number(summary?.draws || 0),
+      winRate: Number(summary?.winRate || 0),
+      framesWon: Number(summary?.framesWon || 0),
+      framesLost: Number(summary?.framesLost || 0),
+      frameDiff: Number(summary?.frameDiff || 0),
+      totalPointsFor: Number(summary?.totalPointsFor || 0),
+      totalPointsAgainst: Number(summary?.totalPointsAgainst || 0),
+      totalPointsDiff: Number(summary?.totalPointsDiff || 0),
+      breaks20Plus: Number(summary?.breaks20Plus || 0),
+      highestBreak: Number(summary?.highestBreak || 0),
+      championships: Number(summary?.championships || 0),
+      runnerUps: Number(summary?.runnerUps || 0),
+      semiFinals: Number(summary?.semiFinals || 0),
+    };
+  }, [tournamentCareer]);
+
+  const tournamentCareerByFormat = useMemo(() => {
+    const rows = tournamentCareer?.byFormat || {};
+    return {
+      knockout: rows.KNOCKOUT || { tournamentsEntered: 0, matchesPlayed: 0, wins: 0, losses: 0, draws: 0, breaks20Plus: 0, highestBreak: 0 },
+      league: rows.LEAGUE || { tournamentsEntered: 0, matchesPlayed: 0, wins: 0, losses: 0, draws: 0, breaks20Plus: 0, highestBreak: 0 },
+    };
+  }, [tournamentCareer]);
+
+  const recentTournamentMatches = useMemo(() => (
+    Array.isArray(tournamentCareer?.recentMatches) ? tournamentCareer.recentMatches : []
+  ), [tournamentCareer]);
+
+  const recentTournaments = useMemo(() => (
+    Array.isArray(tournamentCareer?.recentTournaments) ? tournamentCareer.recentTournaments : []
+  ), [tournamentCareer]);
 
   useEffect(() => {
     let mounted = true;
@@ -937,7 +993,7 @@ const Me: React.FC = () => {
                       </span>
                     ),
                   },
-                  ...(highbreakEnabled ? [{ key: 'history', label: '歷史記錄' }] : []),
+                  { key: 'history', label: '歷史記錄' },
                   { key: 'settings', label: '設定' },
                 ]}
                 activeKey={activeTab}
@@ -1656,12 +1712,12 @@ const Me: React.FC = () => {
                     <div className="font-semibold text-lg">歷史記錄</div>
                     <HelpGuide
                       title="歷史記錄"
-                      intro="查看歷史 highbreak 記錄，並分開會內與比賽兩類資料。"
+                      intro="查看正式賽事履歷，以及歷史 highbreak 記錄。"
                       steps={[
-                        '先切換「全部 / 會內 / 比賽」，再查看對應的歷史最高及累計。',
-                        '下方會顯示每月累計走勢。',
-                        '可在「時間段 / 年 / 月」切換篩選方式。',
-                        '下方列表會顯示符合條件的 highbreak 記錄；如有影片連結可點「連結」開啟。',
+                        '先查看上方賽事履歷摘要，包括正式賽場數、勝負、得失局與獎項。',
+                        '可在最近賽事與最近對賽中回看近期正式比賽表現。',
+                        '如已啟用 highbreak 模組，下方可再查看會內 / 比賽單杆歷史。',
+                        '單杆歷史支援時間段、年、月與分類查詢。',
                       ]}
                       tips={[
                         '表格在手機可左右滑查看欄位。',
@@ -1669,198 +1725,360 @@ const Me: React.FC = () => {
                       ]}
                     />
                   </div>
-                  {breaksLoading ? (
+                  {tournamentCareerLoading ? (
                     <div className="text-sm cue-muted">讀取中…</div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setBreakCategory('ALL')}
-                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'ALL' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                        >
-                          全部
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBreakCategory('VENUE')}
-                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'VENUE' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                        >
-                          會內
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBreakCategory('TOURNAMENT')}
-                          className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'TOURNAMENT' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                        >
-                          比賽
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="text-sm cue-muted">目前分類最高</div>
-                          <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.highest || 0}</div>
+                          <div className="text-sm cue-muted">正式賽場數</div>
+                          <div className="text-3xl font-extrabold accent-yellow mt-1">{tournamentCareerSummary.matchesPlayed}</div>
+                          <div className="text-xs cue-muted mt-2">參賽 {tournamentCareerSummary.tournamentsEntered} 項，已完成 {tournamentCareerSummary.completedTournaments} 項</div>
                         </div>
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="text-sm cue-muted">目前分類累計</div>
-                          <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.total || 0}</div>
+                          <div className="text-sm cue-muted">勝負和</div>
+                          <div className="text-2xl font-extrabold accent-yellow mt-1">
+                            {tournamentCareerSummary.wins} / {tournamentCareerSummary.losses} / {tournamentCareerSummary.draws}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">勝率 {tournamentCareerSummary.winRate.toFixed(1)}%</div>
+                        </div>
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="text-sm cue-muted">得失局</div>
+                          <div className="text-2xl font-extrabold accent-yellow mt-1">
+                            {tournamentCareerSummary.framesWon} - {tournamentCareerSummary.framesLost}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">局差 {tournamentCareerSummary.frameDiff >= 0 ? '+' : ''}{tournamentCareerSummary.frameDiff}</div>
+                        </div>
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="text-sm cue-muted">比賽 20+ / 最高</div>
+                          <div className="text-2xl font-extrabold accent-yellow mt-1">
+                            {tournamentCareerSummary.breaks20Plus} / {tournamentCareerSummary.highestBreak}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">總得分差 {tournamentCareerSummary.totalPointsDiff >= 0 ? '+' : ''}{tournamentCareerSummary.totalPointsDiff}</div>
+                        </div>
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="text-sm cue-muted">冠軍 / 亞軍 / 四強</div>
+                          <div className="text-2xl font-extrabold accent-yellow mt-1">
+                            {tournamentCareerSummary.championships} / {tournamentCareerSummary.runnerUps} / {tournamentCareerSummary.semiFinals}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">正式賽最佳成績已自動沉澱</div>
+                        </div>
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="text-sm cue-muted">賽制分佈</div>
+                          <div className="text-sm mt-2 space-y-1">
+                            <div>Knockout：{tournamentCareerByFormat.knockout.matchesPlayed} 場</div>
+                            <div>League：{tournamentCareerByFormat.league.matchesPlayed} 場</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="font-semibold mb-2">Knockout 履歷</div>
+                          <div className="text-sm cue-muted">
+                            參賽 {tournamentCareerByFormat.knockout.tournamentsEntered} 項 ·
+                            出賽 {tournamentCareerByFormat.knockout.matchesPlayed} 場 ·
+                            勝 {tournamentCareerByFormat.knockout.wins} 負 {tournamentCareerByFormat.knockout.losses}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">
+                            20+ {tournamentCareerByFormat.knockout.breaks20Plus} 次 · 最高 {tournamentCareerByFormat.knockout.highestBreak}
+                          </div>
+                        </div>
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="font-semibold mb-2">League 履歷</div>
+                          <div className="text-sm cue-muted">
+                            參賽 {tournamentCareerByFormat.league.tournamentsEntered} 項 ·
+                            出賽 {tournamentCareerByFormat.league.matchesPlayed} 場 ·
+                            勝 {tournamentCareerByFormat.league.wins} 負 {tournamentCareerByFormat.league.losses} 和 {tournamentCareerByFormat.league.draws}
+                          </div>
+                          <div className="text-xs cue-muted mt-2">
+                            20+ {tournamentCareerByFormat.league.breaks20Plus} 次 · 最高 {tournamentCareerByFormat.league.highestBreak}
+                          </div>
                         </div>
                       </div>
 
                       <div className="cue-surface-strong rounded-lg p-4">
-                        <div className="font-semibold mb-2">每月累計走勢</div>
-                        {monthlySeries.length < 2 ? (
-                          <div className="text-sm cue-muted">資料不足</div>
+                        <div className="font-semibold mb-3">最近參與賽事</div>
+                        {recentTournaments.length === 0 ? (
+                          <div className="text-sm cue-muted">暫未有正式賽事記錄</div>
                         ) : (
-                          (() => {
-                            const w = 640;
-                            const h = 160;
-                            const pad = 18;
-                            const vals = monthlySeries.map((x) => x.value);
-                            const minV = Math.min(...vals);
-                            const maxV = Math.max(...vals);
-                            const span = Math.max(1, maxV - minV);
-                            const n = monthlySeries.length;
-                            const pts = monthlySeries.map((p, i) => {
-                              const x = pad + (i * (w - pad * 2)) / Math.max(1, n - 1);
-                              const y = pad + (h - pad * 2) * (1 - (p.value - minV) / span);
-                              return `${x.toFixed(1)},${y.toFixed(1)}`;
-                            }).join(' ');
-                            const first = monthlySeries[0]?.month || '';
-                            const last = monthlySeries[monthlySeries.length - 1]?.month || '';
-                            return (
-                              <div className="w-full">
-                                <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[160px]">
-                                  <polyline points={pts} fill="none" stroke="rgba(250,204,21,0.95)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-                                  <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="rgba(255,255,255,0.12)" />
-                                  <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="rgba(255,255,255,0.12)" />
-                                </svg>
-                                <div className="flex items-center justify-between text-xs cue-muted mt-1">
-                                  <div>{first}</div>
-                                  <div>{last}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {recentTournaments.map((row: any) => (
+                              <div key={`${row.tournamentId}-${row.format}`} className="rounded-lg px-3 py-2 cue-surface">
+                                <div className="font-semibold">{row.title}</div>
+                                <div className="text-xs cue-muted mt-1">
+                                  {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                  {row.club?.name ? ` · ${row.club.name}` : ''}
+                                  {row.startsAt ? ` · ${new Date(row.startsAt).toLocaleDateString()}` : ''}
+                                </div>
+                                <div className="text-xs cue-muted mt-1">
+                                  {row.finalRank ? `名次 #${row.finalRank}` : `狀態 ${row.participantStatus || '-'}`}
+                                  {row.seed ? ` · Seed #${row.seed}` : ''}
                                 </div>
                               </div>
-                            );
-                          })()
+                            ))}
+                          </div>
                         )}
                       </div>
 
                       <div className="cue-surface-strong rounded-lg p-4">
-                        <div className="font-semibold mb-3">歷史單杆查詢</div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setBreakQueryMode('range')}
-                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'range' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                          >
-                            時間段
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBreakQueryMode('year')}
-                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'year' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                          >
-                            年
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBreakQueryMode('month')}
-                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'month' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                          >
-                            月
-                          </button>
-                        </div>
-
-                        <div className="mt-3">
-                          {breakQueryMode === 'range' && (
-                            <div className="flex flex-wrap gap-2 items-center">
-                              <input type="date" value={breakFrom} onChange={(e) => setBreakFrom(e.target.value)} className="px-3 py-2 rounded cue-surface text-sm" />
-                              <div className="text-sm cue-muted">至</div>
-                              <input type="date" value={breakTo} onChange={(e) => setBreakTo(e.target.value)} className="px-3 py-2 rounded cue-surface text-sm" />
-                              <button
-                                type="button"
-                                onClick={() => { setBreakFrom(''); setBreakTo(''); }}
-                                className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
-                              >
-                                清除
-                              </button>
-                            </div>
-                          )}
-                          {breakQueryMode === 'year' && (
-                            <select
-                              value={breakYear ?? ''}
-                              onChange={(e) => setBreakYear(e.target.value ? Number(e.target.value) : null)}
-                              className="px-3 py-2 rounded cue-surface text-sm"
-                            >
-                              {breakYears.map((y) => (
-                                <option key={y} value={y}>{y}</option>
-                              ))}
-                            </select>
-                          )}
-                          {breakQueryMode === 'month' && (
-                            <select
-                              value={breakMonth}
-                              onChange={(e) => setBreakMonth(e.target.value)}
-                              className="px-3 py-2 rounded cue-surface text-sm"
-                            >
-                              <option value="">請選擇月份</option>
-                              {breakMonths.map((m) => (
-                                <option key={m} value={m}>{m}</option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-
-                        <div className="text-xs cue-muted mt-2">
-                          目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 共 {categorizedBreaks.length} 筆
-                        </div>
-
+                        <div className="font-semibold mb-3">最近正式對賽</div>
+                        {recentTournamentMatches.length === 0 ? (
+                          <div className="text-sm cue-muted">暫未有正式對賽記錄</div>
+                        ) : (
                         <div className="mt-3 overflow-x-auto -mx-2 px-2">
                           <table className="w-full text-left border-collapse text-sm">
                             <thead>
                               <tr className="cue-muted border-b cue-border">
                                 <th className="py-2 px-2 whitespace-nowrap">日期</th>
-                                <th className="py-2 px-2 whitespace-nowrap">類型</th>
-                                <th className="py-2 px-2">球館</th>
                                 <th className="py-2 px-2">賽事</th>
-                                <th className="py-2 px-2 whitespace-nowrap">單杆</th>
-                                <th className="py-2 px-2 whitespace-nowrap">影片</th>
+                                <th className="py-2 px-2 whitespace-nowrap">對手</th>
+                                <th className="py-2 px-2 whitespace-nowrap">結果</th>
+                                <th className="py-2 px-2 whitespace-nowrap">局數</th>
+                                <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {categorizedBreaks.slice(0, 200).map((b) => {
-                                const clubName = String(b.raw?.club?.name || b.raw?._club?.name || b.raw?.clubName || '-');
-                                const href = normalizeHttpUrl(b.raw?.video_url ?? b.raw?.videoUrl);
-                                const tournamentTitle = String(b.raw?.tournament?.title || '-');
-                                const recordTypeLabel = String(b.raw?.record_type || '').toUpperCase() === 'TOURNAMENT' ? '比賽' : '會內';
+                              {recentTournamentMatches.map((row: any) => {
+                                const dateValue = row.endedAt || row.startedAt;
                                 return (
-                                  <tr key={String(b.raw?.id || `${b.when.getTime()}-${b.points}`)} className="border-b cue-border hover:brightness-95">
+                                  <tr key={String(row.id)} className="border-b cue-border hover:brightness-95">
                                     <td className="py-2 px-2 cue-muted whitespace-nowrap">
-                                      {Number.isFinite(b.when.getTime()) ? b.when.toLocaleDateString() : '-'}
+                                      {dateValue ? new Date(dateValue).toLocaleDateString() : '-'}
                                     </td>
-                                    <td className="py-2 px-2 whitespace-nowrap">{recordTypeLabel}</td>
-                                    <td className="py-2 px-2">{clubName}</td>
-                                    <td className="py-2 px-2">{tournamentTitle}</td>
-                                    <td className="py-2 px-2 font-semibold accent-yellow whitespace-nowrap">{b.points}</td>
                                     <td className="py-2 px-2">
-                                      {href ? (
-                                        <a href={href} target="_blank" rel="noreferrer" className="accent-blue underline">連結</a>
-                                      ) : (
-                                        <span className="cue-muted">-</span>
-                                      )}
+                                      <div className="font-semibold">{row.tournamentTitle}</div>
+                                      <div className="text-xs cue-muted mt-1">
+                                        {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                        {row.club?.name ? ` · ${row.club.name}` : ''}
+                                      </div>
                                     </td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{row.opponent?.name || '-'}</td>
+                                    <td className="py-2 px-2">
+                                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                        row.result === '勝'
+                                          ? 'bg-emerald-500/15 text-emerald-300'
+                                          : row.result === '負'
+                                            ? 'bg-rose-500/15 text-rose-300'
+                                            : row.result === '和'
+                                              ? 'bg-sky-500/15 text-sky-300'
+                                              : 'bg-white/10 text-white/80'
+                                      }`}
+                                      >
+                                        {row.result}
+                                        {row.resultType && row.resultType !== 'STANDARD' ? ` · ${row.resultType}` : ''}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-2 whitespace-nowrap font-semibold">{row.framesWon}-{row.framesLost}</td>
+                                    <td className="py-2 px-2 whitespace-nowrap">{row.breaks20Plus} / {row.maxBreak}</td>
                                   </tr>
                                 );
                               })}
                             </tbody>
                           </table>
                         </div>
-                        {categorizedBreaks.length > 200 && <div className="text-xs cue-muted mt-2">只顯示前 200 筆</div>}
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
+
+                {highbreakEnabled && (
+                  <div className="cue-surface rounded-lg p-4">
+                    <div className="font-semibold text-lg mb-3">單杆歷史</div>
+                    {breaksLoading ? (
+                      <div className="text-sm cue-muted">讀取中…</div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setBreakCategory('ALL')}
+                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'ALL' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                          >
+                            全部
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBreakCategory('VENUE')}
+                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'VENUE' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                          >
+                            會內
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBreakCategory('TOURNAMENT')}
+                            className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'TOURNAMENT' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                          >
+                            比賽
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="text-sm cue-muted">目前分類最高</div>
+                            <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.highest || 0}</div>
+                          </div>
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="text-sm cue-muted">目前分類累計</div>
+                            <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.total || 0}</div>
+                          </div>
+                        </div>
+
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="font-semibold mb-2">每月累計走勢</div>
+                          {monthlySeries.length < 2 ? (
+                            <div className="text-sm cue-muted">資料不足</div>
+                          ) : (
+                            (() => {
+                              const w = 640;
+                              const h = 160;
+                              const pad = 18;
+                              const vals = monthlySeries.map((x) => x.value);
+                              const minV = Math.min(...vals);
+                              const maxV = Math.max(...vals);
+                              const span = Math.max(1, maxV - minV);
+                              const n = monthlySeries.length;
+                              const pts = monthlySeries.map((p, i) => {
+                                const x = pad + (i * (w - pad * 2)) / Math.max(1, n - 1);
+                                const y = pad + (h - pad * 2) * (1 - (p.value - minV) / span);
+                                return `${x.toFixed(1)},${y.toFixed(1)}`;
+                              }).join(' ');
+                              const first = monthlySeries[0]?.month || '';
+                              const last = monthlySeries[monthlySeries.length - 1]?.month || '';
+                              return (
+                                <div className="w-full">
+                                  <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[160px]">
+                                    <polyline points={pts} fill="none" stroke="rgba(250,204,21,0.95)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                                    <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="rgba(255,255,255,0.12)" />
+                                    <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="rgba(255,255,255,0.12)" />
+                                  </svg>
+                                  <div className="flex items-center justify-between text-xs cue-muted mt-1">
+                                    <div>{first}</div>
+                                    <div>{last}</div>
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
+                        </div>
+
+                        <div className="cue-surface-strong rounded-lg p-4">
+                          <div className="font-semibold mb-3">歷史單杆查詢</div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setBreakQueryMode('range')}
+                              className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'range' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              時間段
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBreakQueryMode('year')}
+                              className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'year' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              年
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBreakQueryMode('month')}
+                              className={`px-3 py-1.5 rounded text-sm font-semibold ${breakQueryMode === 'month' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              月
+                            </button>
+                          </div>
+
+                          <div className="mt-3">
+                            {breakQueryMode === 'range' && (
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <input type="date" value={breakFrom} onChange={(e) => setBreakFrom(e.target.value)} className="px-3 py-2 rounded cue-surface text-sm" />
+                                <div className="text-sm cue-muted">至</div>
+                                <input type="date" value={breakTo} onChange={(e) => setBreakTo(e.target.value)} className="px-3 py-2 rounded cue-surface text-sm" />
+                                <button
+                                  type="button"
+                                  onClick={() => { setBreakFrom(''); setBreakTo(''); }}
+                                  className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                                >
+                                  清除
+                                </button>
+                              </div>
+                            )}
+                            {breakQueryMode === 'year' && (
+                              <select
+                                value={breakYear ?? ''}
+                                onChange={(e) => setBreakYear(e.target.value ? Number(e.target.value) : null)}
+                                className="px-3 py-2 rounded cue-surface text-sm"
+                              >
+                                {breakYears.map((y) => (
+                                  <option key={y} value={y}>{y}</option>
+                                ))}
+                              </select>
+                            )}
+                            {breakQueryMode === 'month' && (
+                              <select
+                                value={breakMonth}
+                                onChange={(e) => setBreakMonth(e.target.value)}
+                                className="px-3 py-2 rounded cue-surface text-sm"
+                              >
+                                <option value="">請選擇月份</option>
+                                {breakMonths.map((m) => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+
+                          <div className="text-xs cue-muted mt-2">
+                            目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 共 {categorizedBreaks.length} 筆
+                          </div>
+
+                          <div className="mt-3 overflow-x-auto -mx-2 px-2">
+                            <table className="w-full text-left border-collapse text-sm">
+                              <thead>
+                                <tr className="cue-muted border-b cue-border">
+                                  <th className="py-2 px-2 whitespace-nowrap">日期</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">類型</th>
+                                  <th className="py-2 px-2">球館</th>
+                                  <th className="py-2 px-2">賽事</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">單杆</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">影片</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {categorizedBreaks.slice(0, 200).map((b) => {
+                                  const clubName = String(b.raw?.club?.name || b.raw?._club?.name || b.raw?.clubName || '-');
+                                  const href = normalizeHttpUrl(b.raw?.video_url ?? b.raw?.videoUrl);
+                                  const tournamentTitle = String(b.raw?.tournament?.title || '-');
+                                  const recordTypeLabel = String(b.raw?.record_type || '').toUpperCase() === 'TOURNAMENT' ? '比賽' : '會內';
+                                  return (
+                                    <tr key={String(b.raw?.id || `${b.when.getTime()}-${b.points}`)} className="border-b cue-border hover:brightness-95">
+                                      <td className="py-2 px-2 cue-muted whitespace-nowrap">
+                                        {Number.isFinite(b.when.getTime()) ? b.when.toLocaleDateString() : '-'}
+                                      </td>
+                                      <td className="py-2 px-2 whitespace-nowrap">{recordTypeLabel}</td>
+                                      <td className="py-2 px-2">{clubName}</td>
+                                      <td className="py-2 px-2">{tournamentTitle}</td>
+                                      <td className="py-2 px-2 font-semibold accent-yellow whitespace-nowrap">{b.points}</td>
+                                      <td className="py-2 px-2">
+                                        {href ? (
+                                          <a href={href} target="_blank" rel="noreferrer" className="accent-blue underline">連結</a>
+                                        ) : (
+                                          <span className="cue-muted">-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {categorizedBreaks.length > 200 && <div className="text-xs cue-muted mt-2">只顯示前 200 筆</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

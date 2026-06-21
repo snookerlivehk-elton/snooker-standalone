@@ -392,6 +392,254 @@ export function createMemberRouter(options: MemberRouterOptions) {
     }
   });
 
+  router.get('/api/members/:id/tournament-career', async (req, res) => {
+    try {
+      const idOrEmail = String(req.params.id || '').trim();
+      if (!idOrEmail) return res.status(400).json({ error: 'id required' });
+
+      const member = await findMemberByIdOrEmail(idOrEmail);
+      if (!member) return res.status(404).json({ error: 'not found' });
+      const targetId = String(member.id);
+
+      const [participants, matches, breaks] = await Promise.all([
+        prisma.tournamentParticipant.findMany({
+          where: { member_id: targetId },
+          include: {
+            tournament: {
+              select: {
+                id: true,
+                title: true,
+                format: true,
+                startsAt: true,
+                workflow_status: true,
+                status: true,
+                club: { select: { id: true, name: true, logoUrl: true } },
+              },
+            },
+          },
+          orderBy: [{ created_at: 'desc' }],
+        }),
+        prisma.tournamentMatch.findMany({
+          where: {
+            status: 'COMPLETED',
+            OR: [
+              { player_a_participant: { is: { member_id: targetId } } },
+              { player_b_participant: { is: { member_id: targetId } } },
+            ],
+          },
+          include: {
+            tournament: {
+              select: {
+                id: true,
+                title: true,
+                format: true,
+                startsAt: true,
+                club: { select: { id: true, name: true, logoUrl: true } },
+              },
+            },
+            player_a_participant: {
+              include: { member: { select: { id: true, name: true, member_code: true } } },
+            },
+            player_b_participant: {
+              include: { member: { select: { id: true, name: true, member_code: true } } },
+            },
+            winner_participant: {
+              include: { member: { select: { id: true, name: true, member_code: true } } },
+            },
+          },
+          orderBy: [{ ended_at: 'desc' }, { updated_at: 'desc' }],
+        }),
+        prisma.breakRecord.findMany({
+          where: {
+            member_id: targetId,
+            record_type: 'TOURNAMENT',
+            deleted_at: null,
+          },
+          include: {
+            tournament: { select: { id: true, title: true, format: true } },
+          },
+          orderBy: [{ recorded_at: 'desc' }],
+        }),
+      ]);
+
+      const summary = {
+        tournamentsEntered: participants.length,
+        completedTournaments: 0,
+        matchesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        winRate: 0,
+        framesWon: 0,
+        framesLost: 0,
+        frameDiff: 0,
+        totalPointsFor: 0,
+        totalPointsAgainst: 0,
+        totalPointsDiff: 0,
+        breaks20Plus: 0,
+        highestBreak: 0,
+        championships: 0,
+        runnerUps: 0,
+        semiFinals: 0,
+      };
+      const byFormat: Record<'KNOCKOUT' | 'LEAGUE', any> = {
+        KNOCKOUT: {
+          tournamentsEntered: 0,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          breaks20Plus: 0,
+          highestBreak: 0,
+        },
+        LEAGUE: {
+          tournamentsEntered: 0,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          breaks20Plus: 0,
+          highestBreak: 0,
+        },
+      };
+
+      for (const participant of participants) {
+        const format = String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+        byFormat[format].tournamentsEntered += 1;
+        if (String(participant?.tournament?.workflow_status || '').toUpperCase() === 'COMPLETED') {
+          summary.completedTournaments += 1;
+        }
+        const finalRank = Number(participant?.final_rank || 0);
+        if (finalRank === 1 || String(participant?.status || '').toUpperCase() === 'CHAMPION') summary.championships += 1;
+        if (finalRank === 2) summary.runnerUps += 1;
+        if (finalRank === 3) summary.semiFinals += 1;
+      }
+
+      const recentMatches = matches
+        .map((match) => {
+          const mySide = String(match?.player_a_participant?.member_id || '') === targetId ? 'A' : 'B';
+          const mine = mySide === 'A' ? match?.player_a_participant : match?.player_b_participant;
+          const opponent = mySide === 'A' ? match?.player_b_participant : match?.player_a_participant;
+          const resultType = String(match?.result_type || 'STANDARD').toUpperCase();
+          const format = String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+          const framesWon = Number(mySide === 'A' ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0);
+          const framesLost = Number(mySide === 'A' ? match?.player_b_frames_won || 0 : match?.player_a_frames_won || 0);
+          const totalPointsFor = Number(mySide === 'A' ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0);
+          const totalPointsAgainst = Number(mySide === 'A' ? match?.player_b_total_points || 0 : match?.player_a_total_points || 0);
+          const maxBreak = Number(mySide === 'A' ? match?.player_a_max_break || 0 : match?.player_b_max_break || 0);
+          const breaks20Plus = Number(mySide === 'A' ? match?.player_a_20_plus_count || 0 : match?.player_b_20_plus_count || 0);
+          const winnerParticipantId = String(match?.winner_participant_id || '');
+          const myParticipantId = String(mine?.id || '');
+          const isBye = resultType === 'BYE' || !opponent?.member;
+
+          if (!isBye) {
+            summary.matchesPlayed += 1;
+            summary.framesWon += framesWon;
+            summary.framesLost += framesLost;
+            summary.totalPointsFor += totalPointsFor;
+            summary.totalPointsAgainst += totalPointsAgainst;
+            summary.highestBreak = Math.max(summary.highestBreak, maxBreak);
+            byFormat[format].matchesPlayed += 1;
+            byFormat[format].highestBreak = Math.max(byFormat[format].highestBreak, maxBreak);
+
+            if (winnerParticipantId && winnerParticipantId === myParticipantId) {
+              summary.wins += 1;
+              byFormat[format].wins += 1;
+            } else if (winnerParticipantId && winnerParticipantId !== myParticipantId) {
+              summary.losses += 1;
+              byFormat[format].losses += 1;
+            } else {
+              summary.draws += 1;
+              byFormat[format].draws += 1;
+            }
+          }
+
+          return {
+            id: String(match.id),
+            tournamentId: String(match?.tournament?.id || ''),
+            tournamentTitle: String(match?.tournament?.title || '-'),
+            format,
+            club: match?.tournament?.club || null,
+            roundNo: Number(match?.round_no || 0),
+            matchNo: Number(match?.match_no || 0),
+            stageCode: String(match?.stage_code || ''),
+            resultType,
+            result:
+              isBye
+                ? '輪空'
+                : winnerParticipantId
+                  ? winnerParticipantId === myParticipantId ? '勝' : '負'
+                  : '和',
+            opponent: opponent?.member ? {
+              id: String(opponent.member.id),
+              name: String(opponent.member.name || ''),
+              memberCode: String(opponent.member.member_code || ''),
+            } : null,
+            framesWon,
+            framesLost,
+            totalPointsFor,
+            totalPointsAgainst,
+            maxBreak,
+            breaks20Plus,
+            startedAt: match?.started_at ?? null,
+            endedAt: match?.ended_at ?? null,
+          };
+        });
+
+      for (const row of recentMatches) {
+        if (row.resultType === 'BYE') continue;
+        if (row.format !== 'KNOCKOUT' && row.format !== 'LEAGUE') continue;
+        summary.highestBreak = Math.max(summary.highestBreak, Number(row.maxBreak || 0));
+      }
+
+      for (const row of breaks) {
+        const format = String(row?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+        const points = Math.max(0, Number(row?.points || 0));
+        summary.breaks20Plus += 1;
+        summary.highestBreak = Math.max(summary.highestBreak, points);
+        byFormat[format].breaks20Plus += 1;
+        byFormat[format].highestBreak = Math.max(byFormat[format].highestBreak, points);
+      }
+
+      summary.frameDiff = summary.framesWon - summary.framesLost;
+      summary.totalPointsDiff = summary.totalPointsFor - summary.totalPointsAgainst;
+      summary.winRate = summary.matchesPlayed > 0 ? Number(((summary.wins / summary.matchesPlayed) * 100).toFixed(1)) : 0;
+
+      const recentTournaments = participants
+        .map((participant) => ({
+          tournamentId: String(participant?.tournament?.id || ''),
+          title: String(participant?.tournament?.title || '-'),
+          format: String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT',
+          startsAt: participant?.tournament?.startsAt ?? null,
+          workflowStatus: String(participant?.tournament?.workflow_status || ''),
+          participantStatus: String(participant?.status || ''),
+          finalRank: participant?.final_rank ?? null,
+          seed: participant?.seed ?? null,
+          club: participant?.tournament?.club || null,
+        }))
+        .sort((a, b) => {
+          const aTime = a.startsAt ? new Date(a.startsAt).getTime() : 0;
+          const bTime = b.startsAt ? new Date(b.startsAt).getTime() : 0;
+          return bTime - aTime;
+        })
+        .slice(0, 10);
+
+      res.json({
+        member: {
+          id: member.id,
+          name: member.name,
+          memberCode: member.member_code,
+        },
+        summary,
+        byFormat,
+        recentMatches: recentMatches.slice(0, 10),
+        recentTournaments,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err?.message || err) });
+    }
+  });
+
   router.get('/api/me/breaks', async (req, res) => {
     try {
       const memberId = String(req.headers['x-member-id'] || '').trim();

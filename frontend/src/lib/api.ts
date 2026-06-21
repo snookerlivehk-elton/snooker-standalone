@@ -1779,6 +1779,15 @@ export async function getMemberMatches(
   return res.json(); // { matches: [] }
 }
 
+export async function getMemberTournamentCareer(
+  apiUrl: string,
+  id: string,
+) {
+  const res = await fetch(`${apiUrl}/api/members/${id}/tournament-career`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`取得賽事履歷失敗 (${res.status})`);
+  return res.json();
+}
+
 export async function requestPasswordResetCode(apiUrl: string, email: string) {
   const res = await fetch(`${apiUrl}/api/members/request-password-reset-code`, {
     method: 'POST',
