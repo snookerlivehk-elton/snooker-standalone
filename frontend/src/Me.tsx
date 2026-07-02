@@ -7,6 +7,7 @@ import {
   getMember,
   getClubProfile,
   getMemberTournamentCareer,
+  getMemberTournamentMatchDetail,
   getMemberTournamentHeadToHead,
   getMemberTournamentHistory,
   getMyBreaks,
@@ -45,6 +46,21 @@ function formatDateLabel(raw: any): string {
   return date.toLocaleDateString();
 }
 
+function formatDateTimeLabel(raw: any): string {
+  if (!raw) return '-';
+  const date = new Date(String(raw));
+  if (!Number.isFinite(date.getTime())) return '-';
+  return date.toLocaleString();
+}
+
+function formatTournamentResultTypeLabel(value: any): string {
+  const normalized = String(value || 'STANDARD').trim().toUpperCase();
+  if (normalized === 'BYE') return '輪空';
+  if (normalized === 'WALKOVER') return 'Walkover';
+  if (normalized === 'FORFEIT') return 'Forfeit';
+  return 'Standard';
+}
+
 type LocalMsgState = { read: Record<string, boolean>; hidden: Record<string, boolean> };
 
 type InboxItem = {
@@ -80,6 +96,10 @@ const Me: React.FC = () => {
   const [tournamentHistoryLoading, setTournamentHistoryLoading] = useState(false);
   const [tournamentHeadToHead, setTournamentHeadToHead] = useState<any>(null);
   const [tournamentHeadToHeadLoading, setTournamentHeadToHeadLoading] = useState(false);
+  const [selectedTournamentMatchId, setSelectedTournamentMatchId] = useState<string | null>(null);
+  const [selectedTournamentMatchDetail, setSelectedTournamentMatchDetail] = useState<any>(null);
+  const [selectedTournamentMatchLoading, setSelectedTournamentMatchLoading] = useState(false);
+  const [selectedTournamentMatchError, setSelectedTournamentMatchError] = useState<string | null>(null);
   const [clubMessages, setClubMessages] = useState<any[]>([]);
   const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
   const [publicLiveAnnouncements, setPublicLiveAnnouncements] = useState<any[]>([]);
@@ -472,6 +492,32 @@ const Me: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, [memberId, headToHeadFormatFilter, headToHeadYearFilter]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!memberId || !selectedTournamentMatchId) {
+      setSelectedTournamentMatchDetail(null);
+      setSelectedTournamentMatchLoading(false);
+      setSelectedTournamentMatchError(null);
+      return () => { mounted = false; };
+    }
+    (async () => {
+      setSelectedTournamentMatchLoading(true);
+      setSelectedTournamentMatchError(null);
+      try {
+        const row = await getMemberTournamentMatchDetail(API_URL, memberId, selectedTournamentMatchId);
+        if (mounted) setSelectedTournamentMatchDetail(row && typeof row === 'object' ? ((row as any).detail || null) : null);
+      } catch (e: any) {
+        if (mounted) {
+          setSelectedTournamentMatchDetail(null);
+          setSelectedTournamentMatchError(String(e?.message || '讀取賽事詳情失敗'));
+        }
+      } finally {
+        if (mounted) setSelectedTournamentMatchLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [memberId, selectedTournamentMatchId]);
 
   useEffect(() => {
     let mounted = true;
@@ -1966,6 +2012,7 @@ const Me: React.FC = () => {
                                 <th className="py-2 px-2 whitespace-nowrap">結果</th>
                                 <th className="py-2 px-2 whitespace-nowrap">局數</th>
                                 <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                <th className="py-2 px-2 whitespace-nowrap">詳情</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2001,6 +2048,15 @@ const Me: React.FC = () => {
                                     </td>
                                     <td className="py-2 px-2 whitespace-nowrap font-semibold">{row.framesWon}-{row.framesLost}</td>
                                     <td className="py-2 px-2 whitespace-nowrap">{row.breaks20Plus} / {row.maxBreak}</td>
+                                    <td className="py-2 px-2 whitespace-nowrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedTournamentMatchId(String(row.id))}
+                                        className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+                                      >
+                                        查看
+                                      </button>
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -2081,6 +2137,7 @@ const Me: React.FC = () => {
                                   <th className="py-2 px-2 whitespace-nowrap">局數</th>
                                   <th className="py-2 px-2 whitespace-nowrap">得分</th>
                                   <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">詳情</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2118,6 +2175,15 @@ const Me: React.FC = () => {
                                       <td className="py-2 px-2 whitespace-nowrap font-semibold">{row.scoreLabel}</td>
                                       <td className="py-2 px-2 whitespace-nowrap">{row.totalPointsFor}-{row.totalPointsAgainst}</td>
                                       <td className="py-2 px-2 whitespace-nowrap">{row.breaks20Plus} / {row.maxBreak}</td>
+                                      <td className="py-2 px-2 whitespace-nowrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedTournamentMatchId(String(row.id))}
+                                          className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+                                        >
+                                          查看
+                                        </button>
+                                      </td>
                                     </tr>
                                   );
                                 })}
@@ -2215,6 +2281,15 @@ const Me: React.FC = () => {
                                             {row.recentMatch.scoreLabel ? ` · ${row.recentMatch.scoreLabel}` : ''}
                                             {row.recentMatch.result ? ` · ${row.recentMatch.result}` : ''}
                                           </div>
+                                          {row.recentMatch.id ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => setSelectedTournamentMatchId(String(row.recentMatch.id))}
+                                              className="mt-2 px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+                                            >
+                                              查看詳情
+                                            </button>
+                                          ) : null}
                                         </div>
                                       ) : (
                                         <span className="cue-muted">-</span>
@@ -2425,6 +2500,224 @@ const Me: React.FC = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {!!selectedTournamentMatchId && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80" onClick={() => setSelectedTournamentMatchId(null)} />
+                    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto cue-surface rounded-xl p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-lg font-extrabold accent-yellow truncate">正式賽詳情</div>
+                          <div className="text-xs cue-muted mt-1">
+                            {selectedTournamentMatchDetail?.tournament?.title || '讀取中'}
+                            {selectedTournamentMatchDetail?.match?.roundLabel ? ` · ${selectedTournamentMatchDetail.match.roundLabel}` : ''}
+                            {selectedTournamentMatchDetail?.tournament?.club?.name ? ` · ${selectedTournamentMatchDetail.tournament.club.name}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTournamentMatchId(null)}
+                          className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-sm font-semibold"
+                        >
+                          關閉
+                        </button>
+                      </div>
+
+                      {selectedTournamentMatchLoading ? (
+                        <div className="mt-4 text-sm cue-muted">讀取中…</div>
+                      ) : selectedTournamentMatchError ? (
+                        <div className="mt-4 text-sm text-rose-300">{selectedTournamentMatchError}</div>
+                      ) : !selectedTournamentMatchDetail ? (
+                        <div className="mt-4 text-sm cue-muted">未找到賽事詳情</div>
+                      ) : (
+                        <div className="mt-4 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">結果</div>
+                              <div className="text-2xl font-extrabold accent-yellow mt-1">
+                                {selectedTournamentMatchDetail.match?.result || '-'}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">
+                                {formatTournamentResultTypeLabel(selectedTournamentMatchDetail.resultType)}
+                              </div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">局數</div>
+                              <div className="text-2xl font-extrabold accent-yellow mt-1">
+                                {selectedTournamentMatchDetail.match?.scoreLabel || '-'}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">
+                                Best of {selectedTournamentMatchDetail.bestOfFrames || '-'}
+                              </div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">開打 / 完結</div>
+                              <div className="text-sm font-semibold mt-2">
+                                {formatDateTimeLabel(selectedTournamentMatchDetail.match?.startedAt)}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">
+                                完結：{formatDateTimeLabel(selectedTournamentMatchDetail.match?.endedAt)}
+                              </div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">場地資訊</div>
+                              <div className="text-sm font-semibold mt-2">
+                                球枱：{selectedTournamentMatchDetail.tableNo || '-'}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">
+                                排程：{formatDateTimeLabel(selectedTournamentMatchDetail.scheduledAt)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {[selectedTournamentMatchDetail.playerA, selectedTournamentMatchDetail.playerB].map((player: any) => (
+                              <div
+                                key={String(player?.participantId || player?.side || Math.random())}
+                                className={`rounded-lg p-4 ${player?.isTarget ? 'cue-surface ring-1 ring-amber-300/40' : 'cue-surface-strong'}`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="font-semibold truncate">
+                                      {player?.name || '-'}
+                                      {player?.isTarget ? ' · 你' : ''}
+                                    </div>
+                                    <div className="text-xs cue-muted mt-1">
+                                      {player?.memberCode || '-'}
+                                      {player?.seed ? ` · Seed #${player.seed}` : ''}
+                                      {player?.finalRank ? ` · 名次 #${player.finalRank}` : ''}
+                                    </div>
+                                  </div>
+                                  <div className={`px-2 py-1 rounded text-xs font-semibold ${player?.isWinner ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-white/80'}`}>
+                                    {player?.isWinner ? '勝方' : '對局方'}
+                                  </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                                  <div className="rounded p-2 cue-surface">
+                                    <div className="cue-muted text-xs">局數</div>
+                                    <div className="font-semibold mt-1">{player?.framesWon ?? 0}</div>
+                                  </div>
+                                  <div className="rounded p-2 cue-surface">
+                                    <div className="cue-muted text-xs">得分</div>
+                                    <div className="font-semibold mt-1">{player?.totalPoints ?? 0}</div>
+                                  </div>
+                                  <div className="rounded p-2 cue-surface">
+                                    <div className="cue-muted text-xs">20+</div>
+                                    <div className="font-semibold mt-1">{player?.breaks20Plus ?? 0}</div>
+                                  </div>
+                                  <div className="rounded p-2 cue-surface">
+                                    <div className="cue-muted text-xs">最高 break</div>
+                                    <div className="font-semibold mt-1">{player?.maxBreak ?? 0}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <div className="font-semibold">逐局詳情</div>
+                              <div className="text-xs cue-muted">
+                                共 {Array.isArray(selectedTournamentMatchDetail.frames) ? selectedTournamentMatchDetail.frames.length : 0} 局
+                              </div>
+                            </div>
+                            {!Array.isArray(selectedTournamentMatchDetail.frames) || selectedTournamentMatchDetail.frames.length === 0 ? (
+                              <div className="text-sm cue-muted">
+                                {selectedTournamentMatchDetail.resultType && selectedTournamentMatchDetail.resultType !== 'STANDARD'
+                                  ? `此場以 ${formatTournamentResultTypeLabel(selectedTournamentMatchDetail.resultType)} 完結，未有逐局資料`
+                                  : '未有逐局資料'}
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {selectedTournamentMatchDetail.frames.map((frame: any) => (
+                                  <div key={String(frame?.id || frame?.frameNo || Math.random())} className="rounded-lg p-4 cue-surface">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="font-semibold">第 {frame?.frameNo || '-'} 局</div>
+                                        <div className="text-xs cue-muted mt-1">
+                                          {frame?.winnerSide === 'A'
+                                            ? `${selectedTournamentMatchDetail.playerA?.name || 'A'} 勝`
+                                            : frame?.winnerSide === 'B'
+                                              ? `${selectedTournamentMatchDetail.playerB?.name || 'B'} 勝`
+                                              : '未記錄勝方'}
+                                        </div>
+                                      </div>
+                                      <div className="text-sm font-semibold">
+                                        {frame?.playerAScore ?? 0} - {frame?.playerBScore ?? 0}
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-sm">
+                                      <div className="rounded p-3 cue-surface-strong">
+                                        <div className="font-semibold">{selectedTournamentMatchDetail.playerA?.name || 'A'}</div>
+                                        <div className="text-xs cue-muted mt-1">最高 break {frame?.playerAHighestBreak ?? 0}</div>
+                                      </div>
+                                      <div className="rounded p-3 cue-surface-strong">
+                                        <div className="font-semibold">{selectedTournamentMatchDetail.playerB?.name || 'B'}</div>
+                                        <div className="text-xs cue-muted mt-1">最高 break {frame?.playerBHighestBreak ?? 0}</div>
+                                      </div>
+                                    </div>
+                                    {Array.isArray(frame?.breaks) && frame.breaks.length > 0 ? (
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {frame.breaks.map((row: any) => (
+                                          <span
+                                            key={String(row?.id || Math.random())}
+                                            className={`px-3 py-1.5 rounded text-xs font-semibold ${row?.isTarget ? 'bg-amber-500/15 text-amber-200' : 'bg-white/10 text-white/80'}`}
+                                          >
+                                            {row?.player?.name || '-'} {row?.points || 0}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <div className="font-semibold">Break 記錄</div>
+                              <div className="text-xs cue-muted">
+                                共 {Array.isArray(selectedTournamentMatchDetail.breaks) ? selectedTournamentMatchDetail.breaks.length : 0} 筆
+                              </div>
+                            </div>
+                            {!Array.isArray(selectedTournamentMatchDetail.breaks) || selectedTournamentMatchDetail.breaks.length === 0 ? (
+                              <div className="text-sm cue-muted">未有 break 記錄</div>
+                            ) : (
+                              <div className="overflow-x-auto -mx-2 px-2">
+                                <table className="w-full text-left border-collapse text-sm">
+                                  <thead>
+                                    <tr className="cue-muted border-b cue-border">
+                                      <th className="py-2 px-2 whitespace-nowrap">時間</th>
+                                      <th className="py-2 px-2 whitespace-nowrap">局</th>
+                                      <th className="py-2 px-2 whitespace-nowrap">球手</th>
+                                      <th className="py-2 px-2 whitespace-nowrap">Break</th>
+                                      <th className="py-2 px-2">備註</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedTournamentMatchDetail.breaks.map((row: any) => (
+                                      <tr key={String(row?.id || Math.random())} className="border-b cue-border">
+                                        <td className="py-2 px-2 whitespace-nowrap cue-muted">{formatDateTimeLabel(row?.recordedAt)}</td>
+                                        <td className="py-2 px-2 whitespace-nowrap">{row?.frameNo ?? '-'}</td>
+                                        <td className="py-2 px-2 whitespace-nowrap">
+                                          {row?.player?.name || '-'}
+                                          {row?.isTarget ? ' · 你' : ''}
+                                        </td>
+                                        <td className="py-2 px-2 whitespace-nowrap font-semibold accent-yellow">{row?.points ?? 0}</td>
+                                        <td className="py-2 px-2">{row?.note || '-'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1819,6 +1819,16 @@ export async function getMemberTournamentHeadToHead(
   return res.json();
 }
 
+export async function getMemberTournamentMatchDetail(
+  apiUrl: string,
+  id: string,
+  matchId: string,
+) {
+  const res = await fetch(`${apiUrl}/api/members/${id}/tournament-history/${encodeURIComponent(matchId)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`取得賽事詳情失敗 (${res.status})`);
+  return res.json();
+}
+
 export async function requestPasswordResetCode(apiUrl: string, email: string) {
   const res = await fetch(`${apiUrl}/api/members/request-password-reset-code`, {
     method: 'POST',

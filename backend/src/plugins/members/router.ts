@@ -292,6 +292,124 @@ export function createMemberRouter(options: MemberRouterOptions) {
     });
   }
 
+  function buildTournamentMatchDetail(match: any, targetId: string) {
+    const summary = buildTournamentMatchHistoryRows([match], targetId)[0] || null;
+    if (!summary) return null;
+    const playerA = match?.player_a_participant || null;
+    const playerB = match?.player_b_participant || null;
+    const winnerParticipantId = String(match?.winner_participant_id || '');
+    const targetParticipantId = String(
+      String(playerA?.member_id || '') === targetId ? playerA?.id || '' : playerB?.id || '',
+    );
+    const targetSide = targetParticipantId && String(playerA?.id || '') === targetParticipantId ? 'A' : 'B';
+    const winnerSide = winnerParticipantId
+      ? winnerParticipantId === String(playerA?.id || '')
+        ? 'A'
+        : winnerParticipantId === String(playerB?.id || '')
+          ? 'B'
+          : null
+      : null;
+
+    const buildSide = (participant: any, side: 'A' | 'B') => ({
+      side,
+      participantId: String(participant?.id || ''),
+      memberId: String(participant?.member?.id || participant?.member_id || ''),
+      name: String(participant?.member?.name || '-'),
+      memberCode: String(participant?.member?.member_code || ''),
+      seed: participant?.seed ?? null,
+      finalRank: participant?.final_rank ?? null,
+      participantStatus: String(participant?.status || ''),
+      framesWon: Number(side === 'A' ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0),
+      totalPoints: Number(side === 'A' ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0),
+      maxBreak: Number(side === 'A' ? match?.player_a_max_break || 0 : match?.player_b_max_break || 0),
+      breaks20Plus: Number(side === 'A' ? match?.player_a_20_plus_count || 0 : match?.player_b_20_plus_count || 0),
+      isTarget: String(participant?.member?.id || participant?.member_id || '') === targetId,
+      isWinner: !!winnerParticipantId && winnerParticipantId === String(participant?.id || ''),
+    });
+
+    const playerASummary = buildSide(playerA, 'A');
+    const playerBSummary = buildSide(playerB, 'B');
+    const rawBreaks = Array.isArray(match?.break_records) ? match.break_records : [];
+    const breaks = rawBreaks.map((row: any) => {
+      const memberId = String(row?.member?.id || row?.member_id || '');
+      const side = memberId && memberId === playerASummary.memberId ? 'A' : memberId === playerBSummary.memberId ? 'B' : null;
+      return {
+        id: String(row?.id || ''),
+        frameNo: row?.frame_no == null ? null : Number(row.frame_no || 0),
+        points: Number(row?.points || 0),
+        thresholdSnapshot: row?.threshold_snapshot == null ? null : Number(row.threshold_snapshot || 0),
+        recordedAt: row?.recorded_at ?? null,
+        note: row?.note ? String(row.note) : null,
+        videoUrl: row?.video_url ? String(row.video_url) : null,
+        player: {
+          id: memberId,
+          name: String(row?.member?.name || '-'),
+          memberCode: String(row?.member?.member_code || ''),
+        },
+        side,
+        isTarget: memberId === targetId,
+      };
+    });
+
+    const breaksByFrame = new Map<number, any[]>();
+    for (const row of breaks) {
+      if (!Number.isFinite(Number(row.frameNo))) continue;
+      const frameNo = Number(row.frameNo);
+      const current = breaksByFrame.get(frameNo) || [];
+      current.push(row);
+      breaksByFrame.set(frameNo, current);
+    }
+
+    const frames = (Array.isArray(match?.frames) ? match.frames : []).map((frame: any) => {
+      const winnerId = String(frame?.winner_participant_id || '');
+      const frameWinnerSide = winnerId
+        ? winnerId === String(playerA?.id || '')
+          ? 'A'
+          : winnerId === String(playerB?.id || '')
+            ? 'B'
+            : null
+        : null;
+      const frameNo = Number(frame?.frame_no || 0);
+      return {
+        id: String(frame?.id || ''),
+        frameNo,
+        winnerSide: frameWinnerSide,
+        playerAScore: Number(frame?.player_a_score || 0),
+        playerBScore: Number(frame?.player_b_score || 0),
+        playerAHighestBreak: Number(frame?.player_a_highest_break || 0),
+        playerBHighestBreak: Number(frame?.player_b_highest_break || 0),
+        startedAt: frame?.started_at ?? null,
+        endedAt: frame?.ended_at ?? null,
+        breaks: breaksByFrame.get(frameNo) || [],
+      };
+    });
+
+    return {
+      match: summary,
+      targetSide,
+      winnerSide,
+      tournament: {
+        id: String(match?.tournament?.id || ''),
+        title: String(match?.tournament?.title || '-'),
+        format: String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT',
+        startsAt: match?.tournament?.startsAt ?? null,
+        workflowStatus: String(match?.tournament?.workflow_status || ''),
+        status: String(match?.tournament?.status || ''),
+        club: match?.tournament?.club || null,
+      },
+      stageCode: String(match?.stage_code || ''),
+      tableNo: match?.table_no ? String(match.table_no) : null,
+      scheduledAt: match?.scheduled_at ?? null,
+      bestOfFrames: match?.best_of_frames == null ? null : Number(match.best_of_frames || 0),
+      resultType: String(match?.result_type || 'STANDARD').toUpperCase(),
+      playerA: playerASummary,
+      playerB: playerBSummary,
+      frames,
+      breaks,
+      unassignedBreaks: breaks.filter((row: any) => row.frameNo == null),
+    };
+  }
+
   function getTournamentFinishLabel(rankRaw: any) {
     const rank = Number(rankRaw || 0);
     if (!Number.isFinite(rank) || rank <= 0) return '-';
@@ -964,6 +1082,80 @@ export function createMemberRouter(options: MemberRouterOptions) {
         availableYears,
         total: rows.length,
         headToHead: rows.slice(0, limit),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: String(err?.message || err) });
+    }
+  });
+
+  router.get('/api/members/:id/tournament-history/:matchId', async (req, res) => {
+    try {
+      const idOrEmail = String(req.params.id || '').trim();
+      const matchId = String(req.params.matchId || '').trim();
+      if (!idOrEmail) return res.status(400).json({ error: 'id required' });
+      if (!matchId) return res.status(400).json({ error: 'matchId required' });
+
+      const member = await findMemberByIdOrEmail(idOrEmail);
+      if (!member) return res.status(404).json({ error: 'not found' });
+      const targetId = String(member.id);
+
+      const match = await prisma.tournamentMatch.findFirst({
+        where: {
+          id: matchId,
+          status: 'COMPLETED',
+          OR: [
+            { player_a_participant: { is: { member_id: targetId } } },
+            { player_b_participant: { is: { member_id: targetId } } },
+          ],
+        },
+        include: {
+          tournament: {
+            select: {
+              id: true,
+              title: true,
+              format: true,
+              startsAt: true,
+              workflow_status: true,
+              status: true,
+              club: { select: { id: true, name: true, logoUrl: true } },
+            },
+          },
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          frames: {
+            orderBy: [{ frame_no: 'asc' }],
+          },
+          break_records: {
+            where: {
+              deleted_at: null,
+              record_type: 'TOURNAMENT',
+            },
+            orderBy: [{ frame_no: 'asc' }, { recorded_at: 'asc' }, { created_at: 'asc' }],
+            include: {
+              member: { select: { id: true, name: true, member_code: true } },
+            },
+          },
+        },
+      });
+
+      if (!match) return res.status(404).json({ error: 'not found' });
+      const detail = buildTournamentMatchDetail(match, targetId);
+      if (!detail) return res.status(404).json({ error: 'not found' });
+
+      res.json({
+        member: {
+          id: member.id,
+          name: member.name,
+          memberCode: member.member_code,
+        },
+        detail,
       });
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });
