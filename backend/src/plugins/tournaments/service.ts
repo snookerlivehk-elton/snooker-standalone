@@ -100,6 +100,11 @@ function normalizeTournamentFormat(value: any): TournamentFormat {
   return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
 }
 
+function getTargetWins(bestOfRaw: any) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1)));
+  return Math.floor(bestOf / 2) + 1;
+}
+
 async function getOwnedTournament(clubId: string, tournamentId: string) {
   const tournament = await db.tournament.findUnique({ where: { id: tournamentId } });
   if (!tournament || tournament.clubId !== clubId) throw new Error('Not found');
@@ -1004,21 +1009,31 @@ export const tournamentsService = {
       const playerBTotalPoints = frames.reduce((sum, frame) => sum + frame.player_b_score, 0);
       const playerAMaxBreakFromFrames = frames.reduce((best, frame) => Math.max(best, frame.player_a_highest_break), 0);
       const playerBMaxBreakFromFrames = frames.reduce((best, frame) => Math.max(best, frame.player_b_highest_break), 0);
+      const bestOfFrames = Math.max(1, Math.floor(Number(match.best_of_frames ?? tournament.best_of_frames ?? 1) || 1));
+      const targetWins = getTargetWins(bestOfFrames);
+      const hasReachedTargetWins = playerAFramesWon >= targetWins || playerBFramesWon >= targetWins;
+      const hasUsedAllFrames = frames.length >= bestOfFrames;
+      const isMatchCompleted = format === 'KNOCKOUT'
+        ? hasReachedTargetWins
+        : hasReachedTargetWins || hasUsedAllFrames;
       const winnerParticipantId = playerAFramesWon === playerBFramesWon
         ? null
         : playerAFramesWon > playerBFramesWon
           ? match.player_a_participant_id
           : match.player_b_participant_id;
-      if (!winnerParticipantId && format === 'KNOCKOUT') throw new Error('Knockout match cannot end in a draw');
+      if (String(match.status || '').toUpperCase() === 'COMPLETED' && !isMatchCompleted) {
+        throw new Error('Completed match cannot be reverted to partial score');
+      }
+      if (isMatchCompleted && !winnerParticipantId && format === 'KNOCKOUT') throw new Error('Knockout match cannot end in a draw');
 
       const updated = await tx.tournamentMatch.update({
         where: { id: matchId },
         data: {
-          status: 'COMPLETED',
+          status: isMatchCompleted ? 'COMPLETED' : 'LIVE',
           result_type: 'STANDARD',
           started_at: toNullableDate(payload?.startedAt) ?? match.started_at ?? new Date(),
-          ended_at: toNullableDate(payload?.endedAt) ?? new Date(),
-          winner_participant_id: winnerParticipantId,
+          ended_at: isMatchCompleted ? (toNullableDate(payload?.endedAt) ?? new Date()) : null,
+          winner_participant_id: isMatchCompleted ? winnerParticipantId : null,
           player_a_frames_won: playerAFramesWon,
           player_b_frames_won: playerBFramesWon,
           player_a_total_points: playerATotalPoints,
@@ -1029,7 +1044,12 @@ export const tournamentsService = {
       });
 
       await recomputeMatchBreakStats(tx, matchId);
-      if (format === 'KNOCKOUT') {
+      if (!isMatchCompleted) {
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { workflow_status: 'IN_PROGRESS' },
+        });
+      } else if (format === 'KNOCKOUT') {
         await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
       } else {
         await finalizeLeagueProgress(tx, tournament);
