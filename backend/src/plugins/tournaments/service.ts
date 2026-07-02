@@ -865,7 +865,7 @@ export const tournamentsService = {
 
   async listMatches(clubId: string, tournamentId: string) {
     await getOwnedTournament(clubId, tournamentId);
-    return db.tournamentMatch.findMany({
+    const rows = await db.tournamentMatch.findMany({
       where: { tournament_id: tournamentId },
       orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
       include: {
@@ -879,7 +879,7 @@ export const tournamentsService = {
           include: { member: { select: { id: true, name: true, member_code: true } } },
         },
         frames: { orderBy: [{ frame_no: 'asc' }] },
-        breaks: {
+        break_records: {
           where: {
             deleted_at: null,
             record_type: 'TOURNAMENT',
@@ -891,6 +891,10 @@ export const tournamentsService = {
         },
       },
     });
+    return rows.map((row: any) => ({
+      ...row,
+      breaks: Array.isArray(row?.break_records) ? row.break_records : [],
+    }));
   },
 
   async recordMatchResult(clubId: string, tournamentId: string, matchId: string, payload: any) {

@@ -444,6 +444,22 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   }, [selectedTournament]);
 
   const selectedMatch = matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null;
+  useEffect(() => {
+    if (matchesRows.length === 0) {
+      if (selectedMatchId) setSelectedMatchId('');
+      return;
+    }
+    const hasCurrentSelection = matchesRows.some((row: any) => String(row?.id || '') === selectedMatchId);
+    if (hasCurrentSelection) return;
+    const firstReadyMatch = matchesRows.find((row: any) => (
+      !!row?.player_a_participant_id
+      && !!row?.player_b_participant_id
+      && String(row?.status || '').toUpperCase() !== 'PENDING'
+    ));
+    if (firstReadyMatch) {
+      setSelectedMatchId(String(firstReadyMatch.id || ''));
+    }
+  }, [matchesRows, selectedMatchId]);
   const tournamentFormat = normalizeTournamentFormat(selectedTournament?.format || format);
   const isLeague = tournamentFormat === 'LEAGUE';
   const workflowStatus = String(selectedTournament?.workflow_status || 'DRAFT').trim().toUpperCase();
