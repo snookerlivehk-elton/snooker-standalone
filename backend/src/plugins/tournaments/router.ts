@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { getTournamentsModuleSettings } from '../../core/modules/tournamentsSettings.js';
-import { tournamentsService } from './service.js';
+import { buildLeagueStandings, tournamentsService } from './service.js';
 
 export function createTournamentRouter() {
   const router = express.Router();
@@ -502,7 +502,14 @@ export function createTournamentRouter() {
     const { clubId, id } = req.params;
     const memberId = String(req.headers['x-member-id'] || '').trim() || null;
     try {
-      const t = await prisma.tournament.findUnique({ where: { id } });
+      const t = await prisma.tournament.findUnique({
+        where: { id },
+        include: {
+          club: {
+            select: { id: true, name: true, logoUrl: true },
+          },
+        },
+      });
       if (!t || t.clubId !== clubId || t.status !== 'PUBLISHED') return res.status(404).json({ error: 'Not found' });
       const signupCount = await prisma.tournamentSignup.count({ where: { tournamentId: id, status: { in: ['PENDING', 'CONFIRMED'] } } });
       const mySignup = memberId
@@ -511,7 +518,60 @@ export function createTournamentRouter() {
             select: { id: true, status: true, createdAt: true },
           })
         : null;
-      res.json({ ...t, signupCount, mySignup });
+      const participants = await prisma.tournamentParticipant.findMany({
+        where: { tournament_id: id },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true } },
+          signup: { select: { id: true, status: true, createdAt: true } },
+        },
+      });
+      const matches = await prisma.tournamentMatch.findMany({
+        where: { tournament_id: id },
+        orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+        include: {
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+        },
+      });
+      const isLeague = String(t.format || '').toUpperCase() === 'LEAGUE';
+      const standings = isLeague ? buildLeagueStandings(t, participants, matches) : [];
+      const completedMatchCount = matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
+      const readyMatchCount = matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
+      const pendingMatchCount = matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
+      const podium = !isLeague
+        ? {
+            champion: participants.find((row: any) => Number(row?.final_rank || 0) === 1) || null,
+            runnerUp: participants.find((row: any) => Number(row?.final_rank || 0) === 2) || null,
+            semiFinalists: participants
+              .filter((row: any) => Number(row?.final_rank || 0) === 3)
+              .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0)),
+          }
+        : null;
+      res.json({
+        ...t,
+        signupCount,
+        mySignup,
+        participants,
+        matches,
+        standings,
+        summary: {
+          participantCount: participants.filter((row: any) => String(row?.status || '').toUpperCase() === 'ACTIVE').length,
+          totalParticipants: participants.length,
+          totalMatches: matches.length,
+          completedMatchCount,
+          readyMatchCount,
+          pendingMatchCount,
+        },
+        podium,
+      });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

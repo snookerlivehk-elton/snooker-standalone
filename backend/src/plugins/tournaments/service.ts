@@ -135,7 +135,7 @@ function buildLeagueRoundRobinPairs<T>(items: Array<T | null>): Array<Array<[T |
   return rounds;
 }
 
-function buildLeagueStandings(tournament: any, participants: any[], matches: any[]) {
+export function buildLeagueStandings(tournament: any, participants: any[], matches: any[]) {
   const pointsWin = Math.max(0, Number(tournament?.points_win ?? 3));
   const pointsDraw = Math.max(0, Number(tournament?.points_draw ?? 1));
   const pointsLoss = Math.max(0, Number(tournament?.points_loss ?? 0));

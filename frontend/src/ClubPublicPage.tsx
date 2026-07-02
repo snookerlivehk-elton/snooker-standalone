@@ -16,6 +16,7 @@ import {
   getPublicClubLiveAnnouncements,
   getPublicClubMessages,
   getPublicClubProfile,
+  getPublicClubTournament,
   getPublicClubTournaments,
   getPublicPricing,
   getPublicTables,
@@ -49,6 +50,95 @@ type InboxItem = {
   deletable: boolean;
   raw?: any;
 };
+
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
+
+const PUBLIC_BRACKET_CARD_HEIGHT = 88;
+const PUBLIC_BRACKET_BASE_GAP = 18;
+const PUBLIC_BRACKET_CONNECTOR_HALF_GAP = 20;
+
+function formatMemberLabel(member: any) {
+  return [
+    String(member?.member_code || '').trim(),
+    String(member?.name || '').trim(),
+  ].filter(Boolean).join(' ') || '-';
+}
+
+function formatTournamentParticipantLabel(participant: any) {
+  if (!participant) return 'BYE';
+  const seed = Number(participant?.seed || 0);
+  const prefix = seed > 0 ? `#${seed} ` : '';
+  return `${prefix}${formatMemberLabel(participant?.member)}`;
+}
+
+function normalizeTournamentFormat(value: any): TournamentFormat {
+  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+}
+
+function formatTournamentFormatLabel(value: any) {
+  return normalizeTournamentFormat(value) === 'LEAGUE' ? 'League' : 'Knockout';
+}
+
+function formatTournamentWorkflowLabel(value: any) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'REGISTRATION') return '報名中';
+  if (normalized === 'SEEDED') return '已排位';
+  if (normalized === 'COMPLETED') return '已完成';
+  return normalized || '-';
+}
+
+function formatTournamentResultTypeLabel(value: any) {
+  const normalized = String(value || 'STANDARD').trim().toUpperCase();
+  if (normalized === 'BYE') return 'BYE';
+  if (normalized === 'WALKOVER') return 'W/O';
+  if (normalized === 'FORFEIT') return '棄權';
+  return '正常完賽';
+}
+
+function formatTournamentMatchStatusLabel(value: any) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'COMPLETED') return '已完成';
+  if (normalized === 'READY') return '就緒';
+  if (normalized === 'PENDING') return '待定';
+  return normalized || '-';
+}
+
+function nextPowerOfTwo(n: number) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+function formatPublicKnockoutRoundLabel(match: any, participantCount: number) {
+  const roundNo = Number(match?.round_no || 0);
+  if (roundNo <= 0) return '-';
+  const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
+  const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
+  if (hasPreliminaryRound && roundNo === 1) return '預賽';
+  const roundOffset = hasPreliminaryRound ? 1 : 0;
+  const adjustedRound = roundNo - roundOffset;
+  const totalMainRounds = Math.log2(bracketSize);
+  if (adjustedRound === totalMainRounds) return '決賽';
+  if (adjustedRound === totalMainRounds - 1) return '四強';
+  if (adjustedRound === totalMainRounds - 2) return '八強';
+  if (adjustedRound === totalMainRounds - 3) return '16 強';
+  return `第 ${roundNo} 輪`;
+}
+
+function getPublicBracketColumnPaddingTop(roundIndex: number) {
+  if (roundIndex <= 0) return 0;
+  return ((2 ** roundIndex) - 1) * (PUBLIC_BRACKET_CARD_HEIGHT + PUBLIC_BRACKET_BASE_GAP) / 2;
+}
+
+function getPublicBracketColumnGap(roundIndex: number) {
+  if (roundIndex <= 0) return PUBLIC_BRACKET_BASE_GAP;
+  return (2 ** roundIndex) * (PUBLIC_BRACKET_CARD_HEIGHT + PUBLIC_BRACKET_BASE_GAP) - PUBLIC_BRACKET_CARD_HEIGHT;
+}
+
+function getPublicBracketColumnHeight(matchCount: number) {
+  if (matchCount <= 0) return PUBLIC_BRACKET_CARD_HEIGHT;
+  return matchCount * PUBLIC_BRACKET_CARD_HEIGHT + Math.max(0, matchCount - 1) * PUBLIC_BRACKET_BASE_GAP;
+}
 
 const ClubPublicPage: React.FC = () => {
   const { clubId } = useParams<{ clubId: string }>();
@@ -96,6 +186,9 @@ const ClubPublicPage: React.FC = () => {
   const [tournamentsLoading, setTournamentsLoading] = useState(false);
   const [tournamentOpen, setTournamentOpen] = useState<any>(null);
   const [tournamentOpenLoading, setTournamentOpenLoading] = useState(false);
+  const [tournamentDetail, setTournamentDetail] = useState<any>(null);
+  const [tournamentDetailLoading, setTournamentDetailLoading] = useState(false);
+  const [tournamentDetailError, setTournamentDetailError] = useState<string | null>(null);
   const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string; guide: string }>({ open: false, title: '', guide: '' });
   
   const session = useMemo(() => readMemberSession() as MemberSession, []);
@@ -543,6 +636,32 @@ const ClubPublicPage: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    if (!clubId || !tournamentOpen?.id) {
+      setTournamentDetail(null);
+      setTournamentDetailLoading(false);
+      setTournamentDetailError(null);
+      return () => { mounted = false; };
+    }
+    (async () => {
+      setTournamentDetailLoading(true);
+      setTournamentDetailError(null);
+      try {
+        const row = await getPublicClubTournament(API_URL, clubId, String(tournamentOpen.id), sessionMemberId || undefined);
+        if (mounted) setTournamentDetail(row && typeof row === 'object' ? row : null);
+      } catch (e: any) {
+        if (mounted) {
+          setTournamentDetail(null);
+          setTournamentDetailError(String(e?.message || '讀取比賽詳情失敗'));
+        }
+      } finally {
+        if (mounted) setTournamentDetailLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [clubId, sessionMemberId, tournamentOpen]);
+
+  useEffect(() => {
+    let mounted = true;
     (async () => {
       if (!clubMessagesTabEnabled) {
         if (mounted) setClubMessages([]);
@@ -856,6 +975,82 @@ const ClubPublicPage: React.FC = () => {
 
   const clubLiveUnreadCount = useMemo(() => clubLiveItems.filter((x) => !x.read).length, [clubLiveItems]);
   const clubLiveOpen = useMemo(() => (clubLiveOpenKey ? clubLiveItems.find((x) => x.key === clubLiveOpenKey) || null : null), [clubLiveOpenKey, clubLiveItems]);
+  const openedTournament = tournamentDetail && String(tournamentDetail?.id || '') === String(tournamentOpen?.id || '')
+    ? tournamentDetail
+    : tournamentOpen;
+  const openedTournamentFormat = normalizeTournamentFormat(openedTournament?.format);
+  const openedTournamentParticipants = useMemo(() => (
+    Array.isArray(openedTournament?.participants) ? openedTournament.participants : []
+  ), [openedTournament]);
+  const openedTournamentMatches = useMemo(() => (
+    Array.isArray(openedTournament?.matches) ? openedTournament.matches : []
+  ), [openedTournament]);
+  const openedTournamentStandings = useMemo(() => (
+    Array.isArray(openedTournament?.standings) ? openedTournament.standings : []
+  ), [openedTournament]);
+  const openedTournamentLeagueRounds = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    for (const row of openedTournamentMatches) {
+      const roundNo = Number(row?.round_no || 0);
+      if (!grouped.has(roundNo)) grouped.set(roundNo, []);
+      grouped.get(roundNo)!.push(row);
+    }
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([roundNo, items]) => ({
+        roundNo,
+        label: roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽',
+        items: [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0)),
+      }));
+  }, [openedTournamentMatches]);
+  const openedTournamentBracketColumns = useMemo(() => {
+    const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
+    for (const row of openedTournamentMatches) {
+      const key = formatPublicKnockoutRoundLabel(row, openedTournamentParticipants.length);
+      const roundNo = Number(row?.round_no || 0);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.items.push(row);
+        existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
+      } else {
+        grouped.set(key, { roundNo, items: [row] });
+      }
+    }
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[1].roundNo - b[1].roundNo)
+      .map(([label, group], roundIndex, allColumns) => {
+        const sortedItems = [...group.items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
+        const paddingTop = getPublicBracketColumnPaddingTop(roundIndex);
+        const gap = getPublicBracketColumnGap(roundIndex);
+        const cardCenters = sortedItems.map((_: any, itemIndex: number) => (
+          paddingTop + itemIndex * (PUBLIC_BRACKET_CARD_HEIGHT + gap) + PUBLIC_BRACKET_CARD_HEIGHT / 2
+        ));
+        const connectors = roundIndex < allColumns.length - 1
+          ? Array.from({ length: Math.floor(sortedItems.length / 2) }, (_unused, pairIndex) => {
+              const topCenter = cardCenters[pairIndex * 2];
+              const bottomCenter = cardCenters[pairIndex * 2 + 1];
+              if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
+              return {
+                top: topCenter,
+                height: Math.max(0, bottomCenter - topCenter),
+              };
+            }).filter(Boolean)
+          : [];
+        return {
+          label,
+          roundIndex,
+          isFinal: roundIndex === allColumns.length - 1,
+          items: sortedItems,
+          paddingTop,
+          gap,
+          columnHeight: Math.max(
+            getPublicBracketColumnHeight(openedTournamentMatches.length),
+            paddingTop + (sortedItems.length * PUBLIC_BRACKET_CARD_HEIGHT) + Math.max(0, sortedItems.length - 1) * gap,
+          ),
+          connectors,
+        };
+      });
+  }, [openedTournamentMatches, openedTournamentParticipants.length]);
 
   useEffect(() => {
     if (!clubLiveOpen || !clubId) return;
@@ -1460,18 +1655,18 @@ const ClubPublicPage: React.FC = () => {
                 {!!tournamentOpen && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80" onClick={() => setTournamentOpen(null)} />
-                    <div className="relative w-full max-w-lg cue-surface rounded-xl p-4">
+                    <div className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto cue-surface rounded-xl p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-lg font-extrabold accent-yellow truncate">{String(tournamentOpen?.title || '比賽')}</div>
+                          <div className="text-lg font-extrabold accent-yellow truncate">{String(openedTournament?.title || '比賽')}</div>
                           <div className="text-xs cue-muted mt-1">
                             {(() => {
-                              const cap = Number(tournamentOpen?.capacity ?? 0);
-                              const count = Number(tournamentOpen?.signupCount ?? 0);
+                              const cap = Number(openedTournament?.capacity ?? 0);
+                              const count = Number(openedTournament?.signupCount ?? 0);
                               const status = cap > 0 ? `${count}/${cap}` : `${count}/—`;
-                              const startsAt = tournamentOpen?.startsAt ? new Date(String(tournamentOpen.startsAt)) : null;
+                              const startsAt = openedTournament?.startsAt ? new Date(String(openedTournament.startsAt)) : null;
                               const startsText = startsAt && Number.isFinite(startsAt.getTime()) ? startsAt.toLocaleString() : '';
-                              const closesAt = tournamentOpen?.signupClosesAt ? new Date(String(tournamentOpen.signupClosesAt)) : null;
+                              const closesAt = openedTournament?.signupClosesAt ? new Date(String(openedTournament.signupClosesAt)) : null;
                               const closesText = closesAt && Number.isFinite(closesAt.getTime()) ? closesAt.toLocaleDateString() : '';
                               return `${startsText ? `${startsText} · ` : ''}${closesText ? `截止 ${closesText} · ` : ''}報名 ${status}`;
                             })()}
@@ -1486,12 +1681,299 @@ const ClubPublicPage: React.FC = () => {
                         </button>
                       </div>
 
-                      <div className="mt-4 text-sm whitespace-pre-wrap">{String(tournamentOpen?.description || '—')}</div>
+                      {tournamentDetailLoading ? (
+                        <div className="mt-4 text-sm cue-muted">讀取比賽詳情中…</div>
+                      ) : tournamentDetailError ? (
+                        <div className="mt-4 text-sm text-rose-300">{tournamentDetailError}</div>
+                      ) : (
+                        <div className="mt-4 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">賽制</div>
+                              <div className="text-2xl font-extrabold accent-yellow mt-1">{formatTournamentFormatLabel(openedTournamentFormat)}</div>
+                              <div className="text-xs cue-muted mt-2">{formatTournamentWorkflowLabel(openedTournament?.workflow_status)}</div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">報名</div>
+                              <div className="text-2xl font-extrabold accent-yellow mt-1">{Number(openedTournament?.signupCount ?? 0)}</div>
+                              <div className="text-xs cue-muted mt-2">
+                                {Number(openedTournament?.capacity ?? 0) > 0 ? `上限 ${Number(openedTournament?.capacity || 0)} 人` : '不限名額'}
+                              </div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">參賽 / 賽程</div>
+                              <div className="text-2xl font-extrabold accent-yellow mt-1">
+                                {Number(openedTournament?.summary?.participantCount || openedTournamentParticipants.length)} / {openedTournamentMatches.length}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">正式參賽者 / 對局數</div>
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="text-sm cue-muted">進度</div>
+                              <div className="text-sm font-semibold mt-2">已完成 {Number(openedTournament?.summary?.completedMatchCount || 0)} 場</div>
+                              <div className="text-xs cue-muted mt-2">
+                                就緒 {Number(openedTournament?.summary?.readyMatchCount || 0)} · 待定 {Number(openedTournament?.summary?.pendingMatchCount || 0)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 xl:grid-cols-3">
+                            <div className="xl:col-span-2 cue-surface-strong rounded-lg p-4">
+                              <div className="font-semibold mb-2">比賽詳情</div>
+                              <div className="text-sm whitespace-pre-wrap">{String(openedTournament?.description || '—')}</div>
+                              {String(openedTournament?.signupGuide || '').trim() ? (
+                                <div className="mt-4 rounded-lg p-3 cue-surface">
+                                  <div className="font-semibold mb-1">報名指引</div>
+                                  <div className="text-sm cue-muted whitespace-pre-wrap">{String(openedTournament?.signupGuide || '')}</div>
+                                </div>
+                              ) : null}
+                            </div>
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="font-semibold mb-2">我的狀態</div>
+                              <div className="text-sm">
+                                {String(openedTournament?.mySignup?.status || '').toUpperCase() === 'CONFIRMED'
+                                  ? '已確認'
+                                  : String(openedTournament?.mySignup?.status || '').toUpperCase() === 'PENDING'
+                                    ? '待確認'
+                                    : String(openedTournament?.mySignup?.status || '').toUpperCase() === 'CANCELLED'
+                                      ? '已取消'
+                                      : '未報名'}
+                              </div>
+                              <div className="text-xs cue-muted mt-2">{openedTournament?.club?.name ? `場館：${openedTournament.club.name}` : ''}</div>
+                              <div className="text-xs cue-muted mt-1">
+                                {openedTournament?.startsAt ? `比賽時間：${new Date(String(openedTournament.startsAt)).toLocaleString()}` : '未設定比賽時間'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {!!openedTournament?.podium && (openedTournament.podium?.champion || openedTournament.podium?.runnerUp || (Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0)) ? (
+                            <div className="grid gap-3 md:grid-cols-3">
+                              <div className="cue-surface-strong rounded-lg p-4">
+                                <div className="text-sm cue-muted">冠軍</div>
+                                <div className="font-semibold mt-1">{openedTournament.podium?.champion ? formatTournamentParticipantLabel(openedTournament.podium.champion) : '-'}</div>
+                              </div>
+                              <div className="cue-surface-strong rounded-lg p-4">
+                                <div className="text-sm cue-muted">亞軍</div>
+                                <div className="font-semibold mt-1">{openedTournament.podium?.runnerUp ? formatTournamentParticipantLabel(openedTournament.podium.runnerUp) : '-'}</div>
+                              </div>
+                              <div className="cue-surface-strong rounded-lg p-4">
+                                <div className="text-sm cue-muted">四強</div>
+                                <div className="font-semibold mt-1">
+                                  {Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0
+                                    ? openedTournament.podium.semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
+                                    : '-'}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="font-semibold">正式參賽名單</div>
+                                <div className="text-xs cue-muted">{openedTournamentParticipants.length} 人</div>
+                              </div>
+                              {openedTournamentParticipants.length === 0 ? (
+                                <div className="text-sm cue-muted">尚未生成正式參賽名單</div>
+                              ) : (
+                                <div className="overflow-x-auto -mx-2 px-2">
+                                  <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                      <tr className="cue-muted border-b cue-border">
+                                        <th className="py-2 px-2">Seed</th>
+                                        <th className="py-2 px-2">球手</th>
+                                        <th className="py-2 px-2">狀態</th>
+                                        <th className="py-2 px-2">名次</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {openedTournamentParticipants.map((row: any) => (
+                                        <tr key={String(row?.id || Math.random())} className="border-b cue-border">
+                                          <td className="py-2 px-2">{row?.seed || '-'}</td>
+                                          <td className="py-2 px-2 font-semibold">{formatTournamentParticipantLabel(row)}</td>
+                                          <td className="py-2 px-2 cue-muted">{String(row?.status || '-')}</td>
+                                          <td className="py-2 px-2 cue-muted">{row?.final_rank || '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+
+                            {openedTournamentFormat === 'LEAGUE' ? (
+                              <div className="cue-surface-strong rounded-lg p-4">
+                                <div className="flex items-center justify-between gap-3 mb-3">
+                                  <div className="font-semibold">League 積分榜</div>
+                                  <div className="text-xs cue-muted">{openedTournamentStandings.length} 人</div>
+                                </div>
+                                {openedTournamentStandings.length === 0 ? (
+                                  <div className="text-sm cue-muted">賽程生成後會在這裡顯示 standings</div>
+                                ) : (
+                                  <div className="overflow-x-auto -mx-2 px-2">
+                                    <table className="w-full text-left border-collapse text-sm">
+                                      <thead>
+                                        <tr className="cue-muted border-b cue-border">
+                                          <th className="py-2 px-2">名次</th>
+                                          <th className="py-2 px-2">球手</th>
+                                          <th className="py-2 px-2">賽</th>
+                                          <th className="py-2 px-2">勝和負</th>
+                                          <th className="py-2 px-2">局差</th>
+                                          <th className="py-2 px-2">積分</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {openedTournamentStandings.map((row: any) => (
+                                          <tr key={String(row?.participantId || Math.random())} className="border-b cue-border">
+                                            <td className="py-2 px-2 font-semibold">{row?.position || '-'}</td>
+                                            <td className="py-2 px-2 font-semibold">{formatTournamentParticipantLabel(row?.participant)}</td>
+                                            <td className="py-2 px-2 cue-muted">{Number(row?.played || 0)}</td>
+                                            <td className="py-2 px-2 cue-muted">{Number(row?.won || 0)} / {Number(row?.drawn || 0)} / {Number(row?.lost || 0)}</td>
+                                            <td className="py-2 px-2 cue-muted">{Number(row?.framesFor || 0)} - {Number(row?.framesAgainst || 0)} ({Number(row?.frameDiff || 0)})</td>
+                                            <td className="py-2 px-2">{Number(row?.matchPoints || 0)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {openedTournamentFormat === 'KNOCKOUT' && openedTournamentBracketColumns.length > 0 ? (
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="font-semibold">Knockout Bracket</div>
+                                <div className="text-xs cue-muted">{openedTournamentMatches.length} 場</div>
+                              </div>
+                              <div className="overflow-x-auto -mx-2 px-2">
+                                <div className="flex gap-10 min-w-max items-start pb-2">
+                                  {openedTournamentBracketColumns.map((column: any) => (
+                                    <div key={String(column?.label || Math.random())} className="w-72">
+                                      <div className="font-semibold mb-3">{column.label}</div>
+                                      <div className="relative" style={{ height: `${column.columnHeight}px`, paddingTop: `${column.paddingTop}px` }}>
+                                        {column.connectors.map((connector: any, connectorIndex: number) => (
+                                          <React.Fragment key={`${column.label}-connector-${connectorIndex}`}>
+                                            <div className="absolute border-t cue-border" style={{ left: '100%', top: `${connector.top}px`, width: `${PUBLIC_BRACKET_CONNECTOR_HALF_GAP}px` }} />
+                                            <div className="absolute border-r cue-border" style={{ left: `calc(100% + ${PUBLIC_BRACKET_CONNECTOR_HALF_GAP}px)`, top: `${connector.top}px`, height: `${connector.height}px` }} />
+                                            <div className="absolute border-t cue-border" style={{ left: '100%', top: `${connector.top + connector.height}px`, width: `${PUBLIC_BRACKET_CONNECTOR_HALF_GAP}px` }} />
+                                          </React.Fragment>
+                                        ))}
+                                        <div className="flex flex-col" style={{ gap: `${column.gap}px` }}>
+                                          {column.items.map((row: any) => {
+                                            const winnerId = String(row?.winner_participant_id || '');
+                                            const aParticipantId = String(row?.player_a_participant_id || '');
+                                            const bParticipantId = String(row?.player_b_participant_id || '');
+                                            return (
+                                              <div key={String(row?.id || Math.random())} className="relative" style={{ height: `${PUBLIC_BRACKET_CARD_HEIGHT}px` }}>
+                                                {column.roundIndex > 0 ? (
+                                                  <div className="absolute border-t cue-border" style={{ right: '100%', top: '50%', width: `${PUBLIC_BRACKET_CONNECTOR_HALF_GAP}px` }} />
+                                                ) : null}
+                                                {!column.isFinal ? (
+                                                  <div className="absolute border-t cue-border" style={{ left: '100%', top: '50%', width: `${PUBLIC_BRACKET_CONNECTOR_HALF_GAP}px` }} />
+                                                ) : null}
+                                                <div className="relative z-10 h-full w-full rounded-lg border cue-border cue-surface p-3">
+                                                  <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
+                                                    <span>M{row?.match_no || '-'}</span>
+                                                    <span>{formatTournamentResultTypeLabel(row?.result_type)}</span>
+                                                  </div>
+                                                  <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                                  <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                                                  <div className={`font-semibold truncate ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {openedTournamentFormat === 'LEAGUE' && openedTournamentLeagueRounds.length > 0 ? (
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="font-semibold">League Rounds</div>
+                                <div className="text-xs cue-muted">{openedTournamentLeagueRounds.length} 輪</div>
+                              </div>
+                              <div className="grid gap-3 lg:grid-cols-2">
+                                {openedTournamentLeagueRounds.map((round: any) => (
+                                  <div key={String(round?.label || round?.roundNo || Math.random())} className="cue-surface rounded-lg p-3">
+                                    <div className="font-semibold mb-2">{round.label}</div>
+                                    <div className="grid gap-2">
+                                      {round.items.map((row: any) => (
+                                        <div key={String(row?.id || Math.random())} className="rounded-lg border cue-border p-3">
+                                          <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
+                                            <span>M{row?.match_no || '-'}</span>
+                                            <span>{formatTournamentResultTypeLabel(row?.result_type)}</span>
+                                          </div>
+                                          <div className="font-semibold truncate">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                          <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                                          <div className="font-semibold truncate">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                              <div className="font-semibold">公開賽程列表</div>
+                              <div className="text-xs cue-muted">{openedTournamentMatches.length} 場</div>
+                            </div>
+                            {openedTournamentMatches.length === 0 ? (
+                              <div className="text-sm cue-muted">尚未生成賽程</div>
+                            ) : (
+                              <div className="overflow-x-auto -mx-2 px-2">
+                                <table className="w-full text-left border-collapse text-sm">
+                                  <thead>
+                                    <tr className="cue-muted border-b cue-border">
+                                      <th className="py-2 px-2">輪次</th>
+                                      <th className="py-2 px-2">對賽</th>
+                                      <th className="py-2 px-2">比分</th>
+                                      <th className="py-2 px-2">狀態</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {openedTournamentMatches.map((row: any) => (
+                                      <tr key={String(row?.id || Math.random())} className="border-b cue-border">
+                                        <td className="py-2 px-2 whitespace-nowrap">
+                                          {openedTournamentFormat === 'LEAGUE'
+                                            ? `第 ${Number(row?.round_no || 0)} 輪`
+                                            : formatPublicKnockoutRoundLabel(row, openedTournamentParticipants.length)}
+                                        </td>
+                                        <td className="py-2 px-2">
+                                          <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)} vs {formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                          <div className="text-xs cue-muted mt-1">M{row?.match_no || '-'} · {formatTournamentResultTypeLabel(row?.result_type)}</div>
+                                        </td>
+                                        <td className="py-2 px-2 whitespace-nowrap">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</td>
+                                        <td className="py-2 px-2 whitespace-nowrap">{formatTournamentMatchStatusLabel(row?.status)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="mt-5 flex gap-2">
                         <button
                           type="button"
-                          disabled={tournamentOpenLoading}
+                          disabled={
+                            tournamentOpenLoading
+                            || tournamentDetailLoading
+                            || String(openedTournament?.mySignup?.status || '').toUpperCase() === 'PENDING'
+                            || String(openedTournament?.mySignup?.status || '').toUpperCase() === 'CONFIRMED'
+                            || openedTournament?.signupOpen === false
+                          }
                           onClick={async () => {
                             if (!clubId) return;
                             if (!sessionMemberId) {
@@ -1500,13 +1982,17 @@ const ClubPublicPage: React.FC = () => {
                             }
                             try {
                               setTournamentOpenLoading(true);
-                              const res = await signupTournament(API_URL, clubId, sessionMemberId, String(tournamentOpen.id));
+                              const res = await signupTournament(API_URL, clubId, sessionMemberId, String(openedTournament.id));
                               const ok = !!(res && (res as any).ok);
                               if (!ok) throw new Error('報名失敗');
-                              setTournamentSubmitModal({ open: true, title: String(tournamentOpen?.title || '比賽'), guide: String(tournamentOpen?.signupGuide || '') });
+                              setTournamentSubmitModal({ open: true, title: String(openedTournament?.title || '比賽'), guide: String(openedTournament?.signupGuide || '') });
                               try {
                                 const rows = await getPublicClubTournaments(API_URL, clubId, sessionMemberId || undefined);
                                 setTournaments(Array.isArray(rows) ? rows : []);
+                              } catch {}
+                              try {
+                                const detail = await getPublicClubTournament(API_URL, clubId, String(openedTournament.id), sessionMemberId || undefined);
+                                setTournamentDetail(detail && typeof detail === 'object' ? detail : null);
                               } catch {}
                               setTournamentOpen(null);
                             } catch (e: any) {
@@ -1523,7 +2009,13 @@ const ClubPublicPage: React.FC = () => {
                           }}
                           className={`flex-1 px-4 py-2 rounded font-semibold ${tournamentOpenLoading ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
                         >
-                          一鍵報名
+                          {String(openedTournament?.mySignup?.status || '').toUpperCase() === 'CONFIRMED'
+                            ? '已確認報名'
+                            : String(openedTournament?.mySignup?.status || '').toUpperCase() === 'PENDING'
+                              ? '待場館確認'
+                              : openedTournament?.signupOpen === false
+                                ? '暫未開放報名'
+                                : '一鍵報名'}
                         </button>
                         <button
                           type="button"
