@@ -879,6 +879,16 @@ export const tournamentsService = {
           include: { member: { select: { id: true, name: true, member_code: true } } },
         },
         frames: { orderBy: [{ frame_no: 'asc' }] },
+        breaks: {
+          where: {
+            deleted_at: null,
+            record_type: 'TOURNAMENT',
+          },
+          orderBy: [{ frame_no: 'asc' }, { recorded_at: 'desc' }],
+          include: {
+            member: { select: { id: true, name: true, member_code: true } },
+          },
+        },
       },
     });
   },

@@ -37,6 +37,7 @@ type EditableFrame = {
   playerBScore: string;
   playerAHighestBreak: string;
   playerBHighestBreak: string;
+  isPlaceholder?: boolean;
 };
 
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
@@ -57,6 +58,13 @@ function formatDateTimeLocalInput(raw: any) {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   return `${y}-${m}-${dd}T${hh}:${mm}`;
+}
+
+function formatDisplayDateTime(raw: any) {
+  if (!raw) return '-';
+  const d = new Date(String(raw));
+  if (!Number.isFinite(d.getTime())) return '-';
+  return d.toLocaleString();
 }
 
 function formatMemberLabel(member: any) {
@@ -134,26 +142,51 @@ function formatFinalRankLabel(value: any) {
   return `第 ${rank} 名`;
 }
 
-function buildFramesFromMatch(match: any): EditableFrame[] {
+function createEmptyEditableFrame(frameNo: number): EditableFrame {
+  return {
+    frameNo,
+    winnerSide: 'A',
+    playerAScore: '0',
+    playerBScore: '0',
+    playerAHighestBreak: '0',
+    playerBHighestBreak: '0',
+    isPlaceholder: true,
+  };
+}
+
+function getTargetWins(bestOfRaw: any) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1)));
+  return Math.floor(bestOf / 2) + 1;
+}
+
+function buildFramesFromMatch(match: any, tournamentBestOfRaw?: any): EditableFrame[] {
   const frames = Array.isArray(match?.frames) ? match.frames : [];
-  if (frames.length > 0) {
-    return frames.map((frame: any, index: number) => ({
+  const next = frames.length > 0
+    ? frames.map((frame: any, index: number) => ({
       frameNo: Number(frame?.frame_no || index + 1),
       winnerSide: String(frame?.winner_participant_id || '') === String(match?.player_b_participant_id || '') ? 'B' : 'A',
       playerAScore: String(frame?.player_a_score ?? 0),
       playerBScore: String(frame?.player_b_score ?? 0),
       playerAHighestBreak: String(frame?.player_a_highest_break ?? 0),
       playerBHighestBreak: String(frame?.player_b_highest_break ?? 0),
-    }));
+      isPlaceholder: false,
+    }))
+    : [];
+  const bestOf = Math.max(1, Math.floor(Number(match?.best_of_frames ?? tournamentBestOfRaw ?? 1) || 1));
+  const targetWins = getTargetWins(bestOf);
+  const aWins = Number(match?.player_a_frames_won || 0);
+  const bWins = Number(match?.player_b_frames_won || 0);
+  const matchStatus = String(match?.status || '').trim().toUpperCase();
+  const canAppendNextFrame =
+    normalizeMatchResultType(match?.result_type) === 'STANDARD'
+    && matchStatus !== 'COMPLETED'
+    && next.length < bestOf
+    && aWins < targetWins
+    && bWins < targetWins;
+  if (canAppendNextFrame) {
+    next.push(createEmptyEditableFrame((next[next.length - 1]?.frameNo || 0) + 1));
   }
-  return [{
-    frameNo: 1,
-    winnerSide: 'A',
-    playerAScore: '0',
-    playerBScore: '0',
-    playerAHighestBreak: '0',
-    playerBHighestBreak: '0',
-  }];
+  return next.length > 0 ? next : [createEmptyEditableFrame(1)];
 }
 
 function nextPowerOfTwo(n: number) {
@@ -259,14 +292,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [resultEndedAt, setResultEndedAt] = useState('');
   const [resultQuickType, setResultQuickType] = useState<'WALKOVER' | 'FORFEIT'>('WALKOVER');
   const [resultQuickWinnerSide, setResultQuickWinnerSide] = useState<'A' | 'B'>('A');
-  const [resultFrames, setResultFrames] = useState<EditableFrame[]>([{
-    frameNo: 1,
-    winnerSide: 'A',
-    playerAScore: '0',
-    playerBScore: '0',
-    playerAHighestBreak: '0',
-    playerBHighestBreak: '0',
-  }]);
+  const [resultFrames, setResultFrames] = useState<EditableFrame[]>([createEmptyEditableFrame(1)]);
   const [resultSaving, setResultSaving] = useState(false);
   const [breakSaving, setBreakSaving] = useState(false);
   const [breakMemberId, setBreakMemberId] = useState('');
@@ -279,6 +305,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), timeout);
+  }, []);
+
+  const updateFrameDraft = useCallback((index: number, patch: Partial<EditableFrame>) => {
+    setResultFrames((prev) => prev.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, ...patch, isPlaceholder: false } : item
+    )));
   }, []);
 
   const resetEditor = useCallback(() => {
@@ -308,14 +340,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setResultEndedAt('');
     setResultQuickType('WALKOVER');
     setResultQuickWinnerSide('A');
-    setResultFrames([{
-      frameNo: 1,
-      winnerSide: 'A',
-      playerAScore: '0',
-      playerBScore: '0',
-      playerAHighestBreak: '0',
-      playerBHighestBreak: '0',
-    }]);
+    setResultFrames([createEmptyEditableFrame(1)]);
     setBreakMemberId('');
     setBreakFrameNo('1');
     setBreakPoints('');
@@ -437,7 +462,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedMatchResultType = normalizeMatchResultType(selectedMatch?.result_type);
   const selectedMatchResultEditable = !!selectedMatch && selectedMatchHasPlayers && selectedMatchStatus !== 'PENDING';
   const selectedMatchBreakEnabled = !!selectedMatch && selectedMatchHasPlayers && selectedMatchResultType === 'STANDARD';
-  const selectedMatchMemberOptions = selectedMatch ? [
+  const selectedMatchMemberOptions = useMemo(() => (selectedMatch ? [
     {
       value: String(selectedMatch?.player_a_participant?.member?.id || ''),
       label: formatMemberLabel(selectedMatch?.player_a_participant?.member),
@@ -446,7 +471,44 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       value: String(selectedMatch?.player_b_participant?.member?.id || ''),
       label: formatMemberLabel(selectedMatch?.player_b_participant?.member),
     },
-  ].filter((item) => item.value) : [];
+  ].filter((item) => item.value) : []), [selectedMatch]);
+  const selectedMatchBestOf = Math.max(1, Math.floor(Number(selectedMatch?.best_of_frames ?? selectedTournament?.best_of_frames ?? 1) || 1));
+  const selectedMatchTargetWins = getTargetWins(selectedMatchBestOf);
+  const selectedMatchCompletedFrames = Array.isArray(selectedMatch?.frames) ? selectedMatch.frames.length : 0;
+  const selectedMatchBreakRows = useMemo(() => (
+    Array.isArray(selectedMatch?.breaks) ? [...selectedMatch.breaks] : []
+  ).sort((a: any, b: any) => {
+    const aFrame = Number(a?.frame_no || 0);
+    const bFrame = Number(b?.frame_no || 0);
+    if (aFrame !== bFrame) return aFrame - bFrame;
+    const aTime = a?.recorded_at ? new Date(a.recorded_at).getTime() : 0;
+    const bTime = b?.recorded_at ? new Date(b.recorded_at).getTime() : 0;
+    return bTime - aTime;
+  }), [selectedMatch]);
+  const selectedMatchBreakFrameOptions = useMemo(() => {
+    const values = Array.from(new Set(resultFrames.map((frame) => String(frame.frameNo || '1')).filter(Boolean)));
+    return values.length > 0 ? values : ['1'];
+  }, [resultFrames]);
+  const selectedMatchCurrentFrameNo = Number(resultFrames[resultFrames.length - 1]?.frameNo || 1);
+  const selectedMatchCanAddFrame = selectedMatchResultEditable
+    && selectedMatchResultType === 'STANDARD'
+    && resultFrames.length < selectedMatchBestOf;
+  useEffect(() => {
+    if (!selectedMatch) return;
+    const nextFrames = buildFramesFromMatch(selectedMatch, selectedTournament?.best_of_frames);
+    setResultStartedAt(formatDateTimeLocalInput(selectedMatch?.started_at));
+    setResultEndedAt(formatDateTimeLocalInput(selectedMatch?.ended_at));
+    setResultQuickWinnerSide(
+      String(selectedMatch?.winner_participant_id || '') === String(selectedMatch?.player_b_participant_id || '') ? 'B' : 'A'
+    );
+    setResultFrames(nextFrames);
+    setBreakMemberId((prev) => (
+      selectedMatchMemberOptions.some((item) => item.value === prev)
+        ? prev
+        : String(selectedMatchMemberOptions[0]?.value || '')
+    ));
+    setBreakFrameNo(String(nextFrames[nextFrames.length - 1]?.frameNo || 1));
+  }, [selectedMatch, selectedMatchMemberOptions, selectedTournament?.best_of_frames]);
   const bracketColumns = useMemo(() => {
     const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
     for (const row of matchesRows) {
@@ -1465,7 +1527,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       {selectedId && selectedMatch ? (
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <div className="cue-surface-strong rounded-lg p-4">
-            <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <div className="font-semibold">輸入賽果</div>
                 <div className="text-xs cue-muted mt-1">
@@ -1474,6 +1536,14 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <div className="text-xs cue-muted mt-1">
                   目前結果類型：{formatMatchResultTypeLabel(selectedMatch?.result_type)}
                 </div>
+                <div className="text-xs cue-muted mt-1">
+                  {tournamentFormat === 'KNOCKOUT'
+                    ? `Best of ${selectedMatchBestOf}，先贏 ${selectedMatchTargetWins} 局；目前盤數 ${Number(selectedMatch?.player_a_frames_won ?? 0)} : ${Number(selectedMatch?.player_b_frames_won ?? 0)}`
+                    : `Best of ${selectedMatchBestOf}；目前已記錄 ${selectedMatchCompletedFrames} 局，盤數 ${Number(selectedMatch?.player_a_frames_won ?? 0)} : ${Number(selectedMatch?.player_b_frames_won ?? 0)}`}
+                </div>
+                <div className="text-xs cue-muted mt-1">
+                  正在輸入第 {selectedMatchCurrentFrameNo} 局；「本局得分」是該局最後總分，「本局最高 break」是真正最高 break，不是總分。
+                </div>
                 {!selectedMatchResultEditable ? (
                   <div className="text-xs cue-muted mt-1">此對局尚未就緒，需待兩位球手已落位並成為 `READY / COMPLETED` 才可記分。</div>
                 ) : null}
@@ -1481,20 +1551,11 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={!selectedMatchResultEditable}
+                  disabled={!selectedMatchCanAddFrame}
                   className="px-3 py-1 rounded cue-surface hover:brightness-95 text-sm font-semibold"
                   onClick={() => {
-                    setResultFrames((prev) => [
-                      ...prev,
-                      {
-                        frameNo: prev.length + 1,
-                        winnerSide: 'A',
-                        playerAScore: '0',
-                        playerBScore: '0',
-                        playerAHighestBreak: '0',
-                        playerBHighestBreak: '0',
-                      },
-                    ]);
+                    setResultFrames((prev) => [...prev, createEmptyEditableFrame((prev[prev.length - 1]?.frameNo || 0) + 1)]);
+                    setBreakFrameNo(String((resultFrames[resultFrames.length - 1]?.frameNo || 0) + 1));
                   }}
                 >
                   加一局
@@ -1508,6 +1569,28 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   減一局
                 </button>
               </div>
+            </div>
+
+            <div className="rounded-lg border cue-border p-3 mb-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <div className="text-xs cue-muted">賽制摘要</div>
+                  <div className="font-semibold mt-1">{tournamentFormat === 'KNOCKOUT' ? `Best of ${selectedMatchBestOf} / 先贏 ${selectedMatchTargetWins} 局` : `Best of ${selectedMatchBestOf}`}</div>
+                </div>
+                <div>
+                  <div className="text-xs cue-muted">目前盤數</div>
+                  <div className="font-semibold mt-1">{Number(selectedMatch?.player_a_frames_won ?? 0)} : {Number(selectedMatch?.player_b_frames_won ?? 0)}</div>
+                </div>
+                <div>
+                  <div className="text-xs cue-muted">已完成局數</div>
+                  <div className="font-semibold mt-1">{selectedMatchCompletedFrames} / {selectedMatchBestOf}</div>
+                </div>
+                <div>
+                  <div className="text-xs cue-muted">下一個建議輸入</div>
+                  <div className="font-semibold mt-1">第 {selectedMatchCurrentFrameNo} 局</div>
+                </div>
+              </div>
+              <div className="text-xs cue-muted mt-3">每完成一局後可直接儲存；系統會保留已完成各局，並自動幫你預備下一局草稿。</div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 mb-3">
@@ -1549,7 +1632,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   </select>
                 </div>
               </div>
-              <div className="text-xs cue-muted mt-2">此操作不會建立 frame，並會清空該場既有的逐局賽果與 tournament 20+ 記錄。</div>
+              <div className="text-xs cue-muted mt-2">此操作不會建立逐局賽果，並會清空該場既有局數和 tournament `20+` 記錄。</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -1587,16 +1670,16 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <div className="grid gap-3">
               {resultFrames.map((frame, index) => (
                 <div key={frame.frameNo} className="rounded-lg border cue-border p-3">
-                  <div className="font-semibold mb-2">第 {index + 1} 局</div>
-                  <div className="grid gap-3 md:grid-cols-6">
-                    <div className="md:col-span-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="font-semibold">第 {frame.frameNo} 局</div>
+                    {frame.isPlaceholder ? <div className="text-xs cue-muted">待輸入</div> : null}
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <div>
                       <label className="block text-sm mb-1 cue-muted">勝方</label>
                       <select
                         value={frame.winnerSide}
-                        onChange={(e) => {
-                          const winnerSide = (e.target.value === 'B' ? 'B' : 'A');
-                          setResultFrames((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, winnerSide } : item));
-                        }}
+                        onChange={(e) => updateFrameDraft(index, { winnerSide: e.target.value === 'B' ? 'B' : 'A' })}
                         className="w-full px-3 py-2 rounded cue-input"
                       >
                         <option value="A">{formatMemberLabel(selectedMatch?.player_a_participant?.member)}</option>
@@ -1604,22 +1687,23 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm mb-1 cue-muted">A 分數</label>
-                      <input value={frame.playerAScore} onChange={(e) => setResultFrames((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, playerAScore: e.target.value } : item))} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+                      <label className="block text-sm mb-1 cue-muted">A 本局得分</label>
+                      <input value={frame.playerAScore} onChange={(e) => updateFrameDraft(index, { playerAScore: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 64" />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1 cue-muted">B 分數</label>
-                      <input value={frame.playerBScore} onChange={(e) => setResultFrames((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, playerBScore: e.target.value } : item))} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+                      <label className="block text-sm mb-1 cue-muted">B 本局得分</label>
+                      <input value={frame.playerBScore} onChange={(e) => updateFrameDraft(index, { playerBScore: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 27" />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1 cue-muted">A 最高 break</label>
-                      <input value={frame.playerAHighestBreak} onChange={(e) => setResultFrames((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, playerAHighestBreak: e.target.value } : item))} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+                      <label className="block text-sm mb-1 cue-muted">A 本局最高 break</label>
+                      <input value={frame.playerAHighestBreak} onChange={(e) => updateFrameDraft(index, { playerAHighestBreak: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 36" />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1 cue-muted">B 最高 break</label>
-                      <input value={frame.playerBHighestBreak} onChange={(e) => setResultFrames((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, playerBHighestBreak: e.target.value } : item))} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+                      <label className="block text-sm mb-1 cue-muted">B 本局最高 break</label>
+                      <input value={frame.playerBHighestBreak} onChange={(e) => updateFrameDraft(index, { playerBHighestBreak: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 28" />
                     </div>
                   </div>
+                  <div className="text-xs cue-muted mt-2">最高 break 只填單次最高連續得分；如你在右側記錄 `20+`，系統會自動把該局最高 break 更新為較高值。</div>
                 </div>
               ))}
             </div>
@@ -1632,14 +1716,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 onClick={async () => {
                   try {
                     if (!selectedMatchId) throw new Error('請先選擇賽事對局');
-                    const frames = resultFrames.map((frame, index) => ({
-                      frameNo: index + 1,
-                      winnerSide: frame.winnerSide,
-                      playerAScore: Math.max(0, Math.floor(Number(frame.playerAScore || 0))),
-                      playerBScore: Math.max(0, Math.floor(Number(frame.playerBScore || 0))),
-                      playerAHighestBreak: Math.max(0, Math.floor(Number(frame.playerAHighestBreak || 0))),
-                      playerBHighestBreak: Math.max(0, Math.floor(Number(frame.playerBHighestBreak || 0))),
-                    }));
+                    const frames = resultFrames
+                      .filter((frame) => !frame.isPlaceholder)
+                      .map((frame, index) => ({
+                        frameNo: index + 1,
+                        winnerSide: frame.winnerSide,
+                        playerAScore: Math.max(0, Math.floor(Number(frame.playerAScore || 0))),
+                        playerBScore: Math.max(0, Math.floor(Number(frame.playerBScore || 0))),
+                        playerAHighestBreak: Math.max(0, Math.floor(Number(frame.playerAHighestBreak || 0))),
+                        playerBHighestBreak: Math.max(0, Math.floor(Number(frame.playerBHighestBreak || 0))),
+                      }));
+                    if (frames.length === 0) throw new Error('請先輸入至少一局賽果');
                     setResultSaving(true);
                     await recordTournamentMatchResult(API_URL, operatorId, selectedId, selectedMatchId, {
                       startedAt: resultStartedAt ? new Date(resultStartedAt).toISOString() : null,
@@ -1663,6 +1750,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
           <div className="cue-surface-strong rounded-lg p-4">
             <div className="font-semibold mb-3">記錄比賽 20+</div>
+            <div className="text-xs cue-muted mb-3">
+              `20+` 會正式寫入比賽履歷，並自動回寫對應局數的最高 break。
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">球手</label>
@@ -1674,12 +1764,16 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 </select>
               </div>
               <div>
-                <label className="block text-sm mb-1 cue-muted">第幾局</label>
-                <input value={breakFrameNo} onChange={(e) => setBreakFrameNo(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={1} disabled={!selectedMatchBreakEnabled} />
+                <label className="block text-sm mb-1 cue-muted">對應局數</label>
+                <select value={breakFrameNo} onChange={(e) => setBreakFrameNo(e.target.value)} className="w-full px-3 py-2 rounded cue-input" disabled={!selectedMatchBreakEnabled}>
+                  {selectedMatchBreakFrameOptions.map((value) => (
+                    <option key={value} value={value}>第 {value} 局</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm mb-1 cue-muted">Break 分數</label>
-                <input value={breakPoints} onChange={(e) => setBreakPoints(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={20} disabled={!selectedMatchBreakEnabled} />
+                <input value={breakPoints} onChange={(e) => setBreakPoints(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={20} placeholder="例如 34" disabled={!selectedMatchBreakEnabled} />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">記錄時間（可選）</label>
@@ -1725,8 +1819,33 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
             <div className="mt-4 text-xs cue-muted">
               {selectedMatchBreakEnabled
-                ? '提示：Phase 1 會把 `20+ break` 正式寫入比賽紀錄，並同時支援 Knockout 與 League 的賽果沉澱。'
+                ? '只有正常逐局賽果可記錄 tournament `20+`；Walkover / 棄權 會停用此功能。'
                 : '此對局目前不是標準逐局賽果，已停用 tournament 20+ 記錄。'}
+            </div>
+
+            <div className="mt-4 rounded-lg border cue-border p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="font-semibold">本場已記錄 20+</div>
+                <div className="text-xs cue-muted">{selectedMatchBreakRows.length} 筆</div>
+              </div>
+              {selectedMatchBreakRows.length === 0 ? (
+                <div className="text-sm cue-muted">暫未有已加入的 20+ 記錄</div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedMatchBreakRows.map((row: any) => (
+                    <div key={String(row?.id || `${row?.member_id || ''}-${row?.frame_no || ''}-${row?.points || ''}`)} className="rounded cue-surface p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">{formatMemberLabel(row?.member)}</div>
+                        <div className="accent-yellow font-semibold">{Number(row?.points || 0)}</div>
+                      </div>
+                      <div className="text-xs cue-muted mt-1">
+                        第 {Number(row?.frame_no || 0)} 局 · {formatDisplayDateTime(row?.recorded_at)}
+                      </div>
+                      {row?.note ? <div className="text-xs cue-muted mt-1">{String(row.note)}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
