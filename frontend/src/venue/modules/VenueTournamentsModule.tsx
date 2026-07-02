@@ -476,6 +476,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedMatchHasPlayers = !!selectedMatch?.player_a_participant_id && !!selectedMatch?.player_b_participant_id;
   const selectedMatchStatus = String(selectedMatch?.status || '').trim().toUpperCase();
   const selectedMatchResultType = normalizeMatchResultType(selectedMatch?.result_type);
+  const selectedMatchIsCompleted = selectedMatchStatus === 'COMPLETED';
   const selectedMatchResultEditable = !!selectedMatch && selectedMatchHasPlayers && selectedMatchStatus !== 'PENDING';
   const selectedMatchBreakEnabled = !!selectedMatch && selectedMatchHasPlayers && selectedMatchResultType === 'STANDARD';
   const selectedMatchMemberOptions = useMemo(() => (selectedMatch ? [
@@ -491,6 +492,16 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedMatchBestOf = Math.max(1, Math.floor(Number(selectedMatch?.best_of_frames ?? selectedTournament?.best_of_frames ?? 1) || 1));
   const selectedMatchTargetWins = getTargetWins(selectedMatchBestOf);
   const selectedMatchCompletedFrames = Array.isArray(selectedMatch?.frames) ? selectedMatch.frames.length : 0;
+  const selectedMatchWinnerLabel = useMemo(() => {
+    if (!selectedMatchIsCompleted) return '';
+    if (String(selectedMatch?.winner_participant_id || '') === String(selectedMatch?.player_a_participant_id || '')) {
+      return formatMemberLabel(selectedMatch?.player_a_participant?.member);
+    }
+    if (String(selectedMatch?.winner_participant_id || '') === String(selectedMatch?.player_b_participant_id || '')) {
+      return formatMemberLabel(selectedMatch?.player_b_participant?.member);
+    }
+    return '';
+  }, [selectedMatch, selectedMatchIsCompleted]);
   const selectedMatchBreakRows = useMemo(() => (
     Array.isArray(selectedMatch?.breaks) ? [...selectedMatch.breaks] : []
   ).sort((a: any, b: any) => {
@@ -1558,7 +1569,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     : `Best of ${selectedMatchBestOf}；目前已記錄 ${selectedMatchCompletedFrames} 局，盤數 ${Number(selectedMatch?.player_a_frames_won ?? 0)} : ${Number(selectedMatch?.player_b_frames_won ?? 0)}`}
                 </div>
                 <div className="text-xs cue-muted mt-1">
-                  正在輸入第 {selectedMatchCurrentFrameNo} 局；「本局得分」是該局最後總分，「本局最高 break」是真正最高 break，不是總分。
+                  {selectedMatchIsCompleted
+                    ? '此場比賽已完成；下方逐局資料為已保存紀錄，可檢查最終比分與最高 break。'
+                    : `正在輸入第 ${selectedMatchCurrentFrameNo} 局；「本局得分」是該局最後總分，「本局最高 break」是真正最高 break，不是總分。`}
                 </div>
                 {!selectedMatchResultEditable ? (
                   <div className="text-xs cue-muted mt-1">此對局尚未就緒，需待兩位球手已落位並成為 `READY / COMPLETED` 才可記分。</div>
@@ -1587,6 +1600,20 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </div>
             </div>
 
+            {selectedMatchIsCompleted ? (
+              <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 mb-3">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div className="font-semibold accent-yellow">此場比賽已完成</div>
+                  <div className="text-sm">
+                    最終盤數 {Number(selectedMatch?.player_a_frames_won ?? 0)} : {Number(selectedMatch?.player_b_frames_won ?? 0)}
+                  </div>
+                </div>
+                <div className="text-xs cue-muted mt-1">
+                  {selectedMatchWinnerLabel ? `勝方：${selectedMatchWinnerLabel}` : '已保存最終賽果。'}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-lg border cue-border p-3 mb-3">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
@@ -1602,11 +1629,15 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   <div className="font-semibold mt-1">{selectedMatchCompletedFrames} / {selectedMatchBestOf}</div>
                 </div>
                 <div>
-                  <div className="text-xs cue-muted">下一個建議輸入</div>
-                  <div className="font-semibold mt-1">第 {selectedMatchCurrentFrameNo} 局</div>
+                  <div className="text-xs cue-muted">{selectedMatchIsCompleted ? '比賽狀態' : '下一個建議輸入'}</div>
+                  <div className="font-semibold mt-1">{selectedMatchIsCompleted ? '已完成' : `第 ${selectedMatchCurrentFrameNo} 局`}</div>
                 </div>
               </div>
-              <div className="text-xs cue-muted mt-3">每完成一局後可直接儲存；系統會保留已完成各局，並自動幫你預備下一局草稿。</div>
+              <div className="text-xs cue-muted mt-3">
+                {selectedMatchIsCompleted
+                  ? '此場已達勝出局數，系統已停止追加下一局草稿。'
+                  : '每完成一局後可直接儲存；系統會保留已完成各局，並自動幫你預備下一局草稿。'}
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 mb-3">
