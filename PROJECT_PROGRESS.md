@@ -1,6 +1,45 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
-更新日期：2026-06-20（Asia/Hong_Kong）
+更新日期：2026-07-05（Asia/Hong_Kong）
+
+## 最新已完成（2026-07-05）
+
+- Tournament scoring / break flow 已完成新一輪落地：
+  - `Phase 1`：`20+ break` 已直接內嵌到每局賽果輸入卡，操作員可於 frame editor 內即時輸入正式比賽 `20+`。
+  - `Phase 2`：比賽結算的 `max break / 20+ count` 已改為依「當前 frames + 當前 tournament break records」即時重算，不再沿用舊 match 欄位累積值。
+  - 場館 highbreak 榜已可顯示 tournament break 上下文，包括：
+    - `record_type`
+    - 日期時間
+    - 所屬球手
+    - 所屬比賽 / frame
+    - 場館
+- `frontend/src/venue/modules/VenueTournamentsModule.tsx` 已完成一輪完整結構重構，核心 tournament workbench 現已拆成：
+  - `VenueTournamentScoringWorkspace.tsx`
+  - `VenueTournamentScoringMainPanel.tsx`
+  - `VenueTournamentBreaksPanel.tsx`
+  - `VenueTournamentSummaryPanel.tsx`
+  - `VenueTournamentLeagueStandingsPanel.tsx`
+  - `VenueTournamentScheduleBracketPanel.tsx`
+  - `VenueTournamentScoringTypes.ts`
+  - `VenueTournamentScoringHelpers.ts`
+  - `useTournamentScoringDerivedState.ts`
+  - `useTournamentScoringActions.ts`
+  - `useTournamentStageViewData.ts`
+- 這輪重構的結果是：
+  - 主模組已由「超大單檔」收斂為 orchestration / composition 層
+  - scoring、summary、standings、schedule、bracket 已有清晰邊界
+  - 後續再做 tournament 新功能時，改動範圍可更集中
+- 已完成驗證：
+  - `npm run build`（frontend）通過
+  - `npm run build`（backend）通過
+  - 相關 diagnostics 乾淨
+- Git 狀態：
+  - 上述改動已分批 commit 並 push 至 `main`
+  - 最新結構分拆 commit：`9246e6b` `Split tournament stage panels`
+- GitHub Actions / 部署現況：
+  - `CI #298` 成功
+  - `Deploy Frontend to GitHub Pages #287` 失敗，失敗點在 `deploy` job，訊息為 `Deployment failed, try again later.`
+  - 公開 GitHub Pages 網站目前仍可打開，代表線上仍在提供前一個成功部署版本，而非最新 `9246e6b`
 
 ## 最新已記錄方向（2026-06-21）
 

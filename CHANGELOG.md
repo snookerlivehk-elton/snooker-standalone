@@ -5,6 +5,10 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: tournament match scoring now supports inline official `20+` entry directly inside each frame editor, alongside the existing sidebar supplement flow.
+- Changed: tournament match break summaries now recompute from the current match frames and current `TOURNAMENT` break records, so match-level max break / 20+ totals no longer depend on stale accumulated values.
+- Changed: venue tournament highbreak views now surface tournament-linked break context, including record type, club, date/time, and tournament/frame labels.
+- Changed: `VenueTournamentsModule` has been refactored into smaller tournament stage/scoring building blocks, including dedicated scoring workspace panels, shared scoring helpers/types, scoring derived-state/actions hooks, tournament summary panel, league standings panel, schedule/bracket panel, and stage-view data hook.
 - Added: first-phase highbreak dual-mode data model with `BreakRecord.record_type` (`VENUE` / `TOURNAMENT`) plus a reserved `tournament_id` relation for future tournament-linked official records.
 - Changed: all existing club/public/member highbreak leaderboards now count only `VENUE` records, so venue-side highbreak stays a club-internal marketing/game record instead of mixing with official tournament results.
 - Changed: venue highbreak UI, club leaderboard labels, member history, and the admin breaks console now distinguish venue vs tournament records, while current create flows continue to create venue-internal records only.
