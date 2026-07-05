@@ -298,6 +298,66 @@ function buildSaveProgressNotice(savedFrameNo: number, bestOfRaw: any, didComple
   return `第 ${savedFrameNo} 局已儲存，工作台已自動承接到下一局。`;
 }
 
+function isLongMatchBestOf(bestOfRaw: any) {
+  return Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1)) >= 11;
+}
+
+function getFramesInSegment(
+  frames: EditableFrame[],
+  segment: { startFrameNo: number; endFrameNo: number; },
+) {
+  return frames.filter((frame) => (
+    Number(frame.frameNo || 0) >= segment.startFrameNo
+    && Number(frame.frameNo || 0) <= segment.endFrameNo
+  ));
+}
+
+function getSegmentCompletionSummary(
+  frames: EditableFrame[],
+  segment: { startFrameNo: number; endFrameNo: number; },
+) {
+  const segmentFrames = getFramesInSegment(frames, segment);
+  const completedCount = segmentFrames.filter((frame) => !frame.isPlaceholder).length;
+  const totalCount = segment.endFrameNo - segment.startFrameNo + 1;
+  if (completedCount <= 0) return '未開始';
+  if (completedCount >= totalCount) return `已完成 ${completedCount}/${totalCount} 局`;
+  return `進行中 ${completedCount}/${totalCount} 局`;
+}
+
+function getSegmentFramesWonSummary(
+  frames: EditableFrame[],
+  segment: { startFrameNo: number; endFrameNo: number; },
+) {
+  const completedFrames = getFramesInSegment(frames, segment).filter((frame) => !frame.isPlaceholder);
+  const aWins = completedFrames.filter((frame) => frame.winnerSide === 'A').length;
+  const bWins = completedFrames.filter((frame) => frame.winnerSide === 'B').length;
+  return completedFrames.length > 0 ? `本段盤數 ${aWins}:${bWins}` : '本段尚未有盤數';
+}
+
+function getRecommendedFrameNoForSegment(
+  frames: EditableFrame[],
+  segment: { startFrameNo: number; endFrameNo: number; },
+) {
+  const segmentFrames = getFramesInSegment(frames, segment);
+  const pending = segmentFrames.find((frame) => frame.isPlaceholder);
+  if (pending) return Number(pending.frameNo || segment.startFrameNo);
+  const completed = segmentFrames.filter((frame) => !frame.isPlaceholder);
+  if (completed.length > 0) {
+    return Number(completed[completed.length - 1]?.frameNo || segment.startFrameNo);
+  }
+  return segment.startFrameNo;
+}
+
+function buildNextSegmentCheckpointLabel(
+  segment: { endFrameNo: number; boundaryLabel: string } | null,
+  bestOfRaw: any,
+) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1));
+  if (!segment) return `本場最多 ${bestOf} 局`;
+  if (segment.endFrameNo >= bestOf) return `完成第 ${bestOf} 局後即為本場最後段落`;
+  return segment.boundaryLabel;
+}
+
 function nextPowerOfTwo(n: number) {
   let p = 1;
   while (p < n) p *= 2;
@@ -611,6 +671,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedMatchBestOf = Math.max(1, Math.floor(Number(selectedMatch?.best_of_frames ?? selectedTournament?.best_of_frames ?? 1) || 1));
   const selectedMatchTargetWins = getTargetWins(selectedMatchBestOf);
   const selectedMatchCompletedFrames = Array.isArray(selectedMatch?.frames) ? selectedMatch.frames.length : 0;
+  const selectedMatchAWins = Number(selectedMatch?.player_a_frames_won ?? 0);
+  const selectedMatchBWins = Number(selectedMatch?.player_b_frames_won ?? 0);
+  const selectedMatchIsLongFormat = isLongMatchBestOf(selectedMatchBestOf);
   const selectedMatchWinnerLabel = useMemo(() => {
     if (!selectedMatchIsCompleted) return '';
     if (String(selectedMatch?.winner_participant_id || '') === String(selectedMatch?.player_a_participant_id || '')) {
@@ -651,6 +714,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       && Number(activeFrame?.frameNo || 0) <= segment.endFrameNo
     )) || selectedMatchSegments[0] || null
   ), [activeFrame, selectedMatchSegments]);
+  const selectedMatchWinsRemainingA = Math.max(0, selectedMatchTargetWins - selectedMatchAWins);
+  const selectedMatchWinsRemainingB = Math.max(0, selectedMatchTargetWins - selectedMatchBWins);
+  const selectedMatchLatestSavedFrameNo = Number(completedResultFrames[completedResultFrames.length - 1]?.frameNo || 0);
+  const selectedMatchNextCheckpointLabel = buildNextSegmentCheckpointLabel(selectedMatchActiveSegment, selectedMatchBestOf);
   const selectedMatchResumeSummary = selectedMatchIsCompleted
     ? '此場比賽已完成，可回看各局結果與最高 break。'
     : buildSegmentResumeSummary(selectedMatchCurrentFrameNo, completedResultFrames.length, selectedMatchBestOf);
@@ -1733,6 +1800,62 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </div>
             ) : null}
 
+            {selectedMatchIsLongFormat ? (
+              <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 mb-3">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <div className="font-semibold text-violet-100">長局數工作台</div>
+                    <div className="text-xs cue-muted mt-1">
+                      適用於 Best of {selectedMatchBestOf} 這類多段賽事；可按段查看進度、快速跳回下一局或最近已保存局數。
+                    </div>
+                  </div>
+                  <div className="grid gap-2 text-xs cue-muted sm:grid-cols-3">
+                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                      <div>尚差勝局</div>
+                      <div className="mt-1 font-semibold text-white">A 還差 {selectedMatchWinsRemainingA} 局</div>
+                      <div className="mt-1 font-semibold text-white">B 還差 {selectedMatchWinsRemainingB} 局</div>
+                    </div>
+                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                      <div>目前焦點</div>
+                      <div className="mt-1 font-semibold text-white">{selectedMatchActiveSegment ? selectedMatchActiveSegment.title : getFrameSegmentLabel(selectedMatchCurrentFrameNo)}</div>
+                      <div className="mt-1">第 {selectedMatchCurrentFrameNo} 局</div>
+                    </div>
+                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                      <div>下一節點</div>
+                      <div className="mt-1 font-semibold text-white">{selectedMatchNextCheckpointLabel}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFrameNo(selectedMatchCurrentFrameNo)}
+                    className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                  >
+                    回到下一局
+                  </button>
+                  {selectedMatchLatestSavedFrameNo > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveFrameNo(selectedMatchLatestSavedFrameNo)}
+                      className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                    >
+                      最新已保存：第 {selectedMatchLatestSavedFrameNo} 局
+                    </button>
+                  ) : null}
+                  {selectedMatchActiveSegment ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveFrameNo(getRecommendedFrameNoForSegment(resultFrames, selectedMatchActiveSegment))}
+                      className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                    >
+                      回到目前段
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-lg border cue-border p-3 mb-3">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                 <div>
@@ -1776,13 +1899,29 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 {selectedMatchSegments.map((segment) => (
-                  <div key={segment.key} className="rounded-lg border cue-border p-3">
+                  <div
+                    key={segment.key}
+                    className={`rounded-lg border p-3 ${selectedMatchActiveSegment?.key === segment.key ? 'border-yellow-400 bg-white/5' : 'cue-border'}`}
+                  >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div>
                         <div className="font-semibold">{segment.title}</div>
                         <div className="text-xs cue-muted mt-1">{segment.rangeLabel}</div>
                       </div>
-                      <div className="text-[11px] cue-muted text-right">{segment.boundaryLabel}</div>
+                      <div className="text-[11px] cue-muted text-right">
+                        <div>{segment.boundaryLabel}</div>
+                        <div className="mt-1">{getSegmentCompletionSummary(resultFrames, segment)}</div>
+                        <div className="mt-1">{getSegmentFramesWonSummary(resultFrames, segment)}</div>
+                      </div>
+                    </div>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveFrameNo(getRecommendedFrameNoForSegment(resultFrames, segment))}
+                        className="rounded border cue-border px-2 py-1 text-xs font-semibold hover:brightness-95"
+                      >
+                        前往本段
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {resultFrames
