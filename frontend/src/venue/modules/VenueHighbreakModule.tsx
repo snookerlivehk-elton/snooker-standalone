@@ -25,6 +25,31 @@ function normalizeVideoHref(raw: any): string | null {
   return `https://${s}`;
 }
 
+function formatBreakRecordTypeLabel(raw: any) {
+  return String(raw || '').trim().toUpperCase() === 'TOURNAMENT' ? '賽事 20+' : '場館紀錄';
+}
+
+function formatBreakClubLabel(row: any) {
+  return String(row?.club?.name || row?.club?.member?.name || '').trim() || '-';
+}
+
+function formatBreakContextLabel(row: any) {
+  const recordType = String(row?.record_type || '').trim().toUpperCase();
+  if (recordType === 'TOURNAMENT') {
+    const title = String(row?.tournament?.title || '').trim() || '未命名比賽';
+    const frameNo = Number(row?.frame_no || 0);
+    return frameNo > 0 ? `${title} · 第 ${frameNo} 局` : title;
+  }
+  return '場館會內紀錄';
+}
+
+function formatBreakDateTime(raw: any) {
+  if (!raw) return '-';
+  const d = new Date(String(raw));
+  if (!Number.isFinite(d.getTime())) return '-';
+  return d.toLocaleString();
+}
+
 const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   operatorId,
   enabled: enabledOverride,
@@ -116,7 +141,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
         <div>
           <h2 className="text-xl font-bold">場館 Highbreak</h2>
-          <div className="text-xs cue-muted mt-1">此模式只作場館會內營銷/小遊戲紀錄，不會當作正式比賽單杆。</div>
+          <div className="text-xs cue-muted mt-1">可同時查看場館會內單杆與 tournament `20+` 記錄，榜單會標示所屬比賽與場館。</div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <HelpGuide
@@ -125,12 +150,12 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
             steps={[
               '右上角先選擇月份與會員（可選）作為篩選條件，按「重新整理」更新列表。',
               '要新增記錄：下方選擇會員、輸入分數與日期（可選：影片連結/備註），按「新增」。',
-              '列表可查看已記錄的會內單杆，包含影片連結（如有）。',
+              '列表與榜單會同時顯示場館紀錄與正式賽事 `20+`，並標示比賽/場館/日期時間。',
             ]}
             tips={[
               '影片連結建議使用可直接開啟的 https:// URL。',
               '如看不到某會員，請先到「會員管理」確認該會員已加入場館。',
-              '正式比賽 highbreak 會保留到之後與 tournaments 流程接線。',
+              '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡。',
             ]}
           />
           <input
@@ -267,7 +292,9 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
                   <tr className="cue-muted border-b cue-border">
                     <th className="py-2 px-2">會員</th>
                     <th className="py-2 px-2">分數</th>
-                    <th className="py-2 px-2">日期</th>
+                    <th className="py-2 px-2">日期時間</th>
+                    <th className="py-2 px-2">所屬</th>
+                    <th className="py-2 px-2">場館</th>
                     <th className="py-2 px-2">影片</th>
                   </tr>
                 </thead>
@@ -276,7 +303,12 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
                     <tr key={row.id} className="border-b cue-border">
                       <td className="py-2 px-2">{row.member?.name || '-'}</td>
                       <td className="py-2 px-2 font-semibold accent-yellow">{row.points}</td>
-                      <td className="py-2 px-2 cue-muted">{row.recorded_at ? new Date(row.recorded_at).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-2 cue-muted whitespace-nowrap">{formatBreakDateTime(row.recorded_at)}</td>
+                      <td className="py-2 px-2">
+                        <div>{formatBreakContextLabel(row)}</div>
+                        <div className="text-xs cue-muted mt-1">{formatBreakRecordTypeLabel(row.record_type)}</div>
+                      </td>
+                      <td className="py-2 px-2 cue-muted">{formatBreakClubLabel(row)}</td>
                       <td className="py-2 px-2">
                         {normalizeVideoHref(row.video_url) ? (
                           <a href={normalizeVideoHref(row.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
@@ -340,9 +372,11 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="cue-muted border-b cue-border">
-                  <th className="py-2 px-2">日期</th>
+                  <th className="py-2 px-2">日期時間</th>
                   <th className="py-2 px-2">會員</th>
                   <th className="py-2 px-2">分數</th>
+                  <th className="py-2 px-2">所屬</th>
+                  <th className="py-2 px-2">場館</th>
                   <th className="py-2 px-2">影片</th>
                   <th className="py-2 px-2">備註</th>
                 </tr>
@@ -350,9 +384,14 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
               <tbody>
                 {breaks.map((row: any) => (
                   <tr key={row.id} className="border-b cue-border hover:brightness-95">
-                    <td className="py-2 px-2 cue-muted whitespace-nowrap">{row.recorded_at ? new Date(row.recorded_at).toLocaleDateString() : '-'}</td>
+                    <td className="py-2 px-2 cue-muted whitespace-nowrap">{formatBreakDateTime(row.recorded_at)}</td>
                     <td className="py-2 px-2">{row.member?.name || '-'}</td>
                     <td className="py-2 px-2 font-semibold accent-yellow">{row.points}</td>
+                    <td className="py-2 px-2">
+                      <div>{formatBreakContextLabel(row)}</div>
+                      <div className="text-xs cue-muted mt-1">{formatBreakRecordTypeLabel(row.record_type)}</div>
+                    </td>
+                    <td className="py-2 px-2 cue-muted">{formatBreakClubLabel(row)}</td>
                     <td className="py-2 px-2">
                       {normalizeVideoHref(row.video_url) ? (
                         <a href={normalizeVideoHref(row.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
