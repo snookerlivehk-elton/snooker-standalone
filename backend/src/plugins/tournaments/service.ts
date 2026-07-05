@@ -966,11 +966,15 @@ export const tournamentsService = {
       throw new Error(batchLabel ? `找不到 batch ${batchLabel} 的方法 Z 測試資料` : '目前賽事找不到方法 Z 測試資料');
     }
 
-    const memberIds = Array.from(new Set(signups.map((row: any) => String(row?.memberId || row?.member?.id || '')).filter(Boolean)));
-    const detectedBatches = Array.from(new Set(
+    const memberIds = Array.from(new Set<string>(
+      signups
+        .map((row: any) => String(row?.memberId || row?.member?.id || ''))
+        .filter((value: string) => !!value),
+    ));
+    const detectedBatches = Array.from(new Set<string>(
       signups
         .map((row: any) => parseMethodZBatchLabelFromMemberCode(row?.member?.member_code))
-        .filter(Boolean),
+        .filter((value: string) => !!value),
     ));
 
     return db.$transaction(async (tx: any) => {
@@ -978,7 +982,9 @@ export const tournamentsService = {
         where: { tournament_id: tournamentId },
         select: { id: true },
       });
-      const matchIds = matches.map((row: any) => String(row.id || '')).filter(Boolean);
+      const matchIds = matches
+        .map((row: any) => String(row.id || ''))
+        .filter((value: string) => !!value);
 
       let deletedBreakCount = 0;
       let deletedFrameCount = 0;
