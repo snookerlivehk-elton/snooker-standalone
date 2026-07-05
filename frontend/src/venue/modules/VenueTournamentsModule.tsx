@@ -219,6 +219,85 @@ function buildMatchProgressSummary(match: any, tournamentBestOfRaw?: any) {
   return `盤數 ${aWins}:${bWins} · 已完成 ${completedFrames}/${bestOf} 局 · 下一局 第 ${nextFrameNo} 局`;
 }
 
+function getSessionNoForFrame(frameNo: number) {
+  return Math.floor((Math.max(1, frameNo) - 1) / 8) + 1;
+}
+
+function getBlockNoInSession(frameNo: number) {
+  return Math.floor(((Math.max(1, frameNo) - 1) % 8) / 4) + 1;
+}
+
+function getFrameSegmentLabel(frameNo: number) {
+  return `Session ${getSessionNoForFrame(frameNo)} · 第 ${getBlockNoInSession(frameNo)} 段`;
+}
+
+function buildScoreSegments(bestOfRaw: any) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1));
+  const segments: Array<{
+    key: string;
+    startFrameNo: number;
+    endFrameNo: number;
+    sessionNo: number;
+    blockNo: number;
+    title: string;
+    rangeLabel: string;
+    boundaryLabel: string;
+  }> = [];
+  for (let startFrameNo = 1; startFrameNo <= bestOf; startFrameNo += 4) {
+    const endFrameNo = Math.min(bestOf, startFrameNo + 3);
+    const sessionNo = getSessionNoForFrame(startFrameNo);
+    const blockNo = getBlockNoInSession(startFrameNo);
+    const boundaryLabel = endFrameNo >= bestOf
+      ? '本段包含本場最後可輸入局數'
+      : endFrameNo % 8 === 0
+        ? `第 ${endFrameNo} 局後一節完結`
+        : `第 ${endFrameNo} 局後小休`;
+    segments.push({
+      key: `${startFrameNo}-${endFrameNo}`,
+      startFrameNo,
+      endFrameNo,
+      sessionNo,
+      blockNo,
+      title: `Session ${sessionNo} · 第 ${blockNo} 段`,
+      rangeLabel: startFrameNo === endFrameNo ? `第 ${startFrameNo} 局` : `第 ${startFrameNo}-${endFrameNo} 局`,
+      boundaryLabel,
+    });
+  }
+  return segments;
+}
+
+function buildSegmentResumeSummary(nextFrameNo: number, completedFrameCount: number, bestOfRaw: any) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1));
+  if (completedFrameCount <= 0) {
+    return `這是本場第一段的開始，先由 ${getFrameSegmentLabel(1)} 的第 1 局輸入。`;
+  }
+  if (completedFrameCount >= bestOf) {
+    return '此場已完成全部所需局數。';
+  }
+  const previousFrameNo = completedFrameCount;
+  if (previousFrameNo % 8 === 0) {
+    return `上一節已於第 ${previousFrameNo} 局完結，現進入 ${getFrameSegmentLabel(nextFrameNo)}。`;
+  }
+  if (previousFrameNo % 4 === 0) {
+    return `第 ${previousFrameNo} 局後已進入小休，現由 ${getFrameSegmentLabel(nextFrameNo)} 繼續。`;
+  }
+  return `已承接上次進度，現由 ${getFrameSegmentLabel(nextFrameNo)} 的第 ${nextFrameNo} 局繼續。`;
+}
+
+function buildSaveProgressNotice(savedFrameNo: number, bestOfRaw: any, didCompleteMatch: boolean) {
+  const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1));
+  if (didCompleteMatch || savedFrameNo >= bestOf) {
+    return `第 ${savedFrameNo} 局已儲存，已達成此場最終進度。`;
+  }
+  if (savedFrameNo % 8 === 0) {
+    return `第 ${savedFrameNo} 局已儲存，本節完成；下一局將進入 ${getFrameSegmentLabel(savedFrameNo + 1)}。`;
+  }
+  if (savedFrameNo % 4 === 0) {
+    return `第 ${savedFrameNo} 局已儲存，現已到小休位；下一局將進入 ${getFrameSegmentLabel(savedFrameNo + 1)}。`;
+  }
+  return `第 ${savedFrameNo} 局已儲存，工作台已自動承接到下一局。`;
+}
+
 function nextPowerOfTwo(n: number) {
   let p = 1;
   while (p < n) p *= 2;
@@ -563,11 +642,18 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     ? resultFrames[activeFrameIndex]
     : (pendingResultFrame || resultFrames[resultFrames.length - 1] || createEmptyEditableFrame(1));
   const selectedMatchCurrentFrameNo = Number(pendingResultFrame?.frameNo || activeFrame?.frameNo || 1);
+  const selectedMatchCurrentSessionNo = getSessionNoForFrame(selectedMatchCurrentFrameNo);
+  const selectedMatchCurrentBlockNo = getBlockNoInSession(selectedMatchCurrentFrameNo);
+  const selectedMatchSegments = useMemo(() => buildScoreSegments(selectedMatchBestOf), [selectedMatchBestOf]);
+  const selectedMatchActiveSegment = useMemo(() => (
+    selectedMatchSegments.find((segment) => (
+      Number(activeFrame?.frameNo || 0) >= segment.startFrameNo
+      && Number(activeFrame?.frameNo || 0) <= segment.endFrameNo
+    )) || selectedMatchSegments[0] || null
+  ), [activeFrame, selectedMatchSegments]);
   const selectedMatchResumeSummary = selectedMatchIsCompleted
     ? '此場比賽已完成，可回看各局結果與最高 break。'
-    : completedResultFrames.length > 0
-      ? `已承接上次進度，現由第 ${selectedMatchCurrentFrameNo} 局繼續。`
-      : `這是此場的第一局輸入，儲存後系統會自動帶你進入第 ${Math.min(selectedMatchBestOf, selectedMatchCurrentFrameNo + 1)} 局。`;
+    : buildSegmentResumeSummary(selectedMatchCurrentFrameNo, completedResultFrames.length, selectedMatchBestOf);
   const selectMatchForScoring = useCallback((row: any) => {
     const id = String(row?.id || '');
     setSelectedMatchId(id);
@@ -1620,7 +1706,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 ) : null}
               </div>
               <div className="text-right text-xs cue-muted">
-                {selectedMatchIsCompleted ? '可回看已保存局數' : `工作台已定位到第 ${selectedMatchCurrentFrameNo} 局`}
+                {selectedMatchIsCompleted
+                  ? '可回看已保存局數'
+                  : `工作台已定位到 ${getFrameSegmentLabel(selectedMatchCurrentFrameNo)} · 第 ${selectedMatchCurrentFrameNo} 局`}
               </div>
             </div>
 
@@ -1646,7 +1734,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             ) : null}
 
             <div className="rounded-lg border cue-border p-3 mb-3">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                 <div>
                   <div className="text-xs cue-muted">賽制摘要</div>
                   <div className="font-semibold mt-1">{tournamentFormat === 'KNOCKOUT' ? `Best of ${selectedMatchBestOf} / 先贏 ${selectedMatchTargetWins} 局` : `Best of ${selectedMatchBestOf}`}</div>
@@ -1663,11 +1751,19 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   <div className="text-xs cue-muted">{selectedMatchIsCompleted ? '比賽狀態' : '下一個建議輸入'}</div>
                   <div className="font-semibold mt-1">{selectedMatchIsCompleted ? '已完成' : `第 ${selectedMatchCurrentFrameNo} 局`}</div>
                 </div>
+                <div>
+                  <div className="text-xs cue-muted">目前節次</div>
+                  <div className="font-semibold mt-1">{`Session ${selectedMatchCurrentSessionNo}`}</div>
+                </div>
+                <div>
+                  <div className="text-xs cue-muted">本節段落</div>
+                  <div className="font-semibold mt-1">{`第 ${selectedMatchCurrentBlockNo} 段`}</div>
+                </div>
               </div>
               <div className="text-xs cue-muted mt-3">
                 {selectedMatchIsCompleted
                   ? '此場已達勝出局數，系統已停止追加下一局草稿。'
-                  : '每完成一局後直接儲存即可；系統會保留歷史各局，並自動帶你進入下一局。'}
+                  : '系統以每 4 局為一段、每 8 局為一節，自動安排小休與續賽提示。'}
               </div>
             </div>
 
@@ -1675,32 +1771,47 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="font-semibold">局數導航</div>
                 <div className="text-xs cue-muted">
-                  {selectedMatchIsCompleted ? '按任一局可回看已保存內容' : '按任一局可回看或修正；預設停留在下一局'}
+                  {selectedMatchIsCompleted ? '按任一局可回看已保存內容' : '按任一局可回看或修正；每 4 局自動分段，預設停留在下一局'}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {resultFrames.map((frame) => {
-                  const isActive = Number(frame.frameNo || 0) === Number(activeFrame?.frameNo || 0);
-                  const isPending = !!frame.isPlaceholder;
-                  const statusLabel = selectedMatchIsCompleted
-                    ? '已保存'
-                    : isPending
-                      ? '待輸入'
-                      : Number(frame.frameNo || 0) === Number(selectedMatchCurrentFrameNo || 0) && !pendingResultFrame
-                        ? '編輯中'
-                        : '已保存';
-                  return (
-                    <button
-                      key={frame.frameNo}
-                      type="button"
-                      onClick={() => setActiveFrameNo(Number(frame.frameNo || 1))}
-                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${isActive ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
-                    >
-                      <div className="text-sm font-semibold">第 {frame.frameNo} 局</div>
-                      <div className="text-[11px] cue-muted mt-1">{statusLabel}</div>
-                    </button>
-                  );
-                })}
+              <div className="grid gap-3 lg:grid-cols-2">
+                {selectedMatchSegments.map((segment) => (
+                  <div key={segment.key} className="rounded-lg border cue-border p-3">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div>
+                        <div className="font-semibold">{segment.title}</div>
+                        <div className="text-xs cue-muted mt-1">{segment.rangeLabel}</div>
+                      </div>
+                      <div className="text-[11px] cue-muted text-right">{segment.boundaryLabel}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {resultFrames
+                        .filter((frame) => Number(frame.frameNo || 0) >= segment.startFrameNo && Number(frame.frameNo || 0) <= segment.endFrameNo)
+                        .map((frame) => {
+                          const isActive = Number(frame.frameNo || 0) === Number(activeFrame?.frameNo || 0);
+                          const isPending = !!frame.isPlaceholder;
+                          const statusLabel = selectedMatchIsCompleted
+                            ? '已保存'
+                            : isPending
+                              ? '待輸入'
+                              : Number(frame.frameNo || 0) === Number(selectedMatchCurrentFrameNo || 0) && !pendingResultFrame
+                                ? '編輯中'
+                                : '已保存';
+                          return (
+                            <button
+                              key={frame.frameNo}
+                              type="button"
+                              onClick={() => setActiveFrameNo(Number(frame.frameNo || 1))}
+                              className={`rounded-lg border px-3 py-2 text-left transition-colors ${isActive ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
+                            >
+                              <div className="text-sm font-semibold">第 {frame.frameNo} 局</div>
+                              <div className="text-[11px] cue-muted mt-1">{statusLabel}</div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="text-xs cue-muted mt-3">{selectedMatchResumeSummary}</div>
             </div>
@@ -1792,7 +1903,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   </div>
                 </div>
                 <div className="text-xs cue-muted">
-                  {activeFrame?.isPlaceholder ? '待輸入' : '已保存/可修正'}
+                  <div>{selectedMatchActiveSegment ? selectedMatchActiveSegment.title : getFrameSegmentLabel(Number(activeFrame?.frameNo || selectedMatchCurrentFrameNo))}</div>
+                  <div className="mt-1">{activeFrame?.isPlaceholder ? '待輸入' : '已保存/可修正'}</div>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -1847,6 +1959,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                         playerBHighestBreak: Math.max(0, Math.floor(Number(frame.playerBHighestBreak || 0))),
                       }));
                     if (frames.length === 0) throw new Error('請先輸入至少一局賽果');
+                    const nextAWins = frames.filter((frame) => frame.winnerSide === 'A').length;
+                    const nextBWins = frames.filter((frame) => frame.winnerSide === 'B').length;
+                    const didCompleteMatch = nextAWins >= selectedMatchTargetWins || nextBWins >= selectedMatchTargetWins;
                     setResultSaving(true);
                     await recordTournamentMatchResult(API_URL, operatorId, selectedId, selectedMatchId, {
                       startedAt: resultStartedAt ? new Date(resultStartedAt).toISOString() : null,
@@ -1855,7 +1970,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                       frames,
                     });
                     await loadSelectedPhase1Data();
-                    showNotice(`第 ${savingFrameNo} 局已儲存，工作台已自動承接最新進度`);
+                    showNotice(buildSaveProgressNotice(savingFrameNo, selectedMatchBestOf, didCompleteMatch));
                   } catch (e: any) {
                     showNotice(e?.message || '記錄賽果失敗', 3000);
                   } finally {
