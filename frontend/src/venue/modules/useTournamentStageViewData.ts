@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-const BRACKET_CARD_HEIGHT = 92;
+const BRACKET_CARD_HEIGHT = 132;
 const BRACKET_BASE_GAP = 18;
 const BRACKET_CONNECTOR_HALF_GAP = 24;
 
@@ -107,6 +107,13 @@ export function useTournamentStageViewData(participantsRows: any[], matchesRows:
           roundIndex,
           isFinal: roundIndex === allColumns.length - 1,
           items,
+          summary: {
+            total: items.length,
+            completedCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length,
+            liveCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'LIVE').length,
+            readyCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length,
+            pendingCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length,
+          },
           paddingTop,
           gap,
           columnHeight: Math.max(

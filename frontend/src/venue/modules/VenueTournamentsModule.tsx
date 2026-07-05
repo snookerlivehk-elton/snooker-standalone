@@ -1158,6 +1158,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <VenueTournamentScheduleBracketPanel
                 bracketColumns={bracketColumns}
                 buildMatchProgressSummary={buildMatchProgressSummary}
+                  formatDisplayDateTime={formatDisplayDateTime}
                 formatMatchResultTypeLabel={formatMatchResultTypeLabel}
                 formatParticipantLabel={formatParticipantLabel}
                 isLeague={isLeague}
