@@ -1156,6 +1156,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   pointsLoss={Number(selectedTournament?.points_loss ?? 0)}
                   pointsWin={Number(selectedTournament?.points_win ?? 3)}
                   standingsRows={standingsRows}
+                  tournamentTitle={String(selectedTournament?.title || '')}
                   formatParticipantLabel={formatParticipantLabel}
                 />
               ) : null}

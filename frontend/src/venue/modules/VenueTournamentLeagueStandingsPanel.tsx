@@ -6,6 +6,7 @@ type VenueTournamentLeagueStandingsPanelProps = {
   pointsLoss: number;
   pointsWin: number;
   standingsRows: any[];
+  tournamentTitle?: string;
   formatParticipantLabel: (participant: any) => string;
 };
 
@@ -15,6 +16,7 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
   pointsLoss,
   pointsWin,
   standingsRows,
+  tournamentTitle,
   formatParticipantLabel,
 }) => {
   const [dimensionMode, setDimensionMode] = useState<'ALL' | 'MONTH' | 'ROUND'>('ALL');
@@ -34,6 +36,13 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
     if (!/^\d{4}-\d{2}$/.test(text)) return text || '全部月份';
     return `${text.slice(0, 4)}年${text.slice(5, 7)}月`;
   };
+
+  const escapeHtml = (value: any) => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
   const createParticipantSeedMap = () => {
     const participantMap = new Map<string, any>();
@@ -354,11 +363,263 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
     };
   }, [buildStandingsFromMatches, dimensionMode, scopedCompletedMatches, scopedStandingsRows]);
 
+  const handleExportStandingsPdf = () => {
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1280,height=960');
+    if (!printWindow) return;
+
+    const title = String(tournamentTitle || 'League 積分榜');
+    const summaryCards = [
+      {
+        label: '榜首',
+        value: chartData.leader?.label || '-',
+        detail: `${Number(chartData.leader?.matchPoints || 0)} 分`,
+      },
+      {
+        label: '最高勝率',
+        value: chartData.bestWinRate?.label || '-',
+        detail: `${Number(chartData.bestWinRate?.winRate || 0).toFixed(1)}%`,
+      },
+      {
+        label: '最佳局差',
+        value: chartData.bestFrameDiff?.label || '-',
+        detail: `${Number(chartData.bestFrameDiff?.frameDiff || 0) > 0 ? '+' : ''}${Number(chartData.bestFrameDiff?.frameDiff || 0)}`,
+      },
+      {
+        label: '單杆表現',
+        value: chartData.bestBreak?.label || '-',
+        detail: `最高單杆 ${Number(chartData.bestBreak?.maxBreak || 0)} / 20+ ${Number(chartData.bestBreak?.breaks20Plus || 0)}`,
+      },
+    ];
+
+    const html = `<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)} - League Standings PDF</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; color: #111827; background: #fff; }
+    .page { padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 { margin: 0; font-size: 18px; }
+    .hero { border: 1px solid #dbe4ff; border-radius: 18px; padding: 20px 22px; background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%); margin-bottom: 18px; }
+    .hero-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .hero-badge { display: inline-flex; align-items: center; border: 1px solid #bfdbfe; background: #dbeafe; color: #1d4ed8; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 700; }
+    .hero-meta { color: #475569; font-size: 13px; margin-top: 6px; }
+    .hero-side { text-align: right; font-size: 12px; color: #475569; }
+    .hero-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .hero-stat { border: 1px solid #e2e8f0; border-radius: 14px; background: rgba(255,255,255,0.72); padding: 12px; }
+    .hero-stat-label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+    .hero-stat-value { font-size: 24px; font-weight: 700; }
+    .subtitle { color: #4b5563; font-size: 13px; margin-bottom: 16px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .chip { border: 1px solid #d1d5db; border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #f9fafb; }
+    .section { border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; background: #fff; margin-bottom: 18px; page-break-inside: avoid; }
+    .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .note { font-size: 12px; color: #64748b; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .summary-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; background: #fafafa; }
+    .summary-title { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .summary-value { font-size: 18px; font-weight: 700; }
+    .muted { color: #6b7280; font-size: 11px; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; text-align: left; font-size: 12px; }
+    th { background: #f3f4f6; color: #374151; }
+    .compact td, .compact th { font-size: 11px; }
+    .trend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .trend-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; background: #fafafa; }
+    .trend-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .footer { margin-top: 20px; font-size: 11px; color: #6b7280; }
+    @page { size: A4 landscape; margin: 12mm; }
+    @media print {
+      .page { padding: 0; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="hero-badge">League Standings Print</div>
+          <h1>${escapeHtml(title)}</h1>
+          <div class="hero-meta">聯賽積分榜匯出 · 可直接在列印視窗另存為 PDF</div>
+        </div>
+        <div class="hero-side">
+          <div>匯出時間：${escapeHtml(new Date().toLocaleString('zh-HK'))}</div>
+          <div>參賽人數：${escapeHtml(chartData.rows.length)}</div>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-label">目前維度</div>
+          <div class="hero-stat-value">${escapeHtml(activeDimensionLabel)}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-label">已完成對局</div>
+          <div class="hero-stat-value">${escapeHtml(scopedCompletedMatches.length)}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-label">榜首積分</div>
+          <div class="hero-stat-value">${escapeHtml(Number(chartData.leader?.matchPoints || 0))}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-label">維度類型</div>
+          <div class="hero-stat-value">${escapeHtml(dimensionMode === 'ALL' ? '總榜' : dimensionMode === 'MONTH' ? '月份' : '輪次')}</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="meta">
+      <div class="chip">目前維度：${escapeHtml(activeDimensionLabel)}</div>
+      <div class="chip">已完成對局：${escapeHtml(scopedCompletedMatches.length)}</div>
+      <div class="chip">積分規則：勝 ${escapeHtml(pointsWin)} / 和 ${escapeHtml(pointsDraw)} / 負 ${escapeHtml(pointsLoss)}</div>
+      <div class="chip">匯出球手：${escapeHtml(chartData.rows.length)}</div>
+    </div>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>摘要卡</h2>
+        <div class="note">依目前 standings 維度重算</div>
+      </div>
+      <div class="summary-grid">
+        ${summaryCards.map((card) => `
+          <div class="summary-card">
+            <div class="summary-title">${escapeHtml(card.label)}</div>
+            <div class="summary-value">${escapeHtml(card.value)}</div>
+            <div class="muted">${escapeHtml(card.detail)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>積分榜</h2>
+        <div class="note">含積分、勝和負、局差、勝率、20+、最高單杆</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 7%">名次</th>
+            <th style="width: 21%">球手</th>
+            <th style="width: 7%">賽</th>
+            <th style="width: 12%">勝和負</th>
+            <th style="width: 10%">積分</th>
+            <th style="width: 12%">局數</th>
+            <th style="width: 9%">局差</th>
+            <th style="width: 9%">勝率</th>
+            <th style="width: 7%">20+</th>
+            <th style="width: 6%">最高單杆</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${chartData.rows.map((row: any) => `
+            <tr>
+              <td><strong>#${escapeHtml(row.position)}</strong></td>
+              <td>${escapeHtml(row.label)}</td>
+              <td>${escapeHtml(row.played)}</td>
+              <td>${escapeHtml(row.won)} / ${escapeHtml(row.drawn)} / ${escapeHtml(row.lost)}</td>
+              <td>${escapeHtml(row.matchPoints)}</td>
+              <td>${escapeHtml(row.framesFor)} - ${escapeHtml(row.framesAgainst)}</td>
+              <td>${escapeHtml(row.frameDiff > 0 ? `+${row.frameDiff}` : row.frameDiff)}</td>
+              <td>${escapeHtml(row.winRate.toFixed(1))}%</td>
+              <td>${escapeHtml(row.breaks20Plus)}</td>
+              <td>${escapeHtml(row.maxBreak)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>積分圖摘要</h2>
+        <div class="note">列印版以表格摘要呈現圖表數值</div>
+      </div>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th style="width: 24%">球手</th>
+            <th style="width: 12%">積分</th>
+            <th style="width: 12%">局差</th>
+            <th style="width: 12%">勝率</th>
+            <th style="width: 12%">20+</th>
+            <th style="width: 12%">最高單杆</th>
+            <th style="width: 16%">備註</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${chartData.rows.map((row: any) => `
+            <tr>
+              <td>${escapeHtml(row.label)}</td>
+              <td>${escapeHtml(row.matchPoints)}</td>
+              <td>${escapeHtml(row.frameDiff > 0 ? `+${row.frameDiff}` : row.frameDiff)}</td>
+              <td>${escapeHtml(row.winRate.toFixed(1))}%</td>
+              <td>${escapeHtml(row.breaks20Plus)}</td>
+              <td>${escapeHtml(row.maxBreak)}</td>
+              <td>${escapeHtml(row.position === 1 ? '目前榜首' : row.maxBreak === Number(chartData.bestBreak?.maxBreak || 0) ? '單杆突出' : '-')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>排名趨勢摘要</h2>
+        <div class="note">${escapeHtml(rankingTrend.available ? '按各輪完成後的累積 standings 生成' : String(rankingTrend.message || '暫無趨勢資料'))}</div>
+      </div>
+      ${rankingTrend.available ? `
+        <div class="trend-grid">
+          ${rankingTrend.series.map((row: any) => `
+            <div class="trend-card">
+              <div class="trend-title">${escapeHtml(row.label)}</div>
+              <div class="muted">現時名次 #${escapeHtml(row.currentRank)} · 淨變化 ${escapeHtml(row.netChange > 0 ? `+${row.netChange}` : row.netChange)}</div>
+              <div class="muted">走勢 ${escapeHtml(row.positions.map((point: any) => `R${point.roundNo}: #${point.rank}`).join(' -> '))}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="muted">${escapeHtml(rankingTrend.message)}</div>
+      `}
+    </section>
+
+    <div class="footer">由場館工作台產生 · ${escapeHtml(new Date().toLocaleString('zh-HK'))}</div>
+  </div>
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        window.print();
+      }, 200);
+    });
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="font-semibold">League 積分榜</div>
-        <div className="text-xs cue-muted">{standingsRows.length} 人</div>
+        <div className="flex items-center gap-2">
+          {standingsRows.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleExportStandingsPdf}
+              className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+            >
+              匯出 PDF
+            </button>
+          ) : null}
+          <div className="text-xs cue-muted">{standingsRows.length} 人</div>
+        </div>
       </div>
       {standingsRows.length === 0 ? (
         <div className="text-sm cue-muted">賽程生成後會在這裡顯示 standings</div>
