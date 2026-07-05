@@ -632,6 +632,111 @@ export function createTournamentRouter() {
     }
   });
 
+  router.get('/:clubId/tournaments/live/public', async (req, res) => {
+    const { clubId } = req.params;
+    try {
+      const tournaments = await prisma.tournament.findMany({
+        where: { clubId, status: 'PUBLISHED' },
+        orderBy: [{ startsAt: 'asc' }, { createdAt: 'desc' }],
+        take: 50,
+      });
+      const ids = tournaments.map((row) => row.id);
+      if (ids.length <= 0) return res.json([]);
+
+      const matches = await prisma.tournamentMatch.findMany({
+        where: {
+          tournament_id: { in: ids },
+        },
+        orderBy: [{ tournament_id: 'asc' }, { round_no: 'asc' }, { match_no: 'asc' }],
+        include: {
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          frames: {
+            orderBy: [{ frame_no: 'asc' }],
+          },
+          break_records: {
+            where: {
+              deleted_at: null,
+              record_type: 'TOURNAMENT',
+            },
+            orderBy: [{ frame_no: 'asc' }, { recorded_at: 'desc' }],
+            include: {
+              member: { select: { id: true, name: true, member_code: true } },
+            },
+          },
+        },
+      });
+
+      const byTournamentId = new Map<string, any[]>();
+      for (const row of matches) {
+        const tournamentId = String((row as any)?.tournament_id || '');
+        if (!byTournamentId.has(tournamentId)) byTournamentId.set(tournamentId, []);
+        byTournamentId.get(tournamentId)!.push({
+          ...row,
+          breaks: Array.isArray((row as any)?.break_records) ? (row as any).break_records : [],
+        });
+      }
+
+      const payload = tournaments.map((tournament) => {
+        const tournamentMatches = byTournamentId.get(String(tournament.id)) || [];
+        const liveMatches = tournamentMatches.filter((row: any) => {
+          const status = String(row?.status || '').trim().toUpperCase();
+          if (status === 'LIVE') return true;
+          if (status === 'COMPLETED' || status === 'PENDING') return false;
+          return Array.isArray(row?.frames) && row.frames.length > 0;
+        });
+        const readyMatches = tournamentMatches
+          .filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'READY')
+          .slice(0, 4);
+        const recentCompletedMatches = tournamentMatches
+          .filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'COMPLETED')
+          .sort((a: any, b: any) => {
+            const aEnded = a?.ended_at ? new Date(String(a.ended_at)).getTime() : 0;
+            const bEnded = b?.ended_at ? new Date(String(b.ended_at)).getTime() : 0;
+            return bEnded - aEnded;
+          })
+          .slice(0, 3);
+        const completedMatchCount = tournamentMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'COMPLETED').length;
+        const readyMatchCount = tournamentMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'READY').length;
+        const pendingMatchCount = tournamentMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'PENDING').length;
+
+        return {
+          id: tournament.id,
+          title: tournament.title,
+          format: tournament.format,
+          bestOfFrames: (tournament as any).best_of_frames,
+          workflow_status: tournament.workflow_status,
+          startsAt: tournament.startsAt,
+          liveMatches,
+          readyMatches,
+          recentCompletedMatches,
+          summary: {
+            totalMatches: tournamentMatches.length,
+            liveMatchCount: liveMatches.length,
+            readyMatchCount,
+            completedMatchCount,
+            pendingMatchCount,
+          },
+        };
+      }).filter((row) => (
+        row.summary.liveMatchCount > 0
+        || row.summary.readyMatchCount > 0
+        || row.summary.completedMatchCount > 0
+      ));
+
+      res.json(payload);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
   router.get('/:clubId/tournaments/:id/public', async (req, res) => {
     const { clubId, id } = req.params;
     const memberId = String(req.headers['x-member-id'] || '').trim() || null;
@@ -660,7 +765,7 @@ export function createTournamentRouter() {
           signup: { select: { id: true, status: true, createdAt: true } },
         },
       });
-      const matches = await prisma.tournamentMatch.findMany({
+      const rawMatches = await prisma.tournamentMatch.findMany({
         where: { tournament_id: id },
         orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
         include: {
@@ -673,8 +778,25 @@ export function createTournamentRouter() {
           winner_participant: {
             include: { member: { select: { id: true, name: true, member_code: true } } },
           },
+          frames: {
+            orderBy: [{ frame_no: 'asc' }],
+          },
+          break_records: {
+            where: {
+              deleted_at: null,
+              record_type: 'TOURNAMENT',
+            },
+            orderBy: [{ frame_no: 'asc' }, { recorded_at: 'desc' }],
+            include: {
+              member: { select: { id: true, name: true, member_code: true } },
+            },
+          },
         },
       });
+      const matches = rawMatches.map((row: any) => ({
+        ...row,
+        breaks: Array.isArray(row?.break_records) ? row.break_records : [],
+      }));
       const isLeague = String(t.format || '').toUpperCase() === 'LEAGUE';
       const standings = isLeague ? buildLeagueStandings(t, participants, matches) : [];
       const completedMatchCount = matches.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;

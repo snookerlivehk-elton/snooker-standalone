@@ -1084,6 +1084,14 @@ export async function getPublicClubTournament(apiUrl: string, clubId: string, to
   return res.json();
 }
 
+export async function getPublicClubTournamentLiveBoard(apiUrl: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/live/public`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('讀取賽況資料失敗');
+  return res.json();
+}
+
 export async function signupTournament(apiUrl: string, clubId: string, memberId: string, tournamentId: string) {
   const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/${encodeURIComponent(tournamentId)}/signup`, {
     method: 'POST',

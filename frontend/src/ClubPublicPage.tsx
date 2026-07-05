@@ -16,6 +16,7 @@ import {
   getPublicClubLiveAnnouncements,
   getPublicClubMessages,
   getPublicClubProfile,
+  getPublicClubTournamentLiveBoard,
   getPublicClubTournament,
   getPublicClubTournaments,
   getPublicPricing,
@@ -98,9 +99,77 @@ function formatTournamentResultTypeLabel(value: any) {
 function formatTournamentMatchStatusLabel(value: any) {
   const normalized = String(value || '').trim().toUpperCase();
   if (normalized === 'COMPLETED') return '已完成';
+  if (normalized === 'LIVE') return '進行中';
   if (normalized === 'READY') return '就緒';
   if (normalized === 'PENDING') return '待定';
   return normalized || '-';
+}
+
+function getPublicTournamentMatchBestOf(match: any, fallbackBestOfRaw?: any) {
+  return Math.max(1, Math.floor(Number(match?.best_of_frames ?? fallbackBestOfRaw ?? 1) || 1));
+}
+
+function isPublicTournamentLiveMatch(match: any) {
+  const status = String(match?.status || '').trim().toUpperCase();
+  if (status === 'LIVE') return true;
+  if (status === 'COMPLETED' || status === 'PENDING') return false;
+  const frames = Array.isArray(match?.frames) ? match.frames : [];
+  return frames.length > 0;
+}
+
+function formatPublicTournamentStageLabel(match: any, format: TournamentFormat, participantCount: number) {
+  const matchNo = Number(match?.match_no || 0);
+  if (format === 'LEAGUE') {
+    const roundNo = Number(match?.round_no || 0);
+    return `${roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽'} · M${matchNo || '-'}`;
+  }
+  return `${formatPublicKnockoutRoundLabel(match, participantCount)} · M${matchNo || '-'}`;
+}
+
+function buildPublicTournamentLiveProgressLabel(match: any, fallbackBestOfRaw?: any) {
+  const frames = Array.isArray(match?.frames) ? match.frames : [];
+  const completedCount = frames.length;
+  const bestOf = getPublicTournamentMatchBestOf(match, fallbackBestOfRaw);
+  const aWins = Number(match?.player_a_frames_won || 0);
+  const bWins = Number(match?.player_b_frames_won || 0);
+  const status = String(match?.status || '').trim().toUpperCase();
+  if (status === 'COMPLETED') return `已完成 · 盤數 ${aWins}:${bWins}`;
+  if (completedCount <= 0) return `尚未開局 · Best of ${bestOf}`;
+  const nextFrameNo = Math.min(bestOf, completedCount + 1);
+  return `盤數 ${aWins}:${bWins} · 已完成 ${completedCount}/${bestOf} 局 · 下一局 第 ${nextFrameNo} 局`;
+}
+
+function getPublicTournamentBreakRows(match: any) {
+  if (Array.isArray(match?.breaks)) return match.breaks;
+  if (Array.isArray(match?.break_records)) return match.break_records;
+  return [];
+}
+
+function buildPublicTournamentBreakSummary(match: any) {
+  const rows = getPublicTournamentBreakRows(match);
+  const totalCount = rows.length;
+  const topRow = rows.reduce((best: any, row: any) => (
+    Number(row?.points || 0) > Number(best?.points || 0) ? row : best
+  ), rows[0] || null);
+  const latestRow = rows.reduce((best: any, row: any) => {
+    if (!best) return row;
+    const rowTime = row?.recorded_at ? new Date(String(row.recorded_at)).getTime() : 0;
+    const bestTime = best?.recorded_at ? new Date(String(best.recorded_at)).getTime() : 0;
+    if (rowTime !== bestTime) return rowTime > bestTime ? row : best;
+    return Number(row?.frame_no || 0) > Number(best?.frame_no || 0) ? row : best;
+  }, null);
+  const topValue = Math.max(
+    Number(match?.player_a_max_break || 0),
+    Number(match?.player_b_max_break || 0),
+    Number(topRow?.points || 0),
+  );
+  return {
+    countLabel: totalCount > 0 ? `20+ ${totalCount} 筆` : '暫無 20+',
+    topLabel: topValue > 0 ? `最高 break ${topValue}` : '最高 break -',
+    latestLabel: latestRow
+      ? `最新 20+：${formatMemberLabel(latestRow?.member)} · 第 ${Number(latestRow?.frame_no || 0)} 局 · ${Number(latestRow?.points || 0)}`
+      : '未有最新 20+',
+  };
 }
 
 function nextPowerOfTwo(n: number) {
@@ -170,7 +239,7 @@ const ClubPublicPage: React.FC = () => {
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'live' | 'leader' | 'info' | 'contact'>('booking');
+  const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'scoreboard' | 'live' | 'leader' | 'info' | 'contact'>('booking');
 
   const [clubMessages, setClubMessages] = useState<any[]>([]);
   const [clubMessagesLoading, setClubMessagesLoading] = useState(false);
@@ -184,6 +253,9 @@ const ClubPublicPage: React.FC = () => {
 
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [tournamentsLoading, setTournamentsLoading] = useState(false);
+  const [tournamentLiveBoard, setTournamentLiveBoard] = useState<any[]>([]);
+  const [tournamentLiveBoardLoading, setTournamentLiveBoardLoading] = useState(false);
+  const [tournamentLiveBoardError, setTournamentLiveBoardError] = useState<string | null>(null);
   const [tournamentOpen, setTournamentOpen] = useState<any>(null);
   const [tournamentOpenLoading, setTournamentOpenLoading] = useState(false);
   const [tournamentDetail, setTournamentDetail] = useState<any>(null);
@@ -381,6 +453,7 @@ const ClubPublicPage: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'messages' && !clubMessagesTabEnabled) setActiveTab('booking');
     if (activeTab === 'signup' && !tournamentsTabEnabled) setActiveTab('booking');
+    if (activeTab === 'scoreboard' && !tournamentsTabEnabled) setActiveTab('booking');
     if (activeTab === 'live' && !liveTabEnabled) setActiveTab('booking');
   }, [activeTab, clubMessagesTabEnabled, liveTabEnabled, tournamentsTabEnabled]);
 
@@ -633,6 +706,34 @@ const ClubPublicPage: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, [clubId, sessionMemberId, tournamentsTabEnabled]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!clubId) return;
+      if (!tournamentsTabEnabled) {
+        if (mounted) setTournamentLiveBoard([]);
+        if (mounted) setTournamentLiveBoardLoading(false);
+        if (mounted) setTournamentLiveBoardError(null);
+        return;
+      }
+      if (activeTab !== 'scoreboard') return;
+      setTournamentLiveBoardLoading(true);
+      setTournamentLiveBoardError(null);
+      try {
+        const rows = await getPublicClubTournamentLiveBoard(API_URL, clubId);
+        if (mounted) setTournamentLiveBoard(Array.isArray(rows) ? rows : []);
+      } catch (e: any) {
+        if (mounted) {
+          setTournamentLiveBoard([]);
+          setTournamentLiveBoardError(String(e?.message || '讀取賽況資料失敗'));
+        }
+      } finally {
+        if (mounted) setTournamentLiveBoardLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [activeTab, clubId, tournamentsTabEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -988,6 +1089,37 @@ const ClubPublicPage: React.FC = () => {
   const openedTournamentStandings = useMemo(() => (
     Array.isArray(openedTournament?.standings) ? openedTournament.standings : []
   ), [openedTournament]);
+  const openedTournamentLiveMatches = useMemo(() => (
+    openedTournamentMatches
+      .filter((row: any) => isPublicTournamentLiveMatch(row))
+      .sort((a: any, b: any) => {
+        const aStarted = a?.started_at ? new Date(String(a.started_at)).getTime() : 0;
+        const bStarted = b?.started_at ? new Date(String(b.started_at)).getTime() : 0;
+        if (aStarted !== bStarted) return bStarted - aStarted;
+        return Number(a?.match_no || 0) - Number(b?.match_no || 0);
+      })
+  ), [openedTournamentMatches]);
+  const openedTournamentReadyMatches = useMemo(() => (
+    openedTournamentMatches
+      .filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'READY')
+      .sort((a: any, b: any) => {
+        const aTime = a?.scheduled_at ? new Date(String(a.scheduled_at)).getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b?.scheduled_at ? new Date(String(b.scheduled_at)).getTime() : Number.MAX_SAFE_INTEGER;
+        if (aTime !== bTime) return aTime - bTime;
+        return Number(a?.match_no || 0) - Number(b?.match_no || 0);
+      })
+  ), [openedTournamentMatches]);
+  const openedTournamentRecentCompletedMatches = useMemo(() => (
+    openedTournamentMatches
+      .filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'COMPLETED')
+      .sort((a: any, b: any) => {
+        const aEnded = a?.ended_at ? new Date(String(a.ended_at)).getTime() : 0;
+        const bEnded = b?.ended_at ? new Date(String(b.ended_at)).getTime() : 0;
+        if (aEnded !== bEnded) return bEnded - aEnded;
+        return Number(b?.match_no || 0) - Number(a?.match_no || 0);
+      })
+      .slice(0, 3)
+  ), [openedTournamentMatches]);
   const openedTournamentLeagueRounds = useMemo(() => {
     const grouped = new Map<number, any[]>();
     for (const row of openedTournamentMatches) {
@@ -1346,6 +1478,7 @@ const ClubPublicPage: React.FC = () => {
                 ),
               }] : []),
               ...(tournamentsTabEnabled ? [{ key: 'signup', label: '報名' }] : []),
+              ...(tournamentsTabEnabled ? [{ key: 'scoreboard', label: '賽況' }] : []),
               ...(liveTabEnabled ? [{
                 key: 'live',
                 label: (
@@ -1458,6 +1591,136 @@ const ClubPublicPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'scoreboard' && (
+              <div className="mt-5 space-y-6">
+                <div className="cue-surface rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div>
+                      <div className="font-semibold text-lg">公開賽況</div>
+                      <div className="text-xs cue-muted mt-1">集中顯示目前可公開查看的 tournament 進度、即將上場與最近完成場次</div>
+                    </div>
+                    <div className="text-xs cue-muted">
+                      {tournamentLiveBoardLoading ? '讀取中…' : `共 ${tournamentLiveBoard.length} 個賽事項目`}
+                    </div>
+                  </div>
+
+                  {tournamentLiveBoardError && <div className="text-sm text-rose-300 mb-2">{tournamentLiveBoardError}</div>}
+                  {tournamentLiveBoardLoading && <div className="text-sm cue-muted">讀取中…</div>}
+                  {!tournamentLiveBoardLoading && tournamentLiveBoard.length === 0 && (
+                    <div className="text-sm cue-muted">目前未有可公開顯示的 tournament 賽況。</div>
+                  )}
+                  {!tournamentLiveBoardLoading && tournamentLiveBoard.length > 0 && (
+                    <div className="space-y-4">
+                      {tournamentLiveBoard.map((tournament: any) => (
+                        <div key={String(tournament?.id || Math.random())} className="cue-surface-strong rounded-lg p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-lg truncate">{String(tournament?.title || '比賽')}</div>
+                              <div className="text-xs cue-muted mt-1">
+                                {formatTournamentFormatLabel(tournament?.format)} · {formatTournamentWorkflowLabel(tournament?.workflow_status)}
+                                {tournament?.startsAt ? ` · ${new Date(String(tournament.startsAt)).toLocaleString()}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex gap-2 text-xs">
+                              <div className="px-3 py-2 rounded cue-surface">
+                                進行中 {Number(tournament?.summary?.liveMatchCount || 0)}
+                              </div>
+                              <div className="px-3 py-2 rounded cue-surface">
+                                即將上場 {Number(tournament?.summary?.readyMatchCount || 0)}
+                              </div>
+                              <div className="px-3 py-2 rounded cue-surface">
+                                已完成 {Number(tournament?.summary?.completedMatchCount || 0)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {Array.isArray(tournament?.liveMatches) && tournament.liveMatches.length > 0 ? (
+                            <div className="mt-4">
+                              <div className="font-semibold mb-2">進行中場次</div>
+                              <div className="grid gap-3 xl:grid-cols-2">
+                                {tournament.liveMatches.map((row: any) => {
+                                  const breakSummary = buildPublicTournamentBreakSummary(row);
+                                  return (
+                                    <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-4">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                          <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}</div>
+                                          <div className="text-xs cue-muted mt-1">{buildPublicTournamentLiveProgressLabel(row, tournament?.bestOfFrames)}</div>
+                                        </div>
+                                        <div className="text-xs font-semibold accent-yellow">{formatTournamentMatchStatusLabel(row?.status)}</div>
+                                      </div>
+                                      <div className="mt-3">
+                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                        <div className="text-sm cue-muted my-1">
+                                          {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
+                                        </div>
+                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                      </div>
+                                      <div className="grid gap-2 sm:grid-cols-3 mt-3 text-xs">
+                                        <div className="cue-surface-strong rounded-lg p-2">{breakSummary.topLabel}</div>
+                                        <div className="cue-surface-strong rounded-lg p-2">{breakSummary.countLabel}</div>
+                                        <div className="cue-surface-strong rounded-lg p-2">已完成 {Array.isArray(row?.frames) ? row.frames.length : 0} 局</div>
+                                      </div>
+                                      <div className="text-xs cue-muted mt-3">{breakSummary.latestLabel}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {Array.isArray(tournament?.readyMatches) && tournament.readyMatches.length > 0 ? (
+                            <div className="mt-4">
+                              <div className="font-semibold mb-2">即將上場</div>
+                              <div className="grid gap-2 lg:grid-cols-2">
+                                {tournament.readyMatches.map((row: any) => (
+                                  <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
+                                    <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
+                                      <span>{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}</span>
+                                      <span>{row?.scheduled_at ? new Date(String(row.scheduled_at)).toLocaleString() : '待定時間'}</span>
+                                    </div>
+                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                    <div className="text-xs cue-muted my-1">vs</div>
+                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {Array.isArray(tournament?.recentCompletedMatches) && tournament.recentCompletedMatches.length > 0 ? (
+                            <div className="mt-4">
+                              <div className="font-semibold mb-2">最近完成</div>
+                              <div className="grid gap-2 lg:grid-cols-3">
+                                {tournament.recentCompletedMatches.map((row: any) => (
+                                  <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
+                                    <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}</div>
+                                    <div className="font-semibold mt-2">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                    <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="mt-4 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(tournament?.id || '')) || tournament)}
+                              className="px-4 py-2 rounded cue-button text-sm font-semibold"
+                            >
+                              查看詳情
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1744,6 +2007,110 @@ const ClubPublicPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
+
+                          {openedTournamentMatches.length > 0 ? (
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
+                                <div>
+                                  <div className="font-semibold">Live 賽況</div>
+                                  <div className="text-xs cue-muted mt-1">即時反映目前盤數、下一局與本場 break 摘要</div>
+                                </div>
+                                <div className="text-xs cue-muted">
+                                  進行中 {openedTournamentLiveMatches.length} · 即將上場 {openedTournamentReadyMatches.length} · 最近完成 {openedTournamentRecentCompletedMatches.length}
+                                </div>
+                              </div>
+
+                              <div className="grid gap-3 md:grid-cols-3 mb-4">
+                                <div className="cue-surface rounded-lg p-3">
+                                  <div className="text-sm cue-muted">進行中</div>
+                                  <div className="text-2xl font-extrabold accent-yellow mt-1">{openedTournamentLiveMatches.length}</div>
+                                  <div className="text-xs cue-muted mt-2">已開局而未完賽場次</div>
+                                </div>
+                                <div className="cue-surface rounded-lg p-3">
+                                  <div className="text-sm cue-muted">即將上場</div>
+                                  <div className="text-2xl font-extrabold accent-yellow mt-1">{openedTournamentReadyMatches.length}</div>
+                                  <div className="text-xs cue-muted mt-2">已排位可隨時開打場次</div>
+                                </div>
+                                <div className="cue-surface rounded-lg p-3">
+                                  <div className="text-sm cue-muted">最新完成</div>
+                                  <div className="text-2xl font-extrabold accent-yellow mt-1">{Number(openedTournament?.summary?.completedMatchCount || 0)}</div>
+                                  <div className="text-xs cue-muted mt-2">本賽事已完成場次總數</div>
+                                </div>
+                              </div>
+
+                              {openedTournamentLiveMatches.length > 0 ? (
+                                <div className="grid gap-3 xl:grid-cols-2">
+                                  {openedTournamentLiveMatches.map((row: any) => {
+                                    const breakSummary = buildPublicTournamentBreakSummary(row);
+                                    return (
+                                      <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, openedTournamentFormat, openedTournamentParticipants.length)}</div>
+                                            <div className="text-xs cue-muted mt-1">{buildPublicTournamentLiveProgressLabel(row, openedTournament?.bestOfFrames)}</div>
+                                          </div>
+                                          <div className="text-xs font-semibold accent-yellow">{formatTournamentMatchStatusLabel(row?.status)}</div>
+                                        </div>
+                                        <div className="mt-3">
+                                          <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                          <div className="text-sm cue-muted my-1">
+                                            {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
+                                          </div>
+                                          <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                        </div>
+                                        <div className="grid gap-2 sm:grid-cols-3 mt-3 text-xs">
+                                          <div className="cue-surface-strong rounded-lg p-2">{breakSummary.topLabel}</div>
+                                          <div className="cue-surface-strong rounded-lg p-2">{breakSummary.countLabel}</div>
+                                          <div className="cue-surface-strong rounded-lg p-2">
+                                            已完成 {Array.isArray(row?.frames) ? row.frames.length : 0} 局
+                                          </div>
+                                        </div>
+                                        <div className="text-xs cue-muted mt-3">{breakSummary.latestLabel}</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-sm cue-muted">目前未有進行中場次；下方會顯示即將上場或最近完成的對局。</div>
+                              )}
+
+                              {openedTournamentReadyMatches.length > 0 ? (
+                                <div className="mt-4">
+                                  <div className="font-semibold mb-2">即將上場</div>
+                                  <div className="grid gap-2 lg:grid-cols-2">
+                                    {openedTournamentReadyMatches.slice(0, 4).map((row: any) => (
+                                      <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
+                                        <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
+                                          <span>{formatPublicTournamentStageLabel(row, openedTournamentFormat, openedTournamentParticipants.length)}</span>
+                                          <span>{row?.scheduled_at ? new Date(String(row.scheduled_at)).toLocaleString() : '待定時間'}</span>
+                                        </div>
+                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                        <div className="text-xs cue-muted my-1">vs</div>
+                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {openedTournamentRecentCompletedMatches.length > 0 ? (
+                                <div className="mt-4">
+                                  <div className="font-semibold mb-2">最近完成</div>
+                                  <div className="grid gap-2 lg:grid-cols-3">
+                                    {openedTournamentRecentCompletedMatches.map((row: any) => (
+                                      <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
+                                        <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, openedTournamentFormat, openedTournamentParticipants.length)}</div>
+                                        <div className="font-semibold mt-2">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                        <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                        <div className="text-xs cue-muted mt-2">{buildPublicTournamentLiveProgressLabel(row, openedTournament?.bestOfFrames)}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
 
                           {!!openedTournament?.podium && (openedTournament.podium?.champion || openedTournament.podium?.runnerUp || (Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0)) ? (
                             <div className="grid gap-3 md:grid-cols-3">
