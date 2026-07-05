@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import HelpGuide from '../../components/HelpGuide';
 import { API_URL } from '../../config';
 import VenueTournamentScoringWorkspace from './VenueTournamentScoringWorkspace';
+import type { EditableFrame, MatchScoreSegment, TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 import {
   cancelTournamentSignup,
   closeClubTournament,
@@ -29,16 +30,6 @@ type VenueTournamentsModuleProps = {
   operatorId: string;
   enabled: boolean;
   className?: string;
-};
-
-type EditableFrame = {
-  frameNo: number;
-  winnerSide: 'A' | 'B';
-  playerAScore: string;
-  playerBScore: string;
-  playerAHighestBreak: string;
-  playerBHighestBreak: string;
-  isPlaceholder?: boolean;
 };
 
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
@@ -234,16 +225,7 @@ function getFrameSegmentLabel(frameNo: number) {
 
 function buildScoreSegments(bestOfRaw: any) {
   const bestOf = Math.max(1, Math.floor(Number(bestOfRaw || 1) || 1));
-  const segments: Array<{
-    key: string;
-    startFrameNo: number;
-    endFrameNo: number;
-    sessionNo: number;
-    blockNo: number;
-    title: string;
-    rangeLabel: string;
-    boundaryLabel: string;
-  }> = [];
+  const segments: MatchScoreSegment[] = [];
   for (let startFrameNo = 1; startFrameNo <= bestOf; startFrameNo += 4) {
     const endFrameNo = Math.min(bestOf, startFrameNo + 3);
     const sessionNo = getSessionNoForFrame(startFrameNo);
@@ -1019,6 +1001,78 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0));
     return { champion, runnerUp, semiFinalists };
   }, [participantsRows]);
+  const scoringWorkspace: TournamentScoringWorkspace | null = selectedId && selectedMatch ? {
+    activeFrame,
+    activeFrameIndex,
+    activeFrameNoValue,
+    breakFrameNo,
+    breakMemberId,
+    breakNote,
+    breakPoints,
+    breakRecordedAt,
+    breakSaving,
+    formatDisplayDateTime,
+    formatMatchResultTypeLabel,
+    formatMemberLabel,
+    getFrameSegmentLabel,
+    getRecommendedFrameNoForSegment,
+    getSegmentBreakSummary,
+    getSegmentCompletionSummary,
+    getSegmentFramesWonSummary,
+    onSubmitActiveFrameBreak: handleSubmitActiveFrameBreak,
+    onSubmitQuickResult: handleSubmitQuickResult,
+    onSubmitSidebarBreak: handleSubmitSidebarBreak,
+    onSubmitStandardResult: handleSubmitStandardResult,
+    pendingResultFrame,
+    resultEndedAt,
+    resultFrames,
+    resultQuickType,
+    resultQuickWinnerSide,
+    resultSaving,
+    resultStartedAt,
+    selectedMatch,
+    selectedMatchA20PlusCount,
+    selectedMatchActiveFrameBreakRows,
+    selectedMatchActiveSegment,
+    selectedMatchActiveSegmentBreakRows,
+    selectedMatchActiveSegmentBreakSummary,
+    selectedMatchB20PlusCount,
+    selectedMatchBestOf,
+    selectedMatchBreakEnabled,
+    selectedMatchBreakFrameOptions,
+    selectedMatchBreakRows,
+    selectedMatchBreakTotalsLabel,
+    selectedMatchCompletedFrames,
+    selectedMatchCurrentBlockNo,
+    selectedMatchCurrentFrameNo,
+    selectedMatchCurrentSessionNo,
+    selectedMatchIsCompleted,
+    selectedMatchIsLongFormat,
+    selectedMatchLatestSavedFrameNo,
+    selectedMatchMemberOptions,
+    selectedMatchNextCheckpointLabel,
+    selectedMatchResultEditable,
+    selectedMatchResumeSummary,
+    selectedMatchSegments,
+    selectedMatchTargetWins,
+    selectedMatchTopBreakLabel,
+    selectedMatchWinnerLabel,
+    selectedMatchWinsRemainingA,
+    selectedMatchWinsRemainingB,
+    setActiveFrameNo,
+    setBreakFrameNo,
+    setBreakMemberId,
+    setBreakNote,
+    setBreakPoints,
+    setBreakRecordedAt,
+    setResultEndedAt,
+    setResultQuickType,
+    setResultQuickWinnerSide,
+    setResultStartedAt,
+    showNotice,
+    tournamentFormat,
+    updateFrameDraft,
+  } : null;
 
   if (!enabled) {
     return (
@@ -1941,81 +1995,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         </div>
       ) : null}
 
-      {selectedId && selectedMatch ? (
-        <VenueTournamentScoringWorkspace
-          workspace={{
-            activeFrame,
-            activeFrameIndex,
-            activeFrameNoValue,
-            breakFrameNo,
-            breakMemberId,
-            breakNote,
-            breakPoints,
-            breakRecordedAt,
-            breakSaving,
-            formatDisplayDateTime,
-            formatMatchResultTypeLabel,
-            formatMemberLabel,
-            getFrameSegmentLabel,
-            getRecommendedFrameNoForSegment,
-            getSegmentBreakSummary,
-            getSegmentCompletionSummary,
-            getSegmentFramesWonSummary,
-            onSubmitActiveFrameBreak: handleSubmitActiveFrameBreak,
-            onSubmitQuickResult: handleSubmitQuickResult,
-            onSubmitSidebarBreak: handleSubmitSidebarBreak,
-            onSubmitStandardResult: handleSubmitStandardResult,
-            pendingResultFrame,
-            resultEndedAt,
-            resultFrames,
-            resultQuickType,
-            resultQuickWinnerSide,
-            resultSaving,
-            resultStartedAt,
-            selectedMatch,
-            selectedMatchA20PlusCount,
-            selectedMatchActiveFrameBreakRows,
-            selectedMatchActiveSegment,
-            selectedMatchActiveSegmentBreakRows,
-            selectedMatchActiveSegmentBreakSummary,
-            selectedMatchB20PlusCount,
-            selectedMatchBestOf,
-            selectedMatchBreakEnabled,
-            selectedMatchBreakFrameOptions,
-            selectedMatchBreakRows,
-            selectedMatchBreakTotalsLabel,
-            selectedMatchCompletedFrames,
-            selectedMatchCurrentBlockNo,
-            selectedMatchCurrentFrameNo,
-            selectedMatchCurrentSessionNo,
-            selectedMatchIsCompleted,
-            selectedMatchIsLongFormat,
-            selectedMatchLatestSavedFrameNo,
-            selectedMatchMemberOptions,
-            selectedMatchNextCheckpointLabel,
-            selectedMatchResultEditable,
-            selectedMatchResumeSummary,
-            selectedMatchSegments,
-            selectedMatchTargetWins,
-            selectedMatchTopBreakLabel,
-            selectedMatchWinnerLabel,
-            selectedMatchWinsRemainingA,
-            selectedMatchWinsRemainingB,
-            setActiveFrameNo,
-            setBreakFrameNo,
-            setBreakMemberId,
-            setBreakNote,
-            setBreakPoints,
-            setBreakRecordedAt,
-            setResultEndedAt,
-            setResultQuickType,
-            setResultQuickWinnerSide,
-            setResultStartedAt,
-            showNotice,
-            tournamentFormat,
-            updateFrameDraft,
-          }}
-        />
+      {scoringWorkspace ? (
+        <VenueTournamentScoringWorkspace workspace={scoringWorkspace} />
       ) : null}
     </div>
   );

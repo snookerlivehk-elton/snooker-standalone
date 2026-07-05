@@ -1,7 +1,8 @@
 import React from 'react';
+import type { TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 
 type VenueTournamentScoringMainPanelProps = {
-  workspace: any;
+  workspace: TournamentScoringWorkspace;
 };
 
 const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelProps> = ({ workspace }) => {
