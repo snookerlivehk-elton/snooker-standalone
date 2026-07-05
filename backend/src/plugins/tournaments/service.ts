@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../core/db/prisma.js';
+import { hashPassword, makeSalt } from '../../core/members/utils.js';
 
 const db = prisma as any;
 
@@ -115,6 +116,159 @@ function normalizeSeedMode(value: any): TournamentSeedMode {
   const mode = String(value || 'MANUAL').trim().toUpperCase();
   if (mode === 'RANKING' || mode === 'RANDOM') return mode;
   return 'MANUAL';
+}
+
+function normalizeMethodZBatchLabel(value: any) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 12);
+  if (normalized) return normalized;
+  return `TZ${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
+function normalizeMethodZPassword(value: any) {
+  const password = String(value || 'Test1234');
+  const pwLenOk = password.length >= 8;
+  const pwHasNum = /\d/.test(password);
+  const pwHasAlpha = /[A-Za-z]/.test(password);
+  if (!pwLenOk || !pwHasNum || !pwHasAlpha) {
+    throw new Error('測試會員密碼不符合規則（至少8字元，需含英文字母與數字）');
+  }
+  return password;
+}
+
+function parseMethodZBatchLabelFromMemberCode(value: any) {
+  const raw = String(value || '').trim().toUpperCase();
+  const match = raw.match(/^TZ-([A-Z0-9]+)-\d{2}$/);
+  return match ? match[1] : '';
+}
+
+function randomInt(min: number, max: number) {
+  const lower = Math.ceil(Math.min(min, max));
+  const upper = Math.floor(Math.max(min, max));
+  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
+}
+
+function buildMethodZSimulationPlan(match: any, tournament: any, generateBreaks: boolean) {
+  const bestOfFrames = Math.max(1, Math.floor(Number(match?.best_of_frames ?? tournament?.best_of_frames ?? 1) || 1));
+  const targetWins = getTargetWins(bestOfFrames);
+  const format = normalizeTournamentFormat(tournament?.format);
+  const trackedBreakThreshold = Math.max(1, toInt(tournament?.tracked_break_threshold, 20));
+  const winnerSide: Side = Math.random() < 0.5 ? 'A' : 'B';
+  const frameWinners: Side[] = [];
+  let aWins = 0;
+  let bWins = 0;
+
+  while (aWins < targetWins && bWins < targetWins && frameWinners.length < bestOfFrames) {
+    const remainingFrames = bestOfFrames - frameWinners.length;
+    const aNeeds = targetWins - aWins;
+    const bNeeds = targetWins - bWins;
+
+    let nextWinner: Side;
+    if (remainingFrames <= aNeeds) nextWinner = 'A';
+    else if (remainingFrames <= bNeeds) nextWinner = 'B';
+    else {
+      const bias = format === 'KNOCKOUT' ? 0.62 : 0.58;
+      nextWinner = Math.random() < bias
+        ? winnerSide
+        : (winnerSide === 'A' ? 'B' : 'A');
+    }
+
+    frameWinners.push(nextWinner);
+    if (nextWinner === 'A') aWins += 1;
+    else bWins += 1;
+  }
+
+  const startedAt = new Date(Date.now() - randomInt(8, 90) * 60_000);
+  const frames = frameWinners.map((frameWinner, index) => {
+    const winnerScore = randomInt(55, 92);
+    const loserScore = randomInt(0, Math.max(10, winnerScore - 8));
+    const frameStartedAt = new Date(startedAt.getTime() + index * 9 * 60_000);
+    const frameEndedAt = new Date(frameStartedAt.getTime() + randomInt(5, 9) * 60_000);
+    return {
+      frameNo: index + 1,
+      winnerSide: frameWinner,
+      playerAScore: frameWinner === 'A' ? winnerScore : loserScore,
+      playerBScore: frameWinner === 'B' ? winnerScore : loserScore,
+      playerAHighestBreak: 0,
+      playerBHighestBreak: 0,
+      startedAt: frameStartedAt.toISOString(),
+      endedAt: frameEndedAt.toISOString(),
+    };
+  });
+
+  const breakPlans: Array<{
+    memberId: string;
+    frameNo: number;
+    points: number;
+    recordedAt: string;
+    note: string;
+  }> = [];
+  if (generateBreaks) {
+    for (const frame of frames) {
+      if (Math.random() > 0.55) continue;
+      const memberId = frame.winnerSide === 'A'
+        ? String(match?.player_a_participant?.member_id || '')
+        : String(match?.player_b_participant?.member_id || '');
+      if (!memberId) continue;
+      const winnerScore = frame.winnerSide === 'A' ? Number(frame.playerAScore || 0) : Number(frame.playerBScore || 0);
+      const points = Math.min(
+        Math.max(trackedBreakThreshold, winnerScore - randomInt(0, 18)),
+        randomInt(Math.max(trackedBreakThreshold, 22), Math.max(trackedBreakThreshold + 6, 96)),
+      );
+      breakPlans.push({
+        memberId,
+        frameNo: Number(frame.frameNo || 1),
+        points,
+        recordedAt: String(frame.endedAt || new Date().toISOString()),
+        note: 'Method Z auto break',
+      });
+      if (frame.winnerSide === 'A') frame.playerAHighestBreak = points;
+      else frame.playerBHighestBreak = points;
+    }
+  }
+
+  if (generateBreaks && breakPlans.length === 0 && frames.length > 0) {
+    const firstFrame = frames[0]!;
+    const memberId = firstFrame.winnerSide === 'A'
+      ? String(match?.player_a_participant?.member_id || '')
+      : String(match?.player_b_participant?.member_id || '');
+    if (memberId) {
+      const points = Math.max(trackedBreakThreshold, Math.min(
+        firstFrame.winnerSide === 'A' ? Number(firstFrame.playerAScore || 0) : Number(firstFrame.playerBScore || 0),
+        trackedBreakThreshold + 18,
+      ));
+      breakPlans.push({
+        memberId,
+        frameNo: Number(firstFrame.frameNo || 1),
+        points,
+        recordedAt: String(firstFrame.endedAt || new Date().toISOString()),
+        note: 'Method Z auto break',
+      });
+      if (firstFrame.winnerSide === 'A') firstFrame.playerAHighestBreak = points;
+      else firstFrame.playerBHighestBreak = points;
+    }
+  }
+
+  return {
+    resultPayload: {
+      resultType: 'STANDARD',
+      frames,
+      startedAt: startedAt.toISOString(),
+      endedAt: new Date(startedAt.getTime() + frames.length * 10 * 60_000).toISOString(),
+    },
+    breakPlans,
+    summary: {
+      roundNo: Number(match?.round_no || 0),
+      matchNo: Number(match?.match_no || 0),
+      winnerSide: aWins > bWins ? 'A' : 'B',
+      scoreLabel: `${aWins}:${bWins}`,
+      breakCount: breakPlans.length,
+      highestBreak: breakPlans.reduce((best, row) => Math.max(best, Number(row?.points || 0)), 0),
+    },
+  };
 }
 
 function buildLeagueRoundRobinPairs<T>(items: Array<T | null>): Array<Array<[T | null, T | null]>> {
@@ -610,6 +764,299 @@ export const tournamentsService = {
       });
       const participants = await reseedParticipants(tx, updatedTournament);
       return { tournament: updatedTournament, participants };
+    });
+  },
+
+  async bootstrapTestData(clubId: string, tournamentId: string, optionsRaw: any) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const count = Math.max(2, Math.min(64, toInt(optionsRaw?.count, 6)));
+    const batchLabel = normalizeMethodZBatchLabel(optionsRaw?.batchLabel);
+    const password = normalizeMethodZPassword(optionsRaw?.password);
+    const includeParticipants = optionsRaw?.includeParticipants === false ? false : true;
+    const includeSchedule = optionsRaw?.includeSchedule === false ? false : true;
+    const shouldGenerateParticipants = includeSchedule ? true : includeParticipants;
+    const format = normalizeTournamentFormat(tournament.format);
+
+    const [existingSignupCount, existingMatchCount] = await Promise.all([
+      db.tournamentSignup.count({ where: { tournamentId } }),
+      db.tournamentMatch.count({ where: { tournament_id: tournamentId } }),
+    ]);
+    const capacity = Math.max(2, toInt(tournament.capacity, 32));
+    if (existingSignupCount + count > capacity) {
+      throw new Error(`測試會員會超出賽事名額上限（目前 ${existingSignupCount} / ${capacity}）`);
+    }
+    if ((shouldGenerateParticipants || includeSchedule) && existingMatchCount > 0) {
+      throw new Error('現有賽程已存在，請先使用空白賽事或重建賽程後再執行方法 Z');
+    }
+
+    const createdMembers = await db.$transaction(async (tx: any) => {
+      const nextMembers: Array<{
+        id: string;
+        name: string;
+        email: string;
+        memberCode: string;
+      }> = [];
+
+      for (let index = 0; index < count; index += 1) {
+        const serial = String(index + 1).padStart(2, '0');
+        const memberCode = `TZ-${batchLabel}-${serial}`;
+        const email = `methodz+${batchLabel.toLowerCase()}-${serial}@local.test`;
+        const name = `方法Z測試球手 ${batchLabel}-${serial}`;
+        const salt = makeSalt();
+        const digest = hashPassword(password, salt);
+
+        const existingMember = await tx.member.findFirst({
+          where: {
+            OR: [
+              { member_code: memberCode },
+              { email },
+            ],
+          },
+          select: { id: true },
+        });
+        if (existingMember) {
+          throw new Error(`Batch ${batchLabel} 已存在，請改用另一個批次代號`);
+        }
+
+        const memberId = randomUUID();
+        await tx.member.create({
+          data: {
+            id: memberId,
+            name,
+            email,
+            member_code: memberCode,
+            member_tier: 'VERIFIED',
+            email_verified_at: new Date(),
+            password_salt: salt,
+            password_hash: digest,
+            password_updated_at: new Date(),
+            club_name: 'Method Z Test',
+          },
+        });
+
+        await tx.tournamentSignup.create({
+          data: {
+            id: randomUUID(),
+            tournamentId,
+            memberId,
+            status: 'CONFIRMED',
+          },
+        });
+
+        nextMembers.push({
+          id: memberId,
+          name,
+          email,
+          memberCode,
+        });
+      }
+
+      return nextMembers;
+    });
+
+    let participants: any[] = [];
+    if (shouldGenerateParticipants) {
+      participants = await tournamentsService.generateParticipants(clubId, tournamentId);
+    }
+
+    let matches: any[] = [];
+    if (includeSchedule) {
+      matches = format === 'LEAGUE'
+        ? await tournamentsService.generateLeagueSchedule(clubId, tournamentId)
+        : await tournamentsService.generateKnockoutSchedule(clubId, tournamentId);
+    }
+
+    return {
+      batchLabel,
+      password,
+      format,
+      createdMembers,
+      createdSignupCount: createdMembers.length,
+      generatedParticipants: shouldGenerateParticipants,
+      generatedSchedule: includeSchedule,
+      participantCount: shouldGenerateParticipants ? participants.length : null,
+      matchCount: includeSchedule ? matches.length : null,
+    };
+  },
+
+  async simulateTestProgress(clubId: string, tournamentId: string, operatorMemberId: string, optionsRaw: any) {
+    const tournament = await getOwnedTournament(clubId, tournamentId);
+    const mode = String(optionsRaw?.mode || 'FULL').trim().toUpperCase() === 'PARTIAL' ? 'PARTIAL' : 'FULL';
+    const targetRound = Math.max(0, toInt(optionsRaw?.targetRound, 0));
+    const maxMatches = Math.max(0, toInt(optionsRaw?.maxMatches, 0));
+    const generateBreaks = optionsRaw?.generateBreaks === false ? false : true;
+    const simulatedMatches: any[] = [];
+
+    for (let safety = 0; safety < 256; safety += 1) {
+      const matches = await db.tournamentMatch.findMany({
+        where: { tournament_id: tournamentId },
+        orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+        include: {
+          player_a_participant: { select: { id: true, member_id: true } },
+          player_b_participant: { select: { id: true, member_id: true } },
+        },
+      });
+
+      const remainingAllowance = maxMatches > 0 ? maxMatches - simulatedMatches.length : Number.MAX_SAFE_INTEGER;
+      if (remainingAllowance <= 0) break;
+
+      const eligible = matches.filter((match: any) => {
+        const status = String(match?.status || '').trim().toUpperCase();
+        const roundNo = Number(match?.round_no || 0);
+        if (!match?.player_a_participant_id || !match?.player_b_participant_id) return false;
+        if (status !== 'READY' && status !== 'LIVE') return false;
+        if (mode === 'PARTIAL' && targetRound > 0 && roundNo > targetRound) return false;
+        return true;
+      });
+      if (eligible.length === 0) break;
+
+      let progressed = false;
+      for (const match of eligible) {
+        if (maxMatches > 0 && simulatedMatches.length >= maxMatches) break;
+        const plan = buildMethodZSimulationPlan(match, tournament, generateBreaks);
+        await tournamentsService.recordMatchResult(clubId, tournamentId, String(match.id), plan.resultPayload);
+        for (const breakPayload of plan.breakPlans) {
+          await tournamentsService.addMatchBreak(clubId, tournamentId, String(match.id), operatorMemberId, breakPayload);
+        }
+        simulatedMatches.push({
+          matchId: String(match.id || ''),
+          roundNo: Number(match?.round_no || 0),
+          matchNo: Number(match?.match_no || 0),
+          scoreLabel: plan.summary.scoreLabel,
+          winnerSide: plan.summary.winnerSide,
+          breakCount: plan.summary.breakCount,
+          highestBreak: plan.summary.highestBreak,
+        });
+        progressed = true;
+      }
+
+      if (!progressed || mode === 'PARTIAL') break;
+    }
+
+    if (simulatedMatches.length === 0) throw new Error('目前沒有可模擬的對局');
+    return {
+      mode,
+      targetRound: targetRound || null,
+      maxMatches: maxMatches || null,
+      generateBreaks,
+      simulatedCount: simulatedMatches.length,
+      simulatedMatches,
+    };
+  },
+
+  async cleanupTestData(clubId: string, tournamentId: string, optionsRaw: any) {
+    await getOwnedTournament(clubId, tournamentId);
+    const batchLabel = String(optionsRaw?.batchLabel || '').trim().toUpperCase();
+    const removeMembers = optionsRaw?.removeMembers === false ? false : true;
+
+    const signups = await db.tournamentSignup.findMany({
+      where: {
+        tournamentId,
+        member: batchLabel
+          ? { member_code: { startsWith: `TZ-${batchLabel}-` } }
+          : { member_code: { startsWith: 'TZ-' } },
+      },
+      include: {
+        member: {
+          select: { id: true, member_code: true, email: true },
+        },
+      },
+    });
+    if (signups.length === 0) {
+      throw new Error(batchLabel ? `找不到 batch ${batchLabel} 的方法 Z 測試資料` : '目前賽事找不到方法 Z 測試資料');
+    }
+
+    const memberIds = Array.from(new Set(signups.map((row: any) => String(row?.memberId || row?.member?.id || '')).filter(Boolean)));
+    const detectedBatches = Array.from(new Set(
+      signups
+        .map((row: any) => parseMethodZBatchLabelFromMemberCode(row?.member?.member_code))
+        .filter(Boolean),
+    ));
+
+    return db.$transaction(async (tx: any) => {
+      const matches = await tx.tournamentMatch.findMany({
+        where: { tournament_id: tournamentId },
+        select: { id: true },
+      });
+      const matchIds = matches.map((row: any) => String(row.id || '')).filter(Boolean);
+
+      let deletedBreakCount = 0;
+      let deletedFrameCount = 0;
+      let deletedMatchCount = 0;
+      if (matchIds.length > 0) {
+        deletedBreakCount = await tx.breakRecord.count({
+          where: { tournament_match_id: { in: matchIds } },
+        });
+        deletedFrameCount = await tx.tournamentFrame.count({
+          where: { tournament_match_id: { in: matchIds } },
+        });
+        await tx.breakRecord.deleteMany({
+          where: { tournament_match_id: { in: matchIds } },
+        });
+        await tx.tournamentFrame.deleteMany({
+          where: { tournament_match_id: { in: matchIds } },
+        });
+        const deletedMatches = await tx.tournamentMatch.deleteMany({
+          where: { id: { in: matchIds } },
+        });
+        deletedMatchCount = Number(deletedMatches.count || 0);
+      }
+
+      const deletedParticipants = await tx.tournamentParticipant.deleteMany({
+        where: {
+          tournament_id: tournamentId,
+          member_id: { in: memberIds },
+        },
+      });
+      const deletedSignups = await tx.tournamentSignup.deleteMany({
+        where: {
+          tournamentId,
+          memberId: { in: memberIds },
+        },
+      });
+
+      let deletedMemberCount = 0;
+      if (removeMembers) {
+        const removableMemberIds: string[] = [];
+        for (const memberId of memberIds) {
+          const [signupCount, participantCount, breakCount] = await Promise.all([
+            tx.tournamentSignup.count({ where: { memberId } }),
+            tx.tournamentParticipant.count({ where: { member_id: memberId } }),
+            tx.breakRecord.count({ where: { member_id: memberId } }),
+          ]);
+          if (signupCount === 0 && participantCount === 0 && breakCount === 0) {
+            removableMemberIds.push(memberId);
+          }
+        }
+        if (removableMemberIds.length > 0) {
+          const deletedMembers = await tx.member.deleteMany({
+            where: {
+              id: { in: removableMemberIds },
+              club_name: 'Method Z Test',
+            },
+          });
+          deletedMemberCount = Number(deletedMembers.count || 0);
+        }
+      }
+
+      const remainingParticipants = await tx.tournamentParticipant.count({
+        where: { tournament_id: tournamentId },
+      });
+      await tx.tournament.update({
+        where: { id: tournamentId },
+        data: { workflow_status: remainingParticipants > 0 ? 'REGISTRATION' : 'DRAFT' },
+      });
+
+      return {
+        batchLabel: batchLabel || null,
+        detectedBatches,
+        deletedSignupCount: Number(deletedSignups.count || 0),
+        deletedParticipantCount: Number(deletedParticipants.count || 0),
+        deletedMemberCount,
+        deletedMatchCount,
+        deletedFrameCount,
+        deletedBreakCount,
+      };
     });
   },
 

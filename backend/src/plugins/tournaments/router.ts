@@ -689,6 +689,51 @@ export function createTournamentRouter() {
     }
   });
 
+  router.post('/tournaments/:id/test-tools/bootstrap', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const result = await tournamentsService.bootstrapTestData(clubId, id, req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/test-tools/simulate', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const result = await tournamentsService.simulateTestProgress(clubId, id, member.id, req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
+  router.post('/tournaments/:id/test-tools/cleanup', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    const id = String(req.params.id || '').trim();
+    try {
+      const result = await tournamentsService.cleanupTestData(clubId, id, req.body || {});
+      res.json({ ok: true, ...result });
+    } catch (e: any) {
+      const message = String(e?.message || e);
+      res.status(message === 'Not found' ? 404 : 400).json({ error: message });
+    }
+  });
+
   router.put('/tournaments/:id/participants/:participantId', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;

@@ -1284,6 +1284,74 @@ export async function generateTournamentParticipants(apiUrl: string, memberId: s
   return res.json();
 }
 
+export async function bootstrapTournamentTestData(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  payload: {
+    count: number;
+    batchLabel?: string;
+    password?: string;
+    includeParticipants?: boolean;
+    includeSchedule?: boolean;
+  },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/test-tools/bootstrap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '方法 Z 建立測試資料失敗');
+  }
+  return res.json();
+}
+
+export async function simulateTournamentTestProgress(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  payload: {
+    mode: 'PARTIAL' | 'FULL';
+    targetRound?: number | null;
+    maxMatches?: number | null;
+    generateBreaks?: boolean;
+  },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/test-tools/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '方法 Z 自動灌賽果失敗');
+  }
+  return res.json();
+}
+
+export async function cleanupTournamentTestData(
+  apiUrl: string,
+  memberId: string,
+  tournamentId: string,
+  payload: {
+    batchLabel?: string;
+    removeMembers?: boolean;
+  },
+) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/${encodeURIComponent(tournamentId)}/test-tools/cleanup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '方法 Z 清理測試資料失敗');
+  }
+  return res.json();
+}
+
 export async function updateTournamentParticipant(
   apiUrl: string,
   memberId: string,

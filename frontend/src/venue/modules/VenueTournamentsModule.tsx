@@ -17,6 +17,7 @@ import VenueTournamentScoringWorkspace from './VenueTournamentScoringWorkspace';
 import VenueTournamentLeagueStandingsPanel from './VenueTournamentLeagueStandingsPanel';
 import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
 import VenueTournamentSummaryPanel from './VenueTournamentSummaryPanel';
+import VenueTournamentTestToolsPanel from './VenueTournamentTestToolsPanel';
 import type { EditableFrame, TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 import { useTournamentScoringActions } from './useTournamentScoringActions';
 import { useTournamentScoringDerivedState } from './useTournamentScoringDerivedState';
@@ -169,6 +170,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [breakRecordedAt, setBreakRecordedAt] = useState(() => formatDateTimeLocalInput(new Date()));
   const [breakNote, setBreakNote] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [testToolsOpen, setTestToolsOpen] = useState(false);
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
@@ -215,6 +217,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setBreakPoints('');
     setBreakRecordedAt(formatDateTimeLocalInput(new Date()));
     setBreakNote('');
+    setTestToolsOpen(false);
   }, []);
 
   const loadRows = useCallback(async () => {
@@ -1016,8 +1019,33 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               >
                 {participantsLoading || matchesLoading ? '更新中...' : '重新整理工作台'}
               </button>
+              <button
+                type="button"
+                className={`px-3 py-2 rounded text-sm font-semibold ${testToolsOpen ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                onClick={() => setTestToolsOpen((prev) => !prev)}
+              >
+                {testToolsOpen ? '收起方法 Z' : '方法 Z 測試工具'}
+              </button>
             </div>
           </div>
+
+          {testToolsOpen ? (
+            <VenueTournamentTestToolsPanel
+              operatorId={operatorId}
+              tournamentId={selectedId}
+              tournamentTitle={String(selectedTournament?.title || '')}
+              isLeague={isLeague}
+              confirmedCount={confirmedRows.length}
+              capacity={Math.max(2, Number(capacity || 0) || 32)}
+              confirmedRows={confirmedRows}
+              participantsRows={participantsRows}
+              matchesRows={matchesRows}
+              onCompleted={async () => {
+                await Promise.all([loadSelectedSignups(), loadSelectedPhase1Data(), loadRows()]);
+              }}
+              showNotice={showNotice}
+            />
+          ) : null}
 
           <VenueTournamentSummaryPanel
             bestOfFrames={bestOfFrames}
