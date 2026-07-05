@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import HelpGuide from '../../components/HelpGuide';
 import { API_URL } from '../../config';
 import {
@@ -14,9 +14,13 @@ import {
   getSegmentFramesWonSummary,
 } from './VenueTournamentScoringHelpers';
 import VenueTournamentScoringWorkspace from './VenueTournamentScoringWorkspace';
+import VenueTournamentLeagueStandingsPanel from './VenueTournamentLeagueStandingsPanel';
+import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
+import VenueTournamentSummaryPanel from './VenueTournamentSummaryPanel';
 import type { EditableFrame, TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 import { useTournamentScoringActions } from './useTournamentScoringActions';
 import { useTournamentScoringDerivedState } from './useTournamentScoringDerivedState';
+import { useTournamentStageViewData } from './useTournamentStageViewData';
 import {
   cancelTournamentSignup,
   closeClubTournament,
@@ -47,10 +51,6 @@ type VenueTournamentsModuleProps = {
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
-
-const BRACKET_CARD_HEIGHT = 92;
-const BRACKET_BASE_GAP = 18;
-const BRACKET_CONNECTOR_HALF_GAP = 24;
 
 function formatParticipantLabel(participant: any) {
   if (!participant) return 'BYE';
@@ -118,71 +118,6 @@ function formatFinalRankLabel(value: any) {
   if (rank === 2) return '亞軍';
   if (rank === 3) return '四強';
   return `第 ${rank} 名`;
-}
-
-
-function nextPowerOfTwo(n: number) {
-  let p = 1;
-  while (p < n) p *= 2;
-  return p;
-}
-
-function formatKnockoutRoundLabel(match: any, participantCount: number) {
-  const roundNo = Number(match?.round_no || 0);
-  if (roundNo <= 0) return '-';
-  const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
-  const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
-  if (hasPreliminaryRound && roundNo === 1) return '預賽';
-  const roundOffset = hasPreliminaryRound ? 1 : 0;
-  const stageSize = bracketSize / (2 ** Math.max(0, roundNo - 1));
-  if (stageSize <= 2) return '決賽';
-  if (stageSize === 4) return '4 強';
-  if (stageSize === 8) return '8 強';
-  if (stageSize === 16) return '16 強';
-  if (stageSize === 32) return '32 強';
-  if (stageSize === 64) return '64 強';
-  if (stageSize === 128) return '128 強';
-  if (stageSize === 256) return '256 強';
-  return `Round ${Math.max(1, roundNo - roundOffset)}`;
-}
-
-function formatLeagueRoundLabel(match: any) {
-  const roundNo = Number(match?.round_no || 0);
-  return roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽';
-}
-
-function buildKnockoutSummary(participantsRows: any[], matchesRows: any[]) {
-  const participantCount = participantsRows.length;
-  const bracketSize = participantCount > 1 ? nextPowerOfTwo(participantCount) : 0;
-  const byeCount = participantCount > 1 ? Math.max(0, bracketSize - participantCount) : 0;
-  const completedCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
-  const readyCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
-  const pendingCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
-  return { participantCount, bracketSize, byeCount, completedCount, readyCount, pendingCount };
-}
-
-function buildLeagueSummary(participantsRows: any[], matchesRows: any[]) {
-  const participantCount = participantsRows.length;
-  const totalRounds = participantCount > 1 ? participantCount - 1 + (participantCount % 2 === 1 ? 1 : 0) : 0;
-  const completedCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length;
-  const readyCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length;
-  const pendingCount = matchesRows.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length;
-  return { participantCount, totalRounds, totalMatches: matchesRows.length, completedCount, readyCount, pendingCount };
-}
-
-function getBracketColumnPaddingTop(roundIndex: number) {
-  if (roundIndex <= 0) return 0;
-  return ((2 ** roundIndex) - 1) * (BRACKET_CARD_HEIGHT + BRACKET_BASE_GAP) / 2;
-}
-
-function getBracketColumnGap(roundIndex: number) {
-  if (roundIndex <= 0) return BRACKET_BASE_GAP;
-  return (2 ** roundIndex) * (BRACKET_CARD_HEIGHT + BRACKET_BASE_GAP) - BRACKET_CARD_HEIGHT;
-}
-
-function getBracketColumnHeight(matchCount: number) {
-  if (matchCount <= 0) return BRACKET_CARD_HEIGHT;
-  return matchCount * BRACKET_CARD_HEIGHT + Math.max(0, matchCount - 1) * BRACKET_BASE_GAP;
 }
 
 const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
@@ -416,6 +351,13 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   });
   const canResetSchedule = hasSchedule && !hasPlayedMatches;
   const {
+    bracketColumns,
+    knockoutSummary,
+    leagueSummary,
+    leagueRounds,
+    podiumSummary,
+  } = useTournamentStageViewData(participantsRows, matchesRows);
+  const {
     activeFrame,
     activeFrameIndex,
     activeFrameNoValue,
@@ -508,77 +450,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     showNotice,
     normalizeMatchResultType,
   });
-  const bracketColumns = useMemo(() => {
-    const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
-    for (const row of matchesRows) {
-      const key = formatKnockoutRoundLabel(row, participantsRows.length);
-      const roundNo = Number(row?.round_no || 0);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.items.push(row);
-        existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
-      } else {
-        grouped.set(key, { roundNo, items: [row] });
-      }
-    }
-    return Array.from(grouped.entries())
-      .sort((a, b) => a[1].roundNo - b[1].roundNo)
-      .map(([label, group], roundIndex, allColumns) => {
-      const items = group.items;
-      const sortedItems = [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
-      const paddingTop = getBracketColumnPaddingTop(roundIndex);
-      const gap = getBracketColumnGap(roundIndex);
-      const cardCenters = sortedItems.map((_: any, itemIndex: number) => (
-        paddingTop + itemIndex * (BRACKET_CARD_HEIGHT + gap) + BRACKET_CARD_HEIGHT / 2
-      ));
-      const connectors = roundIndex < allColumns.length - 1
-        ? Array.from({ length: Math.floor(sortedItems.length / 2) }, (_unused, pairIndex) => {
-            const topCenter = cardCenters[pairIndex * 2];
-            const bottomCenter = cardCenters[pairIndex * 2 + 1];
-            if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
-            return {
-              top: topCenter,
-              height: Math.max(0, bottomCenter - topCenter),
-            };
-          }).filter(Boolean)
-        : [];
-        return {
-          label,
-          roundIndex,
-          isFinal: roundIndex === allColumns.length - 1,
-          items: sortedItems,
-          paddingTop,
-          gap,
-          columnHeight: Math.max(getBracketColumnHeight(matchesRows.length), paddingTop + (sortedItems.length * BRACKET_CARD_HEIGHT) + Math.max(0, sortedItems.length - 1) * gap),
-          connectors,
-        };
-      });
-  }, [matchesRows, participantsRows.length]);
-  const knockoutSummary = useMemo(() => buildKnockoutSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
-  const leagueSummary = useMemo(() => buildLeagueSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
-  const leagueRounds = useMemo(() => {
-    const grouped = new Map<number, any[]>();
-    for (const row of matchesRows) {
-      const roundNo = Number(row?.round_no || 0);
-      if (!grouped.has(roundNo)) grouped.set(roundNo, []);
-      grouped.get(roundNo)!.push(row);
-    }
-    return Array.from(grouped.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([roundNo, items]) => ({
-        roundNo,
-        label: roundNo > 0 ? `第 ${roundNo} 輪` : '循環賽',
-        items: [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0)),
-      }));
-  }, [matchesRows]);
-  const podiumSummary = useMemo(() => {
-    const champion = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 1) || null;
-    const runnerUp = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 2) || null;
-    const semiFinalists = participantsRows
-      .filter((row: any) => Number(row?.final_rank || 0) === 3)
-      .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0));
-    return { champion, runnerUp, semiFinalists };
-  }, [participantsRows]);
+  const tournamentSummaryNote = !confirmedRows.length
+    ? '先確認至少 1 位報名者，之後才可生成正式名單。'
+    : hasSchedule
+      ? hasPlayedMatches
+        ? `賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
+        : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? 'League' : 'Knockout'}賽程。`
+      : !hasParticipants
+        ? `先生成正式名單，再決定 seedMode 與${isLeague ? ' League' : ' Knockout'}賽程。`
+        : participantsRows.length < 2
+          ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? ' League' : ' Knockout'}賽程。`
+          : `目前可調整種子及生成${isLeague ? ' League' : ' Knockout'}賽程。`;
   const scoringWorkspace: TournamentScoringWorkspace | null = selectedId && selectedMatch ? {
     activeFrame,
     activeFrameIndex,
@@ -1137,75 +1019,25 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
-            <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">Workflow</div>
-              <div className="font-semibold mt-1">{formatWorkflowStatusLabel(workflowStatus)}</div>
-            </div>
-            <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">賽制</div>
-              <div className="font-semibold mt-1">{formatTournamentFormatLabel(tournamentFormat)}</div>
-            </div>
-            <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">{isLeague ? '正式參賽者 / 輪次' : '正式參賽者 / 籤表'}</div>
-              <div className="font-semibold mt-1">
-                {isLeague
-                  ? `${leagueSummary.participantCount || 0} / ${leagueSummary.totalRounds || '-'}`
-                  : `${knockoutSummary.participantCount || 0} / ${knockoutSummary.bracketSize || '-'}`
-                }
-              </div>
-            </div>
-            <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">{isLeague ? 'Best Of / 計分' : '輪空 Bye'}</div>
-              <div className="font-semibold mt-1">
-                {isLeague
-                  ? `BO${bestOfFrames || '-'} / ${pointsWin}-${pointsDraw}-${pointsLoss}`
-                  : knockoutSummary.byeCount}
-              </div>
-            </div>
-            <div className="cue-surface rounded-lg p-3">
-              <div className="text-xs cue-muted">賽程進度</div>
-              <div className="font-semibold mt-1">
-                {isLeague
-                  ? `${leagueSummary.completedCount} 完成 / ${leagueSummary.readyCount} 就緒 / ${leagueSummary.pendingCount} 待定`
-                  : `${knockoutSummary.completedCount} 完成 / ${knockoutSummary.readyCount} 就緒 / ${knockoutSummary.pendingCount} 待定`
-                }
-              </div>
-            </div>
-          </div>
-          {!isLeague && (podiumSummary.champion || podiumSummary.runnerUp || podiumSummary.semiFinalists.length > 0) ? (
-            <div className="grid gap-3 md:grid-cols-3 mb-4">
-              <div className="cue-surface rounded-lg p-3">
-                <div className="text-xs cue-muted">冠軍</div>
-                <div className="font-semibold mt-1">{podiumSummary.champion ? formatParticipantLabel(podiumSummary.champion) : '-'}</div>
-              </div>
-              <div className="cue-surface rounded-lg p-3">
-                <div className="text-xs cue-muted">亞軍</div>
-                <div className="font-semibold mt-1">{podiumSummary.runnerUp ? formatParticipantLabel(podiumSummary.runnerUp) : '-'}</div>
-              </div>
-              <div className="cue-surface rounded-lg p-3">
-                <div className="text-xs cue-muted">四強</div>
-                <div className="font-semibold mt-1">
-                  {podiumSummary.semiFinalists.length > 0
-                    ? podiumSummary.semiFinalists.map((row: any) => formatParticipantLabel(row)).join(' / ')
-                    : '-'}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <div className="text-xs cue-muted mb-4">
-            {!confirmedRows.length
-              ? '先確認至少 1 位報名者，之後才可生成正式名單。'
-              : hasSchedule
-                ? hasPlayedMatches
-                  ? `賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
-                  : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? 'League' : 'Knockout'}賽程。`
-                : !hasParticipants
-                  ? `先生成正式名單，再決定 seedMode 與${isLeague ? ' League' : ' Knockout'}賽程。`
-                  : participantsRows.length < 2
-                    ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? ' League' : ' Knockout'}賽程。`
-                    : `目前可調整種子及生成${isLeague ? ' League' : ' Knockout'}賽程。`}
-          </div>
+          <VenueTournamentSummaryPanel
+            bestOfFrames={bestOfFrames}
+            hasParticipants={hasParticipants}
+            hasPlayedMatches={hasPlayedMatches}
+            hasSchedule={hasSchedule}
+            isLeague={isLeague}
+            leagueSummary={leagueSummary}
+            knockoutSummary={knockoutSummary}
+            note={tournamentSummaryNote}
+            podiumSummary={podiumSummary}
+            pointsDraw={pointsDraw}
+            pointsLoss={pointsLoss}
+            pointsWin={pointsWin}
+            tournamentFormat={tournamentFormat}
+            workflowStatus={workflowStatus}
+            formatParticipantLabel={formatParticipantLabel}
+            formatTournamentFormatLabel={formatTournamentFormatLabel}
+            formatWorkflowStatusLabel={formatWorkflowStatusLabel}
+          />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
@@ -1318,258 +1150,27 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
             <div>
               {isLeague ? (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="font-semibold">League 積分榜</div>
-                    <div className="text-xs cue-muted">{standingsRows.length} 人</div>
-                  </div>
-                  {standingsRows.length === 0 ? (
-                    <div className="text-sm cue-muted">賽程生成後會在這裡顯示 standings</div>
-                  ) : (
-                    <div className="overflow-x-auto -mx-2 px-2">
-                      <table className="w-full text-left border-collapse text-sm">
-                        <thead>
-                          <tr className="cue-muted border-b cue-border">
-                            <th className="py-2 px-2">名次</th>
-                            <th className="py-2 px-2">球手</th>
-                            <th className="py-2 px-2">賽</th>
-                            <th className="py-2 px-2">勝和負</th>
-                            <th className="py-2 px-2">局差</th>
-                            <th className="py-2 px-2">積分</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {standingsRows.map((row: any) => (
-                            <tr key={String(row?.participantId || '')} className="border-b cue-border hover:brightness-95">
-                              <td className="py-2 px-2 font-semibold">{row?.position || '-'}</td>
-                              <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row?.participant)}</td>
-                              <td className="py-2 px-2 cue-muted">{Number(row?.played || 0)}</td>
-                              <td className="py-2 px-2 cue-muted">{Number(row?.won || 0)} / {Number(row?.drawn || 0)} / {Number(row?.lost || 0)}</td>
-                              <td className="py-2 px-2 cue-muted">{Number(row?.framesFor || 0)} - {Number(row?.framesAgainst || 0)} ({Number(row?.frameDiff || 0)})</td>
-                              <td className="py-2 px-2">{Number(row?.matchPoints || 0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                <VenueTournamentLeagueStandingsPanel
+                  standingsRows={standingsRows}
+                  formatParticipantLabel={formatParticipantLabel}
+                />
               ) : null}
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="font-semibold">{isLeague ? 'League 賽程' : 'Knockout 賽程'}</div>
-                <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${matchesRows.length} 場`}</div>
-              </div>
-              {matchesLoading ? (
-                <div className="text-sm cue-muted">讀取中…</div>
-              ) : matchesRows.length === 0 ? (
-                <div className="text-sm cue-muted">尚未生成賽程</div>
-              ) : (
-                <div className="overflow-x-auto -mx-2 px-2">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="cue-muted border-b cue-border">
-                        <th className="py-2 px-2">輪次</th>
-                        <th className="py-2 px-2">對賽</th>
-                        <th className="py-2 px-2">狀態</th>
-                        <th className="py-2 px-2">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matchesRows.map((row: any) => {
-                        const id = String(row?.id || '');
-                        const aLabel = formatParticipantLabel(row?.player_a_participant);
-                        const bLabel = formatParticipantLabel(row?.player_b_participant);
-                        const roundLabel = isLeague ? formatLeagueRoundLabel(row) : formatKnockoutRoundLabel(row, participantsRows.length);
-                        const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
-                        const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
-                        return (
-                          <tr key={id} className={`border-b cue-border hover:brightness-95 ${selectedMatchId === id ? 'bg-white/5' : ''}`}>
-                            <td className="py-2 px-2 whitespace-nowrap">
-                              <div>{roundLabel}</div>
-                              <div className="text-xs cue-muted mt-0.5">R{row?.round_no || '-'} / M{row?.match_no || '-'}</div>
-                            </td>
-                            <td className="py-2 px-2">{aLabel} vs {bLabel}</td>
-                            <td className="py-2 px-2 cue-muted">
-                              <div>{String(row?.status || '-')}</div>
-                              <div className="text-xs mt-0.5">{resultTypeLabel}</div>
-                            </td>
-                            <td className="py-2 px-2">
-                              <button
-                                type="button"
-                                disabled={!canRecordMatch}
-                                className={`px-3 py-1 rounded text-sm font-semibold ${canRecordMatch ? 'cue-surface hover:brightness-95' : 'cue-surface-strong cue-muted'}`}
-                                onClick={() => {
-                                  if (!canRecordMatch) return;
-                                  selectMatchForScoring(row);
-                                }}
-                              >
-                                {!canRecordMatch ? '未就緒' : selectedMatchId === id ? '已選擇' : '記錄賽果'}
-                              </button>
-                              <div className="text-xs cue-muted mt-1">
-                                {buildMatchProgressSummary(row, selectedTournament?.best_of_frames)}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <VenueTournamentScheduleBracketPanel
+                bracketColumns={bracketColumns}
+                buildMatchProgressSummary={buildMatchProgressSummary}
+                formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+                formatParticipantLabel={formatParticipantLabel}
+                isLeague={isLeague}
+                leagueRounds={leagueRounds}
+                matchesLoading={matchesLoading}
+                matchesRows={matchesRows}
+                participantsCount={participantsRows.length}
+                selectedMatchId={selectedMatchId}
+                selectedTournamentBestOf={selectedTournament?.best_of_frames}
+                selectMatchForScoring={selectMatchForScoring}
+              />
             </div>
           </div>
-
-          {!isLeague && matchesRows.length > 0 ? (
-            <div className="mt-5">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="font-semibold">Knockout Bracket Tree</div>
-                <div className="text-xs cue-muted">按卡片可直接切換到該場對局記分</div>
-              </div>
-              <div className="overflow-x-auto -mx-2 px-2">
-                <div className="flex gap-12 min-w-max items-start pb-2">
-                  {bracketColumns.map((column) => (
-                    <div key={column.label} className="w-72">
-                      <div className="font-semibold mb-3 sticky left-0">{column.label}</div>
-                      <div
-                        className="relative"
-                        style={{
-                          height: `${column.columnHeight}px`,
-                          paddingTop: `${column.paddingTop}px`,
-                        }}
-                      >
-                        {column.connectors.map((connector: any, connectorIndex: number) => (
-                          <React.Fragment key={`${column.label}-connector-${connectorIndex}`}>
-                            <div
-                              className="absolute border-t cue-border"
-                              style={{
-                                left: '100%',
-                                top: `${connector.top}px`,
-                                width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
-                              }}
-                            />
-                            <div
-                              className="absolute border-r cue-border"
-                              style={{
-                                left: `calc(100% + ${BRACKET_CONNECTOR_HALF_GAP}px)`,
-                                top: `${connector.top}px`,
-                                height: `${connector.height}px`,
-                              }}
-                            />
-                            <div
-                              className="absolute border-t cue-border"
-                              style={{
-                                left: '100%',
-                                top: `${connector.top + connector.height}px`,
-                                width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
-                              }}
-                            />
-                          </React.Fragment>
-                        ))}
-                        <div className="flex flex-col" style={{ gap: `${column.gap}px` }}>
-                        {column.items.map((row: any) => {
-                          const id = String(row?.id || '');
-                          const aLabel = formatParticipantLabel(row?.player_a_participant);
-                          const bLabel = formatParticipantLabel(row?.player_b_participant);
-                          const winnerId = String(row?.winner_participant_id || '');
-                          const aParticipantId = String(row?.player_a_participant_id || '');
-                          const bParticipantId = String(row?.player_b_participant_id || '');
-                          const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
-                          const canSelectMatch = !!aParticipantId && !!bParticipantId && String(row?.status || '').toUpperCase() !== 'PENDING';
-                          return (
-                            <div key={id} className="relative" style={{ height: `${BRACKET_CARD_HEIGHT}px` }}>
-                              {column.roundIndex > 0 ? (
-                                <div
-                                  className="absolute border-t cue-border"
-                                  style={{
-                                    right: '100%',
-                                    top: '50%',
-                                    width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
-                                  }}
-                                />
-                              ) : null}
-                              {!column.isFinal ? (
-                                <div
-                                  className="absolute border-t cue-border"
-                                  style={{
-                                    left: '100%',
-                                    top: '50%',
-                                    width: `${BRACKET_CONNECTOR_HALF_GAP}px`,
-                                  }}
-                                />
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!canSelectMatch) return;
-                                  selectMatchForScoring(row);
-                                }}
-                                disabled={!canSelectMatch}
-                                className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${!canSelectMatch ? 'cue-border cue-surface-strong cue-muted cursor-not-allowed' : selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
-                              >
-                                <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
-                                  <span>M{row?.match_no || '-'}</span>
-                                  <span>{resultTypeLabel}</span>
-                                </div>
-                                <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
-                                <div className="text-xs cue-muted my-1">
-                                  {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
-                                </div>
-                                <div className={`font-semibold truncate ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{bLabel}</div>
-                                <div className="text-xs cue-muted mt-2">{buildMatchProgressSummary(row, selectedTournament?.best_of_frames)}</div>
-                              </button>
-                            </div>
-                          );
-                        })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          {isLeague && leagueRounds.length > 0 ? (
-            <div className="mt-5">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="font-semibold">League Rounds</div>
-                <div className="text-xs cue-muted">依輪次排列，按卡片可直接切換到該場對局記分</div>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {leagueRounds.map((round) => (
-                  <div key={round.label} className="cue-surface rounded-lg p-3">
-                    <div className="font-semibold mb-2">{round.label}</div>
-                    <div className="grid gap-2">
-                      {round.items.map((row: any) => {
-                        const id = String(row?.id || '');
-                        const canSelectMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            disabled={!canSelectMatch}
-                            onClick={() => {
-                              if (!canSelectMatch) return;
-                              selectMatchForScoring(row);
-                            }}
-                            className={`w-full rounded-lg border p-3 text-left ${!canSelectMatch ? 'cue-border cue-surface-strong cue-muted cursor-not-allowed' : selectedMatchId === id ? 'border-yellow-400 bg-white/5' : 'cue-border cue-surface hover:brightness-95'}`}
-                          >
-                            <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
-                              <span>M{row?.match_no || '-'}</span>
-                              <span>{formatMatchResultTypeLabel(row?.result_type)}</span>
-                            </div>
-                            <div className="font-semibold truncate">{formatParticipantLabel(row?.player_a_participant)}</div>
-                            <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
-                            <div className="font-semibold truncate">{formatParticipantLabel(row?.player_b_participant)}</div>
-                            <div className="text-xs cue-muted mt-2">{buildMatchProgressSummary(row, selectedTournament?.best_of_frames)}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
 
