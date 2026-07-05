@@ -1092,6 +1092,23 @@ export async function getPublicClubTournamentLiveBoard(apiUrl: string, clubId: s
   return res.json();
 }
 
+export async function getPublicClubTournamentParticipantDetail(
+  apiUrl: string,
+  clubId: string,
+  tournamentId: string,
+  participantId: string,
+) {
+  const res = await fetch(
+    `${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/${encodeURIComponent(tournamentId)}/participants/${encodeURIComponent(participantId)}/public`,
+    { cache: 'no-store' },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取球手聯賽數據失敗');
+  }
+  return res.json();
+}
+
 export async function signupTournament(apiUrl: string, clubId: string, memberId: string, tournamentId: string) {
   const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/tournaments/${encodeURIComponent(tournamentId)}/signup`, {
     method: 'POST',

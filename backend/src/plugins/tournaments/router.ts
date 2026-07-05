@@ -36,6 +36,257 @@ function formatMemberLabel(member: any) {
   return [code, name].filter(Boolean).join(' ') || '未命名會員';
 }
 
+function getLeagueParticipantMatchResultKey(match: any, targetParticipantId: string) {
+  const resultType = String(match?.result_type || 'STANDARD').trim().toUpperCase();
+  const winnerParticipantId = String(match?.winner_participant_id || '').trim();
+  if (resultType === 'BYE') return 'BYE';
+  if (!winnerParticipantId) return 'DRAW';
+  return winnerParticipantId === targetParticipantId ? 'WIN' : 'LOSS';
+}
+
+function buildLeagueParticipantRoundLabel(match: any) {
+  const roundNo = Number(match?.round_no || 0);
+  return roundNo > 0 ? `第 ${roundNo} 輪` : 'League';
+}
+
+function buildPublicLeagueParticipantDetail(options: {
+  tournament: any;
+  participant: any;
+  standings: any[];
+  matches: any[];
+}) {
+  const { tournament, participant, standings, matches } = options;
+  const participantId = String(participant?.id || '').trim();
+  const memberId = String(participant?.member_id || participant?.member?.id || '').trim();
+  const standing = standings.find((row: any) => String(row?.participantId || '') === participantId) || null;
+
+  const participantMatches = matches
+    .filter((match: any) => (
+      String(match?.player_a_participant_id || '') === participantId
+      || String(match?.player_b_participant_id || '') === participantId
+    ))
+    .map((match: any) => {
+      const isA = String(match?.player_a_participant_id || '') === participantId;
+      const opponent = isA ? match?.player_b_participant : match?.player_a_participant;
+      const resultKey = getLeagueParticipantMatchResultKey(match, participantId);
+      const breaks = (Array.isArray(match?.break_records) ? match.break_records : [])
+        .filter((row: any) => String(row?.member_id || row?.member?.id || '') === memberId)
+        .map((row: any) => ({
+          id: String(row?.id || ''),
+          frameNo: row?.frame_no == null ? null : Number(row.frame_no || 0),
+          points: Number(row?.points || 0),
+          recordedAt: row?.recorded_at ?? null,
+          note: row?.note ? String(row.note) : null,
+          opponent: opponent?.member ? {
+            id: String(opponent.member.id || ''),
+            name: String(opponent.member.name || ''),
+            memberCode: String(opponent.member.member_code || ''),
+          } : null,
+          roundLabel: buildLeagueParticipantRoundLabel(match),
+          matchId: String(match?.id || ''),
+        }));
+      return {
+        id: String(match?.id || ''),
+        roundNo: Number(match?.round_no || 0),
+        roundLabel: buildLeagueParticipantRoundLabel(match),
+        matchNo: Number(match?.match_no || 0),
+        resultType: String(match?.result_type || 'STANDARD').trim().toUpperCase(),
+        resultKey,
+        resultLabel:
+          resultKey === 'WIN'
+            ? '勝'
+            : resultKey === 'LOSS'
+              ? '負'
+              : resultKey === 'BYE'
+                ? '輪空'
+                : '和',
+        status: String(match?.status || '').trim().toUpperCase(),
+        scheduledAt: match?.scheduled_at ?? null,
+        startedAt: match?.started_at ?? null,
+        endedAt: match?.ended_at ?? null,
+        framesWon: Number(isA ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0),
+        framesLost: Number(isA ? match?.player_b_frames_won || 0 : match?.player_a_frames_won || 0),
+        totalPoints: Number(isA ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0),
+        totalPointsAgainst: Number(isA ? match?.player_b_total_points || 0 : match?.player_a_total_points || 0),
+        maxBreak: Number(isA ? match?.player_a_max_break || 0 : match?.player_b_max_break || 0),
+        breaks20Plus: Number(isA ? match?.player_a_20_plus_count || 0 : match?.player_b_20_plus_count || 0),
+        opponent: opponent?.member ? {
+          id: String(opponent.member.id || ''),
+          name: String(opponent.member.name || ''),
+          memberCode: String(opponent.member.member_code || ''),
+          participantId: String(opponent?.id || ''),
+        } : null,
+        breaks,
+      };
+    })
+    .sort((a: any, b: any) => {
+      if (a.roundNo !== b.roundNo) return a.roundNo - b.roundNo;
+      return a.matchNo - b.matchNo;
+    });
+
+  const breakRows = participantMatches
+    .flatMap((match: any) => match.breaks)
+    .sort((a: any, b: any) => {
+      const aTime = a?.recordedAt ? new Date(String(a.recordedAt)).getTime() : 0;
+      const bTime = b?.recordedAt ? new Date(String(b.recordedAt)).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return Number(b?.points || 0) - Number(a?.points || 0);
+    });
+
+  const completedMatches = participantMatches.filter((match: any) => String(match?.status || '') === 'COMPLETED');
+
+  const summary = participantMatches.reduce((acc: any, match: any) => {
+    if (match.resultKey === 'WIN') acc.wins += 1;
+    else if (match.resultKey === 'LOSS') acc.losses += 1;
+    else if (match.resultKey === 'DRAW') acc.draws += 1;
+    acc.totalPoints += Number(match?.totalPoints || 0);
+    acc.totalPointsAgainst += Number(match?.totalPointsAgainst || 0);
+    acc.highestBreak = Math.max(acc.highestBreak, Number(match?.maxBreak || 0));
+    acc.breaks20Plus += Number(match?.breaks20Plus || 0);
+    acc.played += String(match?.status || '') === 'COMPLETED' ? 1 : 0;
+    return acc;
+  }, {
+    played: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    totalPoints: 0,
+    totalPointsAgainst: 0,
+    highestBreak: 0,
+    breaks20Plus: 0,
+  });
+
+  const completedMatchCount = Math.max(0, Number(summary.played || 0));
+  const avgPointsPerMatch = completedMatchCount > 0 ? summary.totalPoints / completedMatchCount : 0;
+  const avgBreaks20PlusPerMatch = completedMatchCount > 0 ? summary.breaks20Plus / completedMatchCount : 0;
+
+  const recentForm = [...completedMatches]
+    .sort((a: any, b: any) => {
+      const aTime = a?.endedAt
+        ? new Date(String(a.endedAt)).getTime()
+        : a?.startedAt
+          ? new Date(String(a.startedAt)).getTime()
+          : a?.scheduledAt
+            ? new Date(String(a.scheduledAt)).getTime()
+            : 0;
+      const bTime = b?.endedAt
+        ? new Date(String(b.endedAt)).getTime()
+        : b?.startedAt
+          ? new Date(String(b.startedAt)).getTime()
+          : b?.scheduledAt
+            ? new Date(String(b.scheduledAt)).getTime()
+            : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      if (a.roundNo !== b.roundNo) return b.roundNo - a.roundNo;
+      return b.matchNo - a.matchNo;
+    })
+    .slice(0, 5)
+    .map((match: any) => ({
+      id: match.id,
+      roundLabel: match.roundLabel,
+      opponent: match.opponent,
+      resultKey: match.resultKey,
+      resultLabel: match.resultLabel,
+      framesWon: match.framesWon,
+      framesLost: match.framesLost,
+      totalPoints: match.totalPoints,
+      totalPointsAgainst: match.totalPointsAgainst,
+      maxBreak: match.maxBreak,
+      breaks20Plus: match.breaks20Plus,
+      endedAt: match.endedAt,
+    }));
+
+  const opponentStatsMap = new Map<string, any>();
+  for (const match of participantMatches) {
+    const opponentKey = String(match?.opponent?.participantId || match?.opponent?.id || 'BYE');
+    const existing = opponentStatsMap.get(opponentKey) || {
+      opponent: match?.opponent || null,
+      played: 0,
+      completed: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      totalPoints: 0,
+      totalPointsAgainst: 0,
+      highestBreak: 0,
+      breaks20Plus: 0,
+    };
+    existing.played += 1;
+    if (match.resultKey === 'WIN') existing.wins += 1;
+    else if (match.resultKey === 'LOSS') existing.losses += 1;
+    else if (match.resultKey === 'DRAW') existing.draws += 1;
+    if (String(match?.status || '') === 'COMPLETED') existing.completed += 1;
+    existing.totalPoints += Number(match?.totalPoints || 0);
+    existing.totalPointsAgainst += Number(match?.totalPointsAgainst || 0);
+    existing.highestBreak = Math.max(existing.highestBreak, Number(match?.maxBreak || 0));
+    existing.breaks20Plus += Number(match?.breaks20Plus || 0);
+    opponentStatsMap.set(opponentKey, existing);
+  }
+
+  const opponentStats = Array.from(opponentStatsMap.values())
+    .map((row: any) => ({
+      ...row,
+      avgPointsPerMatch: row.completed > 0 ? row.totalPoints / row.completed : 0,
+      avgBreaks20PlusPerMatch: row.completed > 0 ? row.breaks20Plus / row.completed : 0,
+      pointsDiff: row.totalPoints - row.totalPointsAgainst,
+    }))
+    .sort((a: any, b: any) => {
+      if (b.completed !== a.completed) return b.completed - a.completed;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+      return String(a?.opponent?.name || '').localeCompare(String(b?.opponent?.name || ''));
+    });
+
+  return {
+    tournament: {
+      id: String(tournament?.id || ''),
+      title: String(tournament?.title || ''),
+      format: 'LEAGUE',
+      startsAt: tournament?.startsAt ?? null,
+      workflowStatus: String(tournament?.workflow_status || ''),
+      status: String(tournament?.status || ''),
+      club: tournament?.club || null,
+    },
+    participant: {
+      id: participantId,
+      memberId,
+      seed: participant?.seed ?? null,
+      status: String(participant?.status || ''),
+      finalRank: participant?.final_rank ?? null,
+      member: participant?.member || null,
+    },
+    standing: standing ? {
+      position: Number(standing?.position || 0),
+      played: Number(standing?.played || 0),
+      won: Number(standing?.won || 0),
+      drawn: Number(standing?.drawn || 0),
+      lost: Number(standing?.lost || 0),
+      matchPoints: Number(standing?.matchPoints || 0),
+      framesFor: Number(standing?.framesFor || 0),
+      framesAgainst: Number(standing?.framesAgainst || 0),
+      frameDiff: Number(standing?.frameDiff || 0),
+    } : null,
+    summary: {
+      played: summary.played,
+      wins: summary.wins,
+      draws: summary.draws,
+      losses: summary.losses,
+      totalPoints: summary.totalPoints,
+      totalPointsAgainst: summary.totalPointsAgainst,
+      pointsDiff: summary.totalPoints - summary.totalPointsAgainst,
+      highestBreak: summary.highestBreak,
+      breaks20Plus: summary.breaks20Plus,
+      matchPoints: Number(standing?.matchPoints || 0),
+      avgPointsPerMatch,
+      avgBreaks20PlusPerMatch,
+    },
+    breaks: breakRows,
+    matches: participantMatches,
+    recentForm,
+    opponentStats,
+  };
+}
+
 async function sendTournamentSignupNotificationEmail(options: {
   type: 'created' | 'confirmed' | 'cancelled';
   clubId: string;
@@ -828,6 +1079,76 @@ export function createTournamentRouter() {
         },
         podium,
       });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  router.get('/:clubId/tournaments/:id/participants/:participantId/public', async (req, res) => {
+    const { clubId, id, participantId } = req.params;
+    try {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id },
+        include: {
+          club: {
+            select: { id: true, name: true, logoUrl: true },
+          },
+        },
+      });
+      if (!tournament || tournament.clubId !== clubId || tournament.status !== 'PUBLISHED') {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (String(tournament.format || '').trim().toUpperCase() !== 'LEAGUE') {
+        return res.status(400).json({ error: '只支援聯賽球手數據' });
+      }
+
+      const participants = await prisma.tournamentParticipant.findMany({
+        where: { tournament_id: id },
+        orderBy: [{ seed: 'asc' }, { created_at: 'asc' }],
+        include: {
+          member: { select: { id: true, name: true, member_code: true } },
+        },
+      });
+      const participant = participants.find((row: any) => String(row?.id || '') === String(participantId));
+      if (!participant) return res.status(404).json({ error: 'Not found' });
+
+      const matches = await prisma.tournamentMatch.findMany({
+        where: { tournament_id: id },
+        orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+        include: {
+          player_a_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          player_b_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          winner_participant: {
+            include: { member: { select: { id: true, name: true, member_code: true } } },
+          },
+          frames: {
+            orderBy: [{ frame_no: 'asc' }],
+          },
+          break_records: {
+            where: {
+              deleted_at: null,
+              record_type: 'TOURNAMENT',
+            },
+            orderBy: [{ frame_no: 'asc' }, { recorded_at: 'asc' }, { created_at: 'asc' }],
+            include: {
+              member: { select: { id: true, name: true, member_code: true } },
+            },
+          },
+        },
+      });
+
+      const standings = buildLeagueStandings(tournament, participants, matches);
+      const detail = buildPublicLeagueParticipantDetail({
+        tournament,
+        participant,
+        standings,
+        matches,
+      });
+      res.json(detail);
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
