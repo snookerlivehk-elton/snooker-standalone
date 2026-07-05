@@ -1158,7 +1158,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               <VenueTournamentScheduleBracketPanel
                 bracketColumns={bracketColumns}
                 buildMatchProgressSummary={buildMatchProgressSummary}
-                  formatDisplayDateTime={formatDisplayDateTime}
+                formatDisplayDateTime={formatDisplayDateTime}
                 formatMatchResultTypeLabel={formatMatchResultTypeLabel}
                 formatParticipantLabel={formatParticipantLabel}
                 isLeague={isLeague}
@@ -1169,6 +1169,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 selectedMatchId={selectedMatchId}
                 selectedTournamentBestOf={selectedTournament?.best_of_frames}
                 selectMatchForScoring={selectMatchForScoring}
+                tournamentTitle={selectedTournament?.title}
               />
             </div>
           </div>

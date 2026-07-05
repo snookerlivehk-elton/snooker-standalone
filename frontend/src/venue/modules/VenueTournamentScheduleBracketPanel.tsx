@@ -15,6 +15,7 @@ type VenueTournamentScheduleBracketPanelProps = {
   selectedMatchId: string;
   selectedTournamentBestOf: any;
   selectMatchForScoring: (row: any) => void;
+  tournamentTitle?: string;
 };
 
 const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBracketPanelProps> = ({
@@ -31,6 +32,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   selectedMatchId,
   selectedTournamentBestOf,
   selectMatchForScoring,
+  tournamentTitle = '',
 }) => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
   const [quickFilter, setQuickFilter] = useState<'ALL' | 'SCORABLE' | 'UNFINISHED'>('ALL');
@@ -114,6 +116,13 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     };
   };
 
+  const escapeHtml = (value: any) => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
   const roundOptions = useMemo(() => bracketColumns.map((column: any) => String(column?.label || '')).filter(Boolean), [bracketColumns]);
   const effectiveFocusedRoundLabel = !isLeague && roundOptions.includes(focusedRoundLabel) ? focusedRoundLabel : 'ALL';
 
@@ -174,11 +183,163 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     { key: 'UNFINISHED', label: '只看未完成' },
   ];
 
+  const handleExportKnockoutPdf = () => {
+    if (isLeague) return;
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1280,height=960');
+    if (!printWindow) return;
+
+    const groupedRows = knockoutRoundCards.map((column) => ({
+      label: column.label,
+      items: filteredMatchesRows.filter((row: any) => formatKnockoutRoundLabel(row, participantsCount) === column.label),
+      summary: column,
+    })).filter((group) => group.items.length > 0);
+
+    const focusLabel = effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel;
+    const quickLabel = quickFilterOptions.find((option) => option.key === quickFilter)?.label || '全部對局';
+    const statusLabel = statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態';
+    const title = String(tournamentTitle || 'Knockout 賽程');
+
+    const html = `<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)} - Knockout 賽程 PDF</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; color: #111827; background: #fff; }
+    .page { padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .subtitle { color: #4b5563; font-size: 13px; margin-bottom: 16px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .chip { border: 1px solid #d1d5db; border-radius: 999px; padding: 6px 10px; font-size: 12px; background: #f9fafb; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .summary-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; background: #fafafa; }
+    .summary-title { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+    .summary-value { font-size: 20px; font-weight: 700; }
+    .round { margin-bottom: 22px; page-break-inside: avoid; }
+    .round-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .round-title { font-size: 18px; font-weight: 700; }
+    .round-subtitle { font-size: 12px; color: #6b7280; }
+    .round-theme-y { color: #92400e; }
+    .round-theme-f { color: #86198f; }
+    .round-theme-s { color: #075985; }
+    .round-theme-g { color: #334155; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; text-align: left; font-size: 12px; }
+    th { background: #f3f4f6; color: #374151; }
+    .vs { font-weight: 700; }
+    .muted { color: #6b7280; font-size: 11px; margin-top: 4px; }
+    .status { font-weight: 700; }
+    .footer { margin-top: 20px; font-size: 11px; color: #6b7280; }
+    @page { size: A4 portrait; margin: 12mm; }
+    @media print {
+      .page { padding: 0; }
+      .round { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>${escapeHtml(title)}</h1>
+    <div class="subtitle">Knockout 賽程匯出 · 可直接在列印視窗另存為 PDF</div>
+    <div class="meta">
+      <div class="chip">焦點輪次：${escapeHtml(focusLabel)}</div>
+      <div class="chip">快捷篩選：${escapeHtml(quickLabel)}</div>
+      <div class="chip">狀態篩選：${escapeHtml(statusLabel)}</div>
+      <div class="chip">匯出場數：${escapeHtml(filteredMatchesRows.length)}</div>
+    </div>
+    <div class="summary-grid">
+      ${knockoutRoundCards.map((column) => `
+        <div class="summary-card">
+          <div class="summary-title">${escapeHtml(column.label)}</div>
+          <div class="summary-value">${escapeHtml(column.total)}</div>
+          <div class="muted">進行中 ${escapeHtml(column.liveCount)} · 就緒 ${escapeHtml(column.readyCount)} · 已完成 ${escapeHtml(column.completedCount)}</div>
+        </div>
+      `).join('')}
+    </div>
+    ${groupedRows.map((group) => {
+      const themeClass = group.label.includes('決賽')
+        ? 'round-theme-y'
+        : group.label.includes('4 強')
+          ? 'round-theme-f'
+          : group.label.includes('8 強')
+            ? 'round-theme-s'
+            : group.label.includes('預賽')
+              ? 'round-theme-g'
+              : '';
+      return `
+      <section class="round">
+        <div class="round-header">
+          <div class="round-title ${themeClass}">${escapeHtml(group.label)}</div>
+          <div class="round-subtitle">共 ${escapeHtml(group.summary.total)} 場</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 11%">場次</th>
+              <th style="width: 29%">對賽</th>
+              <th style="width: 20%">賽程</th>
+              <th style="width: 12%">狀態</th>
+              <th style="width: 10%">比分</th>
+              <th style="width: 18%">進度</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${group.items.map((row: any) => `
+              <tr>
+                <td>
+                  <div>M${escapeHtml(row?.match_no || '-')}</div>
+                  <div class="muted">R${escapeHtml(row?.round_no || '-')}</div>
+                </td>
+                <td>
+                  <div class="vs">${escapeHtml(formatParticipantLabel(row?.player_a_participant))} vs ${escapeHtml(formatParticipantLabel(row?.player_b_participant))}</div>
+                  <div class="muted">${escapeHtml(formatMatchResultTypeLabel(row?.result_type))}</div>
+                </td>
+                <td>${escapeHtml(buildMatchMeta(row))}</td>
+                <td><span class="status">${escapeHtml(formatMatchStatusLabel(row?.status))}</span></td>
+                <td>${escapeHtml(Number(row?.player_a_frames_won ?? 0))} : ${escapeHtml(Number(row?.player_b_frames_won ?? 0))}</td>
+                <td>${escapeHtml(buildMatchProgressSummary(row, selectedTournamentBestOf))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </section>
+      `;
+    }).join('')}
+    <div class="footer">由場館工作台產生 · ${escapeHtml(new Date().toLocaleString('zh-HK'))}</div>
+  </div>
+  <script>
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        window.print();
+      }, 200);
+    });
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <>
     <div className="flex items-center justify-between gap-3 mb-2">
       <div className="font-semibold">{isLeague ? 'League 賽程' : 'Knockout 賽程'}</div>
-      <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${filteredMatchesRows.length} / ${matchesRows.length} 場`}</div>
+      <div className="flex items-center gap-2">
+        {!isLeague && !matchesLoading && matchesRows.length > 0 ? (
+          <button
+            type="button"
+            onClick={handleExportKnockoutPdf}
+            className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+          >
+            匯出 PDF
+          </button>
+        ) : null}
+        <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${filteredMatchesRows.length} / ${matchesRows.length} 場`}</div>
+      </div>
     </div>
     {matchesLoading ? (
       <div className="text-sm cue-muted">讀取中…</div>
