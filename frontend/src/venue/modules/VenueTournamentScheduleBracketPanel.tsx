@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { formatKnockoutRoundLabel, formatLeagueRoundLabel } from './useTournamentStageViewData';
 
 type VenueTournamentScheduleBracketPanelProps = {
@@ -32,6 +32,9 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   selectedTournamentBestOf,
   selectMatchForScoring,
 }) => {
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
+  const [focusedRoundLabel, setFocusedRoundLabel] = useState<string>('ALL');
+
   const formatMatchStatusLabel = (value: any) => {
     const normalized = String(value || '').trim().toUpperCase();
     if (normalized === 'COMPLETED') return '已完成';
@@ -66,17 +69,117 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     return 'cue-border cue-surface hover:brightness-95';
   };
 
+  const roundOptions = useMemo(() => bracketColumns.map((column: any) => String(column?.label || '')).filter(Boolean), [bracketColumns]);
+  const effectiveFocusedRoundLabel = !isLeague && roundOptions.includes(focusedRoundLabel) ? focusedRoundLabel : 'ALL';
+
+  const filteredMatchesRows = useMemo(() => {
+    return matchesRows.filter((row: any) => {
+      const status = String(row?.status || '').trim().toUpperCase();
+      const statusOk = statusFilter === 'ALL' || status === statusFilter;
+      if (!statusOk) return false;
+      if (isLeague || effectiveFocusedRoundLabel === 'ALL') return true;
+      return formatKnockoutRoundLabel(row, participantsCount) === effectiveFocusedRoundLabel;
+    });
+  }, [effectiveFocusedRoundLabel, isLeague, matchesRows, participantsCount, statusFilter]);
+
+  const filteredBracketColumns = useMemo(() => {
+    return bracketColumns.map((column: any) => {
+      const items = Array.isArray(column?.items)
+        ? column.items.filter((row: any) => statusFilter === 'ALL' || String(row?.status || '').trim().toUpperCase() === statusFilter)
+        : [];
+      return {
+        ...column,
+        items,
+        summary: {
+          total: items.length,
+          completedCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length,
+          liveCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'LIVE').length,
+          readyCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length,
+          pendingCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length,
+        },
+      };
+    });
+  }, [bracketColumns, statusFilter]);
+
+  const knockoutRoundCards = useMemo(() => {
+    return filteredBracketColumns.map((column: any) => ({
+      label: String(column?.label || ''),
+      total: Number(column?.summary?.total || 0),
+      liveCount: Number(column?.summary?.liveCount || 0),
+      readyCount: Number(column?.summary?.readyCount || 0),
+      completedCount: Number(column?.summary?.completedCount || 0),
+      pendingCount: Number(column?.summary?.pendingCount || 0),
+    }));
+  }, [filteredBracketColumns]);
+
+  const statusFilterOptions: Array<{ key: 'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'; label: string }> = [
+    { key: 'ALL', label: '全部狀態' },
+    { key: 'LIVE', label: '進行中' },
+    { key: 'READY', label: '就緒' },
+    { key: 'COMPLETED', label: '已完成' },
+    { key: 'PENDING', label: '待定' },
+  ];
+
   return (
     <>
     <div className="flex items-center justify-between gap-3 mb-2">
       <div className="font-semibold">{isLeague ? 'League 賽程' : 'Knockout 賽程'}</div>
-      <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${matchesRows.length} 場`}</div>
+      <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${filteredMatchesRows.length} / ${matchesRows.length} 場`}</div>
     </div>
     {matchesLoading ? (
       <div className="text-sm cue-muted">讀取中…</div>
     ) : matchesRows.length === 0 ? (
       <div className="text-sm cue-muted">尚未生成賽程</div>
     ) : (
+      <>
+        <div className="cue-surface rounded-lg p-3 mb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {statusFilterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setStatusFilter(option.key)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  statusFilter === option.key ? 'bg-white/15 text-white border border-white/20' : 'cue-surface-strong cue-muted border border-white/10 hover:brightness-105'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+            {!isLeague ? (
+              <>
+                <div className="mx-1 h-4 w-px bg-white/10" />
+                <button
+                  type="button"
+                  onClick={() => setFocusedRoundLabel('ALL')}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    effectiveFocusedRoundLabel === 'ALL' ? 'bg-white/15 text-white border border-white/20' : 'cue-surface-strong cue-muted border border-white/10 hover:brightness-105'
+                  }`}
+                >
+                  全部輪次
+                </button>
+                {roundOptions.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setFocusedRoundLabel(label)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      effectiveFocusedRoundLabel === label ? 'bg-yellow-500/15 text-yellow-200 border border-yellow-400/30' : 'cue-surface-strong cue-muted border border-white/10 hover:brightness-105'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </>
+            ) : null}
+          </div>
+          <div className="text-xs cue-muted mt-2">
+            {!isLeague && effectiveFocusedRoundLabel !== 'ALL'
+              ? `目前焦點：${effectiveFocusedRoundLabel} · `
+              : ''}
+            狀態篩選：{statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態'}
+          </div>
+        </div>
       <div className="overflow-x-auto -mx-2 px-2">
         <table className="w-full text-left border-collapse text-sm">
           <thead>
@@ -88,7 +191,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
             </tr>
           </thead>
           <tbody>
-            {matchesRows.map((row: any) => {
+            {filteredMatchesRows.map((row: any) => {
               const id = String(row?.id || '');
               const aLabel = formatParticipantLabel(row?.player_a_participant);
               const bLabel = formatParticipantLabel(row?.player_b_participant);
@@ -138,17 +241,58 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           </tbody>
         </table>
       </div>
+      </>
     )}
     {!isLeague && matchesRows.length > 0 ? (
       <div className="mt-5">
+        {knockoutRoundCards.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-4">
+            {knockoutRoundCards.map((column) => {
+              const isFocused = effectiveFocusedRoundLabel === column.label;
+              const isAll = effectiveFocusedRoundLabel === 'ALL';
+              return (
+                <button
+                  key={column.label}
+                  type="button"
+                  onClick={() => setFocusedRoundLabel(isFocused ? 'ALL' : column.label)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${
+                    isFocused
+                      ? 'border-yellow-400/50 bg-yellow-500/10'
+                      : isAll
+                        ? 'cue-border cue-surface hover:brightness-105'
+                        : 'cue-border cue-surface hover:brightness-105'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold">{column.label}</div>
+                    <div className="text-xs cue-muted">{column.total} 場</div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs cue-muted">
+                    <span>進行中 {column.liveCount}</span>
+                    <span>就緒 {column.readyCount}</span>
+                    <span>已完成 {column.completedCount}</span>
+                    <span>待定 {column.pendingCount}</span>
+                  </div>
+                  <div className="text-[11px] cue-muted mt-2">
+                    {isFocused ? '再按一次返回全部輪次' : '按一下聚焦此輪'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3 mb-2">
           <div className="font-semibold">Knockout Bracket Tree</div>
-          <div className="text-xs cue-muted">按卡片可直接切換到該場對局記分</div>
+          <div className="text-xs cue-muted">
+            {effectiveFocusedRoundLabel !== 'ALL' ? `焦點輪次：${effectiveFocusedRoundLabel}` : '按卡片可直接切換到該場對局記分'}
+          </div>
         </div>
         <div className="overflow-x-auto -mx-2 px-2">
           <div className="flex gap-12 min-w-max items-start pb-2">
-            {bracketColumns.map((column) => (
-              <div key={column.label} className="w-72">
+            {filteredBracketColumns.map((column) => {
+              const isFocusedColumn = effectiveFocusedRoundLabel === 'ALL' || effectiveFocusedRoundLabel === column.label;
+              return (
+              <div key={column.label} className={`w-72 transition-opacity ${isFocusedColumn ? 'opacity-100' : 'opacity-35'}`}>
                 <div className="mb-3 sticky left-0">
                   <div className="font-semibold">{column.label}</div>
                   <div className="text-xs cue-muted mt-1">
@@ -157,6 +301,9 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                     {Number(column.summary?.completedCount || 0) > 0 ? ` · 已完成 ${column.summary.completedCount}` : ''}
                   </div>
                 </div>
+                {column.items.length === 0 ? (
+                  <div className="cue-surface-strong rounded-lg border cue-border p-3 text-sm cue-muted">此狀態篩選下沒有對局</div>
+                ) : (
                 <div
                   className="relative"
                   style={{
@@ -255,8 +402,10 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                     })}
                   </div>
                 </div>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       </div>
