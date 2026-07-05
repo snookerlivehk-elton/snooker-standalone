@@ -106,6 +106,20 @@ function formatTournamentMatchStatusLabel(value: any) {
   return normalized || '-';
 }
 
+function getTournamentMatchMonthKey(match: any) {
+  const raw = match?.endedAt || match?.startedAt || match?.scheduledAt || null;
+  if (!raw) return '';
+  const d = new Date(String(raw));
+  if (!Number.isFinite(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthFilterLabel(monthKey: string) {
+  const value = String(monthKey || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(value)) return value || '全部月份';
+  return `${value.slice(0, 4)}年${value.slice(5, 7)}月`;
+}
+
 function getPublicTournamentMatchBestOf(match: any, fallbackBestOfRaw?: any) {
   return Math.max(1, Math.floor(Number(match?.best_of_frames ?? fallbackBestOfRaw ?? 1) || 1));
 }
@@ -266,6 +280,8 @@ const ClubPublicPage: React.FC = () => {
   const [tournamentParticipantDetail, setTournamentParticipantDetail] = useState<any>(null);
   const [tournamentParticipantDetailLoading, setTournamentParticipantDetailLoading] = useState(false);
   const [tournamentParticipantDetailError, setTournamentParticipantDetailError] = useState<string | null>(null);
+  const [tournamentParticipantMonthFilter, setTournamentParticipantMonthFilter] = useState<string>('ALL');
+  const [tournamentParticipantRoundFilter, setTournamentParticipantRoundFilter] = useState<string>('ALL');
   const [tournamentSubmitModal, setTournamentSubmitModal] = useState<{ open: boolean; title: string; guide: string }>({ open: false, title: '', guide: '' });
   
   const session = useMemo(() => readMemberSession() as MemberSession, []);
@@ -1227,6 +1243,149 @@ const ClubPublicPage: React.FC = () => {
         };
       });
   }, [openedTournamentMatches, openedTournamentParticipants.length]);
+
+  const tournamentParticipantFilterOptions = useMemo(() => {
+    const matches = Array.isArray(tournamentParticipantDetail?.matches) ? tournamentParticipantDetail.matches : [];
+    const months = Array.from(new Set<string>(
+      matches
+        .map((row: any) => getTournamentMatchMonthKey(row))
+        .filter((value: string) => !!value),
+    )).sort((a, b) => String(b).localeCompare(String(a)));
+    const rounds = Array.from(new Set<number>(
+      matches
+        .map((row: any) => Number(row?.roundNo || 0))
+        .filter((value: number) => Number.isFinite(value) && value > 0),
+    )).sort((a, b) => a - b);
+    return { months, rounds };
+  }, [tournamentParticipantDetail]);
+
+  const filteredTournamentParticipantMatches = useMemo(() => {
+    const matches = Array.isArray(tournamentParticipantDetail?.matches) ? tournamentParticipantDetail.matches : [];
+    return matches.filter((row: any) => {
+      const monthOk = tournamentParticipantMonthFilter === 'ALL'
+        || getTournamentMatchMonthKey(row) === tournamentParticipantMonthFilter;
+      const roundOk = tournamentParticipantRoundFilter === 'ALL'
+        || String(Number(row?.roundNo || 0)) === tournamentParticipantRoundFilter;
+      return monthOk && roundOk;
+    });
+  }, [tournamentParticipantDetail, tournamentParticipantMonthFilter, tournamentParticipantRoundFilter]);
+
+  const filteredTournamentParticipantBreaks = useMemo(() => {
+    const breaks = Array.isArray(tournamentParticipantDetail?.breaks) ? tournamentParticipantDetail.breaks : [];
+    const matchIdSet = new Set(filteredTournamentParticipantMatches.map((row: any) => String(row?.id || '')));
+    return breaks.filter((row: any) => matchIdSet.has(String(row?.matchId || '')));
+  }, [filteredTournamentParticipantMatches, tournamentParticipantDetail]);
+
+  const filteredTournamentParticipantRecentForm = useMemo(() => {
+    return [...filteredTournamentParticipantMatches]
+      .filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'COMPLETED')
+      .sort((a: any, b: any) => {
+        const aTime = a?.endedAt
+          ? new Date(String(a.endedAt)).getTime()
+          : a?.startedAt
+            ? new Date(String(a.startedAt)).getTime()
+            : a?.scheduledAt
+              ? new Date(String(a.scheduledAt)).getTime()
+              : 0;
+        const bTime = b?.endedAt
+          ? new Date(String(b.endedAt)).getTime()
+          : b?.startedAt
+            ? new Date(String(b.startedAt)).getTime()
+            : b?.scheduledAt
+              ? new Date(String(b.scheduledAt)).getTime()
+              : 0;
+        if (aTime !== bTime) return bTime - aTime;
+        if (a.roundNo !== b.roundNo) return b.roundNo - a.roundNo;
+        return b.matchNo - a.matchNo;
+      })
+      .slice(0, 5);
+  }, [filteredTournamentParticipantMatches]);
+
+  const filteredTournamentParticipantOpponentStats = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const row of filteredTournamentParticipantMatches) {
+      const key = String(row?.opponent?.participantId || row?.opponent?.id || 'BYE');
+      const existing = map.get(key) || {
+        opponent: row?.opponent || null,
+        played: 0,
+        completed: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        totalPoints: 0,
+        totalPointsAgainst: 0,
+        highestBreak: 0,
+        breaks20Plus: 0,
+      };
+      existing.played += 1;
+      if (row?.resultKey === 'WIN') existing.wins += 1;
+      else if (row?.resultKey === 'LOSS') existing.losses += 1;
+      else if (row?.resultKey === 'DRAW') existing.draws += 1;
+      if (String(row?.status || '').trim().toUpperCase() === 'COMPLETED') existing.completed += 1;
+      existing.totalPoints += Number(row?.totalPoints || 0);
+      existing.totalPointsAgainst += Number(row?.totalPointsAgainst || 0);
+      existing.highestBreak = Math.max(existing.highestBreak, Number(row?.maxBreak || 0));
+      existing.breaks20Plus += Number(row?.breaks20Plus || 0);
+      map.set(key, existing);
+    }
+    return Array.from(map.values())
+      .map((row: any) => ({
+        ...row,
+        avgPointsPerMatch: row.completed > 0 ? row.totalPoints / row.completed : 0,
+        avgBreaks20PlusPerMatch: row.completed > 0 ? row.breaks20Plus / row.completed : 0,
+        pointsDiff: row.totalPoints - row.totalPointsAgainst,
+      }))
+      .sort((a: any, b: any) => {
+        if (b.completed !== a.completed) return b.completed - a.completed;
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+        return String(a?.opponent?.name || '').localeCompare(String(b?.opponent?.name || ''));
+      });
+  }, [filteredTournamentParticipantMatches]);
+
+  const filteredTournamentParticipantChartData = useMemo(() => {
+    const completedMatches = filteredTournamentParticipantMatches.filter((row: any) => (
+      String(row?.status || '').trim().toUpperCase() === 'COMPLETED'
+    ));
+    const wins = completedMatches.filter((row: any) => row?.resultKey === 'WIN').length;
+    const draws = completedMatches.filter((row: any) => row?.resultKey === 'DRAW').length;
+    const losses = completedMatches.filter((row: any) => row?.resultKey === 'LOSS').length;
+    const totalPoints = completedMatches.reduce((sum: number, row: any) => sum + Number(row?.totalPoints || 0), 0);
+    const totalBreaks20Plus = completedMatches.reduce((sum: number, row: any) => sum + Number(row?.breaks20Plus || 0), 0);
+    const maxPoints = Math.max(1, ...completedMatches.map((row: any) => Number(row?.totalPoints || 0)));
+    const maxBreakCount = Math.max(1, ...completedMatches.map((row: any) => Number(row?.breaks20Plus || 0)));
+    return {
+      resultCounts: [
+        { key: 'WIN', label: '勝', count: wins, className: 'bg-emerald-400' },
+        { key: 'DRAW', label: '和', count: draws, className: 'bg-slate-300' },
+        { key: 'LOSS', label: '負', count: losses, className: 'bg-rose-400' },
+      ],
+      pointsTrend: completedMatches
+        .slice()
+        .sort((a: any, b: any) => {
+          if (a.roundNo !== b.roundNo) return a.roundNo - b.roundNo;
+          return a.matchNo - b.matchNo;
+        })
+        .map((row: any) => ({
+          id: row.id,
+          label: row.roundLabel || `R${row.roundNo || '-'}`,
+          opponentLabel: row?.opponent ? formatTournamentParticipantLabel({ member: row.opponent }) : 'BYE',
+          totalPoints: Number(row?.totalPoints || 0),
+          breaks20Plus: Number(row?.breaks20Plus || 0),
+          resultLabel: row?.resultLabel || '-',
+          pointWidth: `${Math.max(8, (Number(row?.totalPoints || 0) / maxPoints) * 100)}%`,
+          breakWidth: `${Math.max(8, (Number(row?.breaks20Plus || 0) / maxBreakCount) * 100)}%`,
+        })),
+      totalPoints,
+      totalBreaks20Plus,
+      completedCount: completedMatches.length,
+    };
+  }, [filteredTournamentParticipantMatches]);
+
+  useEffect(() => {
+    setTournamentParticipantMonthFilter('ALL');
+    setTournamentParticipantRoundFilter('ALL');
+  }, [tournamentParticipantOpen?.participantId, tournamentParticipantDetail?.participant?.id]);
 
   useEffect(() => {
     if (!clubLiveOpen || !clubId) return;
@@ -2535,12 +2694,12 @@ const ClubPublicPage: React.FC = () => {
                               <div className="flex items-center justify-between gap-3 mb-3">
                                 <div className="font-semibold">最近 5 場表現</div>
                                 <div className="text-xs cue-muted">
-                                  {Array.isArray(tournamentParticipantDetail?.recentForm) ? tournamentParticipantDetail.recentForm.length : 0} 場
+                                  {filteredTournamentParticipantRecentForm.length} 場
                                 </div>
                               </div>
-                              {Array.isArray(tournamentParticipantDetail?.recentForm) && tournamentParticipantDetail.recentForm.length > 0 ? (
+                              {filteredTournamentParticipantRecentForm.length > 0 ? (
                                 <div className="space-y-2">
-                                  {tournamentParticipantDetail.recentForm.map((row: any) => (
+                                  {filteredTournamentParticipantRecentForm.map((row: any) => (
                                     <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
                                       <div className="flex items-start justify-between gap-2">
                                         <div>
@@ -2575,10 +2734,10 @@ const ClubPublicPage: React.FC = () => {
                               <div className="flex items-center justify-between gap-3 mb-3">
                                 <div className="font-semibold">對手分布統計</div>
                                 <div className="text-xs cue-muted">
-                                  {Array.isArray(tournamentParticipantDetail?.opponentStats) ? tournamentParticipantDetail.opponentStats.length : 0} 位對手
+                                  {filteredTournamentParticipantOpponentStats.length} 位對手
                                 </div>
                               </div>
-                              {Array.isArray(tournamentParticipantDetail?.opponentStats) && tournamentParticipantDetail.opponentStats.length > 0 ? (
+                              {filteredTournamentParticipantOpponentStats.length > 0 ? (
                                 <div className="overflow-x-auto -mx-2 px-2">
                                   <table className="w-full text-left border-collapse text-sm">
                                     <thead>
@@ -2591,7 +2750,7 @@ const ClubPublicPage: React.FC = () => {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {tournamentParticipantDetail.opponentStats.map((row: any, index: number) => (
+                                      {filteredTournamentParticipantOpponentStats.map((row: any, index: number) => (
                                         <tr key={`${String(row?.opponent?.participantId || row?.opponent?.id || 'bye')}-${index}`} className="border-b cue-border">
                                           <td className="py-2 px-2 font-semibold">{row?.opponent ? formatTournamentParticipantLabel({ member: row.opponent }) : 'BYE'}</td>
                                           <td className="py-2 px-2 cue-muted">
@@ -2621,13 +2780,136 @@ const ClubPublicPage: React.FC = () => {
                             </div>
                           </div>
 
+                          <div className="cue-surface-strong rounded-lg p-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                              <div>
+                                <div className="font-semibold">月份 / 輪次篩選</div>
+                                <div className="text-xs cue-muted mt-1">以下圖表與逐場/20+資料會跟隨篩選更新；上方總覽卡保留整個聯賽總成績。</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTournamentParticipantMonthFilter('ALL');
+                                  setTournamentParticipantRoundFilter('ALL');
+                                }}
+                                className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-sm font-semibold"
+                              >
+                                重設篩選
+                              </button>
+                            </div>
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                              <label className="block">
+                                <div className="text-xs cue-muted mb-1">月份</div>
+                                <select
+                                  value={tournamentParticipantMonthFilter}
+                                  onChange={(e) => setTournamentParticipantMonthFilter(e.target.value)}
+                                  className="w-full rounded-lg cue-surface px-3 py-2 text-sm"
+                                >
+                                  <option value="ALL">全部月份</option>
+                                  {tournamentParticipantFilterOptions.months.map((month) => (
+                                    <option key={month} value={month}>{formatMonthFilterLabel(month)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="block">
+                                <div className="text-xs cue-muted mb-1">輪次</div>
+                                <select
+                                  value={tournamentParticipantRoundFilter}
+                                  onChange={(e) => setTournamentParticipantRoundFilter(e.target.value)}
+                                  className="w-full rounded-lg cue-surface px-3 py-2 text-sm"
+                                >
+                                  <option value="ALL">全部輪次</option>
+                                  {tournamentParticipantFilterOptions.rounds.map((roundNo) => (
+                                    <option key={roundNo} value={String(roundNo)}>{`第 ${roundNo} 輪`}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="mt-3 text-xs cue-muted">
+                              篩選結果：{filteredTournamentParticipantMatches.length} 場賽事、{filteredTournamentParticipantBreaks.length} 筆 20+
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 xl:grid-cols-3">
+                            <div className="cue-surface-strong rounded-lg p-4">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="font-semibold">賽果分布</div>
+                                <div className="text-xs cue-muted">{filteredTournamentParticipantChartData.completedCount} 場</div>
+                              </div>
+                              <div className="space-y-3">
+                                {filteredTournamentParticipantChartData.resultCounts.map((row) => {
+                                  const total = Math.max(1, filteredTournamentParticipantChartData.completedCount);
+                                  const width = `${Math.max(row.count > 0 ? 12 : 0, (row.count / total) * 100)}%`;
+                                  return (
+                                    <div key={row.key}>
+                                      <div className="flex items-center justify-between gap-3 text-sm mb-1">
+                                        <span className="font-semibold">{row.label}</span>
+                                        <span className="cue-muted">{row.count}</span>
+                                      </div>
+                                      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                                        <div className={`h-full rounded-full ${row.className}`} style={{ width }} />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="xl:col-span-2 cue-surface-strong rounded-lg p-4">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="font-semibold">圖表化展示</div>
+                                <div className="text-xs cue-muted">每輪得分與 20+</div>
+                              </div>
+                              {filteredTournamentParticipantChartData.pointsTrend.length > 0 ? (
+                                <div className="space-y-3">
+                                  {filteredTournamentParticipantChartData.pointsTrend.map((row: any) => (
+                                    <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="font-semibold truncate">{row.label} · {row.opponentLabel}</div>
+                                          <div className="text-xs cue-muted mt-1">{row.resultLabel}</div>
+                                        </div>
+                                        <div className="text-xs cue-muted text-right">
+                                          <div>得分 {row.totalPoints}</div>
+                                          <div className="mt-1">20+ {row.breaks20Plus}</div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-3 space-y-2">
+                                        <div>
+                                          <div className="flex items-center justify-between gap-3 text-xs cue-muted mb-1">
+                                            <span>得分</span>
+                                            <span>{row.totalPoints}</span>
+                                          </div>
+                                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                                            <div className="h-full rounded-full bg-amber-400" style={{ width: row.pointWidth }} />
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center justify-between gap-3 text-xs cue-muted mb-1">
+                                            <span>20+</span>
+                                            <span>{row.breaks20Plus}</span>
+                                          </div>
+                                          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                                            <div className="h-full rounded-full bg-sky-400" style={{ width: row.breakWidth }} />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-sm cue-muted">所選月份 / 輪次尚未有已完成賽事可供展示。</div>
+                              )}
+                            </div>
+                          </div>
+
                           <div className="grid gap-4 xl:grid-cols-3">
                             <div className="xl:col-span-2 cue-surface-strong rounded-lg p-4">
                               <div className="flex items-center justify-between gap-3 mb-3">
                                 <div className="font-semibold">逐場聯賽紀錄</div>
-                                <div className="text-xs cue-muted">{Array.isArray(tournamentParticipantDetail?.matches) ? tournamentParticipantDetail.matches.length : 0} 場</div>
+                                <div className="text-xs cue-muted">{filteredTournamentParticipantMatches.length} 場</div>
                               </div>
-                              {Array.isArray(tournamentParticipantDetail?.matches) && tournamentParticipantDetail.matches.length > 0 ? (
+                              {filteredTournamentParticipantMatches.length > 0 ? (
                                 <div className="overflow-x-auto -mx-2 px-2">
                                   <table className="w-full text-left border-collapse text-sm">
                                     <thead>
@@ -2641,7 +2923,7 @@ const ClubPublicPage: React.FC = () => {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {tournamentParticipantDetail.matches.map((row: any) => (
+                                      {filteredTournamentParticipantMatches.map((row: any) => (
                                         <tr key={String(row?.id || Math.random())} className="border-b cue-border">
                                           <td className="py-2 px-2">
                                             <div className="font-semibold">{row?.roundLabel || '-'}</div>
@@ -2670,11 +2952,11 @@ const ClubPublicPage: React.FC = () => {
                             <div className="cue-surface-strong rounded-lg p-4">
                               <div className="flex items-center justify-between gap-3 mb-3">
                                 <div className="font-semibold">20+ 詳細記錄</div>
-                                <div className="text-xs cue-muted">{Array.isArray(tournamentParticipantDetail?.breaks) ? tournamentParticipantDetail.breaks.length : 0} 筆</div>
+                                <div className="text-xs cue-muted">{filteredTournamentParticipantBreaks.length} 筆</div>
                               </div>
-                              {Array.isArray(tournamentParticipantDetail?.breaks) && tournamentParticipantDetail.breaks.length > 0 ? (
+                              {filteredTournamentParticipantBreaks.length > 0 ? (
                                 <div className="space-y-2">
-                                  {tournamentParticipantDetail.breaks.map((row: any) => (
+                                  {filteredTournamentParticipantBreaks.map((row: any) => (
                                     <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
                                       <div className="flex items-start justify-between gap-2">
                                         <div>
