@@ -4,6 +4,50 @@
 
 ## 最新已完成（2026-07-05）
 
+- Tournament 公開頁與後台工作台已完成新一輪可操作性強化：
+  - `ClubPublicPage.tsx`
+    - 聯賽球手詳細頁已補：
+      - 月份 / 輪次篩選
+      - 賽果分布與每輪得分 / `20+` 圖表化展示
+      - 篩選後的最近 5 場、對手分布、逐場紀錄、`20+` 詳細記錄
+  - `VenueTournamentScheduleBracketPanel.tsx`
+    - `Knockout` 工作台已補：
+      - 狀態篩選
+      - 焦點輪次
+      - 每輪摘要卡
+      - `只看可記分對局`
+      - `只看未完成`
+      - `預賽 / 8 強 / 4 強 / 決賽` 視覺層次
+      - schedule / bracket PDF 列印匯出
+  - `VenueTournamentLeagueStandingsPanel.tsx`
+    - `League` 工作台已補：
+      - standings 摘要卡與圖表化
+      - 月份 / 輪次維度切換
+      - 排名趨勢圖
+      - standings PDF / 列印匯出
+    - `League` schedule 區亦已補：
+      - PDF / 列印匯出
+      - 聯賽專用更完整列印版面
+- 已新增 tournament `方法 Z` 測試工具：
+  - 後台可直接一鍵建立測試會員與已確認報名
+  - 可選自動生成 participants 與 `Knockout / League` 賽程
+  - v2 已再補：
+    - 半自動 / 全自動灌賽果
+    - 自動生成 `20+ / highest break` 測試數據
+    - 清理 / 重設 Method Z 測試資料
+  - 主要位置：
+    - `frontend/src/venue/modules/VenueTournamentTestToolsPanel.tsx`
+    - `backend/src/plugins/tournaments/service.ts`
+    - `backend/src/plugins/tournaments/router.ts`
+- 已補 Railway backend hotfix：
+  - 原因：`backend/src/plugins/tournaments/service.ts` 內 Method Z cleanup 流程的 `Set -> Array.from` 在 Railway / Nixpacks 下被推斷成 `unknown[]`
+  - 修正：已補上 `Set<string>` 與明確 `filter` 型別
+  - 結果：`backend npm run build` 已再次通過，hotfix 已推送至 GitHub `main`
+- Git 狀態：
+  - 最近與 tournament 相關的新增功能已分批 commit / push
+  - Method Z 主功能 commit：`6bde308` `Add tournament method z test tools`
+  - Railway build hotfix：`e32d418` `Fix tournament service build types`
+
 - Tournament scoring / break flow 已完成新一輪落地：
   - `Phase 1`：`20+ break` 已直接內嵌到每局賽果輸入卡，操作員可於 frame editor 內即時輸入正式比賽 `20+`。
   - `Phase 2`：比賽結算的 `max break / 20+ count` 已改為依「當前 frames + 當前 tournament break records」即時重算，不再沿用舊 match 欄位累積值。

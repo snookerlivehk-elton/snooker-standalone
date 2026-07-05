@@ -235,10 +235,18 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     { key: 'UNFINISHED', label: '只看未完成' },
   ];
 
+  const openPrintWindow = (html: string) => {
+    const printWindow = window.open('about:blank', '_blank', 'width=1280,height=960');
+    if (!printWindow) return null;
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    return printWindow;
+  };
+
   const handleExportKnockoutPdf = () => {
     if (isLeague) return;
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1280,height=960');
-    if (!printWindow) return;
 
     const groupedRows = knockoutRoundCards.map((column) => ({
       label: column.label,
@@ -269,6 +277,11 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     .summary-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; background: #fafafa; }
     .summary-title { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
     .summary-value { font-size: 20px; font-weight: 700; }
+    .bracket-grid { display: grid; grid-template-columns: repeat(${Math.max(1, groupedRows.length)}, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .bracket-column { border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; background: #fff; }
+    .bracket-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; background: #f8fafc; }
+    .bracket-card + .bracket-card { margin-top: 10px; }
+    .player-name { font-weight: 700; line-height: 1.35; word-break: break-word; }
     .round { margin-bottom: 22px; page-break-inside: avoid; }
     .round-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
     .round-title { font-size: 18px; font-weight: 700; }
@@ -284,7 +297,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     .muted { color: #6b7280; font-size: 11px; margin-top: 4px; }
     .status { font-weight: 700; }
     .footer { margin-top: 20px; font-size: 11px; color: #6b7280; }
-    @page { size: A4 portrait; margin: 12mm; }
+    @page { size: A4 landscape; margin: 12mm; }
     @media print {
       .page { padding: 0; }
       .round { break-inside: avoid; }
@@ -308,6 +321,25 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           <div class="summary-value">${escapeHtml(column.total)}</div>
           <div class="muted">進行中 ${escapeHtml(column.liveCount)} · 就緒 ${escapeHtml(column.readyCount)} · 已完成 ${escapeHtml(column.completedCount)}</div>
         </div>
+      `).join('')}
+    </div>
+    <div class="bracket-grid">
+      ${groupedRows.map((group) => `
+        <section class="bracket-column">
+          <div class="round-header">
+            <div class="round-title">${escapeHtml(group.label)}</div>
+            <div class="round-subtitle">${escapeHtml(group.summary.total)} 場</div>
+          </div>
+          ${group.items.map((row: any) => `
+            <article class="bracket-card">
+              <div class="muted">M${escapeHtml(row?.match_no || '-')} · ${escapeHtml(formatMatchStatusLabel(row?.status))}</div>
+              <div class="player-name">${escapeHtml(formatParticipantLabel(row?.player_a_participant))}</div>
+              <div class="muted">${escapeHtml(Number(row?.player_a_frames_won ?? 0))} : ${escapeHtml(Number(row?.player_b_frames_won ?? 0))}</div>
+              <div class="player-name">${escapeHtml(formatParticipantLabel(row?.player_b_participant))}</div>
+              <div class="muted">${escapeHtml(buildMatchMeta(row))}</div>
+            </article>
+          `).join('')}
+        </section>
       `).join('')}
     </div>
     ${groupedRows.map((group) => {
@@ -371,15 +403,11 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 </body>
 </html>`;
 
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    openPrintWindow(html);
   };
 
   const handleExportLeaguePdf = () => {
     if (!isLeague) return;
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1280,height=960');
-    if (!printWindow) return;
 
     const quickLabel = quickFilterOptions.find((option) => option.key === quickFilter)?.label || '全部對局';
     const statusLabel = statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態';
@@ -632,9 +660,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 </body>
 </html>`;
 
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    openPrintWindow(html);
   };
 
   return (
@@ -831,14 +857,14 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
             {effectiveFocusedRoundLabel !== 'ALL' ? `焦點輪次：${effectiveFocusedRoundLabel}` : '按卡片可直接切換到該場對局記分'}
           </div>
         </div>
-        <div className="overflow-x-auto -mx-2 px-2">
-          <div className="flex gap-12 min-w-max items-start pb-2">
+        <div className="overflow-x-auto -mx-2 px-2 pb-2">
+          <div className="flex gap-8 xl:gap-10 min-w-fit items-start">
             {filteredBracketColumns.map((column) => {
               const isFocusedColumn = effectiveFocusedRoundLabel === 'ALL' || effectiveFocusedRoundLabel === column.label;
               const roundTheme = getRoundTheme(String(column?.label || ''));
               return (
-              <div key={column.label} className={`w-72 transition-opacity ${isFocusedColumn ? 'opacity-100' : 'opacity-35'}`}>
-                <div className="mb-3 sticky left-0">
+              <div key={column.label} className={`w-[19rem] xl:w-[21rem] 2xl:w-[23rem] shrink-0 transition-opacity ${isFocusedColumn ? 'opacity-100' : 'opacity-35'}`}>
+                <div className="mb-3">
                   <div className={`font-semibold ${roundTheme.headerClassName}`}>{column.label}</div>
                   <div className="text-xs cue-muted mt-1">
                     {column.summary?.total || 0} 場
@@ -932,14 +958,14 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                               </span>
                             </div>
                             <div className="text-[11px] cue-muted mb-2">{buildMatchMeta(row)}</div>
-                            <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
+                            <div className={`font-semibold leading-snug whitespace-normal break-words ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{aLabel}</div>
                             <div className="text-sm cue-muted my-1">
                               {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
                             </div>
-                            <div className={`font-semibold truncate ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{bLabel}</div>
+                            <div className={`font-semibold leading-snug whitespace-normal break-words ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{bLabel}</div>
                             <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
                               <span className="cue-muted">{resultTypeLabel}</span>
-                              <span className="cue-muted truncate">{buildMatchProgressSummary(row, selectedTournamentBestOf)}</span>
+                              <span className="cue-muted text-right">{buildMatchProgressSummary(row, selectedTournamentBestOf)}</span>
                             </div>
                           </button>
                         </div>

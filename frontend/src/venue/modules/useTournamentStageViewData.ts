@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-const BRACKET_CARD_HEIGHT = 132;
+const BRACKET_CARD_HEIGHT = 156;
 const BRACKET_BASE_GAP = 18;
 const BRACKET_CONNECTOR_HALF_GAP = 24;
 

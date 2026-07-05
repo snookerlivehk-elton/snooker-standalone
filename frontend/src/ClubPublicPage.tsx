@@ -1913,7 +1913,10 @@ const ClubPublicPage: React.FC = () => {
                           <div className="mt-4 flex justify-end">
                             <button
                               type="button"
-                              onClick={() => setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(tournament?.id || '')) || tournament)}
+                              onClick={() => {
+                                setActiveTab('signup');
+                                setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(tournament?.id || '')) || tournament);
+                              }}
                               className="px-4 py-2 rounded cue-button text-sm font-semibold"
                             >
                               查看詳情

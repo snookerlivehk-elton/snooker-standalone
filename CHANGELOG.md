@@ -5,6 +5,12 @@ Format
 - Categories: Added, Changed, Fixed, Removed, Security.
 
 Unreleased
+- Added: public league participant detail view now supports month / round filters plus chart-style visualizations, including filtered recent form, opponent distribution, match history, and `20+` break history.
+- Added: public `League` participant detail now includes charted result distribution and per-round points / `20+` summaries inside `ClubPublicPage`.
+- Changed: venue tournament `Knockout` workspace now has stronger bracket/schedule readability with round summary cards, status filters, focus mode, score/status badges, stage-themed visual hierarchy, and browser-printable PDF export.
+- Changed: venue tournament `League` workspace now includes schedule PDF/print export, an enhanced league-specific print layout, standings summary cards, standings charts, month/round dimension switching, ranking trend charts, and standings PDF/print export.
+- Added: tournament admin workbench now includes `Method Z` test tools for generating test members/signups, optionally creating participants and schedules, simulating partial/full match progress, generating test `20+` / highest-break data, and cleaning up Method Z test batches.
+- Fixed: tournament service Method Z cleanup flow now uses explicit string typing for Set/Array conversions so strict TypeScript builds succeed consistently in Railway/Nixpacks environments.
 - Added: tournament match scoring now supports inline official `20+` entry directly inside each frame editor, alongside the existing sidebar supplement flow.
 - Changed: tournament match break summaries now recompute from the current match frames and current `TOURNAMENT` break records, so match-level max break / 20+ totals no longer depend on stale accumulated values.
 - Changed: venue tournament highbreak views now surface tournament-linked break context, including record type, club, date/time, and tournament/frame labels.
