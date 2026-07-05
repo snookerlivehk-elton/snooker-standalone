@@ -720,6 +720,23 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     }
     return '';
   }, [selectedMatch, selectedMatchIsCompleted]);
+  const selectedMatchAMaxBreak = Math.max(0, Number(selectedMatch?.player_a_max_break ?? 0));
+  const selectedMatchBMaxBreak = Math.max(0, Number(selectedMatch?.player_b_max_break ?? 0));
+  const selectedMatchA20PlusCount = Math.max(0, Number(selectedMatch?.player_a_20_plus_count ?? 0));
+  const selectedMatchB20PlusCount = Math.max(0, Number(selectedMatch?.player_b_20_plus_count ?? 0));
+  const selectedMatchTopBreakValue = Math.max(selectedMatchAMaxBreak, selectedMatchBMaxBreak);
+  const selectedMatchTopBreakOwners = [
+    selectedMatchAMaxBreak === selectedMatchTopBreakValue && selectedMatchTopBreakValue > 0
+      ? formatMemberLabel(selectedMatch?.player_a_participant?.member)
+      : '',
+    selectedMatchBMaxBreak === selectedMatchTopBreakValue && selectedMatchTopBreakValue > 0
+      ? formatMemberLabel(selectedMatch?.player_b_participant?.member)
+      : '',
+  ].filter(Boolean);
+  const selectedMatchTopBreakLabel = selectedMatchTopBreakValue > 0
+    ? `${selectedMatchTopBreakOwners.join(' / ')} · ${selectedMatchTopBreakValue}`
+    : '-';
+  const selectedMatchBreakTotalsLabel = `A ${selectedMatchAMaxBreak} / ${selectedMatchA20PlusCount} 筆 20+ · B ${selectedMatchBMaxBreak} / ${selectedMatchB20PlusCount} 筆 20+`;
   const selectedMatchBreakRows = useMemo(() => (
     Array.isArray(selectedMatch?.breaks) ? [...selectedMatch.breaks] : []
   ).sort((a: any, b: any) => {
@@ -1873,6 +1890,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <div className="text-xs cue-muted mt-1">
                   {selectedMatchWinnerLabel ? `勝方：${selectedMatchWinnerLabel}` : '已保存最終賽果。'}
                 </div>
+                <div className="text-xs cue-muted mt-1">
+                  本場單杆統計：{selectedMatchBreakTotalsLabel}
+                </div>
               </div>
             ) : null}
 
@@ -1940,7 +1960,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             </div>
 
             <div className="rounded-lg border cue-border p-3 mb-3">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-8">
                 <div>
                   <div className="text-xs cue-muted">賽制摘要</div>
                   <div className="font-semibold mt-1">{tournamentFormat === 'KNOCKOUT' ? `Best of ${selectedMatchBestOf} / 先贏 ${selectedMatchTargetWins} 局` : `Best of ${selectedMatchBestOf}`}</div>
@@ -1965,10 +1985,18 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   <div className="text-xs cue-muted">本節段落</div>
                   <div className="font-semibold mt-1">{`第 ${selectedMatchCurrentBlockNo} 段`}</div>
                 </div>
+                <div>
+                  <div className="text-xs cue-muted">本場最高 break</div>
+                  <div className="font-semibold mt-1">{selectedMatchTopBreakLabel}</div>
+                </div>
+                <div>
+                  <div className="text-xs cue-muted">本場 20+</div>
+                  <div className="font-semibold mt-1">{`A ${selectedMatchA20PlusCount} 筆 · B ${selectedMatchB20PlusCount} 筆`}</div>
+                </div>
               </div>
               <div className="text-xs cue-muted mt-3">
                 {selectedMatchIsCompleted
-                  ? '此場已達勝出局數，系統已停止追加下一局草稿。'
+                  ? `此場已達勝出局數，系統已停止追加下一局草稿；最高 break 與 20+ 會按本場現有資料自動重算。`
                   : '系統以每 4 局為一段、每 8 局為一節，自動安排小休與續賽提示。'}
               </div>
             </div>

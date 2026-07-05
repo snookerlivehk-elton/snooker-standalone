@@ -298,6 +298,12 @@ async function recomputeMatchBreakStats(tx: any, matchId: string) {
     include: {
       player_a_participant: { select: { id: true, member_id: true } },
       player_b_participant: { select: { id: true, member_id: true } },
+      frames: {
+        select: {
+          player_a_highest_break: true,
+          player_b_highest_break: true,
+        },
+      },
     },
   });
   if (!match) throw new Error('Not found');
@@ -321,14 +327,20 @@ async function recomputeMatchBreakStats(tx: any, matchId: string) {
 
   const a = summarize(match.player_a_participant?.member_id);
   const b = summarize(match.player_b_participant?.member_id);
+  const playerAMaxBreakFromFrames = Array.isArray(match.frames)
+    ? match.frames.reduce((best: number, frame: any) => Math.max(best, Number(frame?.player_a_highest_break || 0)), 0)
+    : 0;
+  const playerBMaxBreakFromFrames = Array.isArray(match.frames)
+    ? match.frames.reduce((best: number, frame: any) => Math.max(best, Number(frame?.player_b_highest_break || 0)), 0)
+    : 0;
 
   await tx.tournamentMatch.update({
     where: { id: matchId },
     data: {
       player_a_20_plus_count: a.count,
       player_b_20_plus_count: b.count,
-      player_a_max_break: Math.max(Number(match.player_a_max_break || 0), a.max),
-      player_b_max_break: Math.max(Number(match.player_b_max_break || 0), b.max),
+      player_a_max_break: Math.max(playerAMaxBreakFromFrames, a.max),
+      player_b_max_break: Math.max(playerBMaxBreakFromFrames, b.max),
     },
   });
 }
