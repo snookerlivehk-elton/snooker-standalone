@@ -33,6 +33,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   selectMatchForScoring,
 }) => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
+  const [quickFilter, setQuickFilter] = useState<'ALL' | 'SCORABLE' | 'UNFINISHED'>('ALL');
   const [focusedRoundLabel, setFocusedRoundLabel] = useState<string>('ALL');
 
   const formatMatchStatusLabel = (value: any) => {
@@ -69,6 +70,50 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     return 'cue-border cue-surface hover:brightness-95';
   };
 
+  const matchesQuickFilter = (row: any) => {
+    const status = String(row?.status || '').trim().toUpperCase();
+    const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && status !== 'PENDING';
+    if (quickFilter === 'SCORABLE') return canRecordMatch;
+    if (quickFilter === 'UNFINISHED') return status !== 'COMPLETED';
+    return true;
+  };
+
+  const getRoundTheme = (label: string) => {
+    if (label.includes('決賽')) {
+      return {
+        chipClassName: 'bg-yellow-500/15 text-yellow-200 border-yellow-400/30',
+        cardClassName: 'border-yellow-400/35 bg-yellow-500/8',
+        headerClassName: 'text-yellow-200',
+      };
+    }
+    if (label.includes('4 強')) {
+      return {
+        chipClassName: 'bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-400/30',
+        cardClassName: 'border-fuchsia-400/30 bg-fuchsia-500/8',
+        headerClassName: 'text-fuchsia-200',
+      };
+    }
+    if (label.includes('8 強')) {
+      return {
+        chipClassName: 'bg-sky-500/15 text-sky-200 border-sky-400/30',
+        cardClassName: 'border-sky-400/30 bg-sky-500/8',
+        headerClassName: 'text-sky-200',
+      };
+    }
+    if (label.includes('預賽')) {
+      return {
+        chipClassName: 'bg-slate-500/15 text-slate-200 border-slate-400/30',
+        cardClassName: 'border-slate-400/25 bg-slate-500/8',
+        headerClassName: 'text-slate-100',
+      };
+    }
+    return {
+      chipClassName: 'bg-white/10 text-white border-white/15',
+      cardClassName: 'cue-border cue-surface',
+      headerClassName: 'text-white',
+    };
+  };
+
   const roundOptions = useMemo(() => bracketColumns.map((column: any) => String(column?.label || '')).filter(Boolean), [bracketColumns]);
   const effectiveFocusedRoundLabel = !isLeague && roundOptions.includes(focusedRoundLabel) ? focusedRoundLabel : 'ALL';
 
@@ -77,15 +122,19 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
       const status = String(row?.status || '').trim().toUpperCase();
       const statusOk = statusFilter === 'ALL' || status === statusFilter;
       if (!statusOk) return false;
+      if (!matchesQuickFilter(row)) return false;
       if (isLeague || effectiveFocusedRoundLabel === 'ALL') return true;
       return formatKnockoutRoundLabel(row, participantsCount) === effectiveFocusedRoundLabel;
     });
-  }, [effectiveFocusedRoundLabel, isLeague, matchesRows, participantsCount, statusFilter]);
+  }, [effectiveFocusedRoundLabel, isLeague, matchesRows, participantsCount, quickFilter, statusFilter]);
 
   const filteredBracketColumns = useMemo(() => {
     return bracketColumns.map((column: any) => {
       const items = Array.isArray(column?.items)
-        ? column.items.filter((row: any) => statusFilter === 'ALL' || String(row?.status || '').trim().toUpperCase() === statusFilter)
+        ? column.items.filter((row: any) => {
+            const statusOk = statusFilter === 'ALL' || String(row?.status || '').trim().toUpperCase() === statusFilter;
+            return statusOk && matchesQuickFilter(row);
+          })
         : [];
       return {
         ...column,
@@ -99,7 +148,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         },
       };
     });
-  }, [bracketColumns, statusFilter]);
+  }, [bracketColumns, quickFilter, statusFilter]);
 
   const knockoutRoundCards = useMemo(() => {
     return filteredBracketColumns.map((column: any) => ({
@@ -119,6 +168,11 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     { key: 'COMPLETED', label: '已完成' },
     { key: 'PENDING', label: '待定' },
   ];
+  const quickFilterOptions: Array<{ key: 'ALL' | 'SCORABLE' | 'UNFINISHED'; label: string }> = [
+    { key: 'ALL', label: '全部對局' },
+    { key: 'SCORABLE', label: '只看可記分對局' },
+    { key: 'UNFINISHED', label: '只看未完成' },
+  ];
 
   return (
     <>
@@ -134,6 +188,19 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
       <>
         <div className="cue-surface rounded-lg p-3 mb-3">
           <div className="flex flex-wrap items-center gap-2">
+            {quickFilterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setQuickFilter(option.key)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  quickFilter === option.key ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/30' : 'cue-surface-strong cue-muted border border-white/10 hover:brightness-105'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+            <div className="mx-1 h-4 w-px bg-white/10" />
             {statusFilterOptions.map((option) => (
               <button
                 key={option.key}
@@ -177,6 +244,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
             {!isLeague && effectiveFocusedRoundLabel !== 'ALL'
               ? `目前焦點：${effectiveFocusedRoundLabel} · `
               : ''}
+            快捷篩選：{quickFilterOptions.find((option) => option.key === quickFilter)?.label || '全部對局'} · 
             狀態篩選：{statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態'}
           </div>
         </div>
@@ -196,12 +264,13 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
               const aLabel = formatParticipantLabel(row?.player_a_participant);
               const bLabel = formatParticipantLabel(row?.player_b_participant);
               const roundLabel = isLeague ? formatLeagueRoundLabel(row) : formatKnockoutRoundLabel(row, participantsCount);
+              const roundTheme = getRoundTheme(roundLabel);
               const resultTypeLabel = formatMatchResultTypeLabel(row?.result_type);
               const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && String(row?.status || '').toUpperCase() !== 'PENDING';
               return (
                 <tr key={id} className={`border-b cue-border hover:brightness-95 ${selectedMatchId === id ? 'bg-white/5' : ''}`}>
                   <td className="py-2 px-2 whitespace-nowrap">
-                    <div>{roundLabel}</div>
+                    <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${roundTheme.chipClassName}`}>{roundLabel}</div>
                     <div className="text-xs cue-muted mt-0.5">R{row?.round_no || '-'} / M{row?.match_no || '-'}</div>
                   </td>
                   <td className="py-2 px-2">
@@ -250,6 +319,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
             {knockoutRoundCards.map((column) => {
               const isFocused = effectiveFocusedRoundLabel === column.label;
               const isAll = effectiveFocusedRoundLabel === 'ALL';
+              const roundTheme = getRoundTheme(column.label);
               return (
                 <button
                   key={column.label}
@@ -257,14 +327,14 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                   onClick={() => setFocusedRoundLabel(isFocused ? 'ALL' : column.label)}
                   className={`rounded-lg border p-3 text-left transition-colors ${
                     isFocused
-                      ? 'border-yellow-400/50 bg-yellow-500/10'
+                      ? `${roundTheme.cardClassName} shadow-[0_0_0_1px_rgba(255,255,255,0.06)]`
                       : isAll
                         ? 'cue-border cue-surface hover:brightness-105'
                         : 'cue-border cue-surface hover:brightness-105'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold">{column.label}</div>
+                    <div className={`font-semibold ${roundTheme.headerClassName}`}>{column.label}</div>
                     <div className="text-xs cue-muted">{column.total} 場</div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs cue-muted">
@@ -291,10 +361,11 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           <div className="flex gap-12 min-w-max items-start pb-2">
             {filteredBracketColumns.map((column) => {
               const isFocusedColumn = effectiveFocusedRoundLabel === 'ALL' || effectiveFocusedRoundLabel === column.label;
+              const roundTheme = getRoundTheme(String(column?.label || ''));
               return (
               <div key={column.label} className={`w-72 transition-opacity ${isFocusedColumn ? 'opacity-100' : 'opacity-35'}`}>
                 <div className="mb-3 sticky left-0">
-                  <div className="font-semibold">{column.label}</div>
+                  <div className={`font-semibold ${roundTheme.headerClassName}`}>{column.label}</div>
                   <div className="text-xs cue-muted mt-1">
                     {column.summary?.total || 0} 場
                     {Number(column.summary?.liveCount || 0) > 0 ? ` · 進行中 ${column.summary.liveCount}` : ''}
@@ -378,7 +449,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                               selectMatchForScoring(row);
                             }}
                             disabled={!canSelectMatch}
-                            className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${getBracketCardClassName(row, canSelectMatch, selectedMatchId === id)}`}
+                            className={`relative z-10 h-full w-full text-left rounded-lg border p-3 transition-colors ${selectedMatchId === id ? `${getBracketCardClassName(row, canSelectMatch, true)} ${roundTheme.cardClassName}` : getBracketCardClassName(row, canSelectMatch, false)}`}
                           >
                             <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
                               <span>M{row?.match_no || '-'}</span>
