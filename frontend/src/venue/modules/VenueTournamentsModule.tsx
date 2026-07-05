@@ -358,6 +358,42 @@ function buildNextSegmentCheckpointLabel(
   return segment.boundaryLabel;
 }
 
+function getBreakRowsInSegment(
+  rows: any[],
+  segment: { startFrameNo: number; endFrameNo: number; } | null,
+) {
+  if (!segment) return [];
+  return rows.filter((row) => {
+    const frameNo = Number(row?.frame_no || 0);
+    return frameNo >= segment.startFrameNo && frameNo <= segment.endFrameNo;
+  });
+}
+
+function getSegmentBreakSummary(
+  rows: any[],
+  segment: { startFrameNo: number; endFrameNo: number; } | null,
+) {
+  const segmentRows = getBreakRowsInSegment(rows, segment);
+  if (segmentRows.length === 0) {
+    return {
+      countLabel: '本段未有 20+',
+      topLabel: '最高 20+：-',
+      frameLabel: '未涉及局數',
+    };
+  }
+  const topRow = segmentRows.reduce((best, row) => (
+    Number(row?.points || 0) > Number(best?.points || 0) ? row : best
+  ), segmentRows[0]);
+  const frameLabels = Array.from(new Set(segmentRows.map((row) => Number(row?.frame_no || 0)).filter((value) => value > 0)))
+    .sort((a, b) => a - b)
+    .map((value) => `第 ${value} 局`);
+  return {
+    countLabel: `本段 20+：${segmentRows.length} 筆`,
+    topLabel: `最高 20+：${Number(topRow?.points || 0)}`,
+    frameLabel: frameLabels.length > 0 ? frameLabels.join('、') : '未涉及局數',
+  };
+}
+
 function nextPowerOfTwo(n: number) {
   let p = 1;
   while (p < n) p *= 2;
@@ -718,9 +754,56 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedMatchWinsRemainingB = Math.max(0, selectedMatchTargetWins - selectedMatchBWins);
   const selectedMatchLatestSavedFrameNo = Number(completedResultFrames[completedResultFrames.length - 1]?.frameNo || 0);
   const selectedMatchNextCheckpointLabel = buildNextSegmentCheckpointLabel(selectedMatchActiveSegment, selectedMatchBestOf);
+  const selectedMatchActiveSegmentBreakRows = useMemo(
+    () => getBreakRowsInSegment(selectedMatchBreakRows, selectedMatchActiveSegment),
+    [selectedMatchActiveSegment, selectedMatchBreakRows],
+  );
+  const selectedMatchActiveSegmentBreakSummary = useMemo(
+    () => getSegmentBreakSummary(selectedMatchBreakRows, selectedMatchActiveSegment),
+    [selectedMatchActiveSegment, selectedMatchBreakRows],
+  );
+  const activeFrameNoValue = Number(activeFrame?.frameNo || selectedMatchCurrentFrameNo || 1);
+  const selectedMatchActiveFrameBreakRows = useMemo(() => (
+    selectedMatchBreakRows.filter((row: any) => Number(row?.frame_no || 0) === activeFrameNoValue)
+  ), [activeFrameNoValue, selectedMatchBreakRows]);
   const selectedMatchResumeSummary = selectedMatchIsCompleted
     ? '此場比賽已完成，可回看各局結果與最高 break。'
     : buildSegmentResumeSummary(selectedMatchCurrentFrameNo, completedResultFrames.length, selectedMatchBestOf);
+  const submitTournamentBreak = useCallback(async (frameNoRaw?: number) => {
+    if (!selectedMatchId) throw new Error('請先選擇賽事對局');
+    if (!breakMemberId) throw new Error('請先選擇球手');
+    const points = Math.floor(Number(breakPoints));
+    if (!Number.isFinite(points) || points < 20) throw new Error('20+ 分數不正確');
+    const frameNo = Math.max(1, Math.floor(Number(frameNoRaw || breakFrameNo || 1)));
+    setBreakSaving(true);
+    try {
+      await createTournamentMatchBreak(API_URL, operatorId, selectedId, selectedMatchId, {
+        memberId: breakMemberId,
+        points,
+        frameNo,
+        recordedAt: breakRecordedAt ? new Date(breakRecordedAt).toISOString() : null,
+        note: breakNote || null,
+      });
+      await loadSelectedPhase1Data();
+      setBreakFrameNo(String(frameNo));
+      setBreakPoints('');
+      setBreakNote('');
+      showNotice(`已記錄第 ${frameNo} 局 20+`);
+    } finally {
+      setBreakSaving(false);
+    }
+  }, [
+    breakFrameNo,
+    breakMemberId,
+    breakNote,
+    breakPoints,
+    breakRecordedAt,
+    loadSelectedPhase1Data,
+    operatorId,
+    selectedId,
+    selectedMatchId,
+    showNotice,
+  ]);
   const selectMatchForScoring = useCallback((row: any) => {
     const id = String(row?.id || '');
     setSelectedMatchId(id);
@@ -1800,61 +1883,61 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               </div>
             ) : null}
 
-            {selectedMatchIsLongFormat ? (
-              <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 mb-3">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <div className="font-semibold text-violet-100">長局數工作台</div>
-                    <div className="text-xs cue-muted mt-1">
-                      適用於 Best of {selectedMatchBestOf} 這類多段賽事；可按段查看進度、快速跳回下一局或最近已保存局數。
-                    </div>
-                  </div>
-                  <div className="grid gap-2 text-xs cue-muted sm:grid-cols-3">
-                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
-                      <div>尚差勝局</div>
-                      <div className="mt-1 font-semibold text-white">A 還差 {selectedMatchWinsRemainingA} 局</div>
-                      <div className="mt-1 font-semibold text-white">B 還差 {selectedMatchWinsRemainingB} 局</div>
-                    </div>
-                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
-                      <div>目前焦點</div>
-                      <div className="mt-1 font-semibold text-white">{selectedMatchActiveSegment ? selectedMatchActiveSegment.title : getFrameSegmentLabel(selectedMatchCurrentFrameNo)}</div>
-                      <div className="mt-1">第 {selectedMatchCurrentFrameNo} 局</div>
-                    </div>
-                    <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
-                      <div>下一節點</div>
-                      <div className="mt-1 font-semibold text-white">{selectedMatchNextCheckpointLabel}</div>
-                    </div>
+            <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 mb-3">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                  <div className="font-semibold text-violet-100">比賽工作台總覽</div>
+                  <div className="text-xs cue-muted mt-1">
+                    {selectedMatchIsLongFormat
+                      ? `Best of ${selectedMatchBestOf} 已啟用完整分段工作台；可按段查看進度、20+ 與快速跳回下一局。`
+                      : `Best of ${selectedMatchBestOf} 也沿用同一套工作台；以統一方式查看目前焦點、最近已保存局數與下一節點。`}
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveFrameNo(selectedMatchCurrentFrameNo)}
-                    className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
-                  >
-                    回到下一局
-                  </button>
-                  {selectedMatchLatestSavedFrameNo > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setActiveFrameNo(selectedMatchLatestSavedFrameNo)}
-                      className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
-                    >
-                      最新已保存：第 {selectedMatchLatestSavedFrameNo} 局
-                    </button>
-                  ) : null}
-                  {selectedMatchActiveSegment ? (
-                    <button
-                      type="button"
-                      onClick={() => setActiveFrameNo(getRecommendedFrameNoForSegment(resultFrames, selectedMatchActiveSegment))}
-                      className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
-                    >
-                      回到目前段
-                    </button>
-                  ) : null}
+                <div className="grid gap-2 text-xs cue-muted sm:grid-cols-3">
+                  <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                    <div>尚差勝局</div>
+                    <div className="mt-1 font-semibold text-white">A 還差 {selectedMatchWinsRemainingA} 局</div>
+                    <div className="mt-1 font-semibold text-white">B 還差 {selectedMatchWinsRemainingB} 局</div>
+                  </div>
+                  <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                    <div>目前焦點</div>
+                    <div className="mt-1 font-semibold text-white">{selectedMatchActiveSegment ? selectedMatchActiveSegment.title : getFrameSegmentLabel(selectedMatchCurrentFrameNo)}</div>
+                    <div className="mt-1">第 {selectedMatchCurrentFrameNo} 局</div>
+                  </div>
+                  <div className="rounded border border-violet-400/20 bg-black/10 px-3 py-2">
+                    <div>下一節點</div>
+                    <div className="mt-1 font-semibold text-white">{selectedMatchNextCheckpointLabel}</div>
+                  </div>
                 </div>
               </div>
-            ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveFrameNo(selectedMatchCurrentFrameNo)}
+                  className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                >
+                  回到下一局
+                </button>
+                {selectedMatchLatestSavedFrameNo > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveFrameNo(selectedMatchLatestSavedFrameNo)}
+                    className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                  >
+                    最新已保存：第 {selectedMatchLatestSavedFrameNo} 局
+                  </button>
+                ) : null}
+                {selectedMatchActiveSegment ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveFrameNo(getRecommendedFrameNoForSegment(resultFrames, selectedMatchActiveSegment))}
+                    className="rounded-lg border border-violet-400/30 bg-white/5 px-3 py-2 text-sm font-semibold hover:brightness-95"
+                  >
+                    回到目前段
+                  </button>
+                ) : null}
+              </div>
+            </div>
 
             <div className="rounded-lg border cue-border p-3 mb-3">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -1912,6 +1995,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                         <div>{segment.boundaryLabel}</div>
                         <div className="mt-1">{getSegmentCompletionSummary(resultFrames, segment)}</div>
                         <div className="mt-1">{getSegmentFramesWonSummary(resultFrames, segment)}</div>
+                        <div className="mt-1">{getSegmentBreakSummary(selectedMatchBreakRows, segment).countLabel}</div>
+                        <div className="mt-1">{getSegmentBreakSummary(selectedMatchBreakRows, segment).topLabel}</div>
                       </div>
                     </div>
                     <div className="mb-2 flex flex-wrap gap-2">
@@ -2075,6 +2160,80 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   <input value={activeFrame?.playerBHighestBreak || '0'} onChange={(e) => updateFrameDraft(activeFrameIndex, { playerBHighestBreak: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 28" />
                 </div>
               </div>
+              <div className="mt-3 rounded-lg border cue-border p-3">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-semibold">本局 20+ / 單杆</div>
+                    <div className="text-xs cue-muted mt-1">
+                      以目前這一局作為所屬局數；加入後會同步更新該局最高 break 與本場單杆統計。
+                    </div>
+                  </div>
+                  <div className="text-xs cue-muted">
+                    {activeFrame?.isPlaceholder ? '請先儲存本局賽果，再加入 20+' : `第 ${activeFrameNoValue} 局`}
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">球手</label>
+                    <select value={breakMemberId} onChange={(e) => setBreakMemberId(e.target.value)} className="w-full px-3 py-2 rounded cue-input" disabled={!selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder}>
+                      <option value="">選擇球手</option>
+                      {selectedMatchMemberOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">Break 分數</label>
+                    <input value={breakPoints} onChange={(e) => setBreakPoints(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={20} placeholder="例如 34" disabled={!selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder} />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">記錄時間（可選）</label>
+                    <input value={breakRecordedAt} onChange={(e) => setBreakRecordedAt(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="datetime-local" disabled={!selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder} />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1 cue-muted">備註（可空）</label>
+                    <input value={breakNote} onChange={(e) => setBreakNote(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="例如：清枱 34、關鍵局" disabled={!selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder} />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={breakSaving || !selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder}
+                    className={`px-4 py-2 rounded font-semibold ${breakSaving || !selectedMatchBreakEnabled || !!activeFrame?.isPlaceholder ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
+                    onClick={async () => {
+                      try {
+                        await submitTournamentBreak(activeFrameNoValue);
+                      } catch (e: any) {
+                        showNotice(e?.message || '記錄 20+ 失敗', 3000);
+                      }
+                    }}
+                  >
+                    {breakSaving ? '儲存中...' : `加入第 ${activeFrameNoValue} 局 20+`}
+                  </button>
+                </div>
+                <div className="mt-3 rounded-lg border cue-border p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="font-semibold">本局已記錄 20+</div>
+                    <div className="text-xs cue-muted">{selectedMatchActiveFrameBreakRows.length} 筆</div>
+                  </div>
+                  {selectedMatchActiveFrameBreakRows.length === 0 ? (
+                    <div className="text-sm cue-muted">此局暫未有已加入的 20+ 記錄</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedMatchActiveFrameBreakRows.map((row: any) => (
+                        <div key={String(row?.id || `${row?.member_id || ''}-${row?.frame_no || ''}-${row?.points || ''}`)} className="rounded cue-surface p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-semibold">{formatMemberLabel(row?.member)}</div>
+                            <div className="accent-yellow font-semibold">{Number(row?.points || 0)}</div>
+                          </div>
+                          <div className="text-xs cue-muted mt-1">{formatDisplayDateTime(row?.recorded_at)}</div>
+                          {row?.note ? <div className="text-xs cue-muted mt-1">{String(row.note)}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="text-xs cue-muted mt-2">最高 break 只填單次最高連續得分；如你在右側記錄 `20+`，系統會自動把該局最高 break 更新為較高值。</div>
             </div>
 
@@ -2123,10 +2282,48 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           </div>
 
           <div className="cue-surface-strong rounded-lg p-4">
-            <div className="font-semibold mb-3">記錄比賽 20+</div>
+            <div className="font-semibold mb-3">比賽 20+ 總覽 / 補錄</div>
             <div className="text-xs cue-muted mb-3">
-              `20+` 會正式寫入比賽履歷，並自動回寫對應局數的最高 break。
+              建議優先在左側每局輸入卡直接加入 `20+`；這裡保留全場總覽、分段摘要與補錄入口。
             </div>
+            {selectedMatchActiveSegment ? (
+              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 mb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold accent-yellow">{selectedMatchActiveSegment.title}</div>
+                    <div className="text-xs cue-muted mt-1">{selectedMatchActiveSegment.rangeLabel}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveFrameNo(getRecommendedFrameNoForSegment(resultFrames, selectedMatchActiveSegment))}
+                    className="rounded border border-yellow-500/30 px-2 py-1 text-xs font-semibold hover:brightness-95"
+                  >
+                    回到本段
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3 text-xs cue-muted">
+                  <div className="rounded cue-surface px-3 py-2">{selectedMatchActiveSegmentBreakSummary.countLabel}</div>
+                  <div className="rounded cue-surface px-3 py-2">{selectedMatchActiveSegmentBreakSummary.topLabel}</div>
+                  <div className="rounded cue-surface px-3 py-2">{selectedMatchActiveSegmentBreakSummary.frameLabel}</div>
+                </div>
+                {selectedMatchActiveSegmentBreakRows.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {Array.from(new Set(selectedMatchActiveSegmentBreakRows.map((row: any) => Number(row?.frame_no || 0)).filter((value: number) => value > 0)))
+                      .sort((a, b) => a - b)
+                      .map((frameNo) => (
+                        <button
+                          key={frameNo}
+                          type="button"
+                          onClick={() => setActiveFrameNo(frameNo)}
+                          className="rounded border cue-border px-2 py-1 text-xs font-semibold hover:brightness-95"
+                        >
+                          前往第 {frameNo} 局
+                        </button>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="block text-sm mb-1 cue-muted">球手</label>
@@ -2165,26 +2362,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 className={`px-4 py-2 rounded font-semibold ${breakSaving || !selectedMatchBreakEnabled ? 'cue-surface-strong cue-muted' : 'brand-button text-black'}`}
                 onClick={async () => {
                   try {
-                    if (!selectedMatchId) throw new Error('請先選擇賽事對局');
-                    if (!breakMemberId) throw new Error('請先選擇球手');
-                    const points = Math.floor(Number(breakPoints));
-                    if (!Number.isFinite(points) || points < 20) throw new Error('20+ 分數不正確');
-                    setBreakSaving(true);
-                    await createTournamentMatchBreak(API_URL, operatorId, selectedId, selectedMatchId, {
-                      memberId: breakMemberId,
-                      points,
-                      frameNo: Math.max(1, Math.floor(Number(breakFrameNo || 1))),
-                      recordedAt: breakRecordedAt ? new Date(breakRecordedAt).toISOString() : null,
-                      note: breakNote || null,
-                    });
-                    await loadSelectedPhase1Data();
-                    setBreakPoints('');
-                    setBreakNote('');
-                    showNotice('已記錄比賽 20+');
+                    await submitTournamentBreak(Math.max(1, Math.floor(Number(breakFrameNo || 1))));
                   } catch (e: any) {
                     showNotice(e?.message || '記錄 20+ 失敗', 3000);
-                  } finally {
-                    setBreakSaving(false);
                   }
                 }}
               >
