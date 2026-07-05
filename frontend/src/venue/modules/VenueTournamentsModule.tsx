@@ -1151,6 +1151,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             <div>
               {isLeague ? (
                 <VenueTournamentLeagueStandingsPanel
+                  matchesRows={matchesRows}
+                  pointsDraw={Number(selectedTournament?.points_draw ?? 1)}
+                  pointsLoss={Number(selectedTournament?.points_loss ?? 0)}
+                  pointsWin={Number(selectedTournament?.points_win ?? 3)}
                   standingsRows={standingsRows}
                   formatParticipantLabel={formatParticipantLabel}
                 />
