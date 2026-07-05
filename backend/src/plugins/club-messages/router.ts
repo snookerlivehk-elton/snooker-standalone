@@ -67,7 +67,8 @@ export function createClubMessageRouter() {
         hiddenRows = await prisma.$queryRawUnsafe(`SELECT "messageId" FROM "ClubMessageHide" WHERE "memberId"=$1`, memberId);
       } catch {}
       const hiddenSet = new Set(hiddenRows.map((r) => String(r.messageId)));
-      const visible = messages.filter((m) => !hiddenSet.has(m.id));
+      // System club messages are operational notices for the venue, not member-facing inbox content.
+      const visible = messages.filter((m) => !hiddenSet.has(m.id) && !isSystemClubMessageTitle(m.title));
       const withRead = visible.map((m) => ({ ...m, read: readSet.has(m.id) }));
       res.json(withRead);
     } catch (error) {

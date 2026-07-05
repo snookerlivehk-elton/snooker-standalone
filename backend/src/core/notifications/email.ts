@@ -7,7 +7,7 @@ export async function sendEmailIfConfigured(options: {
   const from = String(process.env.RESEND_FROM_EMAIL || '').trim();
   const to = String(options.to || '').trim();
   if (!resendApiKey || !from || !to) return;
-  await fetch('https://api.resend.com/emails', {
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${resendApiKey}`,
@@ -20,6 +20,16 @@ export async function sendEmailIfConfigured(options: {
       html: options.html,
     }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('[email] Resend request failed', {
+      status: res.status,
+      statusText: res.statusText,
+      body,
+      to,
+      subject: options.subject,
+    });
+  }
 }
 
 export function resolveWebAppBaseUrl() {

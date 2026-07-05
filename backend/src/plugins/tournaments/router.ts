@@ -3,7 +3,133 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin, requireMember, requireMemberCapability } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { getTournamentsModuleSettings } from '../../core/modules/tournamentsSettings.js';
+import { buildWebAppUrl, sendEmailIfConfigured } from '../../core/notifications/email.js';
 import { buildLeagueStandings, tournamentsService } from './service.js';
+
+function escapeHtml(value: any) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDisplayDateTime(value: any) {
+  if (!value) return '待定';
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return '待定';
+  return new Intl.DateTimeFormat('zh-HK', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Hong_Kong',
+  }).format(date);
+}
+
+function formatMemberLabel(member: any) {
+  const code = String(member?.member_code || '').trim();
+  const name = String(member?.name || '').trim();
+  return [code, name].filter(Boolean).join(' ') || '未命名會員';
+}
+
+async function sendTournamentSignupNotificationEmail(options: {
+  type: 'created' | 'confirmed' | 'cancelled';
+  clubId: string;
+  tournamentId: string;
+  signupId: string;
+}) {
+  const settings = await getTournamentsModuleSettings().catch(() => null);
+  const enabled =
+    options.type === 'created'
+      ? settings?.signupCreatedEmailEnabled
+      : options.type === 'confirmed'
+        ? settings?.signupConfirmedEmailEnabled
+        : settings?.signupCancelledEmailEnabled;
+  if (!enabled) return;
+
+  const [club, tournament, signup] = await Promise.all([
+    prisma.clubProfile.findUnique({
+      where: { id: options.clubId },
+      include: { member: { select: { email: true } } },
+    }),
+    prisma.tournament.findUnique({
+      where: { id: options.tournamentId },
+      select: { id: true, title: true, startsAt: true, signupClosesAt: true },
+    }),
+    prisma.tournamentSignup.findUnique({
+      where: { id: options.signupId },
+      include: { member: { select: { name: true, member_code: true, email: true } } },
+    }),
+  ]);
+
+  if (!club || !tournament || !signup?.member) return;
+
+  const tournamentTitle = String(tournament.title || '未命名比賽').trim();
+  const clubName = String(club.name || '').trim() || '場館';
+  const memberLabel = formatMemberLabel(signup.member);
+  const venueDashboardUrl = buildWebAppUrl('/venue/dashboard?tab=content');
+  const memberInboxUrl = buildWebAppUrl('/me');
+  const startsAtText = formatDisplayDateTime(tournament.startsAt);
+  const signupClosesAtText = formatDisplayDateTime(tournament.signupClosesAt);
+
+  try {
+    if (options.type === 'created') {
+      const to = String(club.email || club.member?.email || '').trim();
+      if (!to) return;
+      await sendEmailIfConfigured({
+        to,
+        subject: `新比賽報名待確認：${tournamentTitle}`,
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6">
+            <h2>新比賽報名待確認</h2>
+            <p><strong>場館：</strong>${escapeHtml(clubName)}</p>
+            <p><strong>比賽：</strong>${escapeHtml(tournamentTitle)}</p>
+            <p><strong>會員：</strong>${escapeHtml(memberLabel)}</p>
+            <p><strong>開賽時間：</strong>${escapeHtml(startsAtText)}</p>
+            <p><strong>截止報名：</strong>${escapeHtml(signupClosesAtText)}</p>
+            <p><a href="${escapeHtml(venueDashboardUrl)}">前往場館比賽工作台處理報名</a></p>
+          </div>
+        `,
+      });
+      return;
+    }
+
+    const to = String(signup.member.email || '').trim();
+    if (!to) return;
+    const subject = options.type === 'confirmed'
+      ? `比賽報名已確認：${tournamentTitle}`
+      : `比賽報名已取消：${tournamentTitle}`;
+    const heading = options.type === 'confirmed' ? '你的比賽報名已確認' : '你的比賽報名已取消';
+    const statusText = options.type === 'confirmed' ? '已確認' : '已取消';
+
+    await sendEmailIfConfigured({
+      to,
+      subject,
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6">
+          <h2>${escapeHtml(heading)}</h2>
+          <p><strong>場館：</strong>${escapeHtml(clubName)}</p>
+          <p><strong>比賽：</strong>${escapeHtml(tournamentTitle)}</p>
+          <p><strong>會員：</strong>${escapeHtml(memberLabel)}</p>
+          <p><strong>狀態：</strong>${escapeHtml(statusText)}</p>
+          <p><strong>開賽時間：</strong>${escapeHtml(startsAtText)}</p>
+          <p><a href="${escapeHtml(memberInboxUrl)}">前往會員中心查看最新狀態</a></p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error('[tournaments] Failed to send signup notification email', {
+      type: options.type,
+      tournamentId: options.tournamentId,
+      signupId: options.signupId,
+      error,
+    });
+  }
+}
 
 export function createTournamentRouter() {
   const router = express.Router();
@@ -246,9 +372,13 @@ export function createTournamentRouter() {
     try {
       const t = await prisma.tournament.findUnique({ where: { id } });
       if (!t || t.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
-      const s = await prisma.tournamentSignup.findUnique({ where: { id: signupId } });
+      const s = await prisma.tournamentSignup.findUnique({
+        where: { id: signupId },
+        include: { member: { select: { id: true, name: true, member_code: true, email: true } } },
+      });
       if (!s || s.tournamentId !== id) return res.status(404).json({ error: 'Not found' });
       const updated = await prisma.tournamentSignup.update({ where: { id: signupId }, data: { status: 'CONFIRMED' } });
+      await sendTournamentSignupNotificationEmail({ type: 'confirmed', clubId, tournamentId: id, signupId });
       res.json(updated);
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -265,9 +395,13 @@ export function createTournamentRouter() {
     try {
       const t = await prisma.tournament.findUnique({ where: { id } });
       if (!t || t.clubId !== clubId) return res.status(404).json({ error: 'Not found' });
-      const s = await prisma.tournamentSignup.findUnique({ where: { id: signupId } });
+      const s = await prisma.tournamentSignup.findUnique({
+        where: { id: signupId },
+        include: { member: { select: { id: true, name: true, member_code: true, email: true } } },
+      });
       if (!s || s.tournamentId !== id) return res.status(404).json({ error: 'Not found' });
       const updated = await prisma.tournamentSignup.update({ where: { id: signupId }, data: { status: 'CANCELLED' } });
+      await sendTournamentSignupNotificationEmail({ type: 'cancelled', clubId, tournamentId: id, signupId });
       res.json(updated);
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -607,6 +741,7 @@ export function createTournamentRouter() {
         const content = `會員：${who}\n狀態：待確認`;
         await prisma.clubMessage.create({ data: { clubId, title: msgTitle, content } });
       } catch {}
+      await sendTournamentSignupNotificationEmail({ type: 'created', clubId, tournamentId: id, signupId: signup.id });
       res.json({ ok: true, signup });
     } catch (e) {
       res.status(500).json({ error: String(e) });
