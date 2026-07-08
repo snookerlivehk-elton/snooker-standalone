@@ -1318,6 +1318,38 @@ const ClubPublicPage: React.FC = () => {
     setTournamentParticipantOpen({ participantId, label });
   }, []);
 
+  const openPublicBoardParticipantPanel = useCallback((tournament: any, participant: any) => {
+    const participantId = String(participant?.id || participant?.participantId || '');
+    if (!participantId) return;
+    setActiveTab('signup');
+    setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(tournament?.id || '')) || tournament);
+    setTournamentParticipantOpen({
+      participantId,
+      label: formatTournamentParticipantLabel(participant),
+    });
+  }, [tournaments]);
+
+  const renderPublicBoardParticipantActions = useCallback((tournament: any, row: any) => {
+    const playerA = row?.player_a_participant || null;
+    const playerB = row?.player_b_participant || null;
+    const buttons = [playerA, playerB].filter(Boolean);
+    if (buttons.length === 0) return null;
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {buttons.map((participant: any) => (
+          <button
+            key={String(participant?.id || Math.random())}
+            type="button"
+            onClick={() => openPublicBoardParticipantPanel(tournament, participant)}
+            className="px-3 py-1.5 rounded cue-surface-strong hover:brightness-95 text-xs font-semibold"
+          >
+            查看 {formatTournamentParticipantLabel(participant)}
+          </button>
+        ))}
+      </div>
+    );
+  }, [openPublicBoardParticipantPanel]);
+
   const selectedTournamentParticipantFormat = normalizeTournamentFormat(
     tournamentParticipantDetail?.tournament?.format || openedTournamentFormat,
   );
@@ -1939,11 +1971,23 @@ const ClubPublicPage: React.FC = () => {
                                         <div className="text-xs font-semibold accent-yellow">{formatTournamentMatchStatusLabel(row?.status)}</div>
                                       </div>
                                       <div className="mt-3">
-                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                        <button
+                                          type="button"
+                                          onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_a_participant)}
+                                          className="font-semibold text-left hover:underline"
+                                        >
+                                          {formatTournamentParticipantLabel(row?.player_a_participant)}
+                                        </button>
                                         <div className="text-sm cue-muted my-1">
                                           {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
                                         </div>
-                                        <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                        <button
+                                          type="button"
+                                          onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_b_participant)}
+                                          className="font-semibold text-left hover:underline"
+                                        >
+                                          {formatTournamentParticipantLabel(row?.player_b_participant)}
+                                        </button>
                                       </div>
                                       <div className="grid gap-2 sm:grid-cols-3 mt-3 text-xs">
                                         <div className="cue-surface-strong rounded-lg p-2">{breakSummary.topLabel}</div>
@@ -1951,6 +1995,7 @@ const ClubPublicPage: React.FC = () => {
                                         <div className="cue-surface-strong rounded-lg p-2">已完成 {Array.isArray(row?.frames) ? row.frames.length : 0} 局</div>
                                       </div>
                                       <div className="text-xs cue-muted mt-3">{breakSummary.latestLabel}</div>
+                                      {renderPublicBoardParticipantActions(tournament, row)}
                                     </div>
                                   );
                                 })}
@@ -1968,9 +2013,22 @@ const ClubPublicPage: React.FC = () => {
                                       <span>{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}</span>
                                       <span>{row?.scheduled_at ? new Date(String(row.scheduled_at)).toLocaleString() : '待定時間'}</span>
                                     </div>
-                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                      <button
+                                        type="button"
+                                        onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_a_participant)}
+                                        className="font-semibold text-left hover:underline"
+                                      >
+                                        {formatTournamentParticipantLabel(row?.player_a_participant)}
+                                      </button>
                                     <div className="text-xs cue-muted my-1">vs</div>
-                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                      <button
+                                        type="button"
+                                        onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_b_participant)}
+                                        className="font-semibold text-left hover:underline"
+                                      >
+                                        {formatTournamentParticipantLabel(row?.player_b_participant)}
+                                      </button>
+                                      {renderPublicBoardParticipantActions(tournament, row)}
                                   </div>
                                 ))}
                               </div>
@@ -1984,9 +2042,22 @@ const ClubPublicPage: React.FC = () => {
                                 {tournament.recentCompletedMatches.map((row: any) => (
                                   <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
                                     <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}</div>
-                                    <div className="font-semibold mt-2">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                                    <button
+                                      type="button"
+                                      onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_a_participant)}
+                                      className="font-semibold mt-2 text-left hover:underline"
+                                    >
+                                      {formatTournamentParticipantLabel(row?.player_a_participant)}
+                                    </button>
                                     <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
-                                    <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                                    <button
+                                      type="button"
+                                      onClick={() => openPublicBoardParticipantPanel(tournament, row?.player_b_participant)}
+                                      className="font-semibold text-left hover:underline"
+                                    >
+                                      {formatTournamentParticipantLabel(row?.player_b_participant)}
+                                    </button>
+                                    {renderPublicBoardParticipantActions(tournament, row)}
                                   </div>
                                 ))}
                               </div>
