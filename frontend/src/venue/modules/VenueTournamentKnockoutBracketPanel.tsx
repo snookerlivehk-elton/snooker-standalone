@@ -40,6 +40,9 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
   selectedTournamentBestOf,
 }) => {
   if (knockoutRoundCards.length === 0 && filteredBracketColumns.length === 0) return null;
+  const selectedRoundLabel = filteredBracketColumns.find((column: any) => (
+    Array.isArray(column?.items) && column.items.some((row: any) => String(row?.id || '') === selectedMatchId)
+  ))?.label || '';
 
   return (
     <div className="mt-5">
@@ -57,6 +60,8 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
                 className={`rounded-lg border p-3 text-left transition-colors ${
                   isFocused
                     ? `${roundTheme.cardClassName} shadow-[0_0_0_1px_rgba(255,255,255,0.06)]`
+                    : selectedRoundLabel === column.label
+                      ? 'border-yellow-400/50 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(250,204,21,0.16)]'
                     : isAll
                       ? 'cue-border cue-surface hover:brightness-105'
                       : 'cue-border cue-surface hover:brightness-105'
@@ -73,7 +78,11 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
                   <span>待定 {column.pendingCount}</span>
                 </div>
                 <div className="text-[11px] cue-muted mt-2">
-                  {isFocused ? '再按一次返回全部輪次' : '按一下聚焦此輪'}
+                  {selectedRoundLabel === column.label
+                    ? '目前記分區正在處理這一輪'
+                    : isFocused
+                      ? '再按一次返回全部輪次'
+                      : '按一下聚焦此輪'}
                 </div>
               </button>
             );
@@ -99,7 +108,7 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
                   isFocusedColumn ? 'opacity-100' : 'opacity-35'
                 }`}
               >
-                <div className="mb-3">
+                <div className={`mb-3 rounded-lg p-2 ${selectedRoundLabel === column.label ? 'border border-yellow-400/40 bg-yellow-500/10' : ''}`}>
                   <div className={`font-semibold ${roundTheme.headerClassName}`}>{column.label}</div>
                   <div className="text-xs cue-muted mt-1">
                     {column.summary?.total || 0} 場
@@ -108,6 +117,11 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
                       ? ` · 已完成 ${column.summary.completedCount}`
                       : ''}
                   </div>
+                  {selectedRoundLabel === column.label ? (
+                    <div className="mt-1 text-[11px] text-yellow-100">
+                      目前選中的對局來自這一輪
+                    </div>
+                  ) : null}
                 </div>
                 {column.items.length === 0 ? (
                   <div className="cue-surface-strong rounded-lg border cue-border p-3 text-sm cue-muted">

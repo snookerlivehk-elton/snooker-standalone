@@ -71,6 +71,7 @@ export type TournamentScoringWorkspace = {
   selectedMatchActiveSegmentBreakSummary: SegmentBreakSummary;
   selectedMatchB20PlusCount: number;
   selectedMatchBestOf: number;
+  selectedMatchBreadcrumbLabel: string;
   selectedMatchBreakEnabled: boolean;
   selectedMatchBreakFrameOptions: string[];
   selectedMatchBreakRows: any[];

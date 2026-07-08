@@ -26,7 +26,7 @@ import VenueTournamentTestToolsPanel from './VenueTournamentTestToolsPanel';
 import type { EditableFrame, TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 import { useTournamentScoringActions } from './useTournamentScoringActions';
 import { useTournamentScoringDerivedState } from './useTournamentScoringDerivedState';
-import { useTournamentStageViewData } from './useTournamentStageViewData';
+import { formatKnockoutRoundLabel, formatLeagueRoundLabel, useTournamentStageViewData } from './useTournamentStageViewData';
 import {
   cancelTournamentSignup,
   closeClubTournament,
@@ -499,6 +499,14 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     selectedMatch,
     selectedTournamentBestOf: selectedTournament?.best_of_frames,
   });
+  const selectedMatchStageLabel = selectedMatch
+    ? (isLeague
+      ? formatLeagueRoundLabel(selectedMatch)
+      : formatKnockoutRoundLabel(selectedMatch, participantsRows.length))
+    : '';
+  const selectedMatchBreadcrumbLabel = selectedMatch
+    ? `${isLeague ? 'League' : 'Knockout'} / ${selectedMatchStageLabel} / M${Math.max(1, Number(selectedMatch?.match_no || 1))}`
+    : '';
   const {
     handleSubmitActiveFrameBreak,
     handleSubmitQuickResult,
@@ -709,6 +717,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     selectedMatchActiveSegmentBreakSummary,
     selectedMatchB20PlusCount,
     selectedMatchBestOf,
+    selectedMatchBreadcrumbLabel,
     selectedMatchBreakEnabled,
     selectedMatchBreakFrameOptions,
     selectedMatchBreakRows,

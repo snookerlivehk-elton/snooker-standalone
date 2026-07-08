@@ -18,6 +18,7 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   participantsCount,
   selectedMatchId,
 }) => {
+  const [showAllBlocked, setShowAllBlocked] = React.useState(false);
   const scorableRows = matchesRows.filter((row: any) => {
     const status = String(row?.status || '').trim().toUpperCase();
     return !!row?.player_a_participant_id && !!row?.player_b_participant_id && status !== 'PENDING';
@@ -76,6 +77,7 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   const readyCount = getStatusCount(matchesRows, 'READY');
   const liveCount = getStatusCount(matchesRows, 'LIVE');
   const completedCount = getStatusCount(matchesRows, 'COMPLETED');
+  const visibleBlockedItems = showAllBlocked ? blockedReasonExamples : blockedReasonExamples.slice(0, 4);
 
   let guidance = '先完成目前輪次，再讓下游 bracket 自動解鎖。';
   if (matchesRows.length === 0) {
@@ -139,9 +141,25 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
       </div>
       {blockedReasonExamples.length > 0 && (
         <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
-          <div className="text-xs cue-muted mb-2">Blocked 完整清單</div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <div className="text-xs cue-muted">Blocked 清單預覽</div>
+              <div className="text-[11px] cue-muted mt-1">
+                先顯示前 {Math.min(4, blockedReasonExamples.length)} 項，避免首屏過長；需要時再展開全部。
+              </div>
+            </div>
+            {blockedReasonExamples.length > 4 ? (
+              <button
+                type="button"
+                className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold hover:brightness-95"
+                onClick={() => setShowAllBlocked((prev) => !prev)}
+              >
+                {showAllBlocked ? '收合清單' : `展開全部 ${blockedReasonExamples.length} 項`}
+              </button>
+            ) : null}
+          </div>
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {blockedReasonExamples.map((item) => (
+            {visibleBlockedItems.map((item) => (
               <div key={item.id} className="text-sm">
                 <span className="font-semibold">{item.label}</span>
                 <span className="cue-muted"> · {item.reason}</span>
@@ -160,6 +178,11 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
               </div>
             ))}
           </div>
+          {!showAllBlocked && blockedReasonExamples.length > visibleBlockedItems.length ? (
+            <div className="mt-2 text-xs cue-muted">
+              尚有 {blockedReasonExamples.length - visibleBlockedItems.length} 項未展開。
+            </div>
+          ) : null}
         </div>
       )}
       <div className="text-xs cue-muted mt-3">{guidance}</div>

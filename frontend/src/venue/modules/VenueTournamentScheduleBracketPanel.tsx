@@ -208,6 +208,18 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
       })
       .filter((round: any) => Array.isArray(round?.items) && round.items.length > 0);
   }, [filteredMatchesRows, isLeague, leagueRounds]);
+  const selectedMatchRow = useMemo(
+    () => matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null,
+    [matchesRows, selectedMatchId],
+  );
+  const selectedRoundContextLabel = selectedMatchRow
+    ? (isLeague
+      ? formatLeagueRoundLabel(selectedMatchRow)
+      : formatKnockoutRoundLabel(selectedMatchRow, participantsCount))
+    : '';
+  const selectedMatchContextLabel = selectedMatchRow
+    ? `${selectedRoundContextLabel} · M${Math.max(1, Number(selectedMatchRow?.match_no || 1))}`
+    : '';
 
   const leaguePrintSummary = useMemo(() => {
     if (!isLeague) return null;
@@ -322,27 +334,34 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 
   return (
     <>
-    <div className="flex items-center justify-between gap-3 mb-2">
-      <div className="font-semibold">{isLeague ? 'League 賽程' : 'Knockout 賽程'}</div>
-      <div className="flex items-center gap-2">
-        {!matchesLoading && matchesRows.length > 0 ? (
-          <button
-            type="button"
-            onClick={isLeague ? handleExportLeaguePdf : handleExportKnockoutPdf}
-            className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
-          >
-            匯出 PDF
-          </button>
-        ) : null}
-        <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${filteredMatchesRows.length} / ${matchesRows.length} 場`}</div>
+    <div className="rounded-lg border cue-border bg-black/10 p-3 mb-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="font-semibold">{isLeague ? 'League 賽程工具列' : 'Knockout 賽程工具列'}</div>
+          <div className="text-xs cue-muted mt-1">
+            {isLeague
+              ? '先用這裡收窄範圍，再到下方對局清單與 rounds 視圖處理實際對局。'
+              : '先用這裡收窄範圍，再到下方對局清單或 bracket 視圖處理實際對局。'}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!matchesLoading && matchesRows.length > 0 ? (
+            <button
+              type="button"
+              onClick={isLeague ? handleExportLeaguePdf : handleExportKnockoutPdf}
+              className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+            >
+              匯出 PDF
+            </button>
+          ) : null}
+          <div className="text-xs cue-muted">{matchesLoading ? '讀取中…' : `${filteredMatchesRows.length} / ${matchesRows.length} 場`}</div>
+        </div>
       </div>
-    </div>
-    {matchesLoading ? (
-      <div className="text-sm cue-muted">讀取中…</div>
-    ) : matchesRows.length === 0 ? (
-      <div className="text-sm cue-muted">尚未生成賽程</div>
-    ) : (
-      <>
+      {matchesLoading ? (
+        <div className="text-sm cue-muted mt-3">讀取中…</div>
+      ) : matchesRows.length === 0 ? (
+        <div className="text-sm cue-muted mt-3">尚未生成賽程</div>
+      ) : (
         <VenueTournamentMatchesFilters
           effectiveFocusedRoundLabel={effectiveFocusedRoundLabel}
           isLeague={isLeague}
@@ -355,6 +374,27 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           statusFilter={statusFilter}
           statusFilterOptions={statusFilterOptions}
         />
+      )}
+    </div>
+    {!matchesLoading && matchesRows.length > 0 ? (
+      <div className={`rounded-lg border bg-black/10 p-3 mb-3 ${
+        selectedMatchRow ? 'border-yellow-400/35 shadow-[0_0_0_1px_rgba(250,204,21,0.12)]' : 'cue-border'
+      }`}>
+        <div className="flex flex-col gap-1 mb-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="font-semibold">對局清單</div>
+            <div className="text-xs cue-muted mt-1">
+              這裡保留完整名單視角，方便快速掃描全部符合篩選條件的對局。
+            </div>
+          </div>
+          <div className="text-xs cue-muted">
+            {selectedMatchContextLabel
+              ? `目前已選中：${selectedMatchContextLabel}`
+              : isLeague
+                ? '輪次卡片在下方獨立顯示，避免和清單互相搶視線。'
+                : 'Bracket 視圖在下方獨立顯示，避免和清單混在一起。'}
+          </div>
+        </div>
         <VenueTournamentMatchesTable
           buildMatchMeta={buildMatchMeta}
           buildMatchProgressSummary={buildMatchProgressSummary}
@@ -370,37 +410,61 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           selectedTournamentBestOf={selectedTournamentBestOf}
           selectMatchForScoring={selectMatchForScoring}
         />
-      </>
-    )}
+      </div>
+    ) : null}
     {!isLeague && matchesRows.length > 0 ? (
-      <KnockoutBracketPanel
-        buildMatchMeta={buildMatchMeta}
-        buildMatchProgressSummary={buildMatchProgressSummary}
-        effectiveFocusedRoundLabel={effectiveFocusedRoundLabel}
-        filteredBracketColumns={filteredBracketColumns}
-        formatMatchResultTypeLabel={formatMatchResultTypeLabel}
-        formatMatchStatusLabel={formatMatchStatusLabel}
-        formatParticipantLabel={formatParticipantLabel}
-        getBracketCardClassName={getBracketCardClassName}
-        getMatchStatusTone={getMatchStatusTone}
-        getRoundTheme={getRoundTheme}
-        knockoutRoundCards={knockoutRoundCards}
-        onFocusRound={setFocusedRoundLabel}
-        selectMatchForScoring={selectMatchForScoring}
-        selectedMatchId={selectedMatchId}
-        selectedTournamentBestOf={selectedTournamentBestOf}
-      />
+      <div className={`rounded-lg border bg-black/10 p-3 ${
+        selectedMatchRow ? 'border-yellow-400/45 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]' : 'cue-border'
+      }`}>
+        <div className="mb-3">
+          <div className="font-semibold">Bracket 視圖</div>
+          <div className="text-xs cue-muted mt-1">
+            {selectedMatchContextLabel
+              ? `目前記分區對應：${selectedMatchContextLabel}`
+              : '這裡專注顯示 Knockout 推進結構，與上方清單分開，方便同時掌握輪次層級與單場處理。'}
+          </div>
+        </div>
+        <KnockoutBracketPanel
+          buildMatchMeta={buildMatchMeta}
+          buildMatchProgressSummary={buildMatchProgressSummary}
+          effectiveFocusedRoundLabel={effectiveFocusedRoundLabel}
+          filteredBracketColumns={filteredBracketColumns}
+          formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+          formatMatchStatusLabel={formatMatchStatusLabel}
+          formatParticipantLabel={formatParticipantLabel}
+          getBracketCardClassName={getBracketCardClassName}
+          getMatchStatusTone={getMatchStatusTone}
+          getRoundTheme={getRoundTheme}
+          knockoutRoundCards={knockoutRoundCards}
+          onFocusRound={setFocusedRoundLabel}
+          selectMatchForScoring={selectMatchForScoring}
+          selectedMatchId={selectedMatchId}
+          selectedTournamentBestOf={selectedTournamentBestOf}
+        />
+      </div>
     ) : null}
     {isLeague && leagueRounds.length > 0 ? (
-      <LeagueSchedulePanel
-        buildMatchProgressSummary={buildMatchProgressSummary}
-        filteredLeagueRounds={filteredLeagueRounds}
-        formatMatchResultTypeLabel={formatMatchResultTypeLabel}
-        formatParticipantLabel={formatParticipantLabel}
-        selectMatchForScoring={selectMatchForScoring}
-        selectedMatchId={selectedMatchId}
-        selectedTournamentBestOf={selectedTournamentBestOf}
-      />
+      <div className={`rounded-lg border bg-black/10 p-3 ${
+        selectedMatchRow ? 'border-yellow-400/45 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]' : 'cue-border'
+      }`}>
+        <div className="mb-3">
+          <div className="font-semibold">League Rounds 視圖</div>
+          <div className="text-xs cue-muted mt-1">
+            {selectedMatchContextLabel
+              ? `目前記分區對應：${selectedMatchContextLabel}`
+              : '這裡專注輪次摘要與目前要處理的 rounds，和上方篩選工具列、對局清單分開。'}
+          </div>
+        </div>
+        <LeagueSchedulePanel
+          buildMatchProgressSummary={buildMatchProgressSummary}
+          filteredLeagueRounds={filteredLeagueRounds}
+          formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+          formatParticipantLabel={formatParticipantLabel}
+          selectMatchForScoring={selectMatchForScoring}
+          selectedMatchId={selectedMatchId}
+          selectedTournamentBestOf={selectedTournamentBestOf}
+        />
+      </div>
     ) : null}
   </>
   );

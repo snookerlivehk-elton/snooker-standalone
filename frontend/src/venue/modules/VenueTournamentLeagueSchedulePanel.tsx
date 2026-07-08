@@ -83,7 +83,7 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
   if (filteredLeagueRounds.length === 0) return null;
 
   return (
-    <div className="mt-5">
+    <div>
       <div className="flex flex-col gap-2 mb-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="font-semibold">League Rounds</div>
@@ -105,7 +105,13 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
               key={round.label}
               type="button"
               onClick={() => setExpandedRoundLabel(isExpanded ? '' : round.label)}
-              className={`rounded-lg border p-3 text-left transition-colors hover:brightness-95 ${isExpanded ? tone.cardClassName : 'cue-border cue-surface'}`}
+              className={`rounded-lg border p-3 text-left transition-colors hover:brightness-95 ${
+                isExpanded
+                  ? tone.cardClassName
+                  : selectedRoundLabel === round.label
+                    ? 'border-yellow-400/50 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(250,204,21,0.16)]'
+                    : 'cue-border cue-surface'
+              }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -117,8 +123,14 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
                     {round.summary.completedCount > 0 ? ` · 已完成 ${round.summary.completedCount}` : ''}
                   </div>
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${isExpanded ? tone.chipClassName : 'border-white/10 bg-white/5 text-slate-200'}`}>
-                  {isExpanded ? '已展開' : '展開輪次'}
+                <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${
+                  isExpanded
+                    ? tone.chipClassName
+                    : selectedRoundLabel === round.label
+                      ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100'
+                      : 'border-white/10 bg-white/5 text-slate-200'
+                }`}>
+                  {selectedRoundLabel === round.label ? '目前選中' : isExpanded ? '已展開' : '展開輪次'}
                 </span>
               </div>
             </button>
@@ -131,7 +143,16 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
           const tone = getRoundTone(round);
           const isExpanded = expandedRoundLabel === round.label;
           return (
-            <div key={round.label} className={`rounded-lg border ${isExpanded ? tone.cardClassName : 'cue-border cue-surface'}`}>
+            <div
+              key={round.label}
+              className={`rounded-lg border ${
+                isExpanded
+                  ? tone.cardClassName
+                  : selectedRoundLabel === round.label
+                    ? 'border-yellow-400/45 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]'
+                    : 'cue-border cue-surface'
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => setExpandedRoundLabel(isExpanded ? '' : round.label)}
@@ -147,8 +168,14 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
                     {round.summary.pendingCount > 0 ? ` · 待定 ${round.summary.pendingCount}` : ''}
                   </div>
                 </div>
-                <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${isExpanded ? tone.chipClassName : 'border-white/10 bg-white/5 text-slate-200'}`}>
-                  {isExpanded ? '收合' : '查看對局'}
+                <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${
+                  isExpanded
+                    ? tone.chipClassName
+                    : selectedRoundLabel === round.label
+                      ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100'
+                      : 'border-white/10 bg-white/5 text-slate-200'
+                }`}>
+                  {selectedRoundLabel === round.label ? '目前選中' : isExpanded ? '收合' : '查看對局'}
                 </span>
               </button>
 

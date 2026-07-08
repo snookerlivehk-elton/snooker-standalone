@@ -21,9 +21,18 @@ const VenueTournamentScoringWorkspace: React.FC<VenueTournamentScoringWorkspaceP
   }, [workspace?.selectedMatch?.id]);
 
   return (
-    <div ref={containerRef} className="mt-4 grid gap-4 xl:grid-cols-2">
-      <VenueTournamentScoringMainPanel workspace={workspace} />
-      <VenueTournamentBreaksPanel workspace={workspace} />
+    <div ref={containerRef} className="mt-4">
+      <div className="mb-3 rounded-lg border border-violet-400/25 bg-violet-500/10 px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-200">Scoring Breadcrumb</div>
+        <div className="mt-1 text-sm text-violet-50">{workspace.selectedMatchBreadcrumbLabel}</div>
+        <div className="mt-1 text-xs cue-muted">
+          已自動對應到目前選中的對局來源，方便來回查看 Schedule / Bracket 與記分區。
+        </div>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <VenueTournamentScoringMainPanel workspace={workspace} />
+        <VenueTournamentBreaksPanel workspace={workspace} />
+      </div>
     </div>
   );
 };
