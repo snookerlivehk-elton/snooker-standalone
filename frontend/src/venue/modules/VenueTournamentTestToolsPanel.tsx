@@ -189,6 +189,9 @@ const VenueTournamentTestToolsPanel: React.FC<VenueTournamentTestToolsPanelProps
       <div className="mt-2 text-xs cue-muted">
         建議用全新測試賽事執行。若賽程已存在，方法 Z 會拒絕自動生成正式名單或賽程，避免污染現有比賽。
       </div>
+      <div className="mt-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+        只供測試用途。正式營運賽事不應使用方法 Z 建會員、灌賽果或清理資料。
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button

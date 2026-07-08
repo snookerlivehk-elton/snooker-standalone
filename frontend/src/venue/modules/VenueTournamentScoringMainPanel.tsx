@@ -66,6 +66,9 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
       <div className="flex flex-col gap-3 mb-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <div className="font-semibold">輸入賽果</div>
+          <div className="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs cue-muted">
+            操作順序：1. 先由上方 Schedule / Bracket 選對局 2. 在此完成逐局分數與勝負 3. `判勝 / 棄權` 只在非正常完賽時使用；20+ 補錄請到右側。
+          </div>
           <div className="mt-1 text-sm">
             {formatMemberLabel(selectedMatch?.player_a_participant?.member)} vs {formatMemberLabel(selectedMatch?.player_b_participant?.member)}
           </div>

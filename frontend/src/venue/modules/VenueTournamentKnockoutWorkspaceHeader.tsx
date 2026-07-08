@@ -12,6 +12,8 @@ type VenueTournamentKnockoutWorkspaceHeaderProps = {
   isRefreshing: boolean;
   resetScheduleHint: string;
   scheduleResetSaving: boolean;
+  testToolsAvailable: boolean;
+  testToolsHint: string;
   testToolsOpen: boolean;
   workflowNote: string;
   onGenerateParticipants: () => void;
@@ -31,6 +33,8 @@ const VenueTournamentKnockoutWorkspaceHeader: React.FC<VenueTournamentKnockoutWo
   isRefreshing,
   resetScheduleHint,
   scheduleResetSaving,
+  testToolsAvailable,
+  testToolsHint,
   testToolsOpen,
   workflowNote,
   onGenerateParticipants,
@@ -42,9 +46,12 @@ const VenueTournamentKnockoutWorkspaceHeader: React.FC<VenueTournamentKnockoutWo
   <div className="flex flex-col gap-3 mb-3">
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(360px,500px)] xl:items-start">
       <div>
-        <div className="font-semibold">正式參賽名單 / Knockout 工作台</div>
+        <div className="font-semibold">正式參賽名單 / 淘汰賽工作台</div>
         <div className="text-xs cue-muted mt-1">
           先完成主要操作，再用輔助工具整理資料；重建賽程會獨立顯示，避免和日常操作混在一起。
+        </div>
+        <div className="mt-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs cue-muted">
+          操作順序：1. 先確認報名並生成正式名單 2. 再生成淘汰賽賽程 3. 優先處理 READY / LIVE 對局，blocked 只作追查上游。
         </div>
       </div>
       <VenueTournamentKnockoutWorkspaceActions
@@ -56,6 +63,8 @@ const VenueTournamentKnockoutWorkspaceHeader: React.FC<VenueTournamentKnockoutWo
         isRefreshing={isRefreshing}
         resetScheduleHint={resetScheduleHint}
         scheduleResetSaving={scheduleResetSaving}
+        testToolsAvailable={testToolsAvailable}
+        testToolsHint={testToolsHint}
         testToolsOpen={testToolsOpen}
         onGenerateParticipants={onGenerateParticipants}
         onGenerateSchedule={onGenerateSchedule}

@@ -35,6 +35,7 @@ import {
   generateTournamentLeagueSchedule,
   generateTournamentKnockoutSchedule,
   generateTournamentParticipants,
+  getTournamentTestToolsAccess,
   getMyClubTournaments,
   getTournamentMatches,
   getTournamentParticipants,
@@ -235,6 +236,11 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [notice, setNotice] = useState<string | null>(null);
   const [workflowFocusNotice, setWorkflowFocusNotice] = useState<string | null>(null);
   const [testToolsOpen, setTestToolsOpen] = useState(false);
+  const [testToolsAccess, setTestToolsAccess] = useState<{ enabled: boolean; available: boolean; reason: string }>({
+    enabled: false,
+    available: false,
+    reason: '方法 Z 目前已停用',
+  });
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
@@ -307,6 +313,31 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     }
   }, [enabled, operatorId, showNotice]);
 
+  const loadTestToolsAccess = useCallback(async () => {
+    if (!operatorId || !enabled) {
+      setTestToolsAccess({
+        enabled: false,
+        available: false,
+        reason: '方法 Z 目前已停用',
+      });
+      return;
+    }
+    try {
+      const next = await getTournamentTestToolsAccess(API_URL, operatorId);
+      setTestToolsAccess({
+        enabled: !!next?.enabled,
+        available: !!next?.available,
+        reason: String(next?.reason || '').trim() || '方法 Z 權限未開通',
+      });
+    } catch (e: any) {
+      setTestToolsAccess({
+        enabled: false,
+        available: false,
+        reason: e?.message || '無法確認方法 Z 權限',
+      });
+    }
+  }, [enabled, operatorId]);
+
   const loadSelectedSignups = useCallback(async () => {
     if (!operatorId || !enabled || !selectedId) {
       setPendingRows([]);
@@ -368,6 +399,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   }, [loadRows]);
 
   useEffect(() => {
+    loadTestToolsAccess();
+  }, [loadTestToolsAccess]);
+
+  useEffect(() => {
     loadSelectedSignups();
   }, [loadSelectedSignups]);
 
@@ -387,6 +422,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setPointsDraw(String(selectedTournament?.points_draw ?? 1));
     setPointsLoss(String(selectedTournament?.points_loss ?? 0));
   }, [selectedTournament]);
+
+  useEffect(() => {
+    if (!testToolsAccess.available && testToolsOpen) {
+      setTestToolsOpen(false);
+    }
+  }, [testToolsAccess.available, testToolsOpen]);
 
   const selectedMatch = matchesRows.find((row: any) => String(row?.id || '') === selectedMatchId) || null;
   useEffect(() => {
@@ -769,17 +810,18 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         <h2 className="text-xl font-bold">比賽報名（管理）</h2>
         <HelpGuide
           title="比賽報名（管理）"
-            intro="建立、更新、上架或關閉比賽報名，並逐步管理待確認報名、正式參賽名單、Knockout / League 賽程、賽果與比賽 20+。"
+          intro="建立、更新、上架或關閉比賽報名，並逐步完成報名確認、正式參賽名單、聯賽 / 淘汰賽賽程、賽果輸入與 tournament 20+ 記錄。"
           steps={[
-            '填寫標題、賽制與對應欄位設定；League 需選單/雙循環與計分，Knockout 則調整 seed 模式，之後按「新增」。',
-              '在下方列表可「選擇」某個比賽以查看報名名單與賽事工作台。',
-            '按「上架」讓會員端可見並可報名；按「關閉」停止報名與後續操作。',
-              '確認報名後，可生成正式名單與對應賽制賽程，再在同頁輸入每局賽果與記錄比賽 20+。',
+            '先建立賽事並設定對應賽制欄位；聯賽需確認單 / 雙循環與計分，淘汰賽則先決定 seed 模式。',
+            '在下方列表選擇某個賽事後，先完成報名確認，再生成正式參賽名單。',
+            '正式名單完成後，再生成聯賽 / 淘汰賽賽程；主要操作、輔助操作與危險操作已分開顯示。',
+            '輸入賽果時，先於 Schedule / Bracket 點選對局，再在「輸入賽果」完成逐局記分；判勝 / 棄權只在非正常完賽時使用。',
           ]}
           tips={[
             '建議先完成內容後再上架，避免會員看到未完成資訊。',
             '如要在場館公開頁顯示比賽入口，請同時於場館公開設定開啟「公開比賽入口」。',
-              'League 現可設定單循環 / 雙循環；Knockout 與 League 會共用列表，但建立欄位與後續賽程生成會按賽制分流。',
+            '聯賽與淘汰賽共用賽事列表，但工作台內容、流程摘要與賽程顯示會按賽制分流。',
+            '方法 Z 只供測試用途，並會按後端權限設定決定是否顯示給指定帳號。',
           ]}
         />
       </div>
@@ -1204,6 +1246,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               resetScheduleHint={resetScheduleHint}
               roundRobinMode={leagueRoundRobinMode}
               scheduleResetSaving={scheduleResetSaving}
+              testToolsAvailable={testToolsAccess.available}
+              testToolsHint={testToolsAccess.reason}
               testToolsOpen={testToolsOpen}
               workflowNote={workflowSummaryNote}
               onGenerateParticipants={handleGenerateParticipants}
@@ -1223,6 +1267,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               isRefreshing={participantsLoading || matchesLoading}
               resetScheduleHint={resetScheduleHint}
               scheduleResetSaving={scheduleResetSaving}
+              testToolsAvailable={testToolsAccess.available}
+              testToolsHint={testToolsAccess.reason}
               testToolsOpen={testToolsOpen}
               workflowNote={workflowSummaryNote}
               onGenerateParticipants={handleGenerateParticipants}
@@ -1233,7 +1279,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             />
           )}
 
-          {testToolsOpen ? (
+          {testToolsOpen && testToolsAccess.available ? (
             <VenueTournamentTestToolsPanel
               operatorId={operatorId}
               tournamentId={selectedId}

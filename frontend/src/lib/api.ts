@@ -1286,6 +1286,22 @@ export async function generateTournamentParticipants(apiUrl: string, memberId: s
   return res.json();
 }
 
+export async function getTournamentTestToolsAccess(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/tournaments/test-tools/access`, {
+    headers: { 'x-member-id': memberId },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取方法 Z 權限失敗');
+  }
+  return res.json() as Promise<{
+    enabled: boolean;
+    available: boolean;
+    reason: string;
+  }>;
+}
+
 export async function bootstrapTournamentTestData(
   apiUrl: string,
   memberId: string,

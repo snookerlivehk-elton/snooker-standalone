@@ -9,6 +9,8 @@ type VenueTournamentLeagueWorkspaceActionsProps = {
   isRefreshing: boolean;
   resetScheduleHint: string;
   scheduleResetSaving: boolean;
+  testToolsAvailable: boolean;
+  testToolsHint: string;
   testToolsOpen: boolean;
   onGenerateParticipants: () => void;
   onGenerateSchedule: () => void;
@@ -26,6 +28,8 @@ const VenueTournamentLeagueWorkspaceActions: React.FC<VenueTournamentLeagueWorks
   isRefreshing,
   resetScheduleHint,
   scheduleResetSaving,
+  testToolsAvailable,
+  testToolsHint,
   testToolsOpen,
   onGenerateParticipants,
   onGenerateSchedule,
@@ -50,7 +54,7 @@ const VenueTournamentLeagueWorkspaceActions: React.FC<VenueTournamentLeagueWorks
         className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateSchedule ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
         onClick={onGenerateSchedule}
       >
-        生成 League 賽程
+        生成聯賽賽程
       </button>
     </div>
 
@@ -60,7 +64,7 @@ const VenueTournamentLeagueWorkspaceActions: React.FC<VenueTournamentLeagueWorks
         <div className="mt-1 text-xs cue-muted">{generateParticipantsHint}</div>
       </div>
       <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-        <div className="text-xs font-semibold">生成 League 賽程</div>
+        <div className="text-xs font-semibold">生成聯賽賽程</div>
         <div className="mt-1 text-xs cue-muted">{generateScheduleHint}</div>
       </div>
     </div>
@@ -75,15 +79,21 @@ const VenueTournamentLeagueWorkspaceActions: React.FC<VenueTournamentLeagueWorks
         >
           {isRefreshing ? '更新中...' : '重新整理工作台'}
         </button>
-        <button
-          type="button"
-          className={`px-3 py-2 rounded text-sm font-semibold ${testToolsOpen ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-          onClick={onToggleTestTools}
-        >
-          {testToolsOpen ? '收起方法 Z' : '方法 Z 測試工具'}
-        </button>
+        {testToolsAvailable ? (
+          <button
+            type="button"
+            className={`px-3 py-2 rounded text-sm font-semibold ${testToolsOpen ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+            onClick={onToggleTestTools}
+          >
+            {testToolsOpen ? '收起方法 Z' : '方法 Z 測試工具'}
+          </button>
+        ) : null}
       </div>
-      <div className="mt-2 text-xs cue-muted">這組只處理刷新資料與測試輔助，不影響正式賽程流程。</div>
+      <div className="mt-2 text-xs cue-muted">
+        {testToolsAvailable
+          ? '這組只處理刷新資料與測試輔助，不影響正式賽程流程。'
+          : `方法 Z 入口已隱藏：${testToolsHint}`}
+      </div>
     </div>
 
     <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/10 p-3">

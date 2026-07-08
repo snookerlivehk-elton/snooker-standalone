@@ -6,6 +6,67 @@ import { getTournamentsModuleSettings } from '../../core/modules/tournamentsSett
 import { buildWebAppUrl, sendEmailIfConfigured } from '../../core/notifications/email.js';
 import { buildLeagueStandings, tournamentsService } from './service.js';
 
+function parseEnvIdList(value: string | undefined) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseEnvEmailList(value: string | undefined) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isMethodZEnabled() {
+  const raw = String(process.env.TOURNAMENT_METHOD_Z_ENABLED || '').trim().toLowerCase();
+  if (!raw) return false;
+  return !['0', 'false', 'off', 'no', 'disabled'].includes(raw);
+}
+
+function getTournamentTestToolsAccess(member: { id: string; email?: string | null }) {
+  const enabled = isMethodZEnabled();
+  const allowedMemberIds = parseEnvIdList(process.env.TOURNAMENT_METHOD_Z_ALLOWED_MEMBER_IDS);
+  const allowedEmails = parseEnvEmailList(process.env.TOURNAMENT_METHOD_Z_ALLOWED_EMAILS);
+  if (!enabled) {
+    return {
+      enabled,
+      available: false,
+      reason: '方法 Z 目前已停用',
+    };
+  }
+  const hasAllowList = allowedMemberIds.length > 0 || allowedEmails.length > 0;
+  if (!hasAllowList) {
+    return {
+      enabled,
+      available: true,
+      reason: '方法 Z 已啟用',
+    };
+  }
+  const memberEmail = String(member?.email || '').trim().toLowerCase();
+  const allowed = allowedMemberIds.includes(String(member?.id || '').trim())
+    || (!!memberEmail && allowedEmails.includes(memberEmail));
+  return {
+    enabled,
+    available: allowed,
+    reason: allowed ? '方法 Z 已授權此帳號使用' : '方法 Z 只開放指定測試帳號使用',
+  };
+}
+
+function ensureTournamentTestToolsAccess(
+  res: express.Response,
+  member: { id: string; email?: string | null },
+) {
+  const access = getTournamentTestToolsAccess(member);
+  if (!access.available) {
+    res.status(403).json({ error: access.reason, code: 'TOURNAMENT_METHOD_Z_FORBIDDEN' });
+    return null;
+  }
+  return access;
+}
+
 function escapeHtml(value: any) {
   return String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -721,9 +782,17 @@ export function createTournamentRouter() {
     }
   });
 
+  router.get('/tournaments/test-tools/access', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const access = getTournamentTestToolsAccess(member);
+    res.json(access);
+  });
+
   router.post('/tournaments/:id/test-tools/bootstrap', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
+    if (!ensureTournamentTestToolsAccess(res, member)) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const id = String(req.params.id || '').trim();
@@ -739,6 +808,7 @@ export function createTournamentRouter() {
   router.post('/tournaments/:id/test-tools/simulate', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
+    if (!ensureTournamentTestToolsAccess(res, member)) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const id = String(req.params.id || '').trim();
@@ -754,6 +824,7 @@ export function createTournamentRouter() {
   router.post('/tournaments/:id/test-tools/cleanup', async (req, res) => {
     const member = await requireClubAdmin(req, res);
     if (!member) return;
+    if (!ensureTournamentTestToolsAccess(res, member)) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const id = String(req.params.id || '').trim();
