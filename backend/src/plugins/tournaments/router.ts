@@ -36,7 +36,13 @@ function formatMemberLabel(member: any) {
   return [code, name].filter(Boolean).join(' ') || '未命名會員';
 }
 
-function getLeagueParticipantMatchResultKey(match: any, targetParticipantId: string) {
+function nextPowerOfTwo(n: number) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+function getTournamentParticipantMatchResultKey(match: any, targetParticipantId: string) {
   const resultType = String(match?.result_type || 'STANDARD').trim().toUpperCase();
   const winnerParticipantId = String(match?.winner_participant_id || '').trim();
   if (resultType === 'BYE') return 'BYE';
@@ -44,20 +50,35 @@ function getLeagueParticipantMatchResultKey(match: any, targetParticipantId: str
   return winnerParticipantId === targetParticipantId ? 'WIN' : 'LOSS';
 }
 
-function buildLeagueParticipantRoundLabel(match: any) {
+function buildTournamentParticipantRoundLabel(match: any, tournamentFormat: 'KNOCKOUT' | 'LEAGUE', participantCount: number) {
   const roundNo = Number(match?.round_no || 0);
-  return roundNo > 0 ? `第 ${roundNo} 輪` : 'League';
+  if (roundNo <= 0) return tournamentFormat === 'LEAGUE' ? '循環賽' : '-';
+  if (tournamentFormat === 'LEAGUE') return `第 ${roundNo} 輪`;
+  const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
+  const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
+  if (hasPreliminaryRound && roundNo === 1) return '預賽';
+  const roundOffset = hasPreliminaryRound ? 1 : 0;
+  const stageSize = bracketSize / (2 ** Math.max(0, roundNo - 1));
+  if (stageSize <= 2) return '決賽';
+  if (stageSize === 4) return '4 強';
+  if (stageSize === 8) return '8 強';
+  if (stageSize === 16) return '16 強';
+  if (stageSize === 32) return '32 強';
+  if (stageSize === 64) return '64 強';
+  return `Round ${Math.max(1, roundNo - roundOffset)}`;
 }
 
-function buildPublicLeagueParticipantDetail(options: {
+function buildPublicTournamentParticipantDetail(options: {
   tournament: any;
   participant: any;
   standings: any[];
   matches: any[];
+  participantCount: number;
 }) {
-  const { tournament, participant, standings, matches } = options;
+  const { tournament, participant, standings, matches, participantCount } = options;
   const participantId = String(participant?.id || '').trim();
   const memberId = String(participant?.member_id || participant?.member?.id || '').trim();
+  const tournamentFormat = String(tournament?.format || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
   const standing = standings.find((row: any) => String(row?.participantId || '') === participantId) || null;
 
   const participantMatches = matches
@@ -68,7 +89,8 @@ function buildPublicLeagueParticipantDetail(options: {
     .map((match: any) => {
       const isA = String(match?.player_a_participant_id || '') === participantId;
       const opponent = isA ? match?.player_b_participant : match?.player_a_participant;
-      const resultKey = getLeagueParticipantMatchResultKey(match, participantId);
+      const resultKey = getTournamentParticipantMatchResultKey(match, participantId);
+      const roundLabel = buildTournamentParticipantRoundLabel(match, tournamentFormat, participantCount);
       const breaks = (Array.isArray(match?.break_records) ? match.break_records : [])
         .filter((row: any) => String(row?.member_id || row?.member?.id || '') === memberId)
         .map((row: any) => ({
@@ -82,13 +104,13 @@ function buildPublicLeagueParticipantDetail(options: {
             name: String(opponent.member.name || ''),
             memberCode: String(opponent.member.member_code || ''),
           } : null,
-          roundLabel: buildLeagueParticipantRoundLabel(match),
+          roundLabel,
           matchId: String(match?.id || ''),
         }));
       return {
         id: String(match?.id || ''),
         roundNo: Number(match?.round_no || 0),
-        roundLabel: buildLeagueParticipantRoundLabel(match),
+        roundLabel,
         matchNo: Number(match?.match_no || 0),
         resultType: String(match?.result_type || 'STANDARD').trim().toUpperCase(),
         resultKey,
@@ -241,7 +263,7 @@ function buildPublicLeagueParticipantDetail(options: {
     tournament: {
       id: String(tournament?.id || ''),
       title: String(tournament?.title || ''),
-      format: 'LEAGUE',
+      format: tournamentFormat,
       startsAt: tournament?.startsAt ?? null,
       workflowStatus: String(tournament?.workflow_status || ''),
       status: String(tournament?.status || ''),
@@ -1143,9 +1165,6 @@ export function createTournamentRouter() {
       if (!tournament || tournament.clubId !== clubId || tournament.status !== 'PUBLISHED') {
         return res.status(404).json({ error: 'Not found' });
       }
-      if (String(tournament.format || '').trim().toUpperCase() !== 'LEAGUE') {
-        return res.status(400).json({ error: '只支援聯賽球手數據' });
-      }
 
       const participants = await prisma.tournamentParticipant.findMany({
         where: { tournament_id: id },
@@ -1185,13 +1204,14 @@ export function createTournamentRouter() {
           },
         },
       });
-
-      const standings = buildLeagueStandings(tournament, participants, matches);
-      const detail = buildPublicLeagueParticipantDetail({
+      const isLeague = String(tournament?.format || '').trim().toUpperCase() === 'LEAGUE';
+      const standings = isLeague ? buildLeagueStandings(tournament, participants, matches) : [];
+      const detail = buildPublicTournamentParticipantDetail({
         tournament,
         participant,
         standings,
         matches,
+        participantCount: participants.length,
       });
       res.json(detail);
     } catch (e) {

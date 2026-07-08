@@ -1104,7 +1104,7 @@ export async function getPublicClubTournamentParticipantDetail(
   );
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '讀取球手聯賽數據失敗');
+    throw new Error(err.error || '讀取球手戰況失敗');
   }
   return res.json();
 }
