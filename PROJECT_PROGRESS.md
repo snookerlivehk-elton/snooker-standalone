@@ -1,6 +1,68 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
-更新日期：2026-07-05（Asia/Hong_Kong）
+更新日期：2026-07-08（Asia/Hong_Kong）
+
+## 最新已完成（2026-07-08）
+
+- `ClubPublicPage` 的 tournament public 重構已再完成一輪必要分拆，公開頁比賽詳情的結構現為：
+  - `ClubPublicTournamentPanels.tsx`
+    - 作為 scoreboard / signup / modal orchestration shell
+  - `ClubPublicTournamentDetailModal.tsx`
+    - 作為 modal shell，內含：
+      - `ClubPublicTournamentOverviewSection.tsx`
+      - `ClubPublicTournamentLiveSection.tsx`
+      - `ClubPublicTournamentStageSection.tsx`
+      - `ClubPublicTournamentParticipantPanel.tsx`
+  - `ClubPublicTournamentParticipantPanel.tsx`
+    - 本輪再拆成：
+      - `ClubPublicTournamentParticipantLookup.tsx`
+      - `ClubPublicTournamentParticipantDetailSection.tsx`
+      - `ClubPublicTournamentParticipantDirectorySection.tsx`
+- 本輪分拆結果：
+  - `ClubPublicTournamentParticipantPanel.tsx`
+    - 由 `594` 行降至 `123` 行
+    - 收斂為 participant 面板 orchestration shell
+  - `ClubPublicTournamentLiveBoard.tsx`
+    - 由 `207` 行降至 `87` 行
+    - 收斂為 live board shell
+    - 本輪新增：
+      - `ClubPublicTournamentLiveBoardCard.tsx`
+      - `ClubPublicTournamentLiveMatchesSection.tsx`
+      - `ClubPublicTournamentReadyMatchesSection.tsx`
+      - `ClubPublicTournamentRecentCompletedSection.tsx`
+  - `ClubPublicTournamentDetailModal.tsx`
+    - 維持在上一輪已完成的 `182` 行 modal shell
+  - 現時 `club-public/tournaments` 最大檔已轉為：
+    - `ClubPublicTournamentParticipantDetailSection.tsx`（`426` 行）
+    - `ClubPublicTournamentDetailModal.tsx`（`182` 行）
+- 本輪驗證：
+  - `GetDiagnostics`
+    - `ClubPublicTournamentParticipantPanel.tsx`
+    - `ClubPublicTournamentParticipantLookup.tsx`
+    - `ClubPublicTournamentParticipantDetailSection.tsx`
+    - `ClubPublicTournamentParticipantDirectorySection.tsx`
+    - `ClubPublicTournamentLiveBoard.tsx`
+    - `ClubPublicTournamentLiveBoardCard.tsx`
+    - `ClubPublicTournamentLiveMatchesSection.tsx`
+    - `ClubPublicTournamentReadyMatchesSection.tsx`
+    - `ClubPublicTournamentRecentCompletedSection.tsx`
+    均為乾淨
+  - `frontend npm run build` 已通過
+  - Vite 仍有既存 chunk size warning：
+    - `dist/assets/index-*.js` 約 `883 kB`
+    - 屬非阻塞警告，後續宜做 code-splitting
+- 目前未開發 / 待排程項目（按優先度整理）：
+  - `P1`
+    - 檢查 GitHub Pages `deploy-pages.yml` 失敗原因，判斷是重跑即可還是需要調整 workflow
+  - `P1`
+    - 繼續收斂公開頁 tournament public，下一個最合理目標是 `ClubPublicTournamentParticipantDetailSection.tsx`
+  - `P2`
+    - 處理 frontend bundle 過大警告，為公開頁 / 後台 tournament 區做更實際的 code-splitting
+  - `P2`
+    - 盤點 `PROJECT_PROGRESS.md` 內仍未落地的跨模組項目，例如：
+      - tournaments 報名通知 email delivery
+      - 其他 module settings 的通知實際接線
+      - 進一步把 club public tabs 對齊 module visibility / club access 模型
 
 ## 最新已完成（2026-07-05）
 
