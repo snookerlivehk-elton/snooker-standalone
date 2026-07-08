@@ -420,6 +420,31 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     return frames.length > 0 || !!row?.started_at || !!row?.ended_at;
   });
   const canResetSchedule = hasSchedule && !hasPlayedMatches;
+  const generateParticipantsHint = canGenerateParticipants
+    ? `已有 ${confirmedRows.length} 位已確認報名，可生成正式名單。`
+    : hasSchedule
+      ? '賽程已存在；如需重整理正式名單，請先評估是否要重建賽程。'
+      : confirmedRows.length === 0
+        ? '先確認至少 1 位報名者，這裡才會開放。'
+        : '目前未能生成正式名單。';
+  const generateScheduleHint = canGenerateSchedule
+    ? `已有 ${participantsRows.length} 位正式參賽者，可生成${isLeague ? ' League' : ' Knockout'}賽程。`
+    : hasSchedule
+      ? '賽程已存在；如要重新生成，請改用下方危險操作。'
+      : participantsRows.length === 0
+        ? '要先生成正式名單，之後才可建立賽程。'
+        : participantsRows.length === 1
+          ? '至少需要 2 位正式參賽者才可生成賽程。'
+          : '目前未能生成賽程。';
+  const resetScheduleHint = scheduleResetSaving
+    ? '系統正在清空既有對局與安排。'
+    : canResetSchedule
+      ? `目前已有 ${matchesRows.length} 場已生成對局，尚未開打，可安全重建。`
+      : !hasSchedule
+        ? '尚未生成賽程，現時沒有可重建內容。'
+        : hasPlayedMatches
+          ? '已有實際賽果、frame 或開賽時間，系統不允許重建。'
+          : '目前未能重建賽程。';
   const {
     bracketColumns,
     knockoutSummary,
@@ -1161,10 +1186,13 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               canResetSchedule={canResetSchedule}
               confirmedCount={confirmedRows.length}
               currentWorkflowStep={currentWorkflowStep}
+              generateParticipantsHint={generateParticipantsHint}
+              generateScheduleHint={generateScheduleHint}
               hasParticipants={hasParticipants}
               hasSchedule={hasSchedule}
               isRefreshing={participantsLoading || matchesLoading}
               participantCount={participantsRows.length}
+              resetScheduleHint={resetScheduleHint}
               roundRobinMode={leagueRoundRobinMode}
               scheduleResetSaving={scheduleResetSaving}
               testToolsOpen={testToolsOpen}
@@ -1181,7 +1209,10 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               canGenerateSchedule={canGenerateSchedule}
               canResetSchedule={canResetSchedule}
               currentWorkflowStep={currentWorkflowStep}
+              generateParticipantsHint={generateParticipantsHint}
+              generateScheduleHint={generateScheduleHint}
               isRefreshing={participantsLoading || matchesLoading}
+              resetScheduleHint={resetScheduleHint}
               scheduleResetSaving={scheduleResetSaving}
               testToolsOpen={testToolsOpen}
               workflowNote={workflowSummaryNote}

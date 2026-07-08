@@ -10,10 +10,13 @@ type VenueTournamentLeagueWorkspaceHeaderProps = {
   canResetSchedule: boolean;
   confirmedCount: number;
   currentWorkflowStep: 'SIGNUP' | 'PARTICIPANTS' | 'SCHEDULE' | 'SCORING' | 'COMPLETED';
+  generateParticipantsHint: string;
+  generateScheduleHint: string;
   hasParticipants: boolean;
   hasSchedule: boolean;
   isRefreshing: boolean;
   participantCount: number;
+  resetScheduleHint: string;
   roundRobinMode: 'SINGLE' | 'DOUBLE';
   scheduleResetSaving: boolean;
   testToolsOpen: boolean;
@@ -32,10 +35,13 @@ const VenueTournamentLeagueWorkspaceHeader: React.FC<VenueTournamentLeagueWorksp
   canResetSchedule,
   confirmedCount,
   currentWorkflowStep,
+  generateParticipantsHint,
+  generateScheduleHint,
   hasParticipants,
   hasSchedule,
   isRefreshing,
   participantCount,
+  resetScheduleHint,
   roundRobinMode,
   scheduleResetSaving,
   testToolsOpen,
@@ -47,18 +53,21 @@ const VenueTournamentLeagueWorkspaceHeader: React.FC<VenueTournamentLeagueWorksp
   onToggleTestTools,
 }) => (
   <div className="flex flex-col gap-3 mb-3">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(360px,500px)] xl:items-start">
       <div>
         <div className="font-semibold">正式參賽名單 / League 工作台</div>
         <div className="text-xs cue-muted mt-1">
-          先由已確認報名生成正式名單，再按目前 round-robin 設定生成 League 賽程。
+          先完成主要操作，再用輔助工具整理資料；危險操作會獨立顯示，避免和日常工作流程混在一起。
         </div>
       </div>
       <VenueTournamentLeagueWorkspaceActions
         canGenerateParticipants={canGenerateParticipants}
         canGenerateSchedule={canGenerateSchedule}
         canResetSchedule={canResetSchedule}
+        generateParticipantsHint={generateParticipantsHint}
+        generateScheduleHint={generateScheduleHint}
         isRefreshing={isRefreshing}
+        resetScheduleHint={resetScheduleHint}
         scheduleResetSaving={scheduleResetSaving}
         testToolsOpen={testToolsOpen}
         onGenerateParticipants={onGenerateParticipants}
