@@ -116,7 +116,7 @@ const VenueTournamentTestToolsPanel: React.FC<VenueTournamentTestToolsPanelProps
         <div>
           <div className="font-semibold">方法 Z 測試工具</div>
           <div className="mt-1 text-xs cue-muted">
-            一鍵建立測試會員、直接確認報名，並可自動生成正式名單與 {isLeague ? 'League' : 'Knockout'} 賽程。
+            一鍵建立測試會員、直接確認報名，並可自動生成正式名單與 {isLeague ? '聯賽' : '淘汰賽'} 賽程。
           </div>
         </div>
         <div className="text-xs cue-muted">

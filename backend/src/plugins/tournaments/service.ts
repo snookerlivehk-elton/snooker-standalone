@@ -805,7 +805,7 @@ export const tournamentsService = {
         const serial = String(index + 1).padStart(2, '0');
         const memberCode = `TZ-${batchLabel}-${serial}`;
         const email = `methodz+${batchLabel.toLowerCase()}-${serial}@local.test`;
-        const name = `方法Z測試球手 ${batchLabel}-${serial}`;
+        const name = `方法Z ${batchLabel}-${serial}`;
         const salt = makeSalt();
         const digest = hashPassword(password, salt);
 

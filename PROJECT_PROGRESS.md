@@ -4,6 +4,43 @@
 
 ## 最新已完成（2026-07-09）
 
+- Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
+  - `VenueTournamentLeagueSchedulePanel.tsx`
+    - `League rounds` 改為更扁平、可展開的輪次視圖，降低卡片擠壓與首屏雜訊
+  - `VenueTournamentLeagueWorkspaceActions.tsx`
+  - `VenueTournamentKnockoutWorkspaceActions.tsx`
+    - 工作台操作列已重整為主要操作 / 輔助操作 / 危險操作三段式
+  - `VenueTournamentScoringMainPanel.tsx`
+  - `VenueTournamentScoringWorkspace.tsx`
+    - 記分區已改成更聚焦的工作流版面，並加入簡短 breadcrumb
+  - `VenueTournamentWorkspaceSectionCard.tsx`
+  - `VenueTournamentLeagueWorkspaceMainContent.tsx`
+  - `VenueTournamentKnockoutWorkspaceMainContent.tsx`
+    - `Insights / Standings / Schedule` 已加入預設收合與優先順序
+  - `VenueTournamentScheduleBracketPanel.tsx`
+  - `VenueTournamentKnockoutBracketPanel.tsx`
+    - 選中對局後，對應 `Schedule / Bracket` 區段會同步高亮，減少來回找位置成本
+- 工作台文案與球手顯示已同步收斂：
+  - `League / Knockout / Walkover / Forfeit` 已在主要後台工作台改為 `聯賽 / 淘汰賽 / 判勝 / 棄權`
+  - tournament workbench 內的球手名稱已改為「姓名優先，沒姓名才退回 member code」，不再預設把會員編號與姓名串成長字串
+- `Method Z` 測試會員命名已縮短：
+  - `backend/src/plugins/tournaments/service.ts`
+    - 新建立的測試會員名稱由 `方法Z測試球手 <batch>-<serial>` 改為 `方法Z <batch>-<serial>`
+  - 目的：
+    - 保留批次辨識能力
+    - 降低報名名單、participants 與對局卡上的名稱長度
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+  - `backend npm run build` 已通過
+  - 相關 diagnostics 乾淨
+- Git 狀態：
+  - 今日 workbench 可用性優化已分批 commit / push 至 `main`
+  - `5f520b5` `feat: improve tournament workflow guidance`
+  - `fcfbf60` `feat: improve tournament workspace usability`
+  - `6a3a3a1` `feat: collapse tournament workspace sections`
+  - `2fc18ce` `feat: tighten tournament workspace navigation`
+  - `a1ada1a` `fix: localize tournament workspace labels`
+
 - Tournament venue workbench 已完成一輪「必要範圍」的 `League / Knockout` format 分流重構，主模組現更接近 orchestration shell：
   - `VenueTournamentsModule.tsx`
     - 主要負責 route、shared handlers 與資料組裝
