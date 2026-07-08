@@ -8,8 +8,20 @@ type VenueTournamentScoringWorkspaceProps = {
 };
 
 const VenueTournamentScoringWorkspace: React.FC<VenueTournamentScoringWorkspaceProps> = ({ workspace }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const didMountRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!workspace?.selectedMatch?.id) return;
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [workspace?.selectedMatch?.id]);
+
   return (
-    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+    <div ref={containerRef} className="mt-4 grid gap-4 xl:grid-cols-2">
       <VenueTournamentScoringMainPanel workspace={workspace} />
       <VenueTournamentBreaksPanel workspace={workspace} />
     </div>

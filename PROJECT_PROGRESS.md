@@ -1,6 +1,52 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
-更新日期：2026-07-08（Asia/Hong_Kong）
+更新日期：2026-07-09（Asia/Hong_Kong）
+
+## 最新已完成（2026-07-09）
+
+- Tournament venue workbench 已完成一輪「必要範圍」的 `League / Knockout` format 分流重構，主模組現更接近 orchestration shell：
+  - `VenueTournamentsModule.tsx`
+    - 主要負責 route、shared handlers 與資料組裝
+  - 已新增 / 收斂：
+    - `VenueTournamentLeagueWorkspaceActions.tsx`
+    - `VenueTournamentKnockoutWorkspaceActions.tsx`
+    - `VenueTournamentLeagueWorkspaceHeader.tsx`
+    - `VenueTournamentKnockoutWorkspaceHeader.tsx`
+    - `VenueTournamentLeagueWorkspaceOverview.tsx`
+    - `VenueTournamentKnockoutWorkspaceOverview.tsx`
+    - `VenueTournamentLeagueWorkspaceMainContent.tsx`
+    - `VenueTournamentKnockoutWorkspaceMainContent.tsx`
+    - `VenueTournamentLeagueSchedulePanel.tsx`
+    - `VenueTournamentKnockoutBracketPanel.tsx`
+    - `VenueTournamentMatchesFilters.tsx`
+    - `VenueTournamentMatchesTable.tsx`
+    - `LeagueSchedulePrint.ts`
+    - `KnockoutBracketPrint.ts`
+- 本輪結果：
+  - `League` 與 `Knockout` 的 workspace header / overview / main content / schedule-print 流程邊界已明確
+  - `VenueTournamentSummaryPanel.tsx` 已退役，由 format-specific overview 取代
+  - `VenueTournamentScheduleBracketPanel.tsx` 已收斂為 schedule / bracket orchestration shell
+- 本輪驗證：
+  - `frontend npm run build` 已通過
+  - 相關 diagnostics 乾淨
+  - 既有 Vite chunk size warning 仍存在，但無新增 build error
+- Git 狀態：
+  - 本輪已 commit / push 至 `main`
+  - commit：`cdd6452`
+  - message：`refactor: split tournament workspace format panels`
+- 下一步建議（由純分拆轉回功能優化）：
+  - `P1`
+    - 優化 `League` 建賽後的引導流程，補足「生成賽程前 / 後」的狀態提示、空狀態與 next step CTA
+  - `P1`
+    - 優化 `Knockout` seed / bracket workflow，讓 operator 更易理解「seed -> 預賽 / bye -> bracket」的實際結果
+  - `P1`
+    - 強化「賽程生成後是否應重建」的確認文案、風險提示與 rebuild 後結果回饋
+  - `P2`
+    - 為 `League` 補 `round complete / next round ready` 的營運導向摘要提示
+  - `P2`
+    - 為 `Knockout` 補 `哪些場次已可記分 / 哪些場次被上游結果阻塞` 的流程提示
+  - `P2`
+    - 視需要再做 code-splitting，處理既有 bundle warning
 
 ## 最新已完成（2026-07-08）
 

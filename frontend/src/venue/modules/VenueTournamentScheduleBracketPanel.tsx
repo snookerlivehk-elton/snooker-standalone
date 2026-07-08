@@ -1,11 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { formatKnockoutRoundLabel, formatLeagueRoundLabel } from './useTournamentStageViewData';
 import { buildKnockoutBracketPrintHtml } from './KnockoutBracketPrint';
 import { buildLeagueSchedulePrintHtml } from './LeagueSchedulePrint';
 import LeagueSchedulePanel from './VenueTournamentLeagueSchedulePanel';
 import KnockoutBracketPanel from './VenueTournamentKnockoutBracketPanel';
-import VenueTournamentMatchesFilters from './VenueTournamentMatchesFilters';
+import VenueTournamentMatchesFilters, { type MatchQuickFilterKey, type MatchStatusFilterKey } from './VenueTournamentMatchesFilters';
 import VenueTournamentMatchesTable from './VenueTournamentMatchesTable';
+
+type ScheduleFilterPreset = {
+  token: string;
+  quickFilter?: MatchQuickFilterKey;
+  statusFilter?: MatchStatusFilterKey;
+  focusedRoundLabel?: string;
+};
 
 type VenueTournamentScheduleBracketPanelProps = {
   bracketColumns: any[];
@@ -21,6 +28,7 @@ type VenueTournamentScheduleBracketPanelProps = {
   selectedMatchId: string;
   selectedTournamentBestOf: any;
   selectMatchForScoring: (row: any) => void;
+  externalFilterPreset?: ScheduleFilterPreset | null;
   tournamentTitle?: string;
 };
 
@@ -38,6 +46,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   selectedMatchId,
   selectedTournamentBestOf,
   selectMatchForScoring,
+  externalFilterPreset = null,
   tournamentTitle = '',
 }) => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
@@ -124,6 +133,15 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 
   const roundOptions = useMemo(() => bracketColumns.map((column: any) => String(column?.label || '')).filter(Boolean), [bracketColumns]);
   const effectiveFocusedRoundLabel = !isLeague && roundOptions.includes(focusedRoundLabel) ? focusedRoundLabel : 'ALL';
+
+  useEffect(() => {
+    if (!externalFilterPreset) return;
+    if (externalFilterPreset.quickFilter) setQuickFilter(externalFilterPreset.quickFilter);
+    if (externalFilterPreset.statusFilter) setStatusFilter(externalFilterPreset.statusFilter);
+    if (externalFilterPreset.focusedRoundLabel !== undefined) {
+      setFocusedRoundLabel(externalFilterPreset.focusedRoundLabel);
+    }
+  }, [externalFilterPreset]);
 
   const filteredMatchesRows = useMemo(() => {
     return matchesRows.filter((row: any) => {

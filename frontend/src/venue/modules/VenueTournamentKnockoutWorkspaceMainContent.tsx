@@ -1,4 +1,5 @@
 import React from 'react';
+import VenueTournamentKnockoutWorkflowInsights from './VenueTournamentKnockoutWorkflowInsights';
 import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
 
 type VenueTournamentKnockoutWorkspaceMainContentProps = {
@@ -33,6 +34,12 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   tournamentTitle,
 }) => (
   <div>
+    <VenueTournamentKnockoutWorkflowInsights
+      matchesRows={matchesRows}
+      onJumpToMatch={selectMatchForScoring}
+      participantsCount={participantsCount}
+      selectedMatchId={selectedMatchId}
+    />
     <VenueTournamentScheduleBracketPanel
       bracketColumns={bracketColumns}
       buildMatchProgressSummary={buildMatchProgressSummary}

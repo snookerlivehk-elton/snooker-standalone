@@ -58,6 +58,7 @@ type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type TournamentLeagueRoundRobinMode = 'SINGLE' | 'DOUBLE';
 type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
+type WorkflowStepKey = 'SIGNUP' | 'PARTICIPANTS' | 'SCHEDULE' | 'SCORING' | 'COMPLETED';
 
 function formatParticipantLabel(participant: any) {
   if (!participant) return 'BYE';
@@ -135,6 +136,53 @@ function formatFinalRankLabel(value: any) {
   return `第 ${rank} 名`;
 }
 
+function estimateLeagueScheduleSummary(participantCount: number, roundRobinMode: TournamentLeagueRoundRobinMode) {
+  if (!Number.isFinite(participantCount) || participantCount < 2) {
+    return { rounds: 0, matches: 0 };
+  }
+  const baseRounds = participantCount % 2 === 0 ? participantCount - 1 : participantCount;
+  const baseMatches = (participantCount * (participantCount - 1)) / 2;
+  return {
+    rounds: roundRobinMode === 'DOUBLE' ? baseRounds * 2 : baseRounds,
+    matches: roundRobinMode === 'DOUBLE' ? baseMatches * 2 : baseMatches,
+  };
+}
+
+function nextPowerOfTwo(value: number) {
+  let p = 1;
+  while (p < value) p *= 2;
+  return p;
+}
+
+function estimateKnockoutBracketSummary(participantCount: number) {
+  if (!Number.isFinite(participantCount) || participantCount < 2) {
+    return { bracketSize: 0, byeCount: 0 };
+  }
+  const bracketSize = nextPowerOfTwo(participantCount);
+  return {
+    bracketSize,
+    byeCount: Math.max(0, bracketSize - participantCount),
+  };
+}
+
+function canScoreTournamentMatch(row: any) {
+  const status = String(row?.status || '').trim().toUpperCase();
+  return !!row?.player_a_participant_id && !!row?.player_b_participant_id && status !== 'PENDING';
+}
+
+function getPreferredScoringMatch(rows: any[]) {
+  return rows.find((row: any) => canScoreTournamentMatch(row) && String(row?.status || '').trim().toUpperCase() === 'LIVE')
+    || rows.find((row: any) => canScoreTournamentMatch(row) && String(row?.status || '').trim().toUpperCase() === 'READY')
+    || rows.find((row: any) => canScoreTournamentMatch(row) && String(row?.status || '').trim().toUpperCase() !== 'COMPLETED')
+    || rows.find((row: any) => canScoreTournamentMatch(row))
+    || null;
+}
+
+function formatScoringJumpTargetLabel(row: any) {
+  if (!row) return '';
+  return `第 ${Math.max(1, Number(row?.round_no || 1))} 輪 M${Math.max(1, Number(row?.match_no || 1))}`;
+}
+
 const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   operatorId,
   enabled,
@@ -185,11 +233,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [breakRecordedAt, setBreakRecordedAt] = useState(() => formatDateTimeLocalInput(new Date()));
   const [breakNote, setBreakNote] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [workflowFocusNotice, setWorkflowFocusNotice] = useState<string | null>(null);
   const [testToolsOpen, setTestToolsOpen] = useState(false);
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), timeout);
+  }, []);
+
+  const showWorkflowFocusNotice = useCallback((message: string, timeout = 5000) => {
+    setWorkflowFocusNotice(message);
+    window.setTimeout(() => setWorkflowFocusNotice(null), timeout);
   }, []);
 
   const updateFrameDraft = useCallback((index: number, patch: Partial<EditableFrame>) => {
@@ -233,6 +287,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setBreakPoints('');
     setBreakRecordedAt(formatDateTimeLocalInput(new Date()));
     setBreakNote('');
+    setWorkflowFocusNotice(null);
     setTestToolsOpen(false);
   }, []);
 
@@ -323,6 +378,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const selectedTournament = rows.find((row: any) => String(row?.id || '') === selectedId) || null;
   useEffect(() => {
     if (!selectedTournament) return;
+    setWorkflowFocusNotice(null);
     setFormat(normalizeTournamentFormat(selectedTournament?.format));
     setSeedMode(normalizeSeedMode(selectedTournament?.seed_mode));
     setLeagueRoundRobinMode(normalizeLeagueRoundRobinMode((selectedTournament as any)?.league_round_robin_mode));
@@ -341,20 +397,14 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     const hasCurrentSelection = matchesRows.some((row: any) => String(row?.id || '') === selectedMatchId);
     if (hasCurrentSelection) return;
     const resumableMatch = matchesRows.find((row: any) => (
-      !!row?.player_a_participant_id
-      && !!row?.player_b_participant_id
-      && String(row?.status || '').toUpperCase() !== 'PENDING'
+      canScoreTournamentMatch(row)
       && String(row?.status || '').toUpperCase() !== 'COMPLETED'
       && Array.isArray(row?.frames)
       && row.frames.length > 0
     ));
-    const firstReadyMatch = matchesRows.find((row: any) => (
-      !!row?.player_a_participant_id
-      && !!row?.player_b_participant_id
-      && String(row?.status || '').toUpperCase() !== 'PENDING'
-    ));
-    if (resumableMatch || firstReadyMatch) {
-      setSelectedMatchId(String((resumableMatch || firstReadyMatch)?.id || ''));
+    const preferredMatch = resumableMatch || getPreferredScoringMatch(matchesRows);
+    if (preferredMatch) {
+      setSelectedMatchId(String(preferredMatch?.id || ''));
     }
   }, [matchesRows, selectedMatchId]);
   const tournamentFormat = normalizeTournamentFormat(selectedTournament?.format || format);
@@ -485,45 +535,91 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           : isLeague
             ? '目前可直接生成 League 賽程。'
             : '目前可調整種子及生成 Knockout 賽程。';
+  const currentWorkflowStep: WorkflowStepKey = workflowStatus === 'COMPLETED'
+    ? 'COMPLETED'
+    : hasPlayedMatches || workflowStatus === 'IN_PROGRESS'
+      ? 'SCORING'
+      : hasSchedule || workflowStatus === 'SEEDED'
+        ? 'SCHEDULE'
+        : hasParticipants || workflowStatus === 'REGISTRATION'
+          ? 'PARTICIPANTS'
+          : 'SIGNUP';
+  const workflowSummaryNote = !confirmedRows.length
+    ? '先確認報名名單，之後才可生成正式參賽名單。'
+    : !hasParticipants
+      ? `目前已有 ${confirmedRows.length} 位已確認報名，下一步是生成正式名單。`
+      : !hasSchedule
+        ? `目前已有 ${participantsRows.length} 位正式參賽者，下一步是生成${isLeague ? ' League' : ' Knockout'}賽程。`
+        : hasPlayedMatches
+          ? '賽事已開始，現在以記分、進度追蹤與結果整理為主。'
+          : '賽程已生成但尚未開打，可先安排首批對局並開始記分。';
+  const leagueScheduleEstimate = estimateLeagueScheduleSummary(participantsRows.length, leagueRoundRobinMode);
+  const knockoutBracketEstimate = estimateKnockoutBracketSummary(participantsRows.length);
   const handleGenerateParticipants = async () => {
     try {
-      await generateTournamentParticipants(API_URL, operatorId, selectedId);
+      const result = await generateTournamentParticipants(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-      showNotice('已生成正式參賽名單');
+      const nextParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
+      showNotice(`已生成正式參賽名單：共 ${nextParticipants.length || participantsRows.length || confirmedRows.length} 位參賽者。`);
     } catch (e: any) {
       showNotice(e?.message || '生成正式參賽名單失敗', 3000);
     }
   };
   const handleGenerateLeagueSchedule = async () => {
-    if (!confirm('確定按目前正式名單生成 League 賽程？')) return;
+    if (!confirm(
+      `確定按目前正式名單生成 League 賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- 循環模式：${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}\n- 預計輪次 / 場數：${leagueScheduleEstimate.rounds} 輪 / ${leagueScheduleEstimate.matches} 場\n- 生成後如需改循環模式、BO 或計分，應先重建賽程`
+    )) return;
     try {
-      await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+      const result = await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+      const createdMatches = Array.isArray((result as any)?.matches) ? (result as any).matches : [];
+      const preferredMatch = getPreferredScoringMatch(createdMatches);
+      if (preferredMatch?.id) setSelectedMatchId(String(preferredMatch.id));
       await loadSelectedPhase1Data();
-      showNotice('已生成循環賽賽程');
+      const createdRounds = new Set(createdMatches.map((row: any) => Number(row?.round_no || 0)).filter((value: number) => value > 0)).size;
+      if (preferredMatch) {
+        showWorkflowFocusNotice(`已自動跳到 League 的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分或安排時間 / 球枱。`, 5200);
+      }
+      showNotice(`已生成 League 賽程：${participantsRows.length} 位參賽者，${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，共 ${createdRounds || leagueScheduleEstimate.rounds} 輪 / ${createdMatches.length || leagueScheduleEstimate.matches} 場。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
     } catch (e: any) {
       showNotice(e?.message || '生成循環賽賽程失敗', 3000);
     }
   };
   const handleGenerateKnockoutSchedule = async () => {
-    if (!confirm('確定按目前正式名單生成 Knockout 賽程？')) return;
+    if (!confirm(
+      `確定按目前正式名單生成 Knockout 賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n- 生成後如需改 seed 排列，應先重建賽程`
+    )) return;
     try {
-      await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+      const result = await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+      const createdMatches = Array.isArray((result as any)?.matches) ? (result as any).matches : [];
+      const preferredMatch = getPreferredScoringMatch(createdMatches);
+      if (preferredMatch?.id) setSelectedMatchId(String(preferredMatch.id));
       await loadSelectedPhase1Data();
-      showNotice('已生成淘汰賽賽程');
+      const readyCount = createdMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'READY').length;
+      const pendingCount = createdMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'PENDING').length;
+      const byeCount = createdMatches.filter((row: any) => String(row?.result_type || '').trim().toUpperCase() === 'BYE').length;
+      if (preferredMatch) {
+        showWorkflowFocusNotice(`已自動跳到 Knockout 的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游 bracket。`, 5200);
+      }
+      showNotice(`已生成 Knockout 賽程：${knockoutBracketEstimate.bracketSize || '-'} 強 bracket，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個 bye。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
     } catch (e: any) {
       showNotice(e?.message || '生成淘汰賽賽程失敗', 3000);
     }
   };
   const handleResetLeagueSchedule = async () => {
     if (!selectedId) return;
-    if (!confirm('確定要重建 League 賽程？現有賽程將被清空，但正式名單會保留。')) return;
-    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
+    if (!confirm(
+      `確定要重建 League 賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成賽程\n- 正式名單會保留 ${participantsRows.length} 位\n- 已安排時間、球枱與對局配對都會一併移除`
+    )) return;
+    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果、frame 或 break records，系統會拒絕重建。')) return;
     try {
       setScheduleResetSaving(true);
       setSelectedMatchId('');
-      await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+      setWorkflowFocusNotice(null);
+      const clearedMatches = matchesRows.length;
+      const result = await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-      showNotice('已重建循環賽賽程，可重新生成');
+      const preservedParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants.length : participantsRows.length;
+      showNotice(`已清空 ${clearedMatches} 場 League 賽程，保留 ${preservedParticipants} 位正式參賽者，可重新生成。`, 3500);
     } catch (e: any) {
       showNotice(e?.message || '重建循環賽賽程失敗', 3500);
     } finally {
@@ -532,14 +628,19 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   };
   const handleResetKnockoutSchedule = async () => {
     if (!selectedId) return;
-    if (!confirm('確定要重建 Knockout 賽程？現有賽程將被清空，但正式名單會保留。')) return;
-    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
+    if (!confirm(
+      `確定要重建 Knockout 賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成對局\n- 正式名單會保留 ${participantsRows.length} 位\n- 既有 seed 仍可保留，但 bracket、bye 與預賽配置會重新建立`
+    )) return;
+    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果、frame 或 break records，系統會拒絕重建。')) return;
     try {
       setScheduleResetSaving(true);
       setSelectedMatchId('');
-      await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+      setWorkflowFocusNotice(null);
+      const clearedMatches = matchesRows.length;
+      const result = await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-      showNotice('已重建淘汰賽賽程，可重新調整 seed 與重新生成');
+      const preservedParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants.length : participantsRows.length;
+      showNotice(`已清空 ${clearedMatches} 場 Knockout 對局，保留 ${preservedParticipants} 位正式參賽者，可重新調整 seed 與生成 bracket。`, 3500);
     } catch (e: any) {
       showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
     } finally {
@@ -650,6 +751,12 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       </div>
 
       {notice ? <div className="mb-4 text-sm accent-yellow">{notice}</div> : null}
+      {workflowFocusNotice ? (
+        <div className="mb-4 rounded-lg border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+          <div className="font-semibold mb-1">已自動定位到下一個工作點</div>
+          <div>{workflowFocusNotice}</div>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-6">
         <div className="md:col-span-3">
@@ -1048,12 +1155,20 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         <div className="mt-4 cue-surface-strong rounded-lg p-4">
           {isLeague ? (
             <VenueTournamentLeagueWorkspaceHeader
+              bestOfFrames={Math.max(1, Number(bestOfFrames || 1))}
               canGenerateParticipants={canGenerateParticipants}
               canGenerateSchedule={canGenerateSchedule}
               canResetSchedule={canResetSchedule}
+              confirmedCount={confirmedRows.length}
+              currentWorkflowStep={currentWorkflowStep}
+              hasParticipants={hasParticipants}
+              hasSchedule={hasSchedule}
               isRefreshing={participantsLoading || matchesLoading}
+              participantCount={participantsRows.length}
+              roundRobinMode={leagueRoundRobinMode}
               scheduleResetSaving={scheduleResetSaving}
               testToolsOpen={testToolsOpen}
+              workflowNote={workflowSummaryNote}
               onGenerateParticipants={handleGenerateParticipants}
               onGenerateSchedule={handleGenerateLeagueSchedule}
               onRefresh={loadSelectedPhase1Data}
@@ -1065,9 +1180,11 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               canGenerateParticipants={canGenerateParticipants}
               canGenerateSchedule={canGenerateSchedule}
               canResetSchedule={canResetSchedule}
+              currentWorkflowStep={currentWorkflowStep}
               isRefreshing={participantsLoading || matchesLoading}
               scheduleResetSaving={scheduleResetSaving}
               testToolsOpen={testToolsOpen}
+              workflowNote={workflowSummaryNote}
               onGenerateParticipants={handleGenerateParticipants}
               onGenerateSchedule={handleGenerateKnockoutSchedule}
               onRefresh={loadSelectedPhase1Data}
@@ -1137,6 +1254,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   formatFinalRankLabel={formatFinalRankLabel}
                   formatParticipantLabel={formatParticipantLabel}
                   formatParticipantStatusLabel={formatParticipantStatusLabel}
+                  hasSchedule={hasSchedule}
                   participantsLoading={participantsLoading}
                   participantsRows={participantsRows}
                   participantSeedDrafts={participantSeedDrafts}
@@ -1151,7 +1269,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                       setParticipantsRows(nextParticipants);
                       setParticipantSeedDrafts(Object.fromEntries(nextParticipants.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
                       await loadRows();
-                      showNotice(`已套用 ${formatSeedModeLabel(seedMode)}`);
+                      showNotice(`已套用 ${formatSeedModeLabel(seedMode)}：更新 ${nextParticipants.length} 位參賽者 seed 排序。`, 3200);
                     } catch (e: any) {
                       showNotice(e?.message || '套用 seed 模式失敗', 3000);
                     } finally {
@@ -1168,7 +1286,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                       const next = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
                       setParticipantsRows(next);
                       setParticipantSeedDrafts(Object.fromEntries(next.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
-                      showNotice('已更新 seed');
+                      const updatedParticipant = next.find((item: any) => String(item?.id || '') === rowId) || null;
+                      showNotice(`已更新 seed：${formatParticipantLabel(updatedParticipant)} -> #${seed}`, 3200);
                     } catch (e: any) {
                       showNotice(e?.message || '更新 seed 失敗', 3000);
                     } finally {

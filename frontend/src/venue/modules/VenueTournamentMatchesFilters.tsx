@@ -1,7 +1,7 @@
 import React from 'react';
 
-type MatchStatusFilterKey = 'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING';
-type MatchQuickFilterKey = 'ALL' | 'SCORABLE' | 'UNFINISHED';
+export type MatchStatusFilterKey = 'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING';
+export type MatchQuickFilterKey = 'ALL' | 'SCORABLE' | 'UNFINISHED';
 
 type VenueTournamentMatchesFiltersProps = {
   effectiveFocusedRoundLabel: string;

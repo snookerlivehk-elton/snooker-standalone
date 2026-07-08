@@ -1,4 +1,5 @@
 import React from 'react';
+import VenueTournamentKnockoutSeedingGuide from './VenueTournamentKnockoutSeedingGuide';
 
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 
@@ -7,6 +8,7 @@ type VenueTournamentKnockoutParticipantsPanelProps = {
   formatFinalRankLabel: (value: any) => string;
   formatParticipantLabel: (participant: any) => string;
   formatParticipantStatusLabel: (value: any) => string;
+  hasSchedule: boolean;
   participantsLoading: boolean;
   participantsRows: any[];
   participantSeedDrafts: Record<string, string>;
@@ -24,6 +26,7 @@ const VenueTournamentKnockoutParticipantsPanel: React.FC<VenueTournamentKnockout
   formatFinalRankLabel,
   formatParticipantLabel,
   formatParticipantStatusLabel,
+  hasSchedule,
   participantsLoading,
   participantsRows,
   participantSeedDrafts,
@@ -66,6 +69,11 @@ const VenueTournamentKnockoutParticipantsPanel: React.FC<VenueTournamentKnockout
         <div className="text-xs cue-muted">手動改 seed 會自動切回 `MANUAL`；賽程生成後會鎖定。</div>
       </div>
     </div>
+    <VenueTournamentKnockoutSeedingGuide
+      hasSchedule={hasSchedule}
+      participantCount={participantsRows.length}
+      seedMode={seedMode}
+    />
     {participantsLoading ? (
       <div className="text-sm cue-muted">讀取中…</div>
     ) : participantsRows.length === 0 ? (

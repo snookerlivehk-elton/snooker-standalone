@@ -1,6 +1,8 @@
 import React from 'react';
+import VenueTournamentLeagueWorkflowInsights from './VenueTournamentLeagueWorkflowInsights';
 import VenueTournamentLeagueStandingsPanel from './VenueTournamentLeagueStandingsPanel';
 import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
+import type { MatchQuickFilterKey, MatchStatusFilterKey } from './VenueTournamentMatchesFilters';
 
 type VenueTournamentLeagueWorkspaceMainContentProps = {
   bracketColumns: any[];
@@ -40,34 +42,51 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
   selectMatchForScoring,
   standingsRows,
   tournamentTitle,
-}) => (
-  <div>
-    <VenueTournamentLeagueStandingsPanel
-      matchesRows={matchesRows}
-      pointsDraw={pointsDraw}
-      pointsLoss={pointsLoss}
-      pointsWin={pointsWin}
-      standingsRows={standingsRows}
-      tournamentTitle={tournamentTitle}
-      formatParticipantLabel={formatParticipantLabel}
-    />
-    <VenueTournamentScheduleBracketPanel
-      bracketColumns={bracketColumns}
-      buildMatchProgressSummary={buildMatchProgressSummary}
-      formatDisplayDateTime={formatDisplayDateTime}
-      formatMatchResultTypeLabel={formatMatchResultTypeLabel}
-      formatParticipantLabel={formatParticipantLabel}
-      isLeague={true}
-      leagueRounds={leagueRounds}
-      matchesLoading={matchesLoading}
-      matchesRows={matchesRows}
-      participantsCount={participantsCount}
-      selectedMatchId={selectedMatchId}
-      selectedTournamentBestOf={selectedTournamentBestOf}
-      selectMatchForScoring={selectMatchForScoring}
-      tournamentTitle={tournamentTitle}
-    />
-  </div>
-);
+}) => {
+  const [scheduleFilterPreset, setScheduleFilterPreset] = React.useState<{
+    token: string;
+    quickFilter?: MatchQuickFilterKey;
+    statusFilter?: MatchStatusFilterKey;
+    focusedRoundLabel?: string;
+  } | null>(null);
+
+  return (
+    <div>
+      <VenueTournamentLeagueWorkflowInsights
+        leagueRounds={leagueRounds}
+        matchesRows={matchesRows}
+        onJumpToMatch={selectMatchForScoring}
+        onApplyScheduleFocus={(preset) => setScheduleFilterPreset({ token: `${Date.now()}-${Math.random()}`, ...preset })}
+        selectedMatchId={selectedMatchId}
+      />
+      <VenueTournamentLeagueStandingsPanel
+        matchesRows={matchesRows}
+        pointsDraw={pointsDraw}
+        pointsLoss={pointsLoss}
+        pointsWin={pointsWin}
+        standingsRows={standingsRows}
+        tournamentTitle={tournamentTitle}
+        formatParticipantLabel={formatParticipantLabel}
+      />
+      <VenueTournamentScheduleBracketPanel
+        bracketColumns={bracketColumns}
+        buildMatchProgressSummary={buildMatchProgressSummary}
+        externalFilterPreset={scheduleFilterPreset}
+        formatDisplayDateTime={formatDisplayDateTime}
+        formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+        formatParticipantLabel={formatParticipantLabel}
+        isLeague={true}
+        leagueRounds={leagueRounds}
+        matchesLoading={matchesLoading}
+        matchesRows={matchesRows}
+        participantsCount={participantsCount}
+        selectedMatchId={selectedMatchId}
+        selectedTournamentBestOf={selectedTournamentBestOf}
+        selectMatchForScoring={selectMatchForScoring}
+        tournamentTitle={tournamentTitle}
+      />
+    </div>
+  );
+};
 
 export default VenueTournamentLeagueWorkspaceMainContent;
