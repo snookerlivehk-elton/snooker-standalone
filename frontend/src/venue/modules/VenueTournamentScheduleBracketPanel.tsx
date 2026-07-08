@@ -278,7 +278,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     const focusLabel = effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel;
     const quickLabel = quickFilterOptions.find((option) => option.key === quickFilter)?.label || '全部對局';
     const statusLabel = statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態';
-    const title = String(tournamentTitle || 'Knockout 賽程');
+    const title = String(tournamentTitle || '淘汰賽賽程');
     const html = buildKnockoutBracketPrintHtml({
       buildMatchMeta,
       buildMatchProgressSummary,
@@ -302,7 +302,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 
     const quickLabel = quickFilterOptions.find((option) => option.key === quickFilter)?.label || '全部對局';
     const statusLabel = statusFilterOptions.find((option) => option.key === statusFilter)?.label || '全部狀態';
-    const title = String(tournamentTitle || 'League 賽程');
+    const title = String(tournamentTitle || '聯賽賽程');
     const summary = leaguePrintSummary || {
       rounds: 0,
       total: 0,
@@ -337,7 +337,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     <div className="rounded-lg border cue-border bg-black/10 p-3 mb-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="font-semibold">{isLeague ? 'League 賽程工具列' : 'Knockout 賽程工具列'}</div>
+          <div className="font-semibold">{isLeague ? '聯賽賽程工具列' : '淘汰賽賽程工具列'}</div>
           <div className="text-xs cue-muted mt-1">
             {isLeague
               ? '先用這裡收窄範圍，再到下方對局清單與 rounds 視圖處理實際對局。'
@@ -417,7 +417,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         selectedMatchRow ? 'border-yellow-400/45 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]' : 'cue-border'
       }`}>
         <div className="mb-3">
-          <div className="font-semibold">Bracket 視圖</div>
+          <div className="font-semibold">淘汰賽籤表視圖</div>
           <div className="text-xs cue-muted mt-1">
             {selectedMatchContextLabel
               ? `目前記分區對應：${selectedMatchContextLabel}`
@@ -448,7 +448,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         selectedMatchRow ? 'border-yellow-400/45 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]' : 'cue-border'
       }`}>
         <div className="mb-3">
-          <div className="font-semibold">League Rounds 視圖</div>
+          <div className="font-semibold">聯賽輪次視圖</div>
           <div className="text-xs cue-muted mt-1">
             {selectedMatchContextLabel
               ? `目前記分區對應：${selectedMatchContextLabel}`

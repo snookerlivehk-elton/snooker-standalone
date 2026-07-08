@@ -86,7 +86,7 @@ const LeagueSchedulePanel: React.FC<LeagueSchedulePanelProps> = ({
     <div>
       <div className="flex flex-col gap-2 mb-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="font-semibold">League Rounds</div>
+          <div className="font-semibold">聯賽輪次</div>
           <div className="text-xs cue-muted mt-1">
             先看輪次摘要，再展開需要處理的輪次；按對局列可直接切換到該場記分。
           </div>

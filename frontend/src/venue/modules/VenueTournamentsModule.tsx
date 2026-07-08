@@ -72,7 +72,7 @@ function normalizeTournamentFormat(value: any): TournamentFormat {
 }
 
 function formatTournamentFormatLabel(value: any) {
-  return normalizeTournamentFormat(value) === 'LEAGUE' ? 'League' : 'Knockout';
+  return normalizeTournamentFormat(value) === 'LEAGUE' ? '聯賽' : '淘汰賽';
 }
 
 function normalizeSeedMode(value: any): TournamentSeedMode {
@@ -113,7 +113,7 @@ function normalizeMatchResultType(value: any): MatchResultType {
 function formatMatchResultTypeLabel(value: any) {
   const resultType = normalizeMatchResultType(value);
   if (resultType === 'BYE') return 'BYE';
-  if (resultType === 'WALKOVER') return 'W/O';
+  if (resultType === 'WALKOVER') return '判勝';
   if (resultType === 'FORFEIT') return '棄權';
   return '正常完賽';
 }
@@ -428,7 +428,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         ? '先確認至少 1 位報名者，這裡才會開放。'
         : '目前未能生成正式名單。';
   const generateScheduleHint = canGenerateSchedule
-    ? `已有 ${participantsRows.length} 位正式參賽者，可生成${isLeague ? ' League' : ' Knockout'}賽程。`
+    ? `已有 ${participantsRows.length} 位正式參賽者，可生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
     : hasSchedule
       ? '賽程已存在；如要重新生成，請改用下方危險操作。'
       : participantsRows.length === 0
@@ -505,7 +505,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       : formatKnockoutRoundLabel(selectedMatch, participantsRows.length))
     : '';
   const selectedMatchBreadcrumbLabel = selectedMatch
-    ? `${isLeague ? 'League' : 'Knockout'} / ${selectedMatchStageLabel} / M${Math.max(1, Number(selectedMatch?.match_no || 1))}`
+    ? `${isLeague ? '聯賽' : '淘汰賽'} / ${selectedMatchStageLabel} / M${Math.max(1, Number(selectedMatch?.match_no || 1))}`
     : '';
   const {
     handleSubmitActiveFrameBreak,
@@ -557,17 +557,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     ? '先確認至少 1 位報名者，之後才可生成正式名單。'
     : hasSchedule
       ? hasPlayedMatches
-        ? `賽程已開始，正式名單${isLeague ? '' : '與 seedMode'}會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
-        : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? 'League' : 'Knockout'}賽程。`
+        ? `賽程已開始，正式名單${isLeague ? '' : '與 seedMode'}會鎖定，且不可再重建${isLeague ? '循環賽' : '淘汰賽籤表'}。`
+        : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? '聯賽' : '淘汰賽'}賽程。`
       : !hasParticipants
         ? isLeague
-          ? '先生成正式名單，再建立 League round-robin 賽程。'
-          : '先生成正式名單，再決定 seedMode 與 Knockout 賽程。'
+          ? '先生成正式名單，再建立聯賽循環賽程。'
+          : '先生成正式名單，再決定 seedMode 與淘汰賽賽程。'
         : participantsRows.length < 2
-          ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? ' League' : ' Knockout'}賽程。`
+          ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
           : isLeague
-            ? '目前可直接生成 League 賽程。'
-            : '目前可調整種子及生成 Knockout 賽程。';
+            ? '目前可直接生成聯賽賽程。'
+            : '目前可調整種子及生成淘汰賽賽程。';
   const currentWorkflowStep: WorkflowStepKey = workflowStatus === 'COMPLETED'
     ? 'COMPLETED'
     : hasPlayedMatches || workflowStatus === 'IN_PROGRESS'
@@ -582,7 +582,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     : !hasParticipants
       ? `目前已有 ${confirmedRows.length} 位已確認報名，下一步是生成正式名單。`
       : !hasSchedule
-        ? `目前已有 ${participantsRows.length} 位正式參賽者，下一步是生成${isLeague ? ' League' : ' Knockout'}賽程。`
+        ? `目前已有 ${participantsRows.length} 位正式參賽者，下一步是生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
         : hasPlayedMatches
           ? '賽事已開始，現在以記分、進度追蹤與結果整理為主。'
           : '賽程已生成但尚未開打，可先安排首批對局並開始記分。';
@@ -600,7 +600,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   };
   const handleGenerateLeagueSchedule = async () => {
     if (!confirm(
-      `確定按目前正式名單生成 League 賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- 循環模式：${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}\n- 預計輪次 / 場數：${leagueScheduleEstimate.rounds} 輪 / ${leagueScheduleEstimate.matches} 場\n- 生成後如需改循環模式、BO 或計分，應先重建賽程`
+      `確定按目前正式名單生成聯賽賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- 循環模式：${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}\n- 預計輪次 / 場數：${leagueScheduleEstimate.rounds} 輪 / ${leagueScheduleEstimate.matches} 場\n- 生成後如需改循環模式、BO 或計分，應先重建賽程`
     )) return;
     try {
       const result = await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
@@ -610,16 +610,16 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       await loadSelectedPhase1Data();
       const createdRounds = new Set(createdMatches.map((row: any) => Number(row?.round_no || 0)).filter((value: number) => value > 0)).size;
       if (preferredMatch) {
-        showWorkflowFocusNotice(`已自動跳到 League 的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分或安排時間 / 球枱。`, 5200);
+        showWorkflowFocusNotice(`已自動跳到聯賽的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分或安排時間 / 球枱。`, 5200);
       }
-      showNotice(`已生成 League 賽程：${participantsRows.length} 位參賽者，${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，共 ${createdRounds || leagueScheduleEstimate.rounds} 輪 / ${createdMatches.length || leagueScheduleEstimate.matches} 場。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
+      showNotice(`已生成聯賽賽程：${participantsRows.length} 位參賽者，${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，共 ${createdRounds || leagueScheduleEstimate.rounds} 輪 / ${createdMatches.length || leagueScheduleEstimate.matches} 場。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
     } catch (e: any) {
       showNotice(e?.message || '生成循環賽賽程失敗', 3000);
     }
   };
   const handleGenerateKnockoutSchedule = async () => {
     if (!confirm(
-      `確定按目前正式名單生成 Knockout 賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n- 生成後如需改 seed 排列，應先重建賽程`
+      `確定按目前正式名單生成淘汰賽賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n- 生成後如需改 seed 排列，應先重建賽程`
     )) return;
     try {
       const result = await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
@@ -631,9 +631,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       const pendingCount = createdMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'PENDING').length;
       const byeCount = createdMatches.filter((row: any) => String(row?.result_type || '').trim().toUpperCase() === 'BYE').length;
       if (preferredMatch) {
-        showWorkflowFocusNotice(`已自動跳到 Knockout 的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游 bracket。`, 5200);
+        showWorkflowFocusNotice(`已自動跳到淘汰賽的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游籤表。`, 5200);
       }
-      showNotice(`已生成 Knockout 賽程：${knockoutBracketEstimate.bracketSize || '-'} 強 bracket，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個 bye。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
+      showNotice(`已生成淘汰賽賽程：${knockoutBracketEstimate.bracketSize || '-'} 強籤表，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個輪空。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
     } catch (e: any) {
       showNotice(e?.message || '生成淘汰賽賽程失敗', 3000);
     }
@@ -641,7 +641,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const handleResetLeagueSchedule = async () => {
     if (!selectedId) return;
     if (!confirm(
-      `確定要重建 League 賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成賽程\n- 正式名單會保留 ${participantsRows.length} 位\n- 已安排時間、球枱與對局配對都會一併移除`
+      `確定要重建聯賽賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成賽程\n- 正式名單會保留 ${participantsRows.length} 位\n- 已安排時間、球枱與對局配對都會一併移除`
     )) return;
     if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果、frame 或 break records，系統會拒絕重建。')) return;
     try {
@@ -652,7 +652,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       const result = await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
       const preservedParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants.length : participantsRows.length;
-      showNotice(`已清空 ${clearedMatches} 場 League 賽程，保留 ${preservedParticipants} 位正式參賽者，可重新生成。`, 3500);
+      showNotice(`已清空 ${clearedMatches} 場聯賽賽程，保留 ${preservedParticipants} 位正式參賽者，可重新生成。`, 3500);
     } catch (e: any) {
       showNotice(e?.message || '重建循環賽賽程失敗', 3500);
     } finally {
@@ -662,7 +662,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const handleResetKnockoutSchedule = async () => {
     if (!selectedId) return;
     if (!confirm(
-      `確定要重建 Knockout 賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成對局\n- 正式名單會保留 ${participantsRows.length} 位\n- 既有 seed 仍可保留，但 bracket、bye 與預賽配置會重新建立`
+      `確定要重建淘汰賽賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成對局\n- 正式名單會保留 ${participantsRows.length} 位\n- 既有 seed 仍可保留，但籤表、輪空與預賽配置會重新建立`
     )) return;
     if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果、frame 或 break records，系統會拒絕重建。')) return;
     try {
@@ -673,7 +673,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       const result = await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
       const preservedParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants.length : participantsRows.length;
-      showNotice(`已清空 ${clearedMatches} 場 Knockout 對局，保留 ${preservedParticipants} 位正式參賽者，可重新調整 seed 與生成 bracket。`, 3500);
+      showNotice(`已清空 ${clearedMatches} 場淘汰賽對局，保留 ${preservedParticipants} 位正式參賽者，可重新調整 seed 與生成籤表。`, 3500);
     } catch (e: any) {
       showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
     } finally {
@@ -1095,7 +1095,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   {pendingRows.slice(0, 200).map((row: any) => {
                     const signupId = String(row?.id || '');
                     const member = row?.member || {};
-                    const who = [String(member?.member_code || '無').trim(), String(member?.name || '').trim()].filter(Boolean).join(' ');
+                    const who = formatMemberLabel(member);
                     return (
                       <tr key={signupId} className="border-b cue-border hover:brightness-95">
                         <td className="py-2 px-2 font-semibold">{who || '-'}</td>
@@ -1168,7 +1168,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 <tbody>
                   {confirmedRows.slice(0, 200).map((row: any) => {
                     const member = row?.member || {};
-                    const who = [String(member?.member_code || '無').trim(), String(member?.name || '').trim()].filter(Boolean).join(' ');
+                    const who = formatMemberLabel(member);
                     return (
                       <tr key={String(row?.id || '')} className="border-b cue-border hover:brightness-95">
                         <td className="py-2 px-2 font-semibold">{who || '-'}</td>

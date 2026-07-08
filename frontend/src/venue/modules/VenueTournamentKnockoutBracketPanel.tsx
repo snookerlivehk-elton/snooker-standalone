@@ -90,7 +90,7 @@ const KnockoutBracketPanel: React.FC<KnockoutBracketPanelProps> = ({
         </div>
       ) : null}
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="font-semibold">Knockout Bracket Tree</div>
+        <div className="font-semibold">淘汰賽籤表</div>
         <div className="text-xs cue-muted">
           {effectiveFocusedRoundLabel !== 'ALL' ? `焦點輪次：${effectiveFocusedRoundLabel}` : '按卡片可直接切換到該場對局記分'}
         </div>

@@ -344,7 +344,7 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
       </div>
 
       <details className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/10 p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-rose-100">Walkover / Forfeit 與時間欄位</summary>
+        <summary className="cursor-pointer text-sm font-semibold text-rose-100">判勝 / 棄權 與時間欄位</summary>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div>
             <label className="block text-sm mb-1 cue-muted">開賽時間（可選）</label>
@@ -362,8 +362,8 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
               className="w-full px-3 py-2 rounded cue-input"
               disabled={!selectedMatchResultEditable || resultSaving}
             >
-              <option value="WALKOVER">Walkover</option>
-              <option value="FORFEIT">Forfeit / 棄權</option>
+              <option value="WALKOVER">判勝</option>
+              <option value="FORFEIT">棄權</option>
             </select>
           </div>
           <div>
@@ -387,7 +387,7 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
             className={`px-4 py-2 rounded font-semibold ${resultSaving || !selectedMatchResultEditable ? 'cue-surface-strong cue-muted' : 'bg-rose-500/20 text-rose-100 border border-rose-400/30 hover:brightness-95'}`}
             onClick={onSubmitQuickResult}
           >
-            {resultSaving ? '儲存中...' : `記錄${resultQuickType === 'FORFEIT' ? '棄權' : 'Walkover'}`}
+            {resultSaving ? '儲存中...' : `記錄${resultQuickType === 'FORFEIT' ? '棄權' : '判勝'}`}
           </button>
         </div>
       </details>

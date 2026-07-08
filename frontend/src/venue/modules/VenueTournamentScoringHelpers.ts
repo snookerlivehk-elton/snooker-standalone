@@ -28,10 +28,9 @@ export function formatDisplayDateTime(raw: any) {
 }
 
 export function formatMemberLabel(member: any) {
-  return [
-    String(member?.member_code || '').trim(),
-    String(member?.name || '').trim(),
-  ].filter(Boolean).join(' ') || '-';
+  const name = String(member?.name || '').trim();
+  const memberCode = String(member?.member_code || '').trim();
+  return name || memberCode || '-';
 }
 
 export function createEmptyEditableFrame(frameNo: number): EditableFrame {
