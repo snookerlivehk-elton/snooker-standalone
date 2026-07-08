@@ -13,6 +13,8 @@ import {
   getSegmentCompletionSummary,
   getSegmentFramesWonSummary,
 } from './VenueTournamentScoringHelpers';
+import VenueTournamentKnockoutParticipantsPanel from './VenueTournamentKnockoutParticipantsPanel';
+import VenueTournamentLeagueParticipantsPanel from './VenueTournamentLeagueParticipantsPanel';
 import VenueTournamentScoringWorkspace from './VenueTournamentScoringWorkspace';
 import VenueTournamentLeagueStandingsPanel from './VenueTournamentLeagueStandingsPanel';
 import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
@@ -359,7 +361,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const hasSchedule = matchesRows.length > 0;
   const canGenerateParticipants = confirmedRows.length > 0 && !hasSchedule;
   const canGenerateSchedule = participantsRows.length >= 2 && !hasSchedule;
-  const canEditSeeding = hasParticipants && !hasSchedule;
+  const canEditSeeding = hasParticipants && !hasSchedule && !isLeague;
   const hasPlayedMatches = matchesRows.some((row: any) => {
     const frames = Array.isArray(row?.frames) ? row.frames : [];
     return frames.length > 0 || !!row?.started_at || !!row?.ended_at;
@@ -469,13 +471,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     ? '先確認至少 1 位報名者，之後才可生成正式名單。'
     : hasSchedule
       ? hasPlayedMatches
-        ? `賽程已開始，正式名單與 seedMode 會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
+        ? `賽程已開始，正式名單${isLeague ? '' : '與 seedMode'}會鎖定，且不可再重建${isLeague ? '循環賽' : 'bracket'}。`
         : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? 'League' : 'Knockout'}賽程。`
       : !hasParticipants
-        ? `先生成正式名單，再決定 seedMode 與${isLeague ? ' League' : ' Knockout'}賽程。`
+        ? isLeague
+          ? '先生成正式名單，再建立 League round-robin 賽程。'
+          : '先生成正式名單，再決定 seedMode 與 Knockout 賽程。'
         : participantsRows.length < 2
           ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? ' League' : ' Knockout'}賽程。`
-          : `目前可調整種子及生成${isLeague ? ' League' : ' Knockout'}賽程。`;
+          : isLeague
+            ? '目前可直接生成 League 賽程。'
+            : '目前可調整種子及生成 Knockout 賽程。';
   const scoringWorkspace: TournamentScoringWorkspace | null = selectedId && selectedMatch ? {
     activeFrame,
     activeFrameIndex,
@@ -1106,110 +1112,59 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <div className="flex flex-col gap-3 mb-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-semibold">正式參賽名單</div>
-                  <div className="text-xs cue-muted">{participantsLoading ? '讀取中…' : `${participantsRows.length} 人`}</div>
-                </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div>
-                    <label className="block text-xs mb-1 cue-muted">目前 seedMode</label>
-                    <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="px-3 py-2 rounded cue-input text-sm min-w-40" disabled={!canEditSeeding || seedModeSaving}>
-                      <option value="MANUAL">手動種子</option>
-                      <option value="RANKING">按評分排序</option>
-                      <option value="RANDOM">隨機抽籤</option>
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={seedModeSaving || !canEditSeeding}
-                    className={`px-3 py-2 rounded text-sm font-semibold ${seedModeSaving || !canEditSeeding ? 'cue-surface-strong cue-muted' : 'cue-button'}`}
-                    onClick={async () => {
-                      try {
-                        setSeedModeSaving(true);
-                        const result = await updateTournamentSeedMode(API_URL, operatorId, selectedId, { seedMode });
-                        const nextParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
-                        setParticipantsRows(nextParticipants);
-                        setParticipantSeedDrafts(Object.fromEntries(nextParticipants.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
-                        await loadRows();
-                        showNotice(`已套用 ${formatSeedModeLabel(seedMode)}`);
-                      } catch (e: any) {
-                        showNotice(e?.message || '套用 seed 模式失敗', 3000);
-                      } finally {
-                        setSeedModeSaving(false);
-                      }
-                    }}
-                  >
-                    {seedModeSaving ? '套用中...' : '套用 seedMode'}
-                  </button>
-                  <div className="text-xs cue-muted">手動改 seed 會自動切回 `MANUAL`；賽程生成後會鎖定。</div>
-                </div>
-              </div>
-              {participantsLoading ? (
-                <div className="text-sm cue-muted">讀取中…</div>
-              ) : participantsRows.length === 0 ? (
-                <div className="text-sm cue-muted">尚未生成正式參賽名單</div>
+              {isLeague ? (
+                <VenueTournamentLeagueParticipantsPanel
+                  formatFinalRankLabel={formatFinalRankLabel}
+                  formatParticipantLabel={formatParticipantLabel}
+                  formatParticipantStatusLabel={formatParticipantStatusLabel}
+                  participantsLoading={participantsLoading}
+                  participantsRows={participantsRows}
+                />
               ) : (
-                <div className="overflow-x-auto -mx-2 px-2">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="cue-muted border-b cue-border">
-                        <th className="py-2 px-2">Seed</th>
-                        <th className="py-2 px-2">球手</th>
-                        <th className="py-2 px-2">狀態</th>
-                        <th className="py-2 px-2">名次</th>
-                        <th className="py-2 px-2">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {participantsRows.map((row: any, index) => {
-                        const rowId = String(row?.id || index);
-                        const seedDraft = participantSeedDrafts[rowId] ?? String(row?.seed ?? index + 1);
-                        const isSaving = participantSeedSavingId === rowId;
-                        return (
-                        <tr key={rowId} className="border-b cue-border hover:brightness-95">
-                          <td className="py-2 px-2 w-28">
-                            <input
-                              type="number"
-                              min={1}
-                              value={seedDraft}
-                              onChange={(e) => setParticipantSeedDrafts((prev) => ({ ...prev, [rowId]: e.target.value }))}
-                              className="w-full px-2 py-1 rounded cue-input"
-                              disabled={isSaving || !canEditSeeding}
-                            />
-                          </td>
-                          <td className="py-2 px-2 font-semibold">{formatParticipantLabel(row)}</td>
-                          <td className="py-2 px-2 cue-muted">{formatParticipantStatusLabel(row?.status)}</td>
-                          <td className="py-2 px-2 cue-muted">{formatFinalRankLabel(row?.final_rank)}</td>
-                          <td className="py-2 px-2">
-                            <button
-                              type="button"
-                              disabled={isSaving || !canEditSeeding}
-                              className={`px-3 py-1 rounded text-sm font-semibold ${isSaving || !canEditSeeding ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
-                              onClick={async () => {
-                                try {
-                                  const seed = Math.max(1, Math.floor(Number(seedDraft || 1)));
-                                  setParticipantSeedSavingId(rowId);
-                                  const result = await updateTournamentParticipant(API_URL, operatorId, selectedId, rowId, { seed });
-                                  const next = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
-                                  setParticipantsRows(next);
-                                  setParticipantSeedDrafts(Object.fromEntries(next.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
-                                  showNotice('已更新 seed');
-                                } catch (e: any) {
-                                  showNotice(e?.message || '更新 seed 失敗', 3000);
-                                } finally {
-                                  setParticipantSeedSavingId('');
-                                }
-                              }}
-                            >
-                              {isSaving ? '儲存中...' : '更新 seed'}
-                            </button>
-                          </td>
-                        </tr>
-                      )})}
-                    </tbody>
-                  </table>
-                </div>
+                <VenueTournamentKnockoutParticipantsPanel
+                  canEditSeeding={canEditSeeding}
+                  formatFinalRankLabel={formatFinalRankLabel}
+                  formatParticipantLabel={formatParticipantLabel}
+                  formatParticipantStatusLabel={formatParticipantStatusLabel}
+                  participantsLoading={participantsLoading}
+                  participantsRows={participantsRows}
+                  participantSeedDrafts={participantSeedDrafts}
+                  participantSeedSavingId={participantSeedSavingId}
+                  seedMode={seedMode}
+                  seedModeSaving={seedModeSaving}
+                  onApplySeedMode={async () => {
+                    try {
+                      setSeedModeSaving(true);
+                      const result = await updateTournamentSeedMode(API_URL, operatorId, selectedId, { seedMode });
+                      const nextParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
+                      setParticipantsRows(nextParticipants);
+                      setParticipantSeedDrafts(Object.fromEntries(nextParticipants.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
+                      await loadRows();
+                      showNotice(`已套用 ${formatSeedModeLabel(seedMode)}`);
+                    } catch (e: any) {
+                      showNotice(e?.message || '套用 seed 模式失敗', 3000);
+                    } finally {
+                      setSeedModeSaving(false);
+                    }
+                  }}
+                  onSeedDraftChange={(rowId, value) => setParticipantSeedDrafts((prev) => ({ ...prev, [rowId]: value }))}
+                  onSeedModeChange={(value) => setSeedMode(normalizeSeedMode(value))}
+                  onUpdateSeed={async (rowId, seedDraft) => {
+                    try {
+                      const seed = Math.max(1, Math.floor(Number(seedDraft || 1)));
+                      setParticipantSeedSavingId(rowId);
+                      const result = await updateTournamentParticipant(API_URL, operatorId, selectedId, rowId, { seed });
+                      const next = Array.isArray((result as any)?.participants) ? (result as any).participants : [];
+                      setParticipantsRows(next);
+                      setParticipantSeedDrafts(Object.fromEntries(next.map((item: any, itemIndex: number) => [String(item?.id || itemIndex), String(item?.seed ?? itemIndex + 1)])));
+                      showNotice('已更新 seed');
+                    } catch (e: any) {
+                      showNotice(e?.message || '更新 seed 失敗', 3000);
+                    } finally {
+                      setParticipantSeedSavingId('');
+                    }
+                  }}
+                />
               )}
             </div>
 
