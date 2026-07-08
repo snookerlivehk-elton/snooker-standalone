@@ -395,6 +395,10 @@ export function buildLeagueStandings(tournament: any, participants: any[], match
   }));
 }
 
+function normalizeLeagueRoundRobinMode(value: any): 'SINGLE' | 'DOUBLE' {
+  return String(value || '').trim().toUpperCase() === 'DOUBLE' ? 'DOUBLE' : 'SINGLE';
+}
+
 async function listParticipantsForSeeding(tx: any, tournamentId: string) {
   return tx.tournamentParticipant.findMany({
     where: { tournament_id: tournamentId },
@@ -1175,7 +1179,14 @@ export const tournamentsService = {
       });
       if (participants.length < 2) throw new Error('At least 2 active participants required');
 
-      const rounds = buildLeagueRoundRobinPairs(participants);
+      const baseRounds = buildLeagueRoundRobinPairs(participants);
+      const roundRobinMode = normalizeLeagueRoundRobinMode(tournament.league_round_robin_mode);
+      const rounds = roundRobinMode === 'DOUBLE'
+        ? [
+            ...baseRounds,
+            ...baseRounds.map((roundPairs) => roundPairs.map(([a, b]) => [b, a] as [any, any])),
+          ]
+        : baseRounds;
       const created: any[] = [];
       for (let roundIndex = 0; roundIndex < rounds.length; roundIndex += 1) {
         const roundPairs = rounds[roundIndex] || [];

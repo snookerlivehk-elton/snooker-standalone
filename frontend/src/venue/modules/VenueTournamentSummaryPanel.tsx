@@ -6,6 +6,7 @@ type VenueTournamentSummaryPanelProps = {
   hasPlayedMatches: boolean;
   hasSchedule: boolean;
   isLeague: boolean;
+  leagueRoundRobinMode: string;
   leagueSummary: any;
   knockoutSummary: any;
   note: string;
@@ -30,6 +31,7 @@ const VenueTournamentSummaryPanel: React.FC<VenueTournamentSummaryPanelProps> = 
   hasPlayedMatches,
   hasSchedule,
   isLeague,
+  leagueRoundRobinMode,
   leagueSummary,
   knockoutSummary,
   note,
@@ -65,7 +67,9 @@ const VenueTournamentSummaryPanel: React.FC<VenueTournamentSummaryPanelProps> = 
       <div className="cue-surface rounded-lg p-3">
         <div className="text-xs cue-muted">{isLeague ? 'Best Of / 計分' : '輪空 Bye'}</div>
         <div className="font-semibold mt-1">
-          {isLeague ? `BO${bestOfFrames || '-'} / ${pointsWin}-${pointsDraw}-${pointsLoss}` : knockoutSummary.byeCount}
+          {isLeague
+            ? `${leagueRoundRobinMode === 'DOUBLE' ? '雙循環' : '單循環'} / BO${bestOfFrames || '-'} / ${pointsWin}-${pointsDraw}-${pointsLoss}`
+            : knockoutSummary.byeCount}
         </div>
       </div>
       <div className="cue-surface rounded-lg p-3">

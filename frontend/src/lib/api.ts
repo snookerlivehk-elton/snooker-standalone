@@ -1140,6 +1140,7 @@ export async function createClubTournament(
     signupGuide?: string | null;
     format?: 'KNOCKOUT' | 'LEAGUE';
     seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM';
+    leagueRoundRobinMode?: 'SINGLE' | 'DOUBLE';
     bestOfFrames?: number | null;
     pointsWin?: number;
     pointsDraw?: number;
@@ -1171,6 +1172,7 @@ export async function updateClubTournament(
     signupGuide?: string | null;
     format?: 'KNOCKOUT' | 'LEAGUE';
     seedMode?: 'MANUAL' | 'RANKING' | 'RANDOM';
+    leagueRoundRobinMode?: 'SINGLE' | 'DOUBLE';
     bestOfFrames?: number | null;
     pointsWin?: number;
     pointsDraw?: number;

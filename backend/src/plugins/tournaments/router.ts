@@ -456,6 +456,7 @@ export function createTournamentRouter() {
     const format = String(payload.format || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
     const seedMode = String(payload.seedMode || 'MANUAL').trim().toUpperCase();
     const capacity = Number(payload.capacity ?? 32);
+    const leagueRoundRobinMode = String(payload.leagueRoundRobinMode || 'SINGLE').trim().toUpperCase();
     const bestOfFrames = payload.bestOfFrames == null || payload.bestOfFrames === '' ? null : Number(payload.bestOfFrames);
     const pointsWin = payload.pointsWin == null || payload.pointsWin === '' ? 3 : Number(payload.pointsWin);
     const pointsDraw = payload.pointsDraw == null || payload.pointsDraw === '' ? 1 : Number(payload.pointsDraw);
@@ -466,6 +467,7 @@ export function createTournamentRouter() {
     if (!['KNOCKOUT', 'LEAGUE'].includes(format)) return res.status(400).json({ error: 'format invalid' });
     const cap = Number.isFinite(capacity) ? Math.max(1, Math.min(512, Math.floor(capacity))) : 32;
     if (bestOfFrames != null && (!Number.isFinite(bestOfFrames) || bestOfFrames <= 0)) return res.status(400).json({ error: 'bestOfFrames invalid' });
+    if (!['SINGLE', 'DOUBLE'].includes(leagueRoundRobinMode)) return res.status(400).json({ error: 'leagueRoundRobinMode invalid' });
     if (!Number.isFinite(pointsWin)) return res.status(400).json({ error: 'pointsWin invalid' });
     if (!Number.isFinite(pointsDraw)) return res.status(400).json({ error: 'pointsDraw invalid' });
     if (!Number.isFinite(pointsLoss)) return res.status(400).json({ error: 'pointsLoss invalid' });
@@ -484,6 +486,7 @@ export function createTournamentRouter() {
           signupGuide,
           format,
           seed_mode: seedMode === 'RANDOM' || seedMode === 'RANKING' ? seedMode : 'MANUAL',
+          league_round_robin_mode: leagueRoundRobinMode === 'DOUBLE' ? 'DOUBLE' : 'SINGLE',
           best_of_frames: bestOfFrames == null ? null : Math.max(1, Math.floor(bestOfFrames)),
           points_win: Math.max(0, Math.floor(pointsWin)),
           points_draw: Math.max(0, Math.floor(pointsDraw)),
@@ -524,6 +527,13 @@ export function createTournamentRouter() {
         return res.status(400).json({ error: 'seedMode invalid' });
       }
       patch.seed_mode = seedMode || 'MANUAL';
+    }
+    if (payload.leagueRoundRobinMode !== undefined) {
+      const leagueRoundRobinMode = String(payload.leagueRoundRobinMode || '').trim().toUpperCase();
+      if (leagueRoundRobinMode && !['SINGLE', 'DOUBLE'].includes(leagueRoundRobinMode)) {
+        return res.status(400).json({ error: 'leagueRoundRobinMode invalid' });
+      }
+      patch.league_round_robin_mode = leagueRoundRobinMode || 'SINGLE';
     }
     if (payload.capacity != null) {
       const n = Number(payload.capacity);

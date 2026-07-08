@@ -51,6 +51,7 @@ type VenueTournamentsModuleProps = {
 
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
+type TournamentLeagueRoundRobinMode = 'SINGLE' | 'DOUBLE';
 type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
 function formatParticipantLabel(participant: any) {
@@ -78,6 +79,14 @@ function formatSeedModeLabel(value: TournamentSeedMode) {
   if (value === 'RANDOM') return '隨機抽籤';
   if (value === 'RANKING') return '按評分排序';
   return '手動種子';
+}
+
+function normalizeLeagueRoundRobinMode(value: any): TournamentLeagueRoundRobinMode {
+  return String(value || '').trim().toUpperCase() === 'DOUBLE' ? 'DOUBLE' : 'SINGLE';
+}
+
+function formatLeagueRoundRobinModeLabel(value: TournamentLeagueRoundRobinMode) {
+  return value === 'DOUBLE' ? '雙循環' : '單循環';
 }
 
 function formatWorkflowStatusLabel(value: any) {
@@ -133,6 +142,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const [guide, setGuide] = useState('');
   const [format, setFormat] = useState<TournamentFormat>('KNOCKOUT');
   const [seedMode, setSeedMode] = useState<TournamentSeedMode>('MANUAL');
+  const [leagueRoundRobinMode, setLeagueRoundRobinMode] = useState<TournamentLeagueRoundRobinMode>('SINGLE');
   const [bestOfFrames, setBestOfFrames] = useState('5');
   const [pointsWin, setPointsWin] = useState('3');
   const [pointsDraw, setPointsDraw] = useState('1');
@@ -190,6 +200,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     setGuide('');
     setFormat('KNOCKOUT');
     setSeedMode('MANUAL');
+    setLeagueRoundRobinMode('SINGLE');
     setBestOfFrames('5');
     setPointsWin('3');
     setPointsDraw('1');
@@ -309,6 +320,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     if (!selectedTournament) return;
     setFormat(normalizeTournamentFormat(selectedTournament?.format));
     setSeedMode(normalizeSeedMode(selectedTournament?.seed_mode));
+    setLeagueRoundRobinMode(normalizeLeagueRoundRobinMode((selectedTournament as any)?.league_round_robin_mode));
     setBestOfFrames(String(selectedTournament?.best_of_frames ?? 5));
     setPointsWin(String(selectedTournament?.points_win ?? 3));
     setPointsDraw(String(selectedTournament?.points_draw ?? 1));
@@ -554,7 +566,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           title="比賽報名（管理）"
             intro="建立、更新、上架或關閉比賽報名，並逐步管理待確認報名、正式參賽名單、Knockout / League 賽程、賽果與比賽 20+。"
           steps={[
-            '填寫標題、賽制、局數、上限、截止日期、比賽時間（可選）、詳情與參賽指引後按「新增」。',
+            '填寫標題、賽制與對應欄位設定；League 需選單/雙循環與計分，Knockout 則調整 seed 模式，之後按「新增」。',
               '在下方列表可「選擇」某個比賽以查看報名名單與賽事工作台。',
             '按「上架」讓會員端可見並可報名；按「關閉」停止報名與後續操作。',
               '確認報名後，可生成正式名單與對應賽制賽程，再在同頁輸入每局賽果與記錄比賽 20+。',
@@ -562,7 +574,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           tips={[
             '建議先完成內容後再上架，避免會員看到未完成資訊。',
             '如要在場館公開頁顯示比賽入口，請同時於場館公開設定開啟「公開比賽入口」。',
-              'Phase 1 現已支援 Knockout bracket 與 League round-robin + standings，之後再補 live scoring 與更完整統計。',
+              'League 現可設定單循環 / 雙循環；Knockout 與 League 會共用列表，但建立欄位與後續賽程生成會按賽制分流。',
           ]}
         />
       </div>
@@ -586,28 +598,49 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <input value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="32" />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm mb-1 cue-muted">Seed 模式</label>
-          <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
-            <option value="MANUAL">手動種子</option>
-            <option value="RANKING">按評分排序</option>
-            <option value="RANDOM">隨機抽籤</option>
-          </select>
-        </div>
-        <div className="md:col-span-2">
           <label className="block text-sm mb-1 cue-muted">每場局數 / Best Of</label>
           <input value={bestOfFrames} onChange={(e) => setBestOfFrames(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="5" type="number" min={1} />
         </div>
-        <div className="md:col-span-1">
-          <label className="block text-sm mb-1 cue-muted">勝分</label>
-          <input value={pointsWin} onChange={(e) => setPointsWin(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
-        </div>
-        <div className="md:col-span-1">
-          <label className="block text-sm mb-1 cue-muted">和分</label>
-          <input value={pointsDraw} onChange={(e) => setPointsDraw(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
-        </div>
-        <div className="md:col-span-1">
-          <label className="block text-sm mb-1 cue-muted">負分</label>
-          <input value={pointsLoss} onChange={(e) => setPointsLoss(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+        {format === 'KNOCKOUT' ? (
+          <div className="md:col-span-2">
+            <label className="block text-sm mb-1 cue-muted">Seed 模式</label>
+            <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
+              <option value="MANUAL">手動種子</option>
+              <option value="RANKING">按評分排序</option>
+              <option value="RANDOM">隨機抽籤</option>
+            </select>
+          </div>
+        ) : (
+          <>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1 cue-muted">循環模式</label>
+              <select
+                value={leagueRoundRobinMode}
+                onChange={(e) => setLeagueRoundRobinMode(normalizeLeagueRoundRobinMode(e.target.value))}
+                className="w-full px-3 py-2 rounded cue-input"
+              >
+                <option value="SINGLE">單循環</option>
+                <option value="DOUBLE">雙循環</option>
+              </select>
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm mb-1 cue-muted">勝分</label>
+              <input value={pointsWin} onChange={(e) => setPointsWin(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm mb-1 cue-muted">和分</label>
+              <input value={pointsDraw} onChange={(e) => setPointsDraw(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+            </div>
+            <div className="md:col-span-1">
+              <label className="block text-sm mb-1 cue-muted">負分</label>
+              <input value={pointsLoss} onChange={(e) => setPointsLoss(e.target.value)} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} />
+            </div>
+          </>
+        )}
+        <div className="md:col-span-6 text-xs cue-muted">
+          {format === 'LEAGUE'
+            ? `目前建立為 ${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，生成賽程時會按此模式建立 round-robin fixtures。`
+            : `目前建立為 Knockout，正式名單生成後可按 ${formatSeedModeLabel(seedMode)} 建立籤表。`}
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm mb-1 cue-muted">截止日期</label>
@@ -641,7 +674,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                 const pw = Math.max(0, Math.floor(Number(pointsWin || 0)));
                 const pd = Math.max(0, Math.floor(Number(pointsDraw || 0)));
                 const pl = Math.max(0, Math.floor(Number(pointsLoss || 0)));
-                if (!Number.isFinite(pw) || !Number.isFinite(pd) || !Number.isFinite(pl)) throw new Error('League 計分設定不正確');
+                if (format === 'LEAGUE' && (!Number.isFinite(pw) || !Number.isFinite(pd) || !Number.isFinite(pl))) throw new Error('League 計分設定不正確');
                 const deadlineIso = deadline ? new Date(`${deadline}T23:59:59`).toISOString() : null;
                 const startsIso = startsAt ? new Date(startsAt).toISOString() : null;
                 if (startsAt && !Number.isFinite(new Date(startsAt).getTime())) throw new Error('比賽時間格式不正確');
@@ -654,10 +687,11 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     signupGuide: guide,
                     format,
                     seedMode,
+                    leagueRoundRobinMode,
                     bestOfFrames: bestOf,
-                    pointsWin: pw,
-                    pointsDraw: pd,
-                    pointsLoss: pl,
+                    pointsWin: format === 'LEAGUE' ? pw : 3,
+                    pointsDraw: format === 'LEAGUE' ? pd : 1,
+                    pointsLoss: format === 'LEAGUE' ? pl : 0,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
@@ -670,15 +704,16 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     signupGuide: guide,
                     format,
                     seedMode,
+                    leagueRoundRobinMode,
                     bestOfFrames: bestOf,
-                    pointsWin: pw,
-                    pointsDraw: pd,
-                    pointsLoss: pl,
+                    pointsWin: format === 'LEAGUE' ? pw : 3,
+                    pointsDraw: format === 'LEAGUE' ? pd : 1,
+                    pointsLoss: format === 'LEAGUE' ? pl : 0,
                     capacity: Math.floor(cap),
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
                   });
-                  showNotice('已建立比賽（草稿）');
+                  showNotice(`已建立${format === 'LEAGUE' ? ' League' : ' Knockout'}比賽（草稿）`);
                   resetEditor();
                 }
                 await loadRows();
@@ -689,7 +724,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               }
             }}
           >
-            {selectedId ? '更新' : '建立'}
+            {selectedId ? '更新' : format === 'LEAGUE' ? '建立 League' : '建立 Knockout'}
           </button>
           <button
             type="button"
@@ -754,6 +789,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                               setGuide(String(row?.signupGuide || ''));
                               setFormat(normalizeTournamentFormat(row?.format));
                               setSeedMode(normalizeSeedMode(row?.seed_mode));
+                              setLeagueRoundRobinMode(normalizeLeagueRoundRobinMode((row as any)?.league_round_robin_mode));
                               setBestOfFrames(String(row?.best_of_frames ?? 5));
                               setPointsWin(String(row?.points_win ?? 3));
                               setPointsDraw(String(row?.points_draw ?? 1));
@@ -1053,6 +1089,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             hasPlayedMatches={hasPlayedMatches}
             hasSchedule={hasSchedule}
             isLeague={isLeague}
+              leagueRoundRobinMode={leagueRoundRobinMode}
             leagueSummary={leagueSummary}
             knockoutSummary={knockoutSummary}
             note={tournamentSummaryNote}

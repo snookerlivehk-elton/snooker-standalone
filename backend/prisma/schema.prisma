@@ -75,6 +75,11 @@ enum TournamentSeedMode {
   RANDOM
 }
 
+enum TournamentLeagueRoundRobinMode {
+  SINGLE
+  DOUBLE
+}
+
 enum BreakRecordType {
   VENUE
   TOURNAMENT
@@ -271,6 +276,7 @@ model Tournament {
   format      TournamentFormat?
   workflow_status TournamentWorkflowStatus @default(DRAFT)
   seed_mode   TournamentSeedMode @default(MANUAL)
+  league_round_robin_mode TournamentLeagueRoundRobinMode @default(SINGLE)
   race_to     Int?
   best_of_frames Int?
   table_count Int?
