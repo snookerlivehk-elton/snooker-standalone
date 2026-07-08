@@ -14,11 +14,14 @@ import {
   getSegmentFramesWonSummary,
 } from './VenueTournamentScoringHelpers';
 import VenueTournamentKnockoutParticipantsPanel from './VenueTournamentKnockoutParticipantsPanel';
+import VenueTournamentKnockoutWorkspaceHeader from './VenueTournamentKnockoutWorkspaceHeader';
+import VenueTournamentKnockoutWorkspaceMainContent from './VenueTournamentKnockoutWorkspaceMainContent';
+import VenueTournamentKnockoutWorkspaceOverview from './VenueTournamentKnockoutWorkspaceOverview';
 import VenueTournamentLeagueParticipantsPanel from './VenueTournamentLeagueParticipantsPanel';
+import VenueTournamentLeagueWorkspaceHeader from './VenueTournamentLeagueWorkspaceHeader';
+import VenueTournamentLeagueWorkspaceMainContent from './VenueTournamentLeagueWorkspaceMainContent';
+import VenueTournamentLeagueWorkspaceOverview from './VenueTournamentLeagueWorkspaceOverview';
 import VenueTournamentScoringWorkspace from './VenueTournamentScoringWorkspace';
-import VenueTournamentLeagueStandingsPanel from './VenueTournamentLeagueStandingsPanel';
-import VenueTournamentScheduleBracketPanel from './VenueTournamentScheduleBracketPanel';
-import VenueTournamentSummaryPanel from './VenueTournamentSummaryPanel';
 import VenueTournamentTestToolsPanel from './VenueTournamentTestToolsPanel';
 import type { EditableFrame, TournamentScoringWorkspace } from './VenueTournamentScoringTypes';
 import { useTournamentScoringActions } from './useTournamentScoringActions';
@@ -482,6 +485,67 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           : isLeague
             ? '目前可直接生成 League 賽程。'
             : '目前可調整種子及生成 Knockout 賽程。';
+  const handleGenerateParticipants = async () => {
+    try {
+      await generateTournamentParticipants(API_URL, operatorId, selectedId);
+      await Promise.all([loadSelectedPhase1Data(), loadRows()]);
+      showNotice('已生成正式參賽名單');
+    } catch (e: any) {
+      showNotice(e?.message || '生成正式參賽名單失敗', 3000);
+    }
+  };
+  const handleGenerateLeagueSchedule = async () => {
+    if (!confirm('確定按目前正式名單生成 League 賽程？')) return;
+    try {
+      await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+      await loadSelectedPhase1Data();
+      showNotice('已生成循環賽賽程');
+    } catch (e: any) {
+      showNotice(e?.message || '生成循環賽賽程失敗', 3000);
+    }
+  };
+  const handleGenerateKnockoutSchedule = async () => {
+    if (!confirm('確定按目前正式名單生成 Knockout 賽程？')) return;
+    try {
+      await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+      await loadSelectedPhase1Data();
+      showNotice('已生成淘汰賽賽程');
+    } catch (e: any) {
+      showNotice(e?.message || '生成淘汰賽賽程失敗', 3000);
+    }
+  };
+  const handleResetLeagueSchedule = async () => {
+    if (!selectedId) return;
+    if (!confirm('確定要重建 League 賽程？現有賽程將被清空，但正式名單會保留。')) return;
+    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
+    try {
+      setScheduleResetSaving(true);
+      setSelectedMatchId('');
+      await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
+      await Promise.all([loadSelectedPhase1Data(), loadRows()]);
+      showNotice('已重建循環賽賽程，可重新生成');
+    } catch (e: any) {
+      showNotice(e?.message || '重建循環賽賽程失敗', 3500);
+    } finally {
+      setScheduleResetSaving(false);
+    }
+  };
+  const handleResetKnockoutSchedule = async () => {
+    if (!selectedId) return;
+    if (!confirm('確定要重建 Knockout 賽程？現有賽程將被清空，但正式名單會保留。')) return;
+    if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
+    try {
+      setScheduleResetSaving(true);
+      setSelectedMatchId('');
+      await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
+      await Promise.all([loadSelectedPhase1Data(), loadRows()]);
+      showNotice('已重建淘汰賽賽程，可重新調整 seed 與重新生成');
+    } catch (e: any) {
+      showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
+    } finally {
+      setScheduleResetSaving(false);
+    }
+  };
   const scoringWorkspace: TournamentScoringWorkspace | null = selectedId && selectedMatch ? {
     activeFrame,
     activeFrameIndex,
@@ -982,94 +1046,35 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
       {selectedId ? (
         <div className="mt-4 cue-surface-strong rounded-lg p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
-            <div>
-              <div className="font-semibold">正式參賽名單 / {isLeague ? 'League' : 'Knockout'} 工作台</div>
-              <div className="text-xs cue-muted mt-1">
-                先由已確認報名生成正式名單，再按目前設定生成 {isLeague ? 'League round-robin' : 'Knockout'} 賽程。
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={!canGenerateParticipants}
-                className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateParticipants ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
-                onClick={async () => {
-                  try {
-                    await generateTournamentParticipants(API_URL, operatorId, selectedId);
-                    await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-                    showNotice('已生成正式參賽名單');
-                  } catch (e: any) {
-                    showNotice(e?.message || '生成正式參賽名單失敗', 3000);
-                  }
-                }}
-              >
-                生成正式名單
-              </button>
-              <button
-                type="button"
-                disabled={!canGenerateSchedule}
-                className={`px-3 py-2 rounded text-sm font-semibold ${canGenerateSchedule ? 'cue-button' : 'cue-surface-strong cue-muted'}`}
-                onClick={async () => {
-                  if (!confirm(`確定按目前正式名單生成 ${isLeague ? 'League' : 'Knockout'} 賽程？`)) return;
-                  try {
-                    if (isLeague) {
-                      await generateTournamentLeagueSchedule(API_URL, operatorId, selectedId);
-                    } else {
-                      await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
-                    }
-                    await loadSelectedPhase1Data();
-                    showNotice(`已生成${isLeague ? '循環賽' : '淘汰賽'}賽程`);
-                  } catch (e: any) {
-                    showNotice(e?.message || `生成${isLeague ? '循環賽' : '淘汰賽'}賽程失敗`, 3000);
-                  }
-                }}
-              >
-                {isLeague ? '生成 League 賽程' : '生成 Knockout 賽程'}
-              </button>
-              <button
-                type="button"
-                disabled={!canResetSchedule || scheduleResetSaving}
-                className={`px-3 py-2 rounded text-sm font-semibold ${!canResetSchedule || scheduleResetSaving ? 'cue-surface-strong cue-muted' : 'cue-surface hover:brightness-95'}`}
-                onClick={async () => {
-                  if (!selectedId) return;
-                  if (!confirm(`確定要重建${isLeague ? ' League ' : ' Knockout '}賽程？現有賽程將被清空，但正式名單會保留。`)) return;
-                  if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果，系統會拒絕重建。')) return;
-                  try {
-                    setScheduleResetSaving(true);
-                    setSelectedMatchId('');
-                    if (isLeague) {
-                      await resetTournamentLeagueSchedule(API_URL, operatorId, selectedId);
-                    } else {
-                      await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
-                    }
-                    await Promise.all([loadSelectedPhase1Data(), loadRows()]);
-                    showNotice(`已重建${isLeague ? '循環賽' : '淘汰賽'}賽程，可重新調整 seed 與重新生成`);
-                  } catch (e: any) {
-                    showNotice(e?.message || `重建${isLeague ? '循環賽' : '淘汰賽'}賽程失敗`, 3500);
-                  } finally {
-                    setScheduleResetSaving(false);
-                  }
-                }}
-              >
-                {scheduleResetSaving ? '重建中...' : '重建賽程'}
-              </button>
-              <button
-                type="button"
-                className="px-3 py-2 rounded cue-surface hover:brightness-95 text-sm font-semibold"
-                onClick={loadSelectedPhase1Data}
-              >
-                {participantsLoading || matchesLoading ? '更新中...' : '重新整理工作台'}
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-2 rounded text-sm font-semibold ${testToolsOpen ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
-                onClick={() => setTestToolsOpen((prev) => !prev)}
-              >
-                {testToolsOpen ? '收起方法 Z' : '方法 Z 測試工具'}
-              </button>
-            </div>
-          </div>
+          {isLeague ? (
+            <VenueTournamentLeagueWorkspaceHeader
+              canGenerateParticipants={canGenerateParticipants}
+              canGenerateSchedule={canGenerateSchedule}
+              canResetSchedule={canResetSchedule}
+              isRefreshing={participantsLoading || matchesLoading}
+              scheduleResetSaving={scheduleResetSaving}
+              testToolsOpen={testToolsOpen}
+              onGenerateParticipants={handleGenerateParticipants}
+              onGenerateSchedule={handleGenerateLeagueSchedule}
+              onRefresh={loadSelectedPhase1Data}
+              onResetSchedule={handleResetLeagueSchedule}
+              onToggleTestTools={() => setTestToolsOpen((prev) => !prev)}
+            />
+          ) : (
+            <VenueTournamentKnockoutWorkspaceHeader
+              canGenerateParticipants={canGenerateParticipants}
+              canGenerateSchedule={canGenerateSchedule}
+              canResetSchedule={canResetSchedule}
+              isRefreshing={participantsLoading || matchesLoading}
+              scheduleResetSaving={scheduleResetSaving}
+              testToolsOpen={testToolsOpen}
+              onGenerateParticipants={handleGenerateParticipants}
+              onGenerateSchedule={handleGenerateKnockoutSchedule}
+              onRefresh={loadSelectedPhase1Data}
+              onResetSchedule={handleResetKnockoutSchedule}
+              onToggleTestTools={() => setTestToolsOpen((prev) => !prev)}
+            />
+          )}
 
           {testToolsOpen ? (
             <VenueTournamentTestToolsPanel
@@ -1089,26 +1094,32 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
             />
           ) : null}
 
-          <VenueTournamentSummaryPanel
-            bestOfFrames={bestOfFrames}
-            hasParticipants={hasParticipants}
-            hasPlayedMatches={hasPlayedMatches}
-            hasSchedule={hasSchedule}
-            isLeague={isLeague}
+          {isLeague ? (
+            <VenueTournamentLeagueWorkspaceOverview
+              bestOfFrames={bestOfFrames}
+              formatTournamentFormatLabel={formatTournamentFormatLabel}
+              formatWorkflowStatusLabel={formatWorkflowStatusLabel}
               leagueRoundRobinMode={leagueRoundRobinMode}
-            leagueSummary={leagueSummary}
-            knockoutSummary={knockoutSummary}
-            note={tournamentSummaryNote}
-            podiumSummary={podiumSummary}
-            pointsDraw={pointsDraw}
-            pointsLoss={pointsLoss}
-            pointsWin={pointsWin}
-            tournamentFormat={tournamentFormat}
-            workflowStatus={workflowStatus}
-            formatParticipantLabel={formatParticipantLabel}
-            formatTournamentFormatLabel={formatTournamentFormatLabel}
-            formatWorkflowStatusLabel={formatWorkflowStatusLabel}
-          />
+              leagueSummary={leagueSummary}
+              note={tournamentSummaryNote}
+              pointsDraw={pointsDraw}
+              pointsLoss={pointsLoss}
+              pointsWin={pointsWin}
+              tournamentFormat={tournamentFormat}
+              workflowStatus={workflowStatus}
+            />
+          ) : (
+            <VenueTournamentKnockoutWorkspaceOverview
+              formatParticipantLabel={formatParticipantLabel}
+              formatTournamentFormatLabel={formatTournamentFormatLabel}
+              formatWorkflowStatusLabel={formatWorkflowStatusLabel}
+              knockoutSummary={knockoutSummary}
+              note={tournamentSummaryNote}
+              podiumSummary={podiumSummary}
+              tournamentFormat={tournamentFormat}
+              workflowStatus={workflowStatus}
+            />
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
@@ -1170,32 +1181,42 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
             <div>
               {isLeague ? (
-                <VenueTournamentLeagueStandingsPanel
+                <VenueTournamentLeagueWorkspaceMainContent
+                  bracketColumns={bracketColumns}
+                  buildMatchProgressSummary={buildMatchProgressSummary}
+                  formatDisplayDateTime={formatDisplayDateTime}
+                  formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+                  formatParticipantLabel={formatParticipantLabel}
+                  leagueRounds={leagueRounds}
+                  matchesLoading={matchesLoading}
                   matchesRows={matchesRows}
+                  participantsCount={participantsRows.length}
                   pointsDraw={Number(selectedTournament?.points_draw ?? 1)}
                   pointsLoss={Number(selectedTournament?.points_loss ?? 0)}
                   pointsWin={Number(selectedTournament?.points_win ?? 3)}
+                  selectedMatchId={selectedMatchId}
+                  selectedTournamentBestOf={selectedTournament?.best_of_frames}
+                  selectMatchForScoring={selectMatchForScoring}
                   standingsRows={standingsRows}
                   tournamentTitle={String(selectedTournament?.title || '')}
-                  formatParticipantLabel={formatParticipantLabel}
                 />
-              ) : null}
-              <VenueTournamentScheduleBracketPanel
-                bracketColumns={bracketColumns}
-                buildMatchProgressSummary={buildMatchProgressSummary}
-                formatDisplayDateTime={formatDisplayDateTime}
-                formatMatchResultTypeLabel={formatMatchResultTypeLabel}
-                formatParticipantLabel={formatParticipantLabel}
-                isLeague={isLeague}
-                leagueRounds={leagueRounds}
-                matchesLoading={matchesLoading}
-                matchesRows={matchesRows}
-                participantsCount={participantsRows.length}
-                selectedMatchId={selectedMatchId}
-                selectedTournamentBestOf={selectedTournament?.best_of_frames}
-                selectMatchForScoring={selectMatchForScoring}
-                tournamentTitle={selectedTournament?.title}
-              />
+              ) : (
+                <VenueTournamentKnockoutWorkspaceMainContent
+                  bracketColumns={bracketColumns}
+                  buildMatchProgressSummary={buildMatchProgressSummary}
+                  formatDisplayDateTime={formatDisplayDateTime}
+                  formatMatchResultTypeLabel={formatMatchResultTypeLabel}
+                  formatParticipantLabel={formatParticipantLabel}
+                  leagueRounds={leagueRounds}
+                  matchesLoading={matchesLoading}
+                  matchesRows={matchesRows}
+                  participantsCount={participantsRows.length}
+                  selectedMatchId={selectedMatchId}
+                  selectedTournamentBestOf={selectedTournament?.best_of_frames}
+                  selectMatchForScoring={selectMatchForScoring}
+                  tournamentTitle={selectedTournament?.title}
+                />
+              )}
             </div>
           </div>
         </div>
