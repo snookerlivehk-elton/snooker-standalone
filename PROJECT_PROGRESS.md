@@ -67,6 +67,26 @@
   - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
     - 載入時會讀取 effective threshold
     - 點選門檻按鈕時，可直接切換成場館自訂標準
+- Highbreak Batch 4 已完成：
+  - `backend/src/plugins/highbreak/router.ts`
+    - 已新增公開設定 API：
+      - `GET /api/leaderboard/settings`
+      - `GET /api/club/:clubId/leaderboard/settings`
+    - 系統公開會員榜 / 場館榜已支援 `minPoints`
+  - `frontend/src/lib/api.ts`
+    - 已新增：
+      - `getPublicHighbreakSettings()`
+      - `getPublicClubHighbreakSettings()`
+    - 系統公開排行榜 wrapper 已支援 `minPoints`
+  - `frontend/src/Me.tsx`
+    - 會員頁 `單杆歷史` 已支援門檻切換
+    - 摘要卡、每月走勢、列表文案會跟隨 `20+ / 30+ / 40+ / 50+`
+  - `frontend/src/ClubPublicPage.tsx`
+    - 場館公開頁 Highbreak 排行榜會讀取場館 effective threshold
+    - 已支援公開頁門檻切換與動態標題
+  - `frontend/src/HomePage.tsx`
+    - 首頁會員榜 / 場館榜會讀取系統預設門檻
+    - 已支援首頁門檻切換與動態標題
 - 本輪驗證：
   - `backend npm run build` 已通過
   - `frontend npm run build` 已通過
@@ -77,6 +97,7 @@
   - `1ab0e53` `chore: clean up break stats debug instrumentation`
   - 待提交 checkpoint：
     - Highbreak Batch 1 ~ 3（影片補錄、`minPoints`、系統/場館預設門檻）
+    - Highbreak Batch 4（會員頁 / 場館公開頁 / 首頁排行榜門檻切換）
 
 - Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
   - `VenueTournamentLeagueSchedulePanel.tsx`

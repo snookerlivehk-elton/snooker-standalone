@@ -28,6 +28,28 @@ export async function getClubHighbreakSettings(apiUrl: string, memberId: string)
   return res.json();
 }
 
+export async function getPublicClubHighbreakSettings(apiUrl: string, clubId: string) {
+  const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/leaderboard/settings`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館 highbreak 設定失敗');
+  }
+  return res.json();
+}
+
+export async function getPublicHighbreakSettings(apiUrl: string) {
+  const res = await fetch(`${apiUrl}/api/leaderboard/settings`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取 highbreak 設定失敗');
+  }
+  return res.json();
+}
+
 export async function updateClubHighbreakSettings(apiUrl: string, memberId: string, patch: {
   displayThresholdMode?: 'FOLLOW_SYSTEM' | 'CUSTOM';
   displayThresholdDefault?: number;
@@ -874,45 +896,57 @@ export async function confirmSettlement(apiUrl: string, memberId: string, settle
   return res.json();
 }
 
-export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
+export async function getLeaderboardMembersHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string; minPoints?: number }) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));
   if (params?.regionCode) sp.set('regionCode', params.regionCode);
   if (params?.districtCode) sp.set('districtCode', params.districtCode);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/leaderboard/members/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取會員榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardMembersMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
+export async function getLeaderboardMembersMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string; minPoints?: number }) {
   const sp = new URLSearchParams();
   sp.set('month', month);
   if (limit != null) sp.set('limit', String(limit));
   if (params?.regionCode) sp.set('regionCode', params.regionCode);
   if (params?.districtCode) sp.set('districtCode', params.districtCode);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const res = await fetch(`${apiUrl}/api/leaderboard/members/monthly?${sp.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取會員榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardClubsHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
+export async function getLeaderboardClubsHighest(apiUrl: string, limit?: number, params?: { regionCode?: string; districtCode?: string; minPoints?: number }) {
   const sp = new URLSearchParams();
   if (limit != null) sp.set('limit', String(limit));
   if (params?.regionCode) sp.set('regionCode', params.regionCode);
   if (params?.districtCode) sp.set('districtCode', params.districtCode);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/leaderboard/clubs/highest${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取場館榜失敗');
   return res.json();
 }
 
-export async function getLeaderboardClubsMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string }) {
+export async function getLeaderboardClubsMonthly(apiUrl: string, month: string, limit?: number, params?: { regionCode?: string; districtCode?: string; minPoints?: number }) {
   const sp = new URLSearchParams();
   sp.set('month', month);
   if (limit != null) sp.set('limit', String(limit));
   if (params?.regionCode) sp.set('regionCode', params.regionCode);
   if (params?.districtCode) sp.set('districtCode', params.districtCode);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const res = await fetch(`${apiUrl}/api/leaderboard/clubs/monthly?${sp.toString()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('讀取場館榜失敗');
   return res.json();

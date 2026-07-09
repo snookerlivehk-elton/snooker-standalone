@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import TopBarPublic from './components/TopBarPublic';
 import { API_URL } from './config';
-import { getLeaderboardClubsHighest, getLeaderboardMembersHighest, getNewsItems, getPublicClubs, getPublicLiveAnnouncements, getSiteAds, getSiteNotice } from './lib/api';
+import { getLeaderboardClubsHighest, getLeaderboardMembersHighest, getNewsItems, getPublicClubs, getPublicHighbreakSettings, getPublicLiveAnnouncements, getSiteAds, getSiteNotice } from './lib/api';
 import slhkLogo from './assets/slhk-logo.svg';
 import { fetchModuleStates, type ModuleCode } from './lib/features';
+
+const HOME_HIGHBREAK_FALLBACK_OPTIONS = [20, 30, 40, 50];
 
 const HomePage: React.FC = () => {
   const [notice, setNotice] = useState<any>(null);
@@ -15,6 +17,8 @@ const HomePage: React.FC = () => {
   const [clubLeaders, setClubLeaders] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
+  const [leaderMinPoints, setLeaderMinPoints] = useState(40);
+  const [leaderThresholdOptions, setLeaderThresholdOptions] = useState<number[]>(HOME_HIGHBREAK_FALLBACK_OPTIONS);
   const [clubs, setClubs] = useState<any[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
   const [clubsError, setClubsError] = useState<string | null>(null);
@@ -81,12 +85,35 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      try {
+        const settings = await getPublicHighbreakSettings(API_URL);
+        if (!mounted) return;
+        const options = Array.isArray((settings as any)?.displayThresholdOptions)
+          ? (settings as any).displayThresholdOptions
+          : HOME_HIGHBREAK_FALLBACK_OPTIONS;
+        setLeaderThresholdOptions(options);
+        const defaultThreshold = Number((settings as any)?.systemDisplayThresholdDefault || 0);
+        if (Number.isFinite(defaultThreshold) && defaultThreshold >= 20) {
+          setLeaderMinPoints(defaultThreshold);
+        }
+      } catch {
+        if (!mounted) return;
+        setLeaderThresholdOptions(HOME_HIGHBREAK_FALLBACK_OPTIONS);
+        setLeaderMinPoints(40);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
       setLeaderLoading(true);
       setLeaderError(null);
       try {
         const [members, clubsHighest] = await Promise.all([
-          getLeaderboardMembersHighest(API_URL, 5),
-          getLeaderboardClubsHighest(API_URL, 5),
+          getLeaderboardMembersHighest(API_URL, 5, { minPoints: leaderMinPoints }),
+          getLeaderboardClubsHighest(API_URL, 5, { minPoints: leaderMinPoints }),
         ]);
         if (!mounted) return;
         setMemberLeaders(Array.isArray(members) ? members : []);
@@ -102,7 +129,7 @@ const HomePage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [leaderMinPoints]);
 
   useEffect(() => {
     let mounted = true;
@@ -435,6 +462,18 @@ const HomePage: React.FC = () => {
                 <div className="text-xs uppercase tracking-[0.25em] accent-yellow">Rankings</div>
                 <h2 className="text-2xl font-black cue-zh-title">最新排行榜</h2>
               </div>
+              <div className="flex flex-wrap gap-2">
+                {leaderThresholdOptions.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setLeaderMinPoints(value)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-semibold ${leaderMinPoints === value ? 'bg-yellow-400 text-black' : 'cue-surface hover:brightness-95'}`}
+                  >
+                    {value}+
+                  </button>
+                ))}
+              </div>
               {leaderLoading ? (
                 <div className="glass rounded-2xl p-4 cue-muted">讀取中…</div>
               ) : leaderError ? (
@@ -442,7 +481,7 @@ const HomePage: React.FC = () => {
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="glass rounded-2xl p-4">
-                    <div className="mb-3 text-lg font-bold">會員最高單杆</div>
+                    <div className="mb-3 text-lg font-bold">會員最高 {leaderMinPoints}+</div>
                     <div className="space-y-2">
                       {memberLeaders.slice(0, 5).map((row: any, idx: number) => (
                         <div key={String(row?.memberId || idx)} className="cue-surface-strong rounded-xl px-3 py-3 flex items-center justify-between gap-3">
@@ -459,7 +498,7 @@ const HomePage: React.FC = () => {
                     </div>
                   </div>
                   <div className="glass rounded-2xl p-4">
-                    <div className="mb-3 text-lg font-bold">場館最高單杆</div>
+                    <div className="mb-3 text-lg font-bold">場館最高 {leaderMinPoints}+</div>
                     <div className="space-y-2">
                       {clubLeaders.slice(0, 5).map((row: any, idx: number) => (
                         <div key={String(row?.clubId || idx)} className="cue-surface-strong rounded-xl px-3 py-3 flex items-center justify-between gap-3">

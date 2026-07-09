@@ -15,6 +15,7 @@ import {
   getMyClubPointsBalances,
   getMyInvites,
   getMyJoinedClubs,
+  getPublicHighbreakSettings,
   getPublicLiveAnnouncements,
   getSiteAds,
   getSiteNotice,
@@ -30,6 +31,8 @@ import { clearMemberSession, readMemberSession, writeMemberSession, type MemberS
 import Tabs from './components/Tabs';
 import { useFeatureEnabled } from './lib/features';
 import HelpGuide from './components/HelpGuide';
+
+const BREAK_THRESHOLD_FALLBACK_OPTIONS = [20, 30, 40, 50];
 
 function normalizeHttpUrl(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -90,6 +93,8 @@ const Me: React.FC = () => {
   const [clubPointsLoading, setClubPointsLoading] = useState(false);
   const [breaks, setBreaks] = useState<any[]>([]);
   const [breaksLoading, setBreaksLoading] = useState(false);
+  const [breakThresholdOptions, setBreakThresholdOptions] = useState<number[]>(BREAK_THRESHOLD_FALLBACK_OPTIONS);
+  const [breakMinPoints, setBreakMinPoints] = useState(40);
   const [tournamentCareer, setTournamentCareer] = useState<any>(null);
   const [tournamentCareerLoading, setTournamentCareerLoading] = useState(false);
   const [tournamentHistory, setTournamentHistory] = useState<any>(null);
@@ -422,7 +427,7 @@ const Me: React.FC = () => {
       }
       setBreaksLoading(true);
       try {
-        const rows = await getMyBreaks(API_URL, memberId);
+        const rows = await getMyBreaks(API_URL, memberId, { minPoints: breakMinPoints });
         if (mounted) setBreaks(Array.isArray(rows) ? rows : []);
       } catch {
         if (mounted) setBreaks([]);
@@ -431,7 +436,31 @@ const Me: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [memberId, highbreakEnabled]);
+  }, [memberId, highbreakEnabled, breakMinPoints]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!highbreakEnabled) return;
+      try {
+        const settings = await getPublicHighbreakSettings(API_URL);
+        if (!mounted) return;
+        const options = Array.isArray((settings as any)?.displayThresholdOptions)
+          ? (settings as any).displayThresholdOptions
+          : BREAK_THRESHOLD_FALLBACK_OPTIONS;
+        setBreakThresholdOptions(options);
+        const defaultThreshold = Number((settings as any)?.systemDisplayThresholdDefault || 0);
+        if (Number.isFinite(defaultThreshold) && defaultThreshold >= 20) {
+          setBreakMinPoints(defaultThreshold);
+        }
+      } catch {
+        if (!mounted) return;
+        setBreakThresholdOptions(BREAK_THRESHOLD_FALLBACK_OPTIONS);
+        setBreakMinPoints(40);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [highbreakEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -2313,6 +2342,19 @@ const Me: React.FC = () => {
                       <div className="text-sm cue-muted">讀取中…</div>
                     ) : (
                       <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm cue-muted">顯示標準</div>
+                          {breakThresholdOptions.map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setBreakMinPoints(value)}
+                              className={`px-3 py-1.5 rounded text-sm font-semibold ${breakMinPoints === value ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              {value}+
+                            </button>
+                          ))}
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -2339,17 +2381,17 @@ const Me: React.FC = () => {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="cue-surface-strong rounded-lg p-4">
-                            <div className="text-sm cue-muted">目前分類最高</div>
+                            <div className="text-sm cue-muted">目前分類最高 {breakMinPoints}+</div>
                             <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.highest || 0}</div>
                           </div>
                           <div className="cue-surface-strong rounded-lg p-4">
-                            <div className="text-sm cue-muted">目前分類累計</div>
+                            <div className="text-sm cue-muted">目前分類 {breakMinPoints}+ 累計</div>
                             <div className="text-3xl font-extrabold accent-yellow mt-1">{categorizedBreakSummary.total || 0}</div>
                           </div>
                         </div>
 
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="font-semibold mb-2">每月累計走勢</div>
+                          <div className="font-semibold mb-2">每月 {breakMinPoints}+ 累計走勢</div>
                           {monthlySeries.length < 2 ? (
                             <div className="text-sm cue-muted">資料不足</div>
                           ) : (
@@ -2453,7 +2495,7 @@ const Me: React.FC = () => {
                           </div>
 
                           <div className="text-xs cue-muted mt-2">
-                            目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 共 {categorizedBreaks.length} 筆
+                            目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 標準：{breakMinPoints}+ · 共 {categorizedBreaks.length} 筆
                           </div>
 
                           <div className="mt-3 overflow-x-auto -mx-2 px-2">

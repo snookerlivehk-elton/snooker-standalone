@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
 import { listUnifiedBreakRows } from '../../core/highbreak/unifiedBreakRows.js';
+import { getEffectiveClubHighbreakSettings, getHighbreakModuleSettings } from '../../core/modules/highbreakSettings.js';
 import { parseLimit, parseMonthRangeUtc } from '../../core/utils/query.js';
 
 type BreakRecordType = 'VENUE' | 'TOURNAMENT';
@@ -293,6 +294,20 @@ export function createClubHighbreakRouter() {
     res.json(rows);
   });
 
+  router.get('/:clubId/leaderboard/settings', async (req, res) => {
+    const clubId = String(req.params.clubId || '').trim();
+    if (!clubId) return res.status(400).json({ error: 'clubId required' });
+    try {
+      const result = await getEffectiveClubHighbreakSettings(clubId);
+      res.json({
+        clubId,
+        ...result,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   router.get('/:clubId/leaderboard/monthly', async (req, res) => {
     const clubId = String(req.params.clubId || '').trim();
     if (!clubId) return res.status(400).json({ error: 'clubId required' });
@@ -375,11 +390,26 @@ async function listPublicHighbreakMemberIds(regionCode?: string, districtCode?: 
 export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
   const router = express.Router();
 
+  router.get('/api/leaderboard/settings', async (_req, res) => {
+    try {
+      const settings = await getHighbreakModuleSettings();
+      res.json(settings);
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   router.get('/api/leaderboard/members/highest', async (req, res) => {
     try {
       const take = parseLimit(req.query.limit, 10);
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      let minPoints = 0;
+      try {
+        minPoints = parseMinPoints(req.query.minPoints);
+      } catch (err: any) {
+        return res.status(400).json({ error: String(err?.message || err) });
+      }
       const [clubIds, memberIds] = await Promise.all([
         listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined),
         listPublicHighbreakMemberIds(regionCode || undefined, districtCode || undefined),
@@ -387,7 +417,13 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['member_id'],
-        where: { deleted_at: null, record_type: 'VENUE', club_id: { in: clubIds }, member_id: { in: memberIds } },
+        where: {
+          deleted_at: null,
+          record_type: 'VENUE',
+          club_id: { in: clubIds },
+          member_id: { in: memberIds },
+          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
+        },
         _max: { points: true },
         orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
         take,
@@ -414,6 +450,12 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const month = String(req.query.month || '').trim();
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      let minPoints = 0;
+      try {
+        minPoints = parseMinPoints(req.query.minPoints);
+      } catch (err: any) {
+        return res.status(400).json({ error: String(err?.message || err) });
+      }
       const range = parseMonthRangeUtc(month);
       if (!range) return res.status(400).json({ error: 'month invalid' });
 
@@ -424,7 +466,14 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['member_id'],
-        where: { deleted_at: null, record_type: 'VENUE', recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds }, member_id: { in: memberIds } },
+        where: {
+          deleted_at: null,
+          record_type: 'VENUE',
+          recorded_at: { gte: range.start, lt: range.end },
+          club_id: { in: clubIds },
+          member_id: { in: memberIds },
+          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
+        },
         _sum: { points: true },
         orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
         take,
@@ -450,11 +499,22 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const take = parseLimit(req.query.limit, 10);
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      let minPoints = 0;
+      try {
+        minPoints = parseMinPoints(req.query.minPoints);
+      } catch (err: any) {
+        return res.status(400).json({ error: String(err?.message || err) });
+      }
       const clubIds = await listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined);
       if (clubIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['club_id'],
-        where: { deleted_at: null, record_type: 'VENUE', club_id: { in: clubIds } },
+        where: {
+          deleted_at: null,
+          record_type: 'VENUE',
+          club_id: { in: clubIds },
+          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
+        },
         _max: { points: true },
         orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
         take,
@@ -484,6 +544,12 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const month = String(req.query.month || '').trim();
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      let minPoints = 0;
+      try {
+        minPoints = parseMinPoints(req.query.minPoints);
+      } catch (err: any) {
+        return res.status(400).json({ error: String(err?.message || err) });
+      }
       const range = parseMonthRangeUtc(month);
       if (!range) return res.status(400).json({ error: 'month invalid' });
 
@@ -491,7 +557,13 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       if (clubIds.length === 0) return res.json([]);
       const rows = await prisma.breakRecord.groupBy({
         by: ['club_id'],
-        where: { deleted_at: null, record_type: 'VENUE', recorded_at: { gte: range.start, lt: range.end }, club_id: { in: clubIds } },
+        where: {
+          deleted_at: null,
+          record_type: 'VENUE',
+          recorded_at: { gte: range.start, lt: range.end },
+          club_id: { in: clubIds },
+          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
+        },
         _sum: { points: true },
         orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
         take,

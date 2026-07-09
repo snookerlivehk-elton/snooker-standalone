@@ -18,6 +18,7 @@ import {
   getPublicClubProfile,
   getPublicClubTournamentParticipantDetail,
   getPublicClubTournamentLiveBoard,
+  getPublicClubHighbreakSettings,
   getPublicClubTournament,
   getPublicClubTournaments,
   getPublicPricing,
@@ -55,6 +56,8 @@ type InboxItem = {
 };
 
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
+
+const PUBLIC_HIGHBREAK_FALLBACK_OPTIONS = [20, 30, 40, 50];
 
 const PUBLIC_BRACKET_CARD_HEIGHT = 88;
 const PUBLIC_BRACKET_BASE_GAP = 18;
@@ -255,6 +258,8 @@ const ClubPublicPage: React.FC = () => {
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [leaderLoading, setLeaderLoading] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
+  const [leaderMinPoints, setLeaderMinPoints] = useState(40);
+  const [leaderThresholdOptions, setLeaderThresholdOptions] = useState<number[]>(PUBLIC_HIGHBREAK_FALLBACK_OPTIONS);
   const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'scoreboard' | 'live' | 'leader' | 'info' | 'contact'>('booking');
 
   const [clubMessages, setClubMessages] = useState<any[]>([]);
@@ -875,6 +880,30 @@ const ClubPublicPage: React.FC = () => {
   }, [clubId, session]);
 
   useEffect(() => {
+    if (!clubId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const settings = await getPublicClubHighbreakSettings(API_URL, clubId);
+        if (!mounted) return;
+        const options = Array.isArray((settings as any)?.moduleSettings?.displayThresholdOptions)
+          ? (settings as any).moduleSettings.displayThresholdOptions
+          : PUBLIC_HIGHBREAK_FALLBACK_OPTIONS;
+        setLeaderThresholdOptions(options);
+        const effectiveMinPoints = Number((settings as any)?.effectiveMinPoints || 0);
+        if (Number.isFinite(effectiveMinPoints) && effectiveMinPoints >= 20) {
+          setLeaderMinPoints(effectiveMinPoints);
+        }
+      } catch {
+        if (!mounted) return;
+        setLeaderThresholdOptions(PUBLIC_HIGHBREAK_FALLBACK_OPTIONS);
+        setLeaderMinPoints(40);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [clubId]);
+
+  useEffect(() => {
     if (!clubId) {
       setLeaderHighest([]);
       setLeaderMonthly([]);
@@ -885,8 +914,8 @@ const ClubPublicPage: React.FC = () => {
     setLeaderLoading(true);
     setLeaderError(null);
     Promise.all([
-      getClubLeaderboardHighest(API_URL, clubId, 10).catch(() => []),
-      getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10).catch(() => []),
+      getClubLeaderboardHighest(API_URL, clubId, 10, leaderMinPoints).catch(() => []),
+      getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, leaderMinPoints).catch(() => []),
     ])
       .then(([highest, monthly]) => {
         if (!mounted) return;
@@ -902,7 +931,7 @@ const ClubPublicPage: React.FC = () => {
         setLeaderLoading(false);
       });
     return () => { mounted = false; };
-  }, [clubId, leaderMonth]);
+  }, [clubId, leaderMonth, leaderMinPoints]);
 
   useEffect(() => {
     if (!clubId || !selTable || !date || !start || !hours || selectedHours.length === 0) {
@@ -2038,7 +2067,22 @@ const ClubPublicPage: React.FC = () => {
                 <div className="cue-surface rounded-lg p-4 text-left">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3 pb-2 border-b cue-border">
                     <div className="font-semibold text-lg">場館 Highbreak 排行榜</div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs cue-muted">標準</div>
+                        <div className="flex flex-wrap gap-1">
+                          {leaderThresholdOptions.map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setLeaderMinPoints(value)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${leaderMinPoints === value ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              {value}+
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="text-xs cue-muted">本月</div>
                       <input
                         type="month"
@@ -2054,7 +2098,7 @@ const ClubPublicPage: React.FC = () => {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">會內最高單杆 Top 10</div>
+                      <div className="font-semibold mb-2">最高 {leaderMinPoints}+ Top 10</div>
                       {leaderHighest.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (
@@ -2089,7 +2133,7 @@ const ClubPublicPage: React.FC = () => {
                     </div>
 
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">會內本月累計 Top 10</div>
+                      <div className="font-semibold mb-2">{leaderMinPoints}+ 本月累計 Top 10</div>
                       {leaderMonthly.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (
