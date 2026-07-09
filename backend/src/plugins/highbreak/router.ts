@@ -7,6 +7,7 @@ import { getEffectiveClubHighbreakSettings, getHighbreakModuleSettings } from '.
 import { parseLimit, parseMonthRangeUtc } from '../../core/utils/query.js';
 
 type BreakRecordType = 'VENUE' | 'TOURNAMENT';
+type BreakScope = 'ALL' | 'VENUE' | 'TOURNAMENT';
 
 function normalizeBreakRecordType(raw: any): BreakRecordType | null {
   const value = String(raw || '').trim().toUpperCase();
@@ -19,6 +20,14 @@ function parseMinPoints(raw: any) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) throw new Error('minPoints invalid');
   return Math.floor(value);
+}
+
+function parseScope(raw: any, fallback: BreakScope = 'ALL'): BreakScope {
+  const value = String(raw == null ? '' : raw).trim().toUpperCase();
+  if (!value) return fallback;
+  if (value === 'VENUE' || value === 'TOURNAMENT') return value;
+  if (value === 'ALL') return 'ALL';
+  throw new Error('scope invalid');
 }
 
 export function createClubHighbreakRouter() {
@@ -74,7 +83,7 @@ export function createClubHighbreakRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
-    const { month, memberId, minPoints } = req.query as any;
+    const { month, memberId, minPoints, scope } = req.query as any;
     if (month) {
       const range = parseMonthRangeUtc(String(month));
       if (!range) return res.status(400).json({ error: 'month invalid' });
@@ -85,12 +94,20 @@ export function createClubHighbreakRouter() {
     } catch (err: any) {
       return res.status(400).json({ error: String(err?.message || err) });
     }
+    const effectiveSettings = await getEffectiveClubHighbreakSettings(clubId);
+    let normalizedScope: BreakScope = effectiveSettings.effectiveScope;
+    try {
+      normalizedScope = parseScope(scope, effectiveSettings.effectiveScope);
+    } catch (err: any) {
+      return res.status(400).json({ error: String(err?.message || err) });
+    }
     const rows = await listUnifiedBreakRows({
       prismaClient: prisma,
       clubId,
       memberId: memberId ? String(memberId).trim() : '',
       month: month ? String(month).trim() : '',
       minPoints: normalizedMinPoints,
+      scope: normalizedScope,
     });
     res.json(rows);
   });
@@ -270,9 +287,12 @@ export function createClubHighbreakRouter() {
     if (!clubId) return res.status(400).json({ error: 'clubId required' });
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+    const effectiveSettings = await getEffectiveClubHighbreakSettings(clubId);
     let minPoints = 0;
+    let scope: BreakScope = effectiveSettings.effectiveScope;
     try {
       minPoints = parseMinPoints(req.query.minPoints);
+      scope = parseScope(req.query.scope, effectiveSettings.effectiveScope);
     } catch (err: any) {
       return res.status(400).json({ error: String(err?.message || err) });
     }
@@ -281,6 +301,7 @@ export function createClubHighbreakRouter() {
       prismaClient: prisma,
       clubId,
       minPoints,
+      scope,
     });
     const rows = [...allRows]
       .sort((a: any, b: any) => {
@@ -317,9 +338,12 @@ export function createClubHighbreakRouter() {
 
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+    const effectiveSettings = await getEffectiveClubHighbreakSettings(clubId);
     let minPoints = 0;
+    let scope: BreakScope = effectiveSettings.effectiveScope;
     try {
       minPoints = parseMinPoints(req.query.minPoints);
+      scope = parseScope(req.query.scope, effectiveSettings.effectiveScope);
     } catch (err: any) {
       return res.status(400).json({ error: String(err?.message || err) });
     }
@@ -329,6 +353,7 @@ export function createClubHighbreakRouter() {
       clubId,
       month,
       minPoints,
+      scope,
     });
     const groupedMap = new Map<string, { member: any; totalPoints: number }>();
     for (const row of allRows) {
@@ -404,9 +429,12 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const take = parseLimit(req.query.limit, 10);
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      const settings = await getHighbreakModuleSettings();
       let minPoints = 0;
+      let scope: BreakScope = settings.defaultLeaderboardScope;
       try {
         minPoints = parseMinPoints(req.query.minPoints);
+        scope = parseScope(req.query.scope, settings.defaultLeaderboardScope);
       } catch (err: any) {
         return res.status(400).json({ error: String(err?.message || err) });
       }
@@ -415,29 +443,47 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
         listPublicHighbreakMemberIds(regionCode || undefined, districtCode || undefined),
       ]);
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
-      const rows = await prisma.breakRecord.groupBy({
-        by: ['member_id'],
-        where: {
-          deleted_at: null,
-          record_type: 'VENUE',
-          club_id: { in: clubIds },
-          member_id: { in: memberIds },
-          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
-        },
-        _max: { points: true },
-        orderBy: [{ _max: { points: 'desc' } }, { member_id: 'asc' }],
-        take,
+      const rows = await listUnifiedBreakRows({
+        prismaClient: prisma,
+        clubIds,
+        memberIds,
+        minPoints,
+        scope,
       });
-      const ids = rows.map((r) => r.member_id);
+      const grouped = new Map<string, { member: any; points: number }>();
+      for (const row of rows) {
+        const memberKey = String(row?.member_id || '');
+        if (!memberKey) continue;
+        const current = grouped.get(memberKey);
+        const points = Number(row?.points || 0);
+        if (!current || points > current.points) {
+          grouped.set(memberKey, {
+            member: row?.member || null,
+            points,
+          });
+        }
+      }
+      const ranked = Array.from(grouped.entries())
+        .map(([memberId, value]) => ({
+          memberId,
+          member: value.member,
+          points: value.points,
+        }))
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return String(a.memberId).localeCompare(String(b.memberId));
+        })
+        .slice(0, take);
+      const ids = ranked.map((r) => r.memberId);
       const members = await prisma.member.findMany({
         where: { id: { in: ids } },
         select: { id: true, name: true, member_code: true },
       });
       const memberMap = new Map(members.map((m) => [m.id, m]));
-      res.json(rows.map((r) => ({
-        memberId: r.member_id,
-        member: memberMap.get(r.member_id) || null,
-        points: r._max.points || 0,
+      res.json(ranked.map((r) => ({
+        memberId: r.memberId,
+        member: memberMap.get(r.memberId) || r.member || null,
+        points: r.points || 0,
       })));
     } catch (e: any) {
       res.status(500).json({ error: String(e?.message || e) });
@@ -450,9 +496,12 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const month = String(req.query.month || '').trim();
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      const settings = await getHighbreakModuleSettings();
       let minPoints = 0;
+      let scope: BreakScope = settings.defaultLeaderboardScope;
       try {
         minPoints = parseMinPoints(req.query.minPoints);
+        scope = parseScope(req.query.scope, settings.defaultLeaderboardScope);
       } catch (err: any) {
         return res.status(400).json({ error: String(err?.message || err) });
       }
@@ -464,30 +513,47 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
         listPublicHighbreakMemberIds(regionCode || undefined, districtCode || undefined),
       ]);
       if (clubIds.length === 0 || memberIds.length === 0) return res.json([]);
-      const rows = await prisma.breakRecord.groupBy({
-        by: ['member_id'],
-        where: {
-          deleted_at: null,
-          record_type: 'VENUE',
-          recorded_at: { gte: range.start, lt: range.end },
-          club_id: { in: clubIds },
-          member_id: { in: memberIds },
-          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
-        },
-        _sum: { points: true },
-        orderBy: [{ _sum: { points: 'desc' } }, { member_id: 'asc' }],
-        take,
+      const rows = await listUnifiedBreakRows({
+        prismaClient: prisma,
+        clubIds,
+        memberIds,
+        month,
+        minPoints,
+        scope,
       });
-      const ids = rows.map((r) => r.member_id);
+      const grouped = new Map<string, { member: any; points: number }>();
+      for (const row of rows) {
+        const memberKey = String(row?.member_id || '');
+        if (!memberKey) continue;
+        const current = grouped.get(memberKey) || {
+          member: row?.member || null,
+          points: 0,
+        };
+        current.points += Number(row?.points || 0);
+        if (!current.member && row?.member) current.member = row.member;
+        grouped.set(memberKey, current);
+      }
+      const ranked = Array.from(grouped.entries())
+        .map(([memberId, value]) => ({
+          memberId,
+          member: value.member,
+          points: value.points,
+        }))
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return String(a.memberId).localeCompare(String(b.memberId));
+        })
+        .slice(0, take);
+      const ids = ranked.map((r) => r.memberId);
       const members = await prisma.member.findMany({
         where: { id: { in: ids } },
         select: { id: true, name: true, member_code: true },
       });
       const memberMap = new Map(members.map((m) => [m.id, m]));
-      res.json(rows.map((r) => ({
-        memberId: r.member_id,
-        member: memberMap.get(r.member_id) || null,
-        points: r._sum.points || 0,
+      res.json(ranked.map((r) => ({
+        memberId: r.memberId,
+        member: memberMap.get(r.memberId) || r.member || null,
+        points: r.points || 0,
       })));
     } catch (e: any) {
       res.status(500).json({ error: String(e?.message || e) });
@@ -499,38 +565,59 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const take = parseLimit(req.query.limit, 10);
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      const settings = await getHighbreakModuleSettings();
       let minPoints = 0;
+      let scope: BreakScope = settings.defaultLeaderboardScope;
       try {
         minPoints = parseMinPoints(req.query.minPoints);
+        scope = parseScope(req.query.scope, settings.defaultLeaderboardScope);
       } catch (err: any) {
         return res.status(400).json({ error: String(err?.message || err) });
       }
       const clubIds = await listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined);
       if (clubIds.length === 0) return res.json([]);
-      const rows = await prisma.breakRecord.groupBy({
-        by: ['club_id'],
-        where: {
-          deleted_at: null,
-          record_type: 'VENUE',
-          club_id: { in: clubIds },
-          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
-        },
-        _max: { points: true },
-        orderBy: [{ _max: { points: 'desc' } }, { club_id: 'asc' }],
-        take,
+      const rows = await listUnifiedBreakRows({
+        prismaClient: prisma,
+        clubIds,
+        minPoints,
+        scope,
       });
-      const ids = rows.map((r) => r.club_id);
+      const grouped = new Map<string, { club: any; points: number }>();
+      for (const row of rows) {
+        const clubKey = String(row?.club_id || '');
+        if (!clubKey) continue;
+        const current = grouped.get(clubKey);
+        const points = Number(row?.points || 0);
+        if (!current || points > current.points) {
+          grouped.set(clubKey, {
+            club: row?.club || null,
+            points,
+          });
+        }
+      }
+      const ranked = Array.from(grouped.entries())
+        .map(([clubId, value]) => ({
+          clubId,
+          club: value.club,
+          points: value.points,
+        }))
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return String(a.clubId).localeCompare(String(b.clubId));
+        })
+        .slice(0, take);
+      const ids = ranked.map((r) => r.clubId);
       const clubs = await prisma.clubProfile.findMany({
         where: { id: { in: ids } },
         select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
       });
       const clubMap = new Map(clubs.map((c) => [c.id, c]));
-      res.json(rows.map((r) => {
-        const club = clubMap.get(r.club_id);
+      res.json(ranked.map((r) => {
+        const club = clubMap.get(r.clubId) || r.club;
         return {
-          clubId: r.club_id,
+          clubId: r.clubId,
           club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
-          points: r._max.points || 0,
+          points: r.points || 0,
         };
       }));
     } catch (e: any) {
@@ -544,9 +631,12 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
       const month = String(req.query.month || '').trim();
       const regionCode = String(req.query.regionCode || '').trim().toUpperCase();
       const districtCode = String(req.query.districtCode || '').trim().toUpperCase();
+      const settings = await getHighbreakModuleSettings();
       let minPoints = 0;
+      let scope: BreakScope = settings.defaultLeaderboardScope;
       try {
         minPoints = parseMinPoints(req.query.minPoints);
+        scope = parseScope(req.query.scope, settings.defaultLeaderboardScope);
       } catch (err: any) {
         return res.status(400).json({ error: String(err?.message || err) });
       }
@@ -555,31 +645,48 @@ export function createSystemHighbreakRouter(adminAuth: express.RequestHandler) {
 
       const clubIds = await listPublicHighbreakClubIds(regionCode || undefined, districtCode || undefined);
       if (clubIds.length === 0) return res.json([]);
-      const rows = await prisma.breakRecord.groupBy({
-        by: ['club_id'],
-        where: {
-          deleted_at: null,
-          record_type: 'VENUE',
-          recorded_at: { gte: range.start, lt: range.end },
-          club_id: { in: clubIds },
-          ...(minPoints > 0 ? { points: { gte: minPoints } } : {}),
-        },
-        _sum: { points: true },
-        orderBy: [{ _sum: { points: 'desc' } }, { club_id: 'asc' }],
-        take,
+      const rows = await listUnifiedBreakRows({
+        prismaClient: prisma,
+        clubIds,
+        month,
+        minPoints,
+        scope,
       });
-      const ids = rows.map((r) => r.club_id);
+      const grouped = new Map<string, { club: any; points: number }>();
+      for (const row of rows) {
+        const clubKey = String(row?.club_id || '');
+        if (!clubKey) continue;
+        const current = grouped.get(clubKey) || {
+          club: row?.club || null,
+          points: 0,
+        };
+        current.points += Number(row?.points || 0);
+        if (!current.club && row?.club) current.club = row.club;
+        grouped.set(clubKey, current);
+      }
+      const ranked = Array.from(grouped.entries())
+        .map(([clubId, value]) => ({
+          clubId,
+          club: value.club,
+          points: value.points,
+        }))
+        .sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          return String(a.clubId).localeCompare(String(b.clubId));
+        })
+        .slice(0, take);
+      const ids = ranked.map((r) => r.clubId);
       const clubs = await prisma.clubProfile.findMany({
         where: { id: { in: ids } },
         select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } },
       });
       const clubMap = new Map(clubs.map((c) => [c.id, c]));
-      res.json(rows.map((r) => {
-        const club = clubMap.get(r.club_id);
+      res.json(ranked.map((r) => {
+        const club = clubMap.get(r.clubId) || r.club;
         return {
-          clubId: r.club_id,
+          clubId: r.clubId,
           club: club ? { ...club, name: club.name || club.member?.name || '' } : null,
-          points: r._sum.points || 0,
+          points: r.points || 0,
         };
       }));
     } catch (e: any) {

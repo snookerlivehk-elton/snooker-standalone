@@ -58,6 +58,12 @@ type InboxItem = {
 type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
 
 const PUBLIC_HIGHBREAK_FALLBACK_OPTIONS = [20, 30, 40, 50];
+const PUBLIC_HIGHBREAK_SCOPE_OPTIONS = [
+  { value: 'ALL', label: '綜合' },
+  { value: 'VENUE', label: '會內' },
+  { value: 'TOURNAMENT', label: '賽事' },
+] as const;
+type PublicHighbreakScope = typeof PUBLIC_HIGHBREAK_SCOPE_OPTIONS[number]['value'];
 
 const PUBLIC_BRACKET_CARD_HEIGHT = 88;
 const PUBLIC_BRACKET_BASE_GAP = 18;
@@ -260,6 +266,7 @@ const ClubPublicPage: React.FC = () => {
   const [leaderError, setLeaderError] = useState<string | null>(null);
   const [leaderMinPoints, setLeaderMinPoints] = useState(40);
   const [leaderThresholdOptions, setLeaderThresholdOptions] = useState<number[]>(PUBLIC_HIGHBREAK_FALLBACK_OPTIONS);
+  const [leaderScope, setLeaderScope] = useState<PublicHighbreakScope>('ALL');
   const [activeTab, setActiveTab] = useState<'booking' | 'messages' | 'signup' | 'scoreboard' | 'live' | 'leader' | 'info' | 'contact'>('booking');
 
   const [clubMessages, setClubMessages] = useState<any[]>([]);
@@ -324,6 +331,7 @@ const ClubPublicPage: React.FC = () => {
   const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
   const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const leaderScopeLabel = PUBLIC_HIGHBREAK_SCOPE_OPTIONS.find((item) => item.value === leaderScope)?.label || '綜合';
 
   const showShareToast = useCallback((msg: string, ms = 2000) => {
     setShareToast(msg);
@@ -894,10 +902,13 @@ const ClubPublicPage: React.FC = () => {
         if (Number.isFinite(effectiveMinPoints) && effectiveMinPoints >= 20) {
           setLeaderMinPoints(effectiveMinPoints);
         }
+        const effectiveScope = String((settings as any)?.effectiveScope || 'ALL').toUpperCase();
+        setLeaderScope(effectiveScope === 'VENUE' || effectiveScope === 'TOURNAMENT' ? effectiveScope : 'ALL');
       } catch {
         if (!mounted) return;
         setLeaderThresholdOptions(PUBLIC_HIGHBREAK_FALLBACK_OPTIONS);
         setLeaderMinPoints(40);
+        setLeaderScope('ALL');
       }
     })();
     return () => { mounted = false; };
@@ -914,8 +925,8 @@ const ClubPublicPage: React.FC = () => {
     setLeaderLoading(true);
     setLeaderError(null);
     Promise.all([
-      getClubLeaderboardHighest(API_URL, clubId, 10, leaderMinPoints).catch(() => []),
-      getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, leaderMinPoints).catch(() => []),
+      getClubLeaderboardHighest(API_URL, clubId, 10, leaderMinPoints, leaderScope).catch(() => []),
+      getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, leaderMinPoints, leaderScope).catch(() => []),
     ])
       .then(([highest, monthly]) => {
         if (!mounted) return;
@@ -931,7 +942,7 @@ const ClubPublicPage: React.FC = () => {
         setLeaderLoading(false);
       });
     return () => { mounted = false; };
-  }, [clubId, leaderMonth, leaderMinPoints]);
+  }, [clubId, leaderMonth, leaderMinPoints, leaderScope]);
 
   useEffect(() => {
     if (!clubId || !selTable || !date || !start || !hours || selectedHours.length === 0) {
@@ -2069,6 +2080,21 @@ const ClubPublicPage: React.FC = () => {
                     <div className="font-semibold text-lg">場館 Highbreak 排行榜</div>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-2">
+                        <div className="text-xs cue-muted">口徑</div>
+                        <div className="flex flex-wrap gap-1">
+                          {PUBLIC_HIGHBREAK_SCOPE_OPTIONS.map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() => setLeaderScope(item.value)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${leaderScope === item.value ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <div className="text-xs cue-muted">標準</div>
                         <div className="flex flex-wrap gap-1">
                           {leaderThresholdOptions.map((value) => (
@@ -2098,7 +2124,7 @@ const ClubPublicPage: React.FC = () => {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">最高 {leaderMinPoints}+ Top 10</div>
+                      <div className="font-semibold mb-2">{leaderScopeLabel}最高 {leaderMinPoints}+ Top 10</div>
                       {leaderHighest.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (
@@ -2133,7 +2159,7 @@ const ClubPublicPage: React.FC = () => {
                     </div>
 
                     <div className="cue-surface-strong rounded-lg p-3">
-                      <div className="font-semibold mb-2">{leaderMinPoints}+ 本月累計 Top 10</div>
+                      <div className="font-semibold mb-2">{leaderScopeLabel} {leaderMinPoints}+ 本月累計 Top 10</div>
                       {leaderMonthly.length === 0 ? (
                         <div className="text-sm cue-muted">暫無資料</div>
                       ) : (

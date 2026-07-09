@@ -87,6 +87,37 @@
   - `frontend/src/HomePage.tsx`
     - 首頁會員榜 / 場館榜會讀取系統預設門檻
     - 已支援首頁門檻切換與動態標題
+- Highbreak Batch 5 已完成第一版 scope 收斂：
+  - `backend/src/core/modules/highbreakSettings.ts`
+    - club-level settings 已新增：
+      - `leaderboardScopeMode`
+      - `leaderboardScopeDefault`
+      - `effectiveScope`
+    - 系統與場館可正式區分：
+      - `ALL`
+      - `VENUE`
+      - `TOURNAMENT`
+  - `backend/src/core/highbreak/unifiedBreakRows.ts`
+    - unified rows 已支援：
+      - `scope`
+      - `memberIds`
+      - `clubIds`
+    - 場館榜、公開榜與綜合榜改為共用同一套 `scope + minPoints` 聚合來源
+  - `backend/src/plugins/highbreak/router.ts`
+    - club / public / system highbreak API 已支援 `scope`
+    - 未指定 `scope` 時，會自動使用場館或系統的 effective scope
+    - 公開會員榜 / 場館榜不再固定只算 `VENUE`
+  - `backend/routes/club.ts`
+    - 場館 highbreak settings API 已支援更新/回傳 scope 設定
+  - `frontend/src/lib/api.ts`
+    - highbreak 查詢 wrapper 已支援 `scope`
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+    - 場館後台已加入 `綜合 / 會內 / 賽事` 口徑切換
+    - 場館可選 `口徑跟隨系統 / 口徑場館自訂`
+  - `frontend/src/ClubPublicPage.tsx`
+    - 場館公開頁排行榜已支援 scope 切換
+  - `frontend/src/HomePage.tsx`
+    - 首頁會員榜 / 場館榜已支援 scope 切換
 - 本輪驗證：
   - `backend npm run build` 已通過
   - `frontend npm run build` 已通過
@@ -98,6 +129,7 @@
   - 待提交 checkpoint：
     - Highbreak Batch 1 ~ 3（影片補錄、`minPoints`、系統/場館預設門檻）
     - Highbreak Batch 4（會員頁 / 場館公開頁 / 首頁排行榜門檻切換）
+    - Highbreak Batch 5（`VENUE / TOURNAMENT / ALL` scope 收斂）
 
 - Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
   - `VenueTournamentLeagueSchedulePanel.tsx`

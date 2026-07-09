@@ -6,6 +6,12 @@ import slhkLogo from './assets/slhk-logo.svg';
 import { fetchModuleStates, type ModuleCode } from './lib/features';
 
 const HOME_HIGHBREAK_FALLBACK_OPTIONS = [20, 30, 40, 50];
+const HOME_HIGHBREAK_SCOPE_OPTIONS = [
+  { value: 'ALL', label: '綜合' },
+  { value: 'VENUE', label: '會內' },
+  { value: 'TOURNAMENT', label: '賽事' },
+] as const;
+type HomeHighbreakScope = typeof HOME_HIGHBREAK_SCOPE_OPTIONS[number]['value'];
 
 const HomePage: React.FC = () => {
   const [notice, setNotice] = useState<any>(null);
@@ -19,6 +25,7 @@ const HomePage: React.FC = () => {
   const [leaderError, setLeaderError] = useState<string | null>(null);
   const [leaderMinPoints, setLeaderMinPoints] = useState(40);
   const [leaderThresholdOptions, setLeaderThresholdOptions] = useState<number[]>(HOME_HIGHBREAK_FALLBACK_OPTIONS);
+  const [leaderScope, setLeaderScope] = useState<HomeHighbreakScope>('ALL');
   const [clubs, setClubs] = useState<any[]>([]);
   const [clubsLoading, setClubsLoading] = useState(false);
   const [clubsError, setClubsError] = useState<string | null>(null);
@@ -96,10 +103,13 @@ const HomePage: React.FC = () => {
         if (Number.isFinite(defaultThreshold) && defaultThreshold >= 20) {
           setLeaderMinPoints(defaultThreshold);
         }
+        const defaultScope = String((settings as any)?.defaultLeaderboardScope || 'ALL').toUpperCase();
+        setLeaderScope(defaultScope === 'VENUE' || defaultScope === 'TOURNAMENT' ? defaultScope : 'ALL');
       } catch {
         if (!mounted) return;
         setLeaderThresholdOptions(HOME_HIGHBREAK_FALLBACK_OPTIONS);
         setLeaderMinPoints(40);
+        setLeaderScope('ALL');
       }
     })();
     return () => { mounted = false; };
@@ -112,8 +122,8 @@ const HomePage: React.FC = () => {
       setLeaderError(null);
       try {
         const [members, clubsHighest] = await Promise.all([
-          getLeaderboardMembersHighest(API_URL, 5, { minPoints: leaderMinPoints }),
-          getLeaderboardClubsHighest(API_URL, 5, { minPoints: leaderMinPoints }),
+          getLeaderboardMembersHighest(API_URL, 5, { minPoints: leaderMinPoints, scope: leaderScope }),
+          getLeaderboardClubsHighest(API_URL, 5, { minPoints: leaderMinPoints, scope: leaderScope }),
         ]);
         if (!mounted) return;
         setMemberLeaders(Array.isArray(members) ? members : []);
@@ -129,7 +139,7 @@ const HomePage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [leaderMinPoints]);
+  }, [leaderMinPoints, leaderScope]);
 
   useEffect(() => {
     let mounted = true;
@@ -463,6 +473,16 @@ const HomePage: React.FC = () => {
                 <h2 className="text-2xl font-black cue-zh-title">最新排行榜</h2>
               </div>
               <div className="flex flex-wrap gap-2">
+                {HOME_HIGHBREAK_SCOPE_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setLeaderScope(item.value)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-semibold ${leaderScope === item.value ? 'bg-white/90 text-black' : 'cue-surface hover:brightness-95'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
                 {leaderThresholdOptions.map((value) => (
                   <button
                     key={value}
@@ -481,7 +501,7 @@ const HomePage: React.FC = () => {
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="glass rounded-2xl p-4">
-                    <div className="mb-3 text-lg font-bold">會員最高 {leaderMinPoints}+</div>
+                    <div className="mb-3 text-lg font-bold">{leaderScope === 'VENUE' ? '會內' : leaderScope === 'TOURNAMENT' ? '賽事' : '綜合'}會員最高 {leaderMinPoints}+</div>
                     <div className="space-y-2">
                       {memberLeaders.slice(0, 5).map((row: any, idx: number) => (
                         <div key={String(row?.memberId || idx)} className="cue-surface-strong rounded-xl px-3 py-3 flex items-center justify-between gap-3">
@@ -498,7 +518,7 @@ const HomePage: React.FC = () => {
                     </div>
                   </div>
                   <div className="glass rounded-2xl p-4">
-                    <div className="mb-3 text-lg font-bold">場館最高 {leaderMinPoints}+</div>
+                    <div className="mb-3 text-lg font-bold">{leaderScope === 'VENUE' ? '會內' : leaderScope === 'TOURNAMENT' ? '賽事' : '綜合'}場館最高 {leaderMinPoints}+</div>
                     <div className="space-y-2">
                       {clubLeaders.slice(0, 5).map((row: any, idx: number) => (
                         <div key={String(row?.clubId || idx)} className="cue-surface-strong rounded-xl px-3 py-3 flex items-center justify-between gap-3">

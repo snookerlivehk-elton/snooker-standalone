@@ -36,6 +36,8 @@ export type HighbreakModuleSettings = {
 export type ClubHighbreakSettings = {
   displayThresholdMode: 'FOLLOW_SYSTEM' | 'CUSTOM';
   displayThresholdDefault: number;
+  leaderboardScopeMode: 'FOLLOW_SYSTEM' | 'CUSTOM';
+  leaderboardScopeDefault: 'ALL' | 'VENUE' | 'TOURNAMENT';
 };
 
 export const DEFAULT_HIGHBREAK_MODULE_SETTINGS: HighbreakModuleSettings = {
@@ -47,6 +49,8 @@ export const DEFAULT_HIGHBREAK_MODULE_SETTINGS: HighbreakModuleSettings = {
 export const DEFAULT_CLUB_HIGHBREAK_SETTINGS: ClubHighbreakSettings = {
   displayThresholdMode: 'FOLLOW_SYSTEM',
   displayThresholdDefault: 40,
+  leaderboardScopeMode: 'FOLLOW_SYSTEM',
+  leaderboardScopeDefault: 'ALL',
 };
 
 export function normalizeHighbreakModuleSettings(value: unknown): HighbreakModuleSettings {
@@ -78,6 +82,12 @@ export function normalizeClubHighbreakSettings(value: unknown, moduleSettings?: 
   const mode = String(raw.displayThresholdMode || DEFAULT_CLUB_HIGHBREAK_SETTINGS.displayThresholdMode)
     .trim()
     .toUpperCase();
+  const scopeMode = String(raw.leaderboardScopeMode || DEFAULT_CLUB_HIGHBREAK_SETTINGS.leaderboardScopeMode)
+    .trim()
+    .toUpperCase();
+  const scopeDefault = String(raw.leaderboardScopeDefault || resolvedModuleSettings.defaultLeaderboardScope)
+    .trim()
+    .toUpperCase();
   return {
     displayThresholdMode: mode === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
     displayThresholdDefault: normalizeThreshold(
@@ -85,6 +95,11 @@ export function normalizeClubHighbreakSettings(value: unknown, moduleSettings?: 
       resolvedModuleSettings.systemDisplayThresholdDefault,
       resolvedModuleSettings.displayThresholdOptions,
     ),
+    leaderboardScopeMode: scopeMode === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
+    leaderboardScopeDefault:
+      scopeDefault === 'VENUE' || scopeDefault === 'TOURNAMENT'
+        ? scopeDefault
+        : 'ALL',
   };
 }
 
@@ -156,9 +171,13 @@ export async function getEffectiveClubHighbreakSettings(clubId: string, db?: DbC
   const effectiveMinPoints = clubSettings.displayThresholdMode === 'CUSTOM'
     ? clubSettings.displayThresholdDefault
     : moduleSettings.systemDisplayThresholdDefault;
+  const effectiveScope = clubSettings.leaderboardScopeMode === 'CUSTOM'
+    ? clubSettings.leaderboardScopeDefault
+    : moduleSettings.defaultLeaderboardScope;
   return {
     moduleSettings,
     clubSettings,
     effectiveMinPoints,
+    effectiveScope,
   };
 }

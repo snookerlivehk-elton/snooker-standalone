@@ -15,6 +15,12 @@ import {
 import { useFeatureEnabled } from '../../lib/features';
 
 const BREAK_THRESHOLD_OPTIONS = [20, 30, 40, 50];
+const BREAK_SCOPE_OPTIONS = [
+  { value: 'ALL', label: '綜合' },
+  { value: 'VENUE', label: '會內' },
+  { value: 'TOURNAMENT', label: '賽事' },
+] as const;
+type BreakScope = typeof BREAK_SCOPE_OPTIONS[number]['value'];
 
 type VenueHighbreakModuleProps = {
   operatorId: string;
@@ -86,6 +92,11 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   const [thresholdOptions, setThresholdOptions] = useState<number[]>(BREAK_THRESHOLD_OPTIONS);
   const [thresholdMode, setThresholdMode] = useState<'FOLLOW_SYSTEM' | 'CUSTOM'>('FOLLOW_SYSTEM');
   const [thresholdSaving, setThresholdSaving] = useState(false);
+  const [breakScope, setBreakScope] = useState<BreakScope>('ALL');
+  const [scopeMode, setScopeMode] = useState<'FOLLOW_SYSTEM' | 'CUSTOM'>('FOLLOW_SYSTEM');
+  const [scopeSaving, setScopeSaving] = useState(false);
+
+  const breakScopeLabel = BREAK_SCOPE_OPTIONS.find((item) => item.value === breakScope)?.label || '綜合';
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
@@ -108,10 +119,13 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
         : BREAK_THRESHOLD_OPTIONS;
       setThresholdOptions(nextOptions);
       setThresholdMode(String((highbreakSettingsRes as any)?.clubSettings?.displayThresholdMode || 'FOLLOW_SYSTEM').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM');
+      setScopeMode(String((highbreakSettingsRes as any)?.clubSettings?.leaderboardScopeMode || 'FOLLOW_SYSTEM').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM');
       const effectiveMinPoints = Number((highbreakSettingsRes as any)?.effectiveMinPoints || 0);
       if (Number.isFinite(effectiveMinPoints) && effectiveMinPoints >= 20) {
         setBreakMinPoints(effectiveMinPoints);
       }
+      const effectiveScope = String((highbreakSettingsRes as any)?.effectiveScope || 'ALL').toUpperCase();
+      setBreakScope(effectiveScope === 'VENUE' || effectiveScope === 'TOURNAMENT' ? effectiveScope : 'ALL');
     } catch (e: any) {
       showNotice(e?.message || '載入單杆資料失敗', 3000);
     } finally {
@@ -128,9 +142,10 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
           month: breakFilterMonth,
           memberId: breakFilterMember || undefined,
           minPoints: breakMinPoints,
+          scope: breakScope,
         }).catch(() => []),
-        getClubLeaderboardHighest(API_URL, clubId, 10, breakMinPoints).catch(() => []),
-        getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, breakMinPoints).catch(() => []),
+        getClubLeaderboardHighest(API_URL, clubId, 10, breakMinPoints, breakScope).catch(() => []),
+        getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, breakMinPoints, breakScope).catch(() => []),
       ]);
       setBreaks(Array.isArray(rows) ? rows : []);
       setLeaderHighest(Array.isArray(highest) ? highest : []);
@@ -143,7 +158,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
     } finally {
       setBreaksLoading(false);
     }
-  }, [breakFilterMember, breakFilterMonth, breakMinPoints, clubId, enabled, leaderMonth, operatorId, showNotice]);
+  }, [breakFilterMember, breakFilterMonth, breakMinPoints, breakScope, clubId, enabled, leaderMonth, operatorId, showNotice]);
 
   useEffect(() => {
     loadContext();
@@ -167,21 +182,21 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b cue-border pb-2">
         <div>
           <h2 className="text-xl font-bold">場館 Highbreak</h2>
-          <div className="text-xs cue-muted mt-1">可同時查看場館會內單杆與 tournament `20+` 記錄，榜單會標示所屬比賽與場館。</div>
+          <div className="text-xs cue-muted mt-1">可按會內 / 賽事 / 綜合口徑查看單杆記錄與排行榜，並標示所屬比賽與場館。</div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <HelpGuide
             title="場館 Highbreak"
-            intro="新增場館會內 highbreak 記錄，並按月份、會員與顯示門檻查看列表、排行榜與影片補錄。"
+            intro="新增場館會內 highbreak 記錄，並按月份、會員、顯示門檻與統計口徑查看列表、排行榜與影片補錄。"
             steps={[
-              '右上角先選擇月份、會員與顯示標準（例如 20+ / 40+），按「重新整理」更新列表。',
+              '右上角先選擇月份、會員、顯示標準與口徑（綜合 / 會內 / 賽事），按「重新整理」更新列表。',
               '要新增記錄：下方選擇會員、輸入分數與日期（可選：影片連結/備註），按「新增」。',
               '比賽完結後，可在列表的「影片」欄直接補上或修改影片連結；若該列來自賽事 fallback，系統會自動轉成正式記錄。',
             ]}
             tips={[
               '影片連結建議使用可直接開啟的 https:// URL。',
               '如看不到某會員，請先到「會員管理」確認該會員已加入場館。',
-              '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡，並可按門檻切換顯示。',
+              '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡，並可按門檻與口徑切換顯示。',
             ]}
           />
           <input
@@ -232,6 +247,35 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-1 rounded cue-surface px-2 py-1">
+            <span className="text-xs cue-muted">口徑</span>
+            {BREAK_SCOPE_OPTIONS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={async () => {
+                  setBreakScope(item.value);
+                  if (scopeMode === 'CUSTOM') return;
+                  try {
+                    setScopeSaving(true);
+                    await updateClubHighbreakSettings(API_URL, operatorId, {
+                      leaderboardScopeMode: 'CUSTOM',
+                      leaderboardScopeDefault: item.value,
+                    });
+                    setScopeMode('CUSTOM');
+                    showNotice(`已改用場館自訂 ${item.label} 口徑`);
+                  } catch (e: any) {
+                    showNotice(e?.message || '更新場館口徑失敗', 3000);
+                  } finally {
+                    setScopeSaving(false);
+                  }
+                }}
+                className={`px-2 py-1 rounded text-xs ${breakScope === item.value ? 'cue-button text-white font-semibold' : 'cue-surface-strong hover:brightness-95'}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             disabled={thresholdSaving}
@@ -261,9 +305,34 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
           </button>
           <button
             type="button"
+            disabled={scopeSaving}
+            onClick={async () => {
+              try {
+                setScopeSaving(true);
+                const result = await updateClubHighbreakSettings(API_URL, operatorId, {
+                  leaderboardScopeMode: scopeMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
+                  ...(scopeMode === 'FOLLOW_SYSTEM' ? { leaderboardScopeDefault: breakScope } : {}),
+                });
+                const nextMode = String((result as any)?.clubSettings?.leaderboardScopeMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
+                const nextEffectiveScope = String((result as any)?.effectiveScope || 'ALL').toUpperCase();
+                setScopeMode(nextMode);
+                setBreakScope(nextEffectiveScope === 'VENUE' || nextEffectiveScope === 'TOURNAMENT' ? nextEffectiveScope : 'ALL');
+                showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設口徑' : '已改為場館自訂口徑');
+              } catch (e: any) {
+                showNotice(e?.message || '更新場館口徑失敗', 3000);
+              } finally {
+                setScopeSaving(false);
+              }
+            }}
+            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
+          >
+            {scopeSaving ? '儲存中...' : scopeMode === 'FOLLOW_SYSTEM' ? '口徑跟隨系統' : '口徑場館自訂'}
+          </button>
+          <button
+            type="button"
             onClick={async () => {
               await Promise.all([loadContext(), loadBreakData()]);
-              showNotice(`已更新 ${breakMinPoints}+ 單杆資料`);
+              showNotice(`已更新 ${breakScopeLabel} ${breakMinPoints}+ 單杆資料`);
             }}
             className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
           >
@@ -363,7 +432,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="cue-surface rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">最高 {breakMinPoints}+ Top 10</div>
+            <div className="font-semibold">{breakScopeLabel}最高 {breakMinPoints}+ Top 10</div>
           </div>
           {leaderHighest.length === 0 ? (
             <div className="text-sm cue-muted">暫無資料</div>
@@ -410,7 +479,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
 
         <div className="cue-surface rounded-lg p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
-            <div className="font-semibold">{breakMinPoints}+ 本月累計 Top 10</div>
+            <div className="font-semibold">{breakScopeLabel} {breakMinPoints}+ 本月累計 Top 10</div>
             <input
               type="month"
               value={leaderMonth}
@@ -444,7 +513,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       </div>
 
       <div className="mt-6">
-        <div className="font-semibold mb-2">{breakMinPoints}+ 紀錄列表</div>
+        <div className="font-semibold mb-2">{breakScopeLabel} {breakMinPoints}+ 紀錄列表</div>
         {breaksLoading ? (
           <div className="text-sm cue-muted">載入中...</div>
         ) : breaks.length === 0 ? (

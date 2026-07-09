@@ -3,9 +3,12 @@ import { parseMonthRangeUtc } from '../utils/query.js';
 type ListUnifiedBreakRowsArgs = {
   prismaClient: any;
   memberId?: string;
+  memberIds?: string[];
   clubId?: string;
+  clubIds?: string[];
   month?: string;
   minPoints?: number;
+  scope?: 'ALL' | 'VENUE' | 'TOURNAMENT';
 };
 
 function toRecordedAt(row: any): Date | null {
@@ -41,18 +44,33 @@ function normalizeMinPoints(raw?: number) {
   return Math.max(1, Math.floor(value));
 }
 
+function normalizeScope(raw?: string) {
+  const value = String(raw || 'ALL').trim().toUpperCase();
+  if (value === 'VENUE' || value === 'TOURNAMENT') return value;
+  return 'ALL';
+}
+
 export async function listUnifiedBreakRows({
   prismaClient,
   memberId = '',
+  memberIds = [],
   clubId = '',
+  clubIds = [],
   month = '',
   minPoints = 0,
+  scope = 'ALL',
 }: ListUnifiedBreakRowsArgs) {
   const normalizedMinPoints = normalizeMinPoints(minPoints);
+  const normalizedScope = normalizeScope(scope);
+  const memberIdList = Array.from(new Set((Array.isArray(memberIds) ? memberIds : []).map((value) => String(value || '').trim()).filter(Boolean)));
+  const clubIdList = Array.from(new Set((Array.isArray(clubIds) ? clubIds : []).map((value) => String(value || '').trim()).filter(Boolean)));
   const explicitWhere: any = { deleted_at: null };
-  if (memberId) explicitWhere.member_id = memberId;
-  if (clubId) explicitWhere.club_id = clubId;
+  if (memberIdList.length > 0) explicitWhere.member_id = { in: memberIdList };
+  else if (memberId) explicitWhere.member_id = memberId;
+  if (clubIdList.length > 0) explicitWhere.club_id = { in: clubIdList };
+  else if (clubId) explicitWhere.club_id = clubId;
   if (normalizedMinPoints > 0) explicitWhere.points = { gte: normalizedMinPoints };
+  if (normalizedScope !== 'ALL') explicitWhere.record_type = normalizedScope;
   if (month) {
     const range = parseMonthRangeUtc(month);
     if (!range) throw new Error('month invalid');
@@ -84,27 +102,35 @@ export async function listUnifiedBreakRows({
       )),
   );
 
-  const frameWhere: any = {
-    OR: [
-      { player_a_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
-      { player_b_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
-    ],
-  };
-  if (clubId || memberId) {
-    frameWhere.tournament_match = {};
-    if (memberId) {
-      frameWhere.tournament_match.OR = [
-        { player_a_participant: { is: { member_id: memberId } } },
-        { player_b_participant: { is: { member_id: memberId } } },
-      ];
-    }
-    if (clubId) {
-      frameWhere.tournament_match.tournament = { is: { clubId } };
-    }
-  }
-
-  const frames = await prismaClient.tournamentFrame.findMany({
-    where: frameWhere,
+  const frames = normalizedScope === 'VENUE' ? [] : await prismaClient.tournamentFrame.findMany({
+    where: (() => {
+      const frameWhere: any = {
+        OR: [
+          { player_a_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
+          { player_b_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
+        ],
+      };
+      if (clubId || clubIdList.length > 0 || memberId || memberIdList.length > 0) {
+        frameWhere.tournament_match = {};
+      }
+      if (memberIdList.length > 0) {
+        frameWhere.tournament_match.OR = [
+          { player_a_participant: { is: { member_id: { in: memberIdList } } } },
+          { player_b_participant: { is: { member_id: { in: memberIdList } } } },
+        ];
+      } else if (memberId) {
+        frameWhere.tournament_match.OR = [
+          { player_a_participant: { is: { member_id: memberId } } },
+          { player_b_participant: { is: { member_id: memberId } } },
+        ];
+      }
+      if (clubIdList.length > 0) {
+        frameWhere.tournament_match.tournament = { is: { clubId: { in: clubIdList } } };
+      } else if (clubId) {
+        frameWhere.tournament_match.tournament = { is: { clubId } };
+      }
+      return frameWhere;
+    })(),
     include: {
       tournament_match: {
         include: {

@@ -416,6 +416,12 @@ router.put('/highbreak/settings', async (req, res) => {
         if (body.displayThresholdDefault !== undefined) {
             patch.displayThresholdDefault = Number(body.displayThresholdDefault);
         }
+        if (body.leaderboardScopeMode !== undefined) {
+            patch.leaderboardScopeMode = String(body.leaderboardScopeMode || '').trim().toUpperCase();
+        }
+        if (body.leaderboardScopeDefault !== undefined) {
+            patch.leaderboardScopeDefault = String(body.leaderboardScopeDefault || '').trim().toUpperCase();
+        }
         if (Object.keys(patch).length === 0) {
             return res.status(400).json({ error: 'no_valid_fields' });
         }
@@ -427,6 +433,7 @@ router.put('/highbreak/settings', async (req, res) => {
             clubSettings,
             moduleSettings: effective.moduleSettings,
             effectiveMinPoints: effective.effectiveMinPoints,
+            effectiveScope: effective.effectiveScope,
         });
     } catch (error) {
         res.status(500).json({ error: String(error) });
