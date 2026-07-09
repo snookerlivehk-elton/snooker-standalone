@@ -10,6 +10,7 @@ type ClubPublicTournamentStageSectionProps = {
   formatTournamentResultTypeLabel: (value: any) => string;
   formatPublicKnockoutRoundLabel: (row: any, participantCount: number) => string;
   formatTournamentMatchStatusLabel: (value: any) => string;
+  openTournamentParticipantPanel: (participant: any) => void;
   PUBLIC_BRACKET_CONNECTOR_HALF_GAP: number;
   PUBLIC_BRACKET_CARD_HEIGHT: number;
 };
@@ -24,15 +25,22 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
   formatTournamentResultTypeLabel,
   formatPublicKnockoutRoundLabel,
   formatTournamentMatchStatusLabel,
+  openTournamentParticipantPanel,
   PUBLIC_BRACKET_CONNECTOR_HALF_GAP,
   PUBLIC_BRACKET_CARD_HEIGHT,
 }) => {
+  const [showLeagueRounds, setShowLeagueRounds] = React.useState(false);
+  const [showFullSchedule, setShowFullSchedule] = React.useState(false);
+
   return (
     <>
       {openedTournamentFormat === 'KNOCKOUT' && openedTournamentBracketColumns.length > 0 ? (
         <div className="cue-surface-strong rounded-lg p-4">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="font-semibold">Knockout Bracket</div>
+            <div>
+              <div className="font-semibold">淘汰賽模式進級表</div>
+              <div className="text-xs cue-muted mt-1">以進級表為主視圖，完整對局列表已下沉到次要區。</div>
+            </div>
             <div className="text-xs cue-muted">{openedTournamentMatches.length} 場</div>
           </div>
           <div className="overflow-x-auto -mx-2 px-2">
@@ -66,9 +74,22 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
                                 <span>M{row?.match_no || '-'}</span>
                                 <span>{formatTournamentResultTypeLabel(row?.result_type)}</span>
                               </div>
-                              <div className={`font-semibold truncate ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}>{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                              <button
+                                type="button"
+                                onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                                className={`font-semibold truncate text-left hover:underline ${winnerId && winnerId === aParticipantId ? 'accent-yellow' : ''}`}
+                              >
+                                {formatTournamentParticipantLabel(row?.player_a_participant)}
+                              </button>
                               <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
-                              <div className={`font-semibold truncate ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}>{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                              <button
+                                type="button"
+                                onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                                className={`font-semibold truncate text-left hover:underline ${winnerId && winnerId === bParticipantId ? 'accent-yellow' : ''}`}
+                              >
+                                {formatTournamentParticipantLabel(row?.player_b_participant)}
+                              </button>
+                              <div className="text-[11px] cue-muted mt-2">可點擊球手名稱查看個人戰況。</div>
                             </div>
                           </div>
                         );
@@ -85,39 +106,79 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
       {openedTournamentFormat === 'LEAGUE' && openedTournamentLeagueRounds.length > 0 ? (
         <div className="cue-surface-strong rounded-lg p-4">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="font-semibold">League Rounds</div>
-            <div className="text-xs cue-muted">{openedTournamentLeagueRounds.length} 輪</div>
+            <div>
+              <div className="font-semibold">聯賽模式輪次對賽</div>
+              <div className="text-xs cue-muted mt-1">聯賽模式以積分榜為主；輪次對賽已降為次要查看區。</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLeagueRounds((prev) => !prev)}
+              className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+            >
+              {showLeagueRounds ? '收合輪次' : `展開 ${openedTournamentLeagueRounds.length} 輪`}
+            </button>
           </div>
-          <div className="grid gap-3 lg:grid-cols-2">
-            {openedTournamentLeagueRounds.map((round: any) => (
-              <div key={String(round?.label || round?.roundNo || Math.random())} className="cue-surface rounded-lg p-3">
-                <div className="font-semibold mb-2">{round.label}</div>
-                <div className="grid gap-2">
-                  {round.items.map((row: any) => (
-                    <div key={String(row?.id || Math.random())} className="rounded-lg border cue-border p-3">
-                      <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
-                        <span>M{row?.match_no || '-'}</span>
-                        <span>{formatTournamentResultTypeLabel(row?.result_type)}</span>
+          {showLeagueRounds ? (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {openedTournamentLeagueRounds.map((round: any) => (
+                <div key={String(round?.label || round?.roundNo || Math.random())} className="cue-surface rounded-lg p-3">
+                  <div className="font-semibold mb-2">{round.label}</div>
+                  <div className="grid gap-2">
+                    {round.items.map((row: any) => (
+                      <div key={String(row?.id || Math.random())} className="rounded-lg border cue-border p-3">
+                        <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-1">
+                          <span>M{row?.match_no || '-'}</span>
+                          <span>{formatTournamentResultTypeLabel(row?.result_type)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                          className="font-semibold truncate text-left hover:underline"
+                        >
+                          {formatTournamentParticipantLabel(row?.player_a_participant)}
+                        </button>
+                        <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
+                        <button
+                          type="button"
+                          onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                          className="font-semibold truncate text-left hover:underline"
+                        >
+                          {formatTournamentParticipantLabel(row?.player_b_participant)}
+                        </button>
                       </div>
-                      <div className="font-semibold truncate">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
-                      <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
-                      <div className="font-semibold truncate">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm cue-muted">
+              已先收合輪次對賽，建議先查看上方積分榜，再按需要展開輪次賽程。
+            </div>
+          )}
         </div>
       ) : null}
 
       <div className="cue-surface-strong rounded-lg p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="font-semibold">公開賽程列表</div>
-          <div className="text-xs cue-muted">{openedTournamentMatches.length} 場</div>
+          <div>
+            <div className="font-semibold">完整賽程列表</div>
+            <div className="text-xs cue-muted mt-1">屬次要資訊，適合在已掌握積分榜或進級表後再查看。</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFullSchedule((prev) => !prev)}
+            className="px-3 py-1.5 rounded cue-surface hover:brightness-95 text-xs font-semibold"
+          >
+            {showFullSchedule ? '收合列表' : `展開 ${openedTournamentMatches.length} 場`}
+          </button>
         </div>
         {openedTournamentMatches.length === 0 ? (
           <div className="text-sm cue-muted">尚未生成賽程</div>
+        ) : !showFullSchedule ? (
+          <div className="text-sm cue-muted">
+            完整對局列表已收合。建議先查看主視圖，再按需要展開全部賽程。
+          </div>
         ) : (
           <div className="overflow-x-auto -mx-2 px-2">
             <table className="w-full text-left border-collapse text-sm">
@@ -138,7 +199,23 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
                         : formatPublicKnockoutRoundLabel(row, openedTournamentParticipants.length)}
                     </td>
                     <td className="py-2 px-2">
-                      <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)} vs {formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                      <div className="flex flex-wrap items-center gap-1 font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                          className="text-left hover:underline"
+                        >
+                          {formatTournamentParticipantLabel(row?.player_a_participant)}
+                        </button>
+                        <span>vs</span>
+                        <button
+                          type="button"
+                          onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                          className="text-left hover:underline"
+                        >
+                          {formatTournamentParticipantLabel(row?.player_b_participant)}
+                        </button>
+                      </div>
                       <div className="text-xs cue-muted mt-1">M{row?.match_no || '-'} · {formatTournamentResultTypeLabel(row?.result_type)}</div>
                     </td>
                     <td className="py-2 px-2 whitespace-nowrap">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</td>

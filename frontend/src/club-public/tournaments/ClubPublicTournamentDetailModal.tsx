@@ -112,6 +112,8 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
               formatTournamentParticipantLabel={formatTournamentParticipantLabel}
             />
 
+            <ClubPublicTournamentParticipantPanel {...participantPanelProps} />
+
             <ClubPublicTournamentLiveSection
               openedTournament={openedTournament}
               openedTournamentFormat={openedTournamentFormat}
@@ -126,8 +128,6 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
               formatTournamentMatchStatusLabel={formatTournamentMatchStatusLabel}
               formatTournamentParticipantLabel={formatTournamentParticipantLabel}
             />
-
-            <ClubPublicTournamentParticipantPanel {...participantPanelProps} />
 
             <ClubPublicTournamentStageSection
               openedTournamentFormat={openedTournamentFormat}

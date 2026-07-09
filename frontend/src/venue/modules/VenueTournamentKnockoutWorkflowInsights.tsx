@@ -47,7 +47,7 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
       || null;
     let reason = '等待上游對局完成';
     if (roundNo <= 1) {
-      reason = '等待 bracket 初始配對完成';
+      reason = '等待進級表初始配對完成';
     } else if (!row?.player_a_participant_id && !row?.player_b_participant_id) {
       reason = `等待 ${leftSource} 與 ${rightSource} 的勝方`;
     } else if (!row?.player_a_participant_id) {
@@ -79,9 +79,9 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   const completedCount = getStatusCount(matchesRows, 'COMPLETED');
   const visibleBlockedItems = showAllBlocked ? blockedReasonExamples : blockedReasonExamples.slice(0, 4);
 
-  let guidance = '先完成目前輪次，再讓下游 bracket 自動解鎖。';
+  let guidance = '先完成目前輪次，再讓下游進級表自動解鎖。';
   if (matchesRows.length === 0) {
-    guidance = '尚未生成 Knockout bracket，先確認 seed 與名單後再建立賽程。';
+    guidance = '尚未生成淘汰賽模式進級表，先確認 seed 與名單後再建立賽程。';
   } else if (blockedRows.length > 0) {
     guidance = `目前有 ${blockedRows.length} 場仍被上游結果阻塞；完成已 ready / live 的對局後，系統會逐步補齊下游對戰。`;
   } else if (scorableRows.length > 0) {
@@ -91,8 +91,8 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   return (
     <div className="cue-surface rounded-lg p-3 mb-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="font-semibold">Knockout 流程摘要</div>
-        <div className="text-xs cue-muted">{matchesRows.length ? `${matchesRows.length} 場對局` : '尚未生成 bracket'}</div>
+        <div className="font-semibold">淘汰賽模式流程摘要</div>
+        <div className="text-xs cue-muted">{matchesRows.length ? `${matchesRows.length} 場對局` : '尚未生成進級表'}</div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-white/10 bg-white/5 p-3">

@@ -29,7 +29,7 @@ const VenueTournamentKnockoutSeedingGuide: React.FC<VenueTournamentKnockoutSeedi
   return (
     <div className="cue-surface rounded-lg p-3 mb-3">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="font-semibold">Knockout seed / bye 摘要</div>
+        <div className="font-semibold">淘汰賽模式 seed / bye 摘要</div>
         <div className="text-xs cue-muted">seedMode: {seedMode}</div>
       </div>
       <div className="grid gap-3 md:grid-cols-4">
@@ -61,7 +61,7 @@ const VenueTournamentKnockoutSeedingGuide: React.FC<VenueTournamentKnockoutSeedi
       </div>
       <div className="text-xs cue-muted mt-1">
         {hasSchedule ? '賽程已生成，seed、bye 與預賽配置已鎖定；若需重排，請先使用重建賽程。'
-          : '建議先確認 seed 順序，再生成 Knockout 賽程。'}
+          : '建議先確認 seed 順序，再生成淘汰賽模式賽程。'}
       </div>
     </div>
   );

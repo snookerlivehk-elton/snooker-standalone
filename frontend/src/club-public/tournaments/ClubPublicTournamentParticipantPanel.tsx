@@ -69,9 +69,9 @@ const ClubPublicTournamentParticipantPanel: React.FC<ClubPublicTournamentPartici
       <div ref={panelRef} className="cue-surface-strong rounded-lg p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <div className="font-semibold">球手搜尋與個人戰況</div>
+            <div className="font-semibold">球手搜尋與個人詳情</div>
             <div className="text-xs cue-muted mt-1">
-              可直接搜尋球手，或從下方正式參賽名單 / 積分榜點選，於同一個 tournament 詳情 modal 內查看個人戰況。
+              可直接搜尋球手，或從下方主視圖點選球手，在同一個賽事詳情視窗內查看個人戰況。
             </div>
           </div>
           <div className="text-xs cue-muted">參賽者 {openedTournamentParticipants.length} 人</div>

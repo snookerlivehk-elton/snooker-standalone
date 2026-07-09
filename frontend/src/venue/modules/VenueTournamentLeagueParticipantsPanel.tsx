@@ -22,7 +22,7 @@ const VenueTournamentLeagueParticipantsPanel: React.FC<VenueTournamentLeaguePart
         <div className="text-xs cue-muted">{participantsLoading ? '讀取中…' : `${participantsRows.length} 人`}</div>
       </div>
       <div className="text-xs cue-muted">
-        League 工作台不使用 seed 排位；round-robin 對戰會按正式名單自動配對。
+        聯賽模式工作台不使用 seed 排位；round-robin 對戰會按正式名單自動配對。
       </div>
     </div>
     {participantsLoading ? (

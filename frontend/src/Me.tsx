@@ -1926,8 +1926,8 @@ const Me: React.FC = () => {
                         <div className="cue-surface-strong rounded-lg p-4">
                           <div className="text-sm cue-muted">賽制分佈</div>
                           <div className="text-sm mt-2 space-y-1">
-                            <div>Knockout：{tournamentCareerByFormat.knockout.matchesPlayed} 場</div>
-                            <div>League：{tournamentCareerByFormat.league.matchesPlayed} 場</div>
+                            <div>淘汰賽模式：{tournamentCareerByFormat.knockout.matchesPlayed} 場</div>
+                            <div>聯賽模式：{tournamentCareerByFormat.league.matchesPlayed} 場</div>
                           </div>
                         </div>
                       </div>
@@ -1979,7 +1979,7 @@ const Me: React.FC = () => {
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="font-semibold mb-2">Knockout 履歷</div>
+                          <div className="font-semibold mb-2">淘汰賽模式履歷</div>
                           <div className="text-sm cue-muted">
                             參賽 {tournamentCareerByFormat.knockout.tournamentsEntered} 項 ·
                             出賽 {tournamentCareerByFormat.knockout.matchesPlayed} 場 ·
@@ -1990,7 +1990,7 @@ const Me: React.FC = () => {
                           </div>
                         </div>
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="font-semibold mb-2">League 履歷</div>
+                          <div className="font-semibold mb-2">聯賽模式履歷</div>
                           <div className="text-sm cue-muted">
                             參賽 {tournamentCareerByFormat.league.tournamentsEntered} 項 ·
                             出賽 {tournamentCareerByFormat.league.matchesPlayed} 場 ·
@@ -2012,7 +2012,7 @@ const Me: React.FC = () => {
                               <div key={`${row.tournamentId}-${row.format}`} className="rounded-lg px-3 py-2 cue-surface">
                                 <div className="font-semibold">{row.title}</div>
                                 <div className="text-xs cue-muted mt-1">
-                                  {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                  {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
                                   {row.club?.name ? ` · ${row.club.name}` : ''}
                                   {row.startsAt ? ` · ${new Date(row.startsAt).toLocaleDateString()}` : ''}
                                 </div>
@@ -2055,7 +2055,7 @@ const Me: React.FC = () => {
                                     <td className="py-2 px-2">
                                       <div className="font-semibold">{row.tournamentTitle}</div>
                                       <div className="text-xs cue-muted mt-1">
-                                        {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                        {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
                                         {row.club?.name ? ` · ${row.club.name}` : ''}
                                       </div>
                                     </td>
@@ -2108,8 +2108,8 @@ const Me: React.FC = () => {
                             className="px-3 py-2 rounded cue-surface text-sm"
                           >
                             <option value="ALL">全部賽制</option>
-                            <option value="KNOCKOUT">Knockout</option>
-                            <option value="LEAGUE">League</option>
+                            <option value="KNOCKOUT">淘汰賽模式</option>
+                            <option value="LEAGUE">聯賽模式</option>
                           </select>
                           <select
                             value={historyResultFilter}
@@ -2180,7 +2180,7 @@ const Me: React.FC = () => {
                                       <td className="py-2 px-2">
                                         <div className="font-semibold">{row.tournamentTitle}</div>
                                         <div className="text-xs cue-muted mt-1">
-                                          {row.format === 'LEAGUE' ? 'League' : 'Knockout'}
+                                          {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
                                           {row.club?.name ? ` · ${row.club.name}` : ''}
                                         </div>
                                       </td>
@@ -2235,8 +2235,8 @@ const Me: React.FC = () => {
                             className="px-3 py-2 rounded cue-surface text-sm"
                           >
                             <option value="ALL">全部賽制</option>
-                            <option value="KNOCKOUT">Knockout</option>
-                            <option value="LEAGUE">League</option>
+                            <option value="KNOCKOUT">淘汰賽模式</option>
+                            <option value="LEAGUE">聯賽模式</option>
                           </select>
                           <select
                             value={headToHeadYearFilter ?? ''}

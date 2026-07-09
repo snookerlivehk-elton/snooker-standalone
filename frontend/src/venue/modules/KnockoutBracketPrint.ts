@@ -46,7 +46,7 @@ export function buildKnockoutBracketPrintHtml({
 <html lang="zh-HK">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(title)} - Knockout 賽程 PDF</title>
+  <title>${escapeHtml(title)} - 淘汰賽模式賽程 PDF</title>
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -90,7 +90,7 @@ export function buildKnockoutBracketPrintHtml({
 <body>
   <div class="page">
     <h1>${escapeHtml(title)}</h1>
-    <div class="subtitle">Knockout 賽程匯出 · 可直接在列印視窗另存為 PDF</div>
+    <div class="subtitle">淘汰賽模式賽程匯出 · 可直接在列印視窗另存為 PDF</div>
     <div class="meta">
       <div class="chip">焦點輪次：${escapeHtml(focusLabel)}</div>
       <div class="chip">快捷篩選：${escapeHtml(quickLabel)}</div>

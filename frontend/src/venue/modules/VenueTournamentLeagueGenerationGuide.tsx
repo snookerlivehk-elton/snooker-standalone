@@ -34,13 +34,13 @@ const VenueTournamentLeagueGenerationGuide: React.FC<VenueTournamentLeagueGenera
   const nextStepLabel = hasSchedule
     ? '賽程已生成，可直接開始安排與記分。'
     : !hasParticipants
-      ? '下一步先生成正式名單，再建立 League 賽程。'
-      : '下一步可按目前設定生成 League 賽程。';
+      ? '下一步先生成正式名單，再建立聯賽模式賽程。'
+      : '下一步可按目前設定生成聯賽模式賽程。';
 
   return (
     <div className="cue-surface rounded-lg p-3">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="font-semibold">League 生成前預估</div>
+        <div className="font-semibold">聯賽模式生成前預估</div>
         <div className="text-xs cue-muted">{roundRobinMode === 'DOUBLE' ? '雙循環' : '單循環'}</div>
       </div>
       <div className="grid gap-3 md:grid-cols-4">
@@ -64,7 +64,7 @@ const VenueTournamentLeagueGenerationGuide: React.FC<VenueTournamentLeagueGenera
       <div className="text-xs cue-muted mt-3">
         {canEstimate
           ? `${effectiveParticipantCount % 2 === 1 ? '單數人數會有輪空位；' : ''}每輪約 ${averageMatchesPerRound} 場，${roundRobinMode === 'DOUBLE' ? '第二循環會對調主客序' : '完成一輪後即完成聯賽基本循環'}。`
-          : '至少需要 2 位球手才可估算 League 賽程。'}
+          : '至少需要 2 位球手才可估算聯賽模式賽程。'}
       </div>
       <div className="text-xs cue-muted mt-1">{nextStepLabel}</div>
     </div>

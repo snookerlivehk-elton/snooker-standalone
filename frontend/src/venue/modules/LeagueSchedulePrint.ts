@@ -60,7 +60,7 @@ export function buildLeagueSchedulePrintHtml({
 <html lang="zh-HK">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(title)} - League 賽程 PDF</title>
+  <title>${escapeHtml(title)} - 聯賽模式賽程 PDF</title>
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -134,7 +134,7 @@ export function buildLeagueSchedulePrintHtml({
     <section class="hero">
       <div class="hero-top">
         <div>
-          <div class="hero-badge">League Schedule Print</div>
+          <div class="hero-badge">聯賽模式賽程列印版</div>
           <h1>${escapeHtml(title)}</h1>
           <div class="hero-meta">聯賽專用列印版面 · 依目前工作台篩選結果生成</div>
         </div>
@@ -162,7 +162,7 @@ export function buildLeagueSchedulePrintHtml({
         </div>
       </div>
     </section>
-    <div class="subtitle">League 賽程匯出 · 可直接在列印視窗另存為 PDF</div>
+    <div class="subtitle">聯賽模式賽程匯出 · 可直接在列印視窗另存為 PDF</div>
     <div class="meta">
       <div class="chip">快捷篩選：${escapeHtml(quickLabel)}</div>
       <div class="chip">狀態篩選：${escapeHtml(statusLabel)}</div>

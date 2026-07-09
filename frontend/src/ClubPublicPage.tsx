@@ -88,7 +88,7 @@ function normalizeTournamentFormat(value: any): TournamentFormat {
 }
 
 function formatTournamentFormatLabel(value: any) {
-  return normalizeTournamentFormat(value) === 'LEAGUE' ? 'League' : 'Knockout';
+  return normalizeTournamentFormat(value) === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式';
 }
 
 function formatTournamentWorkflowLabel(value: any) {

@@ -35,7 +35,7 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   tournamentTitle,
 }) => {
   const [expandedSections, setExpandedSections] = React.useState({
-    insights: true,
+    insights: false,
     schedule: true,
   });
 
@@ -49,35 +49,20 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   }, [selectMatchForScoring, updateExpandedSection]);
 
   const insightsSummary = matchesRows.length > 0
-    ? `共 ${matchesRows.length} 場對局，先看 blocked 與下一場可記分對局。`
-    : '尚未生成 bracket 時，可先查看流程提示與推進方向。';
+    ? `共 ${matchesRows.length} 場對局，可在需要追查 blocked 與下一場記分時再展開。`
+    : '尚未生成進級表時，可先查看流程提示與推進方向。';
   const scheduleSummary = matchesLoading
-    ? 'Bracket 載入中...'
+    ? '進級表載入中...'
     : bracketColumns.length > 0
-      ? `共 ${bracketColumns.length} 個 bracket 輪次欄位，預設展開以便直接推進賽事。`
-      : '尚未生成 Knockout bracket。';
+      ? `共 ${bracketColumns.length} 個輪次欄位，淘汰賽模式主視圖以進級表為核心。`
+      : '尚未生成淘汰賽模式進級表。';
 
   return (
     <div className="space-y-4">
       <VenueTournamentWorkspaceSectionCard
-        title="Knockout 流程摘要"
-        summary={insightsSummary}
-        priorityLabel="先看這裡"
-        expanded={expandedSections.insights}
-        onToggle={() => updateExpandedSection('insights', !expandedSections.insights)}
-      >
-        <VenueTournamentKnockoutWorkflowInsights
-          matchesRows={matchesRows}
-          onJumpToMatch={handleJumpToMatch}
-          participantsCount={participantsCount}
-          selectedMatchId={selectedMatchId}
-        />
-      </VenueTournamentWorkspaceSectionCard>
-
-      <VenueTournamentWorkspaceSectionCard
-        title="Knockout Bracket / Schedule"
+        title="淘汰賽模式進級表"
         summary={scheduleSummary}
-        priorityLabel="主要工作區"
+        priorityLabel="主要展示"
         expanded={expandedSections.schedule}
         onToggle={() => updateExpandedSection('schedule', !expandedSections.schedule)}
       >
@@ -96,6 +81,21 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
           selectedTournamentBestOf={selectedTournamentBestOf}
           selectMatchForScoring={selectMatchForScoring}
           tournamentTitle={tournamentTitle}
+        />
+      </VenueTournamentWorkspaceSectionCard>
+
+      <VenueTournamentWorkspaceSectionCard
+        title="淘汰賽模式流程摘要"
+        summary={insightsSummary}
+        priorityLabel="輔助資訊"
+        expanded={expandedSections.insights}
+        onToggle={() => updateExpandedSection('insights', !expandedSections.insights)}
+      >
+        <VenueTournamentKnockoutWorkflowInsights
+          matchesRows={matchesRows}
+          onJumpToMatch={handleJumpToMatch}
+          participantsCount={participantsCount}
+          selectedMatchId={selectedMatchId}
         />
       </VenueTournamentWorkspaceSectionCard>
     </div>

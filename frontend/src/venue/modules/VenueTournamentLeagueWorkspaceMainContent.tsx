@@ -45,9 +45,9 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
   tournamentTitle,
 }) => {
   const [expandedSections, setExpandedSections] = React.useState({
-    insights: true,
-    standings: false,
-    schedule: true,
+    insights: false,
+    standings: true,
+    schedule: false,
   });
   const [scheduleFilterPreset, setScheduleFilterPreset] = React.useState<{
     token: string;
@@ -75,23 +75,23 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
   }, [updateExpandedSection]);
 
   const insightsSummary = matchesRows.length > 0
-    ? `共 ${matchesRows.length} 場對局，先看目前輪次、未排時間與可記分入口。`
+    ? `共 ${matchesRows.length} 場對局，可在需要安排或記分時再展開。`
     : '尚未生成賽程時，可先查看流程提示與下一步建議。';
   const standingsSummary = standingsRows.length > 0
-    ? `共 ${standingsRows.length} 位球手，屬查閱型資訊，預設收合以縮短頁面。`
+    ? `共 ${standingsRows.length} 位球手，聯賽模式主視圖以積分榜為核心。`
     : '暫未有 standings 資料，待賽程與賽果逐步形成後再查看。';
   const scheduleSummary = matchesLoading
     ? '賽程載入中...'
     : leagueRounds.length > 0
-      ? `共 ${leagueRounds.length} 個輪次，預設展開並優先聚焦目前要處理的 rounds。`
-      : '尚未生成 League 賽程。';
+      ? `共 ${leagueRounds.length} 個輪次，屬次要工作區，可在需要排程或追蹤單輪對賽時展開。`
+      : '尚未生成聯賽模式賽程。';
 
   return (
     <div className="space-y-4">
       <VenueTournamentWorkspaceSectionCard
-        title="League 流程摘要"
+        title="聯賽模式流程摘要"
         summary={insightsSummary}
-        priorityLabel="先看這裡"
+        priorityLabel="輔助資訊"
         expanded={expandedSections.insights}
         onToggle={() => updateExpandedSection('insights', !expandedSections.insights)}
       >
@@ -105,9 +105,27 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
       </VenueTournamentWorkspaceSectionCard>
 
       <VenueTournamentWorkspaceSectionCard
-        title="League 賽程"
+        title="聯賽模式積分榜"
+        summary={standingsSummary}
+        priorityLabel="主要展示"
+        expanded={expandedSections.standings}
+        onToggle={() => updateExpandedSection('standings', !expandedSections.standings)}
+      >
+        <VenueTournamentLeagueStandingsPanel
+          matchesRows={matchesRows}
+          pointsDraw={pointsDraw}
+          pointsLoss={pointsLoss}
+          pointsWin={pointsWin}
+          standingsRows={standingsRows}
+          tournamentTitle={tournamentTitle}
+          formatParticipantLabel={formatParticipantLabel}
+        />
+      </VenueTournamentWorkspaceSectionCard>
+
+      <VenueTournamentWorkspaceSectionCard
+        title="聯賽模式賽程"
         summary={scheduleSummary}
-        priorityLabel="主要工作區"
+        priorityLabel="次要工作區"
         expanded={expandedSections.schedule}
         onToggle={() => updateExpandedSection('schedule', !expandedSections.schedule)}
       >
@@ -127,23 +145,6 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
           selectedTournamentBestOf={selectedTournamentBestOf}
           selectMatchForScoring={selectMatchForScoring}
           tournamentTitle={tournamentTitle}
-        />
-      </VenueTournamentWorkspaceSectionCard>
-
-      <VenueTournamentWorkspaceSectionCard
-        title="League Standings"
-        summary={standingsSummary}
-        expanded={expandedSections.standings}
-        onToggle={() => updateExpandedSection('standings', !expandedSections.standings)}
-      >
-        <VenueTournamentLeagueStandingsPanel
-          matchesRows={matchesRows}
-          pointsDraw={pointsDraw}
-          pointsLoss={pointsLoss}
-          pointsWin={pointsWin}
-          standingsRows={standingsRows}
-          tournamentTitle={tournamentTitle}
-          formatParticipantLabel={formatParticipantLabel}
         />
       </VenueTournamentWorkspaceSectionCard>
     </div>
