@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { formatKnockoutRoundLabel, formatLeagueRoundLabel } from './useTournamentStageViewData';
 import { buildKnockoutBracketPrintHtml } from './KnockoutBracketPrint';
 import { buildLeagueSchedulePrintHtml } from './LeagueSchedulePrint';
+import { downloadKnockoutBracketShareCard } from './TournamentShareCards';
 import LeagueSchedulePanel from './VenueTournamentLeagueSchedulePanel';
 import KnockoutBracketPanel from './VenueTournamentKnockoutBracketPanel';
 import VenueTournamentMatchesFilters, { type MatchQuickFilterKey, type MatchStatusFilterKey } from './VenueTournamentMatchesFilters';
@@ -332,6 +333,33 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     openPrintWindow(html);
   };
 
+  const handleDownloadKnockoutShareCard = () => {
+    if (isLeague || filteredBracketColumns.length <= 0) return;
+    downloadKnockoutBracketShareCard({
+      title: String(tournamentTitle || '淘汰賽模式進級表'),
+      focusLabel: effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel,
+      rounds: filteredBracketColumns.map((column: any) => ({
+        label: String(column?.label || '-'),
+        total: Number(column?.summary?.total || column?.items?.length || 0),
+        completedCount: Number(column?.summary?.completedCount || 0),
+        items: (Array.isArray(column?.items) ? column.items : []).map((row: any) => {
+          const winnerId = String(row?.winner_participant_id || '');
+          const aParticipantId = String(row?.player_a_participant_id || '');
+          const bParticipantId = String(row?.player_b_participant_id || '');
+          return {
+            matchNo: Math.max(1, Number(row?.match_no || 1)),
+            statusLabel: formatMatchStatusLabel(row?.status),
+            playerALabel: formatParticipantLabel(row?.player_a_participant),
+            playerBLabel: formatParticipantLabel(row?.player_b_participant),
+            playerAFrames: Number(row?.player_a_frames_won || 0),
+            playerBFrames: Number(row?.player_b_frames_won || 0),
+            winnerSide: winnerId && winnerId === aParticipantId ? 'A' : winnerId && winnerId === bParticipantId ? 'B' : null,
+          };
+        }),
+      })),
+    });
+  };
+
   return (
     <>
     <div className="rounded-lg border cue-border bg-black/10 p-3 mb-3">
@@ -345,6 +373,17 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!matchesLoading && matchesRows.length > 0 ? (
+            !isLeague ? (
+              <button
+                type="button"
+                onClick={handleDownloadKnockoutShareCard}
+                className="px-3 py-1.5 rounded cue-button text-xs font-semibold"
+              >
+                下載分享圖 PNG
+              </button>
+            ) : null
+          ) : null}
           {!matchesLoading && matchesRows.length > 0 ? (
             <button
               type="button"

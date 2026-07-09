@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { downloadLeagueStandingsShareCard } from './TournamentShareCards';
 
 type VenueTournamentLeagueStandingsPanelProps = {
   matchesRows: any[];
@@ -604,11 +605,41 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
     printWindow.document.close();
   };
 
+  const handleDownloadShareCard = () => {
+    if (chartData.rows.length <= 0) return;
+    downloadLeagueStandingsShareCard({
+      title: String(tournamentTitle || '聯賽模式積分榜'),
+      dimensionLabel: activeDimensionLabel,
+      pointsRuleLabel: `勝 ${Number(pointsWin || 0)} / 和 ${Number(pointsDraw || 0)} / 負 ${Number(pointsLoss || 0)}`,
+      rows: chartData.rows.map((row: any) => ({
+        position: Number(row?.position || 0),
+        label: String(row?.label || '-'),
+        played: Number(row?.played || 0),
+        won: Number(row?.won || 0),
+        drawn: Number(row?.drawn || 0),
+        lost: Number(row?.lost || 0),
+        matchPoints: Number(row?.matchPoints || 0),
+        frameDiff: Number(row?.frameDiff || 0),
+        breaks20Plus: Number(row?.breaks20Plus || 0),
+        maxBreak: Number(row?.maxBreak || 0),
+      })),
+    });
+  };
+
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="font-semibold">League 積分榜</div>
+        <div className="font-semibold">聯賽模式積分榜</div>
         <div className="flex items-center gap-2">
+          {standingsRows.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleDownloadShareCard}
+              className="px-3 py-1.5 rounded cue-button text-xs font-semibold"
+            >
+              下載分享圖 PNG
+            </button>
+          ) : null}
           {standingsRows.length > 0 ? (
             <button
               type="button"
@@ -622,7 +653,7 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
         </div>
       </div>
       {standingsRows.length === 0 ? (
-        <div className="text-sm cue-muted">賽程生成後會在這裡顯示 standings</div>
+        <div className="text-sm cue-muted">賽程生成後會在這裡顯示聯賽模式積分榜</div>
       ) : (
         <>
           <div className="cue-surface rounded-lg p-3 mb-4">
