@@ -2,6 +2,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { getMyClubId, requireClubAdmin } from '../../core/club/access.js';
 import { prisma } from '../../core/db/prisma.js';
+import { listUnifiedBreakRows } from '../../core/highbreak/unifiedBreakRows.js';
 import { parseLimit, parseMonthRangeUtc } from '../../core/utils/query.js';
 
 type BreakRecordType = 'VENUE' | 'TOURNAMENT';
@@ -66,31 +67,17 @@ export function createClubHighbreakRouter() {
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
     const { month, memberId } = req.query as any;
-    const where: any = { club_id: clubId, deleted_at: null };
-    if (memberId) where.member_id = String(memberId).trim();
     if (month) {
       const range = parseMonthRangeUtc(String(month));
       if (!range) return res.status(400).json({ error: 'month invalid' });
-      where.recorded_at = { gte: range.start, lt: range.end };
     }
-    const rows = await prisma.breakRecord.findMany({
-      where,
-      orderBy: [{ recorded_at: 'desc' }],
-      include: {
-        member: { select: { id: true, name: true, email: true, member_code: true } },
-        club: { select: { id: true, name: true, member: { select: { name: true } } } },
-        tournament: { select: { id: true, title: true, startsAt: true } },
-      },
+    const rows = await listUnifiedBreakRows({
+      prismaClient: prisma,
+      clubId,
+      memberId: memberId ? String(memberId).trim() : '',
+      month: month ? String(month).trim() : '',
     });
-    res.json(rows.map((row: any) => ({
-      ...row,
-      club: row.club
-        ? {
-            ...row.club,
-            name: row.club.name || row.club.member?.name || '',
-          }
-        : null,
-    })));
+    res.json(rows);
   });
 
   router.get('/:clubId/leaderboard/highest', async (req, res) => {
@@ -99,25 +86,64 @@ export function createClubHighbreakRouter() {
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
 
-    const rows = await prisma.breakRecord.findMany({
-      where: { club_id: clubId, deleted_at: null },
-      orderBy: [{ points: 'desc' }, { recorded_at: 'desc' }],
-      take: limit,
-      include: {
-        member: { select: { id: true, name: true, email: true, member_code: true } },
-        club: { select: { id: true, name: true, member: { select: { name: true } } } },
-        tournament: { select: { id: true, title: true, startsAt: true } },
-      },
+    const allRows = await listUnifiedBreakRows({
+      prismaClient: prisma,
+      clubId,
     });
-    res.json(rows.map((row: any) => ({
-      ...row,
-      club: row.club
-        ? {
-            ...row.club,
-            name: row.club.name || row.club.member?.name || '',
-          }
-        : null,
-    })));
+    const rows = [...allRows]
+      .sort((a: any, b: any) => {
+        const pointDiff = Number(b?.points || 0) - Number(a?.points || 0);
+        if (pointDiff !== 0) return pointDiff;
+        const aTime = a?.recorded_at ? new Date(String(a.recorded_at)).getTime() : 0;
+        const bTime = b?.recorded_at ? new Date(String(b.recorded_at)).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, limit);
+    res.json(rows);
+    const breakdown = allRows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
+      const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
+      if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
+      acc[key].count += 1;
+      acc[key].totalPoints += Number(row?.points || 0);
+      acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
+      const source = String(row?.source || 'UNKNOWN');
+      acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
+      return acc;
+    }, {});
+    // #region debug-point B:club-highest-leaderboard
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'member-break-stats',
+        runId: 'post-fix',
+        hypothesisId: 'B',
+        location: 'backend/src/plugins/highbreak/router.ts:/:clubId/leaderboard/highest',
+        msg: '[DEBUG] club highest leaderboard source rows',
+        data: {
+          clubId,
+          limit,
+          resultCount: rows.length,
+          breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
+            recordType,
+            count: item.count,
+            totalPoints: item.totalPoints,
+            maxPoints: item.maxPoints,
+            sources: item.sources,
+          })),
+          sample: rows.slice(0, 5).map((row: any) => ({
+            id: row.id,
+            memberId: row.member_id,
+            recordType: row.record_type,
+            tournamentId: row.tournament_id,
+            points: row.points,
+            source: row.source,
+          })),
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
   });
 
   router.get('/:clubId/leaderboard/monthly', async (req, res) => {
@@ -130,28 +156,77 @@ export function createClubHighbreakRouter() {
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
 
-    const where: any = { club_id: clubId, deleted_at: null };
-    if (range) where.recorded_at = { gte: range.start, lt: range.end };
-
-    const grouped = await prisma.breakRecord.groupBy({
-      by: ['member_id'],
-      where,
-      _sum: { points: true },
-      orderBy: { _sum: { points: 'desc' } },
-      take: limit,
+    const allRows = await listUnifiedBreakRows({
+      prismaClient: prisma,
+      clubId,
+      month,
     });
+    const groupedMap = new Map<string, { member: any; totalPoints: number }>();
+    for (const row of allRows) {
+      const memberKey = String(row?.member_id || '');
+      if (!memberKey) continue;
+      const current = groupedMap.get(memberKey) || {
+        member: row?.member || { id: memberKey, name: '-', email: null, member_code: null },
+        totalPoints: 0,
+      };
+      current.totalPoints += Number(row?.points || 0);
+      if (!current.member && row?.member) current.member = row.member;
+      groupedMap.set(memberKey, current);
+    }
+    const grouped = Array.from(groupedMap.entries())
+      .map(([memberId, value]) => ({
+        memberId,
+        member: value.member || { id: memberId, name: '-', email: null, member_code: null },
+        totalPoints: value.totalPoints,
+      }))
+      .sort((a, b) => b.totalPoints - a.totalPoints)
+      .slice(0, limit);
 
-    const ids = grouped.map((g) => g.member_id);
-    const members = ids.length === 0 ? [] : await prisma.member.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, name: true, email: true, member_code: true },
-    });
-    const map = new Map(members.map((m) => [m.id, m]));
-
-    res.json(grouped.map((g) => ({
-      member: map.get(g.member_id) || { id: g.member_id, name: '-', email: null, member_code: null },
-      totalPoints: g._sum.points || 0,
+    res.json(grouped.map((row) => ({
+      member: row.member,
+      totalPoints: row.totalPoints,
     })));
+    const breakdown = allRows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
+      const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
+      if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
+      acc[key].count += 1;
+      acc[key].totalPoints += Number(row?.points || 0);
+      acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
+      const source = String(row?.source || 'UNKNOWN');
+      acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
+      return acc;
+    }, {});
+    // #region debug-point C:club-monthly-leaderboard
+    fetch('http://127.0.0.1:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'member-break-stats',
+        runId: 'post-fix',
+        hypothesisId: 'C',
+        location: 'backend/src/plugins/highbreak/router.ts:/:clubId/leaderboard/monthly',
+        msg: '[DEBUG] club monthly leaderboard source rows',
+        data: {
+          clubId,
+          month: month || null,
+          limit,
+          groupedCount: grouped.length,
+          breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
+            recordType,
+            count: item.count,
+            totalPoints: item.totalPoints,
+            maxPoints: item.maxPoints,
+            sources: item.sources,
+          })),
+          sample: grouped.slice(0, 5).map((row) => ({
+            memberId: row.memberId,
+            totalPoints: row.totalPoints || 0,
+          })),
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
   });
 
   return router;

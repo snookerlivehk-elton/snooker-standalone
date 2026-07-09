@@ -5,6 +5,7 @@ import { prisma } from '../../core/db/prisma.js';
 import { requireMember } from '../../core/club/access.js';
 import { resolveMemberTier } from '../../core/members/eligibility.js';
 import { getMembersModuleSettings } from '../../core/modules/membersSettings.js';
+import { listUnifiedBreakRows } from '../../core/highbreak/unifiedBreakRows.js';
 import {
   findMemberByIdOrEmail,
   generateEmailCode,
@@ -329,7 +330,44 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
     const playerASummary = buildSide(playerA, 'A');
     const playerBSummary = buildSide(playerB, 'B');
-    const rawBreaks = Array.isArray(match?.break_records) ? match.break_records : [];
+    const explicitBreaks = Array.isArray(match?.break_records) ? match.break_records : [];
+    const threshold = Math.max(1, Number(match?.tournament?.tracked_break_threshold || 20));
+    const explicitKeys = new Set(
+      explicitBreaks
+        .filter((row: any) => row?.member_id && Number(row?.frame_no || 0) > 0)
+        .map((row: any) => `${String(row.member_id)}::${Number(row.frame_no || 0)}`),
+    );
+    const syntheticBreaks = (Array.isArray(match?.frames) ? match.frames : []).flatMap((frame: any) => {
+      const frameNo = Math.max(1, Number(frame?.frame_no || 1));
+      const recordedAt = frame?.ended_at ?? frame?.started_at ?? match?.ended_at ?? match?.started_at ?? null;
+      const candidates = [
+        {
+          memberId: String(playerA?.member?.id || playerA?.member_id || ''),
+          member: playerA?.member || null,
+          points: Number(frame?.player_a_highest_break || 0),
+        },
+        {
+          memberId: String(playerB?.member?.id || playerB?.member_id || ''),
+          member: playerB?.member || null,
+          points: Number(frame?.player_b_highest_break || 0),
+        },
+      ];
+      return candidates
+        .filter((candidate) => candidate.memberId && candidate.member && candidate.points >= threshold)
+        .filter((candidate) => !explicitKeys.has(`${candidate.memberId}::${frameNo}`))
+        .map((candidate) => ({
+          id: `derived-${String(match?.id || '')}-${frameNo}-${candidate.memberId}`,
+          member_id: candidate.memberId,
+          frame_no: frameNo,
+          points: candidate.points,
+          threshold_snapshot: threshold,
+          recorded_at: recordedAt,
+          note: null,
+          video_url: null,
+          member: candidate.member,
+        }));
+    });
+    const rawBreaks = [...explicitBreaks, ...syntheticBreaks];
     const breaks = rawBreaks.map((row: any) => {
       const memberId = String(row?.member?.id || row?.member_id || '');
       const side = memberId && memberId === playerASummary.memberId ? 'A' : memberId === playerBSummary.memberId ? 'B' : null;
@@ -1115,6 +1153,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
               title: true,
               format: true,
               startsAt: true,
+              tracked_break_threshold: true,
               workflow_status: true,
               status: true,
               club: { select: { id: true, name: true, logoUrl: true } },
@@ -1173,22 +1212,63 @@ export function createMemberRouter(options: MemberRouterOptions) {
       const clubId = req.query.clubId ? String(req.query.clubId).trim() : '';
       const month = req.query.month ? String(req.query.month).trim() : '';
 
-      const where: any = { member_id: memberId, deleted_at: null };
-      if (clubId) where.club_id = clubId;
       if (month) {
         const range = parseMonthRangeUtc(month);
         if (!range) return res.status(400).json({ error: 'month invalid' });
-        where.recorded_at = { gte: range.start, lt: range.end };
       }
 
-      const rows = await prisma.breakRecord.findMany({
-        where,
-        orderBy: [{ recorded_at: 'desc' }],
-        include: {
-          club: { select: { id: true, name: true, logoUrl: true } },
-          tournament: { select: { id: true, title: true, startsAt: true } },
-        },
+      const rows = await listUnifiedBreakRows({
+        prismaClient: prisma,
+        memberId,
+        clubId,
+        month,
       });
+      const breakdown = rows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
+        const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
+        if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
+        acc[key].count += 1;
+        acc[key].totalPoints += Number(row?.points || 0);
+        acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
+        const source = String(row?.source || 'UNKNOWN');
+        acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
+        return acc;
+      }, {});
+      // #region debug-point A:me-breaks-query
+      fetch('http://127.0.0.1:7777/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'member-break-stats',
+          runId: 'post-fix',
+          hypothesisId: 'A',
+          location: 'backend/src/plugins/members/router.ts:/api/me/breaks',
+          msg: '[DEBUG] /api/me/breaks returned rows',
+          data: {
+            memberId,
+            clubId: clubId || null,
+            month: month || null,
+            rowCount: rows.length,
+            breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
+              recordType,
+              count: item.count,
+              totalPoints: item.totalPoints,
+              maxPoints: item.maxPoints,
+              sources: item.sources,
+            })),
+            sample: rows.slice(0, 5).map((row: any) => ({
+              id: row.id,
+              recordType: row.record_type,
+              clubId: row.club_id,
+              tournamentId: row.tournament_id,
+              points: row.points,
+              recordedAt: row.recorded_at,
+              source: row.source,
+            })),
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       res.json(rows);
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });
