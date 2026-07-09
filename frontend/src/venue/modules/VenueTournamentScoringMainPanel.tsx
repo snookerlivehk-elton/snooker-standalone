@@ -34,6 +34,7 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
     selectedMatchCurrentBlockNo,
     selectedMatchCurrentFrameNo,
     selectedMatchCurrentSessionNo,
+    selectedMatchActiveFrameBreakRows,
     selectedMatchIsCompleted,
     selectedMatchIsLongFormat,
     selectedMatchLatestSavedFrameNo,
@@ -42,7 +43,7 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
     selectedMatchResumeSummary,
     selectedMatchSegments,
     selectedMatchTargetWins,
-    selectedMatchTopBreakLabel,
+    selectedMatchTopTwentyLabel,
     selectedMatchWinnerLabel,
     selectedMatchWinsRemainingA,
     selectedMatchWinsRemainingB,
@@ -60,6 +61,16 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
   const activeSegmentLabel = selectedMatchActiveSegment
     ? selectedMatchActiveSegment.title
     : getFrameSegmentLabel(Number(activeFrame?.frameNo || selectedMatchCurrentFrameNo));
+  const activeFrameTopTwenty = selectedMatchActiveFrameBreakRows.reduce(
+    (best: number, row: any) => Math.max(best, Number(row?.points || 0)),
+    0,
+  );
+  const activeFrameBreakOwners = selectedMatchActiveFrameBreakRows
+    .map((row: any) => formatMemberLabel(row?.member))
+    .filter(Boolean);
+  const activeFrameBreakSummary = selectedMatchActiveFrameBreakRows.length > 0
+    ? `本局已記錄 ${selectedMatchActiveFrameBreakRows.length} 筆 20+，最高 20+ ${activeFrameTopTwenty}${activeFrameBreakOwners.length > 0 ? ` · ${Array.from(new Set(activeFrameBreakOwners)).join(' / ')}` : ''}`
+    : '本局暫未有 20+ 記錄；如有 20+，請在右側面板補錄。';
 
   return (
     <div className="cue-surface-strong rounded-lg p-4">
@@ -88,8 +99,8 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
           </div>
           <div className="text-xs cue-muted mt-1">
             {selectedMatchIsCompleted
-              ? '此場比賽已完成；下方逐局資料為已保存紀錄，可檢查最終比分與最高 break。'
-              : `正在輸入第 ${selectedMatchCurrentFrameNo} 局；「本局得分」是該局最後總分，「本局最高 break」是真正最高 break，不是總分。`}
+              ? '此場比賽已完成；下方逐局資料為已保存紀錄，可檢查最終比分與 20+。'
+              : `正在輸入第 ${selectedMatchCurrentFrameNo} 局；左側只處理逐局比分與勝方，該局 20+ 由右側記錄後自動回算。`}
           </div>
           {!selectedMatchResultEditable ? (
             <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
@@ -203,14 +214,14 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
               <div className="mt-1 font-semibold">{`第 ${selectedMatchCurrentBlockNo} 段`}</div>
             </div>
             <div>
-              <div className="text-xs cue-muted">本場最高 break</div>
-              <div className="mt-1 font-semibold">{selectedMatchTopBreakLabel}</div>
+              <div className="text-xs cue-muted">本場最高 20+</div>
+              <div className="mt-1 font-semibold">{selectedMatchTopTwentyLabel}</div>
               <div className="mt-1 text-xs cue-muted">{selectedMatchBreakTotalsLabel}</div>
             </div>
           </div>
           <div className="mt-3 text-xs cue-muted">
             {selectedMatchIsCompleted
-              ? '此場已達勝出局數，系統已停止追加下一局草稿；最高 break 與 20+ 會按本場現有資料自動重算。'
+              ? '此場已達勝出局數，系統已停止追加下一局草稿；20+ 摘要會按本場現有記錄自動重算。'
               : selectedMatchIsLongFormat
                 ? `Best of ${selectedMatchBestOf} 已啟用完整分段工作台；可按段查看進度並配合右側 20+ 補錄。`
                 : '系統以每 4 局為一段、每 8 局為一節，自動安排小休與續賽提示。'}
@@ -291,7 +302,7 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
             <div className="font-semibold">{frameEditorTitle}</div>
             <div className="text-xs cue-muted mt-1">
               {selectedMatchIsCompleted
-                ? '此局已保存，可在這裡回看或修正比分與最高 break。'
+                ? '此局已保存，可在這裡回看或修正比分。'
                 : activeFrame?.isPlaceholder
                   ? '這是目前待輸入的下一局。儲存後系統會自動承接最新進度。'
                   : '這是已保存局數；你可在儲存前再次修正內容。'}
@@ -302,7 +313,10 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
             <div className="mt-1">{activeFrame?.isPlaceholder ? '待輸入' : '已保存/可修正'}</div>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mb-3 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs cue-muted">
+          {activeFrameBreakSummary}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div>
             <label className="block text-sm mb-1 cue-muted">勝方</label>
             <select
@@ -322,18 +336,10 @@ const VenueTournamentScoringMainPanel: React.FC<VenueTournamentScoringMainPanelP
             <label className="block text-sm mb-1 cue-muted">B 本局得分</label>
             <input value={activeFrame?.playerBScore || '0'} onChange={(e) => updateFrameDraft(activeFrameIndex, { playerBScore: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 27" />
           </div>
-          <div>
-            <label className="block text-sm mb-1 cue-muted">A 本局最高 break</label>
-            <input value={activeFrame?.playerAHighestBreak || '0'} onChange={(e) => updateFrameDraft(activeFrameIndex, { playerAHighestBreak: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 36" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1 cue-muted">B 本局最高 break</label>
-            <input value={activeFrame?.playerBHighestBreak || '0'} onChange={(e) => updateFrameDraft(activeFrameIndex, { playerBHighestBreak: e.target.value })} className="w-full px-3 py-2 rounded cue-input" type="number" min={0} placeholder="例如 28" />
-          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs cue-muted">
-            最高 break 只填單次最高連續得分；如要補錄或查看全場 20+，請使用右側面板。
+            已取消手填 `最高 break`；本場與本局摘要會按已記錄的 20+ 自動計算。
           </div>
           <button
             type="button"

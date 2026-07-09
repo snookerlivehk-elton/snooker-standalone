@@ -1881,7 +1881,7 @@ const Me: React.FC = () => {
                           <div className="text-xs cue-muted mt-2">局差 {tournamentCareerSummary.frameDiff >= 0 ? '+' : ''}{tournamentCareerSummary.frameDiff}</div>
                         </div>
                         <div className="cue-surface-strong rounded-lg p-4">
-                          <div className="text-sm cue-muted">比賽 20+ / 最高</div>
+                          <div className="text-sm cue-muted">比賽 20+ / 最高 20+</div>
                           <div className="text-2xl font-extrabold accent-yellow mt-1">
                             {tournamentCareerSummary.breaks20Plus} / {tournamentCareerSummary.highestBreak}
                           </div>
@@ -1957,7 +1957,7 @@ const Me: React.FC = () => {
                             勝 {tournamentCareerByFormat.knockout.wins} 負 {tournamentCareerByFormat.knockout.losses}
                           </div>
                           <div className="text-xs cue-muted mt-2">
-                            20+ {tournamentCareerByFormat.knockout.breaks20Plus} 次 · 最高 {tournamentCareerByFormat.knockout.highestBreak}
+                            20+ {tournamentCareerByFormat.knockout.breaks20Plus} 次 · 最高 20+ {tournamentCareerByFormat.knockout.highestBreak}
                           </div>
                         </div>
                         <div className="cue-surface-strong rounded-lg p-4">
@@ -1968,7 +1968,7 @@ const Me: React.FC = () => {
                             勝 {tournamentCareerByFormat.league.wins} 負 {tournamentCareerByFormat.league.losses} 和 {tournamentCareerByFormat.league.draws}
                           </div>
                           <div className="text-xs cue-muted mt-2">
-                            20+ {tournamentCareerByFormat.league.breaks20Plus} 次 · 最高 {tournamentCareerByFormat.league.highestBreak}
+                            20+ {tournamentCareerByFormat.league.breaks20Plus} 次 · 最高 20+ {tournamentCareerByFormat.league.highestBreak}
                           </div>
                         </div>
                       </div>
@@ -2011,7 +2011,7 @@ const Me: React.FC = () => {
                                 <th className="py-2 px-2 whitespace-nowrap">對手</th>
                                 <th className="py-2 px-2 whitespace-nowrap">結果</th>
                                 <th className="py-2 px-2 whitespace-nowrap">局數</th>
-                                <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                <th className="py-2 px-2 whitespace-nowrap">20+ / 最高 20+</th>
                                 <th className="py-2 px-2 whitespace-nowrap">詳情</th>
                               </tr>
                             </thead>
@@ -2136,7 +2136,7 @@ const Me: React.FC = () => {
                                   <th className="py-2 px-2 whitespace-nowrap">結果</th>
                                   <th className="py-2 px-2 whitespace-nowrap">局數</th>
                                   <th className="py-2 px-2 whitespace-nowrap">得分</th>
-                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高 20+</th>
                                   <th className="py-2 px-2 whitespace-nowrap">詳情</th>
                                 </tr>
                               </thead>
@@ -2249,7 +2249,7 @@ const Me: React.FC = () => {
                                   <th className="py-2 px-2 whitespace-nowrap">勝負和</th>
                                   <th className="py-2 px-2 whitespace-nowrap">局數</th>
                                   <th className="py-2 px-2 whitespace-nowrap">勝率</th>
-                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高</th>
+                                  <th className="py-2 px-2 whitespace-nowrap">20+ / 最高 20+</th>
                                   <th className="py-2 px-2">最近一次對賽</th>
                                 </tr>
                               </thead>
@@ -2608,7 +2608,7 @@ const Me: React.FC = () => {
                                     <div className="font-semibold mt-1">{player?.breaks20Plus ?? 0}</div>
                                   </div>
                                   <div className="rounded p-2 cue-surface">
-                                    <div className="cue-muted text-xs">最高 break</div>
+                                    <div className="cue-muted text-xs">最高 20+</div>
                                     <div className="font-semibold mt-1">{player?.maxBreak ?? 0}</div>
                                   </div>
                                 </div>
@@ -2651,11 +2651,11 @@ const Me: React.FC = () => {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-sm">
                                       <div className="rounded p-3 cue-surface-strong">
                                         <div className="font-semibold">{selectedTournamentMatchDetail.playerA?.name || 'A'}</div>
-                                        <div className="text-xs cue-muted mt-1">最高 break {frame?.playerAHighestBreak ?? 0}</div>
+                                        <div className="text-xs cue-muted mt-1">最高 20+ {frame?.playerAHighestBreak ?? 0}</div>
                                       </div>
                                       <div className="rounded p-3 cue-surface-strong">
                                         <div className="font-semibold">{selectedTournamentMatchDetail.playerB?.name || 'B'}</div>
-                                        <div className="text-xs cue-muted mt-1">最高 break {frame?.playerBHighestBreak ?? 0}</div>
+                                        <div className="text-xs cue-muted mt-1">最高 20+ {frame?.playerBHighestBreak ?? 0}</div>
                                       </div>
                                     </div>
                                     {Array.isArray(frame?.breaks) && frame.breaks.length > 0 ? (

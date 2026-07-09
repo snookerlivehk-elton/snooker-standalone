@@ -408,17 +408,22 @@ export function createMemberRouter(options: MemberRouterOptions) {
             : null
         : null;
       const frameNo = Number(frame?.frame_no || 0);
+      const frameBreaks = breaksByFrame.get(frameNo) || [];
       return {
         id: String(frame?.id || ''),
         frameNo,
         winnerSide: frameWinnerSide,
         playerAScore: Number(frame?.player_a_score || 0),
         playerBScore: Number(frame?.player_b_score || 0),
-        playerAHighestBreak: Number(frame?.player_a_highest_break || 0),
-        playerBHighestBreak: Number(frame?.player_b_highest_break || 0),
+        playerAHighestBreak: frameBreaks
+          .filter((row) => row?.side === 'A')
+          .reduce((best, row) => Math.max(best, Number(row?.points || 0)), 0),
+        playerBHighestBreak: frameBreaks
+          .filter((row) => row?.side === 'B')
+          .reduce((best, row) => Math.max(best, Number(row?.points || 0)), 0),
         startedAt: frame?.started_at ?? null,
         endedAt: frame?.ended_at ?? null,
-        breaks: breaksByFrame.get(frameNo) || [],
+        breaks: frameBreaks,
       };
     });
 

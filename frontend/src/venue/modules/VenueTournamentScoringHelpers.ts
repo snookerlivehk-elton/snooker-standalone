@@ -39,8 +39,6 @@ export function createEmptyEditableFrame(frameNo: number): EditableFrame {
     winnerSide: 'A',
     playerAScore: '0',
     playerBScore: '0',
-    playerAHighestBreak: '0',
-    playerBHighestBreak: '0',
     isPlaceholder: true,
   };
 }
@@ -58,8 +56,6 @@ export function buildFramesFromMatch(match: any, tournamentBestOfRaw?: any): Edi
       winnerSide: String(frame?.winner_participant_id || '') === String(match?.player_b_participant_id || '') ? 'B' : 'A',
       playerAScore: String(frame?.player_a_score ?? 0),
       playerBScore: String(frame?.player_b_score ?? 0),
-      playerAHighestBreak: String(frame?.player_a_highest_break ?? 0),
-      playerBHighestBreak: String(frame?.player_b_highest_break ?? 0),
       isPlaceholder: false,
     }))
     : [];

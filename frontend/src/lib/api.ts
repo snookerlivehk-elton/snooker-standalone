@@ -1498,8 +1498,6 @@ export async function recordTournamentMatchResult(
       winnerSide: 'A' | 'B';
       playerAScore?: number;
       playerBScore?: number;
-      playerAHighestBreak?: number;
-      playerBHighestBreak?: number;
       startedAt?: string | null;
       endedAt?: string | null;
     }>;

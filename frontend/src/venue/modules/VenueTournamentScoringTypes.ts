@@ -5,8 +5,6 @@ export type EditableFrame = {
   winnerSide: 'A' | 'B';
   playerAScore: string;
   playerBScore: string;
-  playerAHighestBreak: string;
-  playerBHighestBreak: string;
   isPlaceholder?: boolean;
 };
 
@@ -89,7 +87,7 @@ export type TournamentScoringWorkspace = {
   selectedMatchResumeSummary: string;
   selectedMatchSegments: MatchScoreSegment[];
   selectedMatchTargetWins: number;
-  selectedMatchTopBreakLabel: string;
+  selectedMatchTopTwentyLabel: string;
   selectedMatchWinnerLabel: string;
   selectedMatchWinsRemainingA: number;
   selectedMatchWinsRemainingB: number;

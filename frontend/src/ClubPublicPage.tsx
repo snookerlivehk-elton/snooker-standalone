@@ -181,7 +181,7 @@ function buildPublicTournamentBreakSummary(match: any) {
   );
   return {
     countLabel: totalCount > 0 ? `20+ ${totalCount} 筆` : '暫無 20+',
-    topLabel: topValue > 0 ? `最高 break ${topValue}` : '最高 break -',
+    topLabel: topValue > 0 ? `最高 20+ ${topValue}` : '最高 20+ -',
     latestLabel: latestRow
       ? `最新 20+：${formatMemberLabel(latestRow?.member)} · 第 ${Number(latestRow?.frame_no || 0)} 局 · ${Number(latestRow?.points || 0)}`
       : '未有最新 20+',

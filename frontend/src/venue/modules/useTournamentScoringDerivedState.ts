@@ -70,23 +70,6 @@ export function useTournamentScoringDerivedState({
     }
     return '';
   }, [formatMemberLabel, selectedMatch, selectedMatchIsCompleted]);
-  const selectedMatchAMaxBreak = Math.max(0, Number(selectedMatch?.player_a_max_break ?? 0));
-  const selectedMatchBMaxBreak = Math.max(0, Number(selectedMatch?.player_b_max_break ?? 0));
-  const selectedMatchA20PlusCount = Math.max(0, Number(selectedMatch?.player_a_20_plus_count ?? 0));
-  const selectedMatchB20PlusCount = Math.max(0, Number(selectedMatch?.player_b_20_plus_count ?? 0));
-  const selectedMatchTopBreakValue = Math.max(selectedMatchAMaxBreak, selectedMatchBMaxBreak);
-  const selectedMatchTopBreakOwners = [
-    selectedMatchAMaxBreak === selectedMatchTopBreakValue && selectedMatchTopBreakValue > 0
-      ? formatMemberLabel(selectedMatch?.player_a_participant?.member)
-      : '',
-    selectedMatchBMaxBreak === selectedMatchTopBreakValue && selectedMatchTopBreakValue > 0
-      ? formatMemberLabel(selectedMatch?.player_b_participant?.member)
-      : '',
-  ].filter(Boolean);
-  const selectedMatchTopBreakLabel = selectedMatchTopBreakValue > 0
-    ? `${selectedMatchTopBreakOwners.join(' / ')} · ${selectedMatchTopBreakValue}`
-    : '-';
-  const selectedMatchBreakTotalsLabel = `A ${selectedMatchAMaxBreak} / ${selectedMatchA20PlusCount} 筆 20+ · B ${selectedMatchBMaxBreak} / ${selectedMatchB20PlusCount} 筆 20+`;
   const selectedMatchBreakRows = useMemo(() => (
     Array.isArray(selectedMatch?.breaks) ? [...selectedMatch.breaks] : []
   ).sort((a: any, b: any) => {
@@ -97,6 +80,39 @@ export function useTournamentScoringDerivedState({
     const bTime = b?.recorded_at ? new Date(b.recorded_at).getTime() : 0;
     return bTime - aTime;
   }), [selectedMatch]);
+  const selectedMatchAMemberId = String(selectedMatch?.player_a_participant?.member?.id || selectedMatch?.player_a_participant?.member_id || '');
+  const selectedMatchBMemberId = String(selectedMatch?.player_b_participant?.member?.id || selectedMatch?.player_b_participant?.member_id || '');
+  const selectedMatchABreakRows = useMemo(
+    () => selectedMatchBreakRows.filter((row: any) => String(row?.member_id || row?.member?.id || '') === selectedMatchAMemberId),
+    [selectedMatchAMemberId, selectedMatchBreakRows],
+  );
+  const selectedMatchBBreakRows = useMemo(
+    () => selectedMatchBreakRows.filter((row: any) => String(row?.member_id || row?.member?.id || '') === selectedMatchBMemberId),
+    [selectedMatchBMemberId, selectedMatchBreakRows],
+  );
+  const selectedMatchAMaxBreak = selectedMatchABreakRows.reduce(
+    (best: number, row: any) => Math.max(best, Number(row?.points || 0)),
+    0,
+  );
+  const selectedMatchBMaxBreak = selectedMatchBBreakRows.reduce(
+    (best: number, row: any) => Math.max(best, Number(row?.points || 0)),
+    0,
+  );
+  const selectedMatchA20PlusCount = selectedMatchABreakRows.length;
+  const selectedMatchB20PlusCount = selectedMatchBBreakRows.length;
+  const selectedMatchTopTwentyValue = Math.max(selectedMatchAMaxBreak, selectedMatchBMaxBreak);
+  const selectedMatchTopTwentyOwners = [
+    selectedMatchAMaxBreak === selectedMatchTopTwentyValue && selectedMatchTopTwentyValue > 0
+      ? formatMemberLabel(selectedMatch?.player_a_participant?.member)
+      : '',
+    selectedMatchBMaxBreak === selectedMatchTopTwentyValue && selectedMatchTopTwentyValue > 0
+      ? formatMemberLabel(selectedMatch?.player_b_participant?.member)
+      : '',
+  ].filter(Boolean);
+  const selectedMatchTopTwentyLabel = selectedMatchTopTwentyValue > 0
+    ? `${selectedMatchTopTwentyOwners.join(' / ')} · ${selectedMatchTopTwentyValue}`
+    : '-';
+  const selectedMatchBreakTotalsLabel = `A 最高 20+ ${selectedMatchAMaxBreak} / ${selectedMatchA20PlusCount} 筆 · B 最高 20+ ${selectedMatchBMaxBreak} / ${selectedMatchB20PlusCount} 筆`;
   const selectedMatchBreakFrameOptions = useMemo(() => {
     const values = Array.from(new Set(resultFrames.map((frame) => String(frame.frameNo || '1')).filter(Boolean)));
     return values.length > 0 ? values : ['1'];
@@ -134,7 +150,7 @@ export function useTournamentScoringDerivedState({
     selectedMatchBreakRows.filter((row: any) => Number(row?.frame_no || 0) === activeFrameNoValue)
   ), [activeFrameNoValue, selectedMatchBreakRows]);
   const selectedMatchResumeSummary = selectedMatchIsCompleted
-    ? '此場比賽已完成，可回看各局結果與最高 break。'
+    ? '此場比賽已完成，可回看各局結果與 20+ 記錄。'
     : buildSegmentResumeSummary(selectedMatchCurrentFrameNo, completedResultFrames.length, selectedMatchBestOf);
 
   return {
@@ -172,7 +188,7 @@ export function useTournamentScoringDerivedState({
     selectedMatchSegments,
     selectedMatchStatus,
     selectedMatchTargetWins,
-    selectedMatchTopBreakLabel,
+    selectedMatchTopTwentyLabel,
     selectedMatchWinnerLabel,
     selectedMatchWinsRemainingA,
     selectedMatchWinsRemainingB,

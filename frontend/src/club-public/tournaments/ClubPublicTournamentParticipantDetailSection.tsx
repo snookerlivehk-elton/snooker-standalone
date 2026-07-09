@@ -111,7 +111,7 @@ const ClubPublicTournamentParticipantDetailSection: React.FC<ClubPublicTournamen
               </div>
             </div>
             <div className="cue-surface rounded-lg p-4">
-              <div className="text-sm cue-muted">單杆 / 20+</div>
+              <div className="text-sm cue-muted">最高 20+ / 20+</div>
               <div className="text-2xl font-extrabold accent-yellow mt-1">
                 {Number(tournamentParticipantDetail?.summary?.highestBreak || 0)}
               </div>
@@ -156,7 +156,7 @@ const ClubPublicTournamentParticipantDetailSection: React.FC<ClubPublicTournamen
                         局數 {Number(row?.framesWon || 0)} - {Number(row?.framesLost || 0)} · 得分 {Number(row?.totalPoints || 0)} : {Number(row?.totalPointsAgainst || 0)}
                       </div>
                       <div className="mt-1 text-xs cue-muted">
-                        單杆 {Number(row?.maxBreak || 0)} · 20+ {Number(row?.breaks20Plus || 0)}
+                        最高 20+ {Number(row?.maxBreak || 0)} · 20+ {Number(row?.breaks20Plus || 0)}
                       </div>
                     </div>
                   ))}
@@ -180,7 +180,7 @@ const ClubPublicTournamentParticipantDetailSection: React.FC<ClubPublicTournamen
                         <th className="py-2 px-2">戰績</th>
                         <th className="py-2 px-2">總得分</th>
                         <th className="py-2 px-2">平均</th>
-                        <th className="py-2 px-2">單杆 / 20+</th>
+                        <th className="py-2 px-2">最高 20+ / 20+</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -14,8 +14,6 @@ type FrameInput = {
   winnerSide?: any;
   playerAScore?: any;
   playerBScore?: any;
-  playerAHighestBreak?: any;
-  playerBHighestBreak?: any;
   startedAt?: any;
   endedAt?: any;
 };
@@ -83,8 +81,10 @@ function normalizeFrames(framesRaw: any): Array<{
       winner_side: winnerSide === 'A' || winnerSide === 'B' ? (winnerSide as Side) : null,
       player_a_score: Math.max(0, toInt(frame?.playerAScore, 0)),
       player_b_score: Math.max(0, toInt(frame?.playerBScore, 0)),
-      player_a_highest_break: Math.max(0, toInt(frame?.playerAHighestBreak, 0)),
-      player_b_highest_break: Math.max(0, toInt(frame?.playerBHighestBreak, 0)),
+      // Highest break is no longer accepted as manual input.
+      // Tournament frame summaries are derived from recorded 20+ rows instead.
+      player_a_highest_break: 0,
+      player_b_highest_break: 0,
       started_at: toNullableDate(frame?.startedAt),
       ended_at: toNullableDate(frame?.endedAt),
     };

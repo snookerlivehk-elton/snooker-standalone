@@ -194,8 +194,6 @@ export function useTournamentScoringActions({
           winnerSide: frame.winnerSide,
           playerAScore: Math.max(0, Math.floor(Number(frame.playerAScore || 0))),
           playerBScore: Math.max(0, Math.floor(Number(frame.playerBScore || 0))),
-          playerAHighestBreak: Math.max(0, Math.floor(Number(frame.playerAHighestBreak || 0))),
-          playerBHighestBreak: Math.max(0, Math.floor(Number(frame.playerBHighestBreak || 0))),
         }));
       if (frames.length === 0) throw new Error('請先輸入至少一局賽果');
       const nextAWins = frames.filter((frame) => frame.winnerSide === 'A').length;
