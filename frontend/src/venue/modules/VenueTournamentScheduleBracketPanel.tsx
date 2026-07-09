@@ -335,9 +335,60 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 
   const handleDownloadKnockoutShareCard = () => {
     if (isLeague || filteredBracketColumns.length <= 0) return;
+    const highestBreakCandidate = filteredMatchesRows.reduce((best: any, row: any) => {
+      const aBreak = Number(row?.player_a_max_break || 0);
+      const bBreak = Number(row?.player_b_max_break || 0);
+      const next = aBreak >= bBreak
+        ? {
+            breakValue: aBreak,
+            playerLabel: formatParticipantLabel(row?.player_a_participant),
+            scoreLabel: `${Math.max(1, Number(row?.match_no || 1))} / ${aBreak}`,
+          }
+        : {
+            breakValue: bBreak,
+            playerLabel: formatParticipantLabel(row?.player_b_participant),
+            scoreLabel: `${Math.max(1, Number(row?.match_no || 1))} / ${bBreak}`,
+          };
+      return Number(next.breakValue || 0) > Number(best?.breakValue || 0) ? next : best;
+    }, null);
+    const highestScoringMatch = filteredMatchesRows.reduce((best: any, row: any) => {
+      const totalFrames = Number(row?.player_a_frames_won || 0) + Number(row?.player_b_frames_won || 0);
+      if (totalFrames <= Number(best?.totalFrames || -1)) return best;
+      return {
+        totalFrames,
+        valueLabel: `${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)}`,
+        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} vs ${formatParticipantLabel(row?.player_b_participant)}`,
+      };
+    }, null);
+    const largestMarginMatch = filteredMatchesRows.reduce((best: any, row: any) => {
+      const diff = Math.abs(Number(row?.player_a_frames_won || 0) - Number(row?.player_b_frames_won || 0));
+      if (diff <= Number(best?.diff || -1)) return best;
+      return {
+        diff,
+        valueLabel: `${diff} 局`,
+        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} ${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)} ${formatParticipantLabel(row?.player_b_participant)}`,
+      };
+    }, null);
     downloadKnockoutBracketShareCard({
       title: String(tournamentTitle || '淘汰賽模式進級表'),
       focusLabel: effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel,
+      summaryCards: [
+        {
+          label: '最高單杆',
+          value: highestBreakCandidate?.breakValue ? String(highestBreakCandidate.breakValue) : '-',
+          detail: highestBreakCandidate?.playerLabel || '未有紀錄',
+        },
+        {
+          label: '最高得分',
+          value: highestScoringMatch?.valueLabel || '-',
+          detail: highestScoringMatch?.detailLabel || '未有紀錄',
+        },
+        {
+          label: '最高得失局',
+          value: largestMarginMatch?.valueLabel || '-',
+          detail: largestMarginMatch?.detailLabel || '未有紀錄',
+        },
+      ],
       rounds: filteredBracketColumns.map((column: any) => ({
         label: String(column?.label || '-'),
         total: Number(column?.summary?.total || column?.items?.length || 0),

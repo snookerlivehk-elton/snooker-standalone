@@ -28,6 +28,12 @@ type KnockoutShareRound = {
   items: KnockoutShareMatch[];
 };
 
+type KnockoutShareSummaryCard = {
+  label: string;
+  value: string;
+  detail: string;
+};
+
 type DownloadLeagueStandingsShareCardArgs = {
   title: string;
   dimensionLabel: string;
@@ -39,6 +45,7 @@ type DownloadKnockoutBracketShareCardArgs = {
   title: string;
   focusLabel: string;
   rounds: KnockoutShareRound[];
+  summaryCards?: KnockoutShareSummaryCard[];
 };
 
 type SharePalette = {
@@ -428,6 +435,131 @@ function getKnockoutPalette(): SharePalette {
   };
 }
 
+function splitKnockoutBranchItems(items: KnockoutShareMatch[]) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const midpoint = Math.ceil(safeItems.length / 2);
+  return {
+    left: safeItems.slice(0, midpoint),
+    right: safeItems.slice(midpoint),
+  };
+}
+
+function computeBranchLayout(itemCount: number, areaTop: number, areaHeight: number) {
+  if (itemCount <= 0) return { cardHeight: 56, gap: 10, positions: [] as number[] };
+  const gap = itemCount >= 6 ? 6 : itemCount >= 4 ? 8 : 12;
+  const rawHeight = Math.floor((areaHeight - ((itemCount - 1) * gap)) / itemCount);
+  const cardHeight = Math.max(48, Math.min(72, rawHeight));
+  const contentHeight = (itemCount * cardHeight) + ((itemCount - 1) * gap);
+  const startY = areaTop + Math.max(0, Math.floor((areaHeight - contentHeight) / 2));
+  const positions = Array.from({ length: itemCount }, (_, index) => startY + (index * (cardHeight + gap)));
+  return { cardHeight, gap, positions };
+}
+
+function drawBracketRibbon(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, text: string, palette: SharePalette) {
+  const gradient = ctx.createLinearGradient(x, y, x + w, y);
+  gradient.addColorStop(0, palette.accent);
+  gradient.addColorStop(1, palette.accentSoft);
+  fillRoundedRect(ctx, x, y, w, 52, 16, gradient);
+  drawText(ctx, text, x + (w / 2), y + 33, {
+    font: '700 22px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#FFFFFF',
+    align: 'center',
+  });
+}
+
+function drawKnockoutCompactCard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  item: KnockoutShareMatch,
+  palette: SharePalette,
+) {
+  const fill = item.winnerSide ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)';
+  const stroke = item.statusLabel === '已完成' ? 'rgba(246,183,60,0.24)' : 'rgba(255,255,255,0.10)';
+  const labelFont = height >= 64 ? 14 : 12;
+  const scoreFont = height >= 64 ? 16 : 14;
+  fillRoundedRect(ctx, x, y, width, height, 16, fill, stroke);
+  drawText(ctx, `M${item.matchNo}`, x + 10, y + 16, {
+    font: '600 11px Arial, "Microsoft JhengHei", sans-serif',
+    color: palette.textSoft,
+  });
+  drawText(ctx, item.statusLabel, x + width - 10, y + 16, {
+    font: '600 10px Arial, "Microsoft JhengHei", sans-serif',
+    color: palette.textSoft,
+    align: 'right',
+  });
+  const dividerY = y + Math.floor(height / 2);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 10, dividerY);
+  ctx.lineTo(x + width - 56, dividerY);
+  ctx.stroke();
+  ctx.restore();
+  drawAdaptiveText(ctx, item.playerALabel, x + 10, y + Math.max(30, Math.floor(height * 0.42)), {
+    maxWidth: width - 64,
+    maxFontSize: labelFont,
+    minFontSize: 10,
+    color: item.winnerSide === 'A' ? '#F6B73C' : palette.textMain,
+    weight: 700,
+  });
+  drawAdaptiveText(ctx, item.playerBLabel, x + 10, y + Math.max(48, Math.floor(height * 0.78)), {
+    maxWidth: width - 64,
+    maxFontSize: labelFont,
+    minFontSize: 10,
+    color: item.winnerSide === 'B' ? '#F6B73C' : palette.textMain,
+    weight: 700,
+  });
+  drawText(ctx, `${item.playerAFrames}:${item.playerBFrames}`, x + width - 10, y + Math.floor(height / 2) + 6, {
+    font: `700 ${scoreFont}px Arial, "Microsoft JhengHei", sans-serif`,
+    color: palette.textMain,
+    align: 'right',
+  });
+}
+
+function drawBranchConnectors(
+  ctx: CanvasRenderingContext2D,
+  sourceXs: number[],
+  sourceYs: number[],
+  sourceCardWidth: number,
+  sourceCardHeight: number,
+  targetXs: number[],
+  targetYs: number[],
+  targetCardWidth: number,
+  targetCardHeight: number,
+  side: 'left' | 'right',
+) {
+  if (sourceXs.length === 0 || targetXs.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 2;
+  targetYs.forEach((targetY, targetIndex) => {
+    const groupStart = Math.floor((targetIndex * sourceYs.length) / targetYs.length);
+    const groupEnd = Math.max(groupStart + 1, Math.floor(((targetIndex + 1) * sourceYs.length) / targetYs.length));
+    const group = sourceYs.slice(groupStart, groupEnd);
+    if (group.length <= 0) return;
+    const targetCenterY = targetY + (targetCardHeight / 2);
+    const targetX = side === 'left' ? targetXs[targetIndex] : targetXs[targetIndex] + targetCardWidth;
+    const sourceEdgeX = side === 'left' ? sourceXs[groupStart] + sourceCardWidth : sourceXs[groupStart];
+    const midX = side === 'left'
+      ? sourceEdgeX + Math.max(12, Math.floor((targetX - sourceEdgeX) / 2))
+      : sourceEdgeX - Math.max(12, Math.floor((sourceEdgeX - targetX) / 2));
+    group.forEach((rowY) => {
+      const sourceCenterY = rowY + (sourceCardHeight / 2);
+      ctx.beginPath();
+      ctx.moveTo(sourceEdgeX, sourceCenterY);
+      ctx.lineTo(midX, sourceCenterY);
+      ctx.lineTo(midX, targetCenterY);
+      ctx.lineTo(targetX, targetCenterY);
+      ctx.stroke();
+    });
+  });
+  ctx.restore();
+}
+
 export function downloadLeagueStandingsShareCard({
   title,
   dimensionLabel,
@@ -588,6 +720,7 @@ export function downloadKnockoutBracketShareCard({
   title,
   focusLabel,
   rounds,
+  summaryCards = [],
 }: DownloadKnockoutBracketShareCardArgs) {
   const { canvas, ctx } = createCanvasCard();
   const palette = getKnockoutPalette();
@@ -609,6 +742,14 @@ export function downloadKnockoutBracketShareCard({
     : '-';
   const totalMatches = rounds.reduce((sum, round) => sum + Number(round?.total || 0), 0);
   const completedMatches = rounds.reduce((sum, round) => sum + Number(round?.completedCount || 0), 0);
+  const preFinalRounds = rounds.slice(0, -1);
+  const branchRounds = preFinalRounds.map((round) => ({
+    label: round.label,
+    total: round.total,
+    completedCount: round.completedCount,
+    ...splitKnockoutBranchItems(round.items),
+  }));
+  const centerSummaryCards = summaryCards.slice(0, 3);
 
   drawBackground(ctx, palette);
   drawTopBanner(ctx, {
@@ -619,160 +760,205 @@ export function downloadKnockoutBracketShareCard({
     palette,
   });
 
-  fillRoundedRect(ctx, 48, 286, 984, 222, 30, palette.panel, palette.panelStroke);
-  drawSectionTitle(ctx, '決賽中心位', '將冠軍、亞軍與決賽比分收斂成分享時最先被看到的主視覺。', 78, 328, palette);
-
-  fillRoundedRect(ctx, 78, 366, 248, 112, 26, 'rgba(246,183,60,0.16)', 'rgba(246,183,60,0.28)');
-  drawText(ctx, '冠軍', 100, 398, {
-    font: '600 16px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-  });
-  drawText(ctx, championLabel, 100, 438, {
-    font: '700 28px Arial, "Microsoft JhengHei", sans-serif',
-    color: '#F6B73C',
-    maxWidth: 204,
-  });
-  drawText(ctx, 'Champion', 100, 462, {
-    font: '500 14px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMuted,
-  });
-
-  fillRoundedRect(ctx, 754, 366, 248, 112, 26, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.12)');
-  drawText(ctx, '亞軍', 776, 398, {
-    font: '600 16px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-  });
-  drawText(ctx, runnerUpLabel, 776, 438, {
-    font: '700 28px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMain,
-    maxWidth: 204,
-  });
-  drawText(ctx, 'Runner-up', 776, 462, {
-    font: '500 14px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMuted,
-  });
-
-  fillRoundedRect(ctx, 352, 348, 376, 136, 28, 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.14)', 1.5);
-  drawText(ctx, '決賽比分', 540, 382, {
-    font: '600 18px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-    align: 'center',
-  });
-  drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '未有決賽比分', 540, 430, {
-    font: '700 46px Arial, "Microsoft JhengHei", sans-serif',
-    color: '#F6B73C',
-    align: 'center',
-  });
-  drawText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', 540, 458, {
-    font: '500 16px Arial, "Microsoft JhengHei", sans-serif',
+  fillRoundedRect(ctx, 48, 286, 984, 940, 34, palette.panel, palette.panelStroke);
+  drawBracketRibbon(ctx, 392, 314, 296, focusLabel === '全部輪次' ? '淘汰賽模式進級表' : String(focusLabel || '淘汰賽模式進級表'), palette);
+  drawText(ctx, '左右分支歸中，中央保留決賽與賽事摘要，讓分享圖更貼近 bracket 海報版式。', 540, 382, {
+    font: '400 16px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.textMuted,
     align: 'center',
-    maxWidth: 320,
   });
 
-  fillRoundedRect(ctx, 48, 532, 984, 130, 30, palette.panel, palette.panelStroke);
-  drawSectionTitle(ctx, '各輪完成度', '讓分享圖即使不閱讀全部對局，也能快速掌握賽事推進狀態。', 78, 570, palette);
-  const progressCardWidth = Math.floor((924 - ((Math.max(1, rounds.length) - 1) * 12)) / Math.max(1, rounds.length));
-  rounds.forEach((round, index) => {
-    const x = 78 + (index * (progressCardWidth + 12));
-    const safeWidth = Math.max(138, progressCardWidth);
-    drawAdaptiveText(ctx, String(round?.label || '-'), x, 592, {
-      maxWidth: safeWidth - 64,
-      maxFontSize: 15,
-      minFontSize: 11,
-      color: palette.textMain,
-      weight: 600,
-    });
-    drawText(ctx, `${Number(round?.completedCount || 0)}/${Number(round?.total || 0)}`, x + safeWidth, 592, {
-      font: '500 13px Arial, "Microsoft JhengHei", sans-serif',
-      color: palette.textMuted,
-      align: 'right',
-    });
-    fillRoundedRect(ctx, x, 612, safeWidth, 18, 9, 'rgba(255,255,255,0.08)');
-    const progress = Number(round?.total || 0) > 0 ? Number(round?.completedCount || 0) / Number(round.total) : 0;
-    fillRoundedRect(ctx, x, 612, Math.max(18, safeWidth * progress), 18, 9, 'rgba(246,183,60,0.72)');
-  });
+  const branchAreaTop = 420;
+  const branchAreaHeight = 360;
+  const innerGap = 220;
+  const branchGap = 18;
+  const sideAvailableWidth = Math.floor((984 - innerGap - ((Math.max(1, preFinalRounds.length) - 1) * branchGap * 2)) / 2);
+  const branchColumnWidth = Math.max(82, Math.min(132, Math.floor(sideAvailableWidth / Math.max(1, preFinalRounds.length))));
+  const leftColumnXs = preFinalRounds.map((_, index) => 78 + (index * (branchColumnWidth + branchGap)));
+  const rightBase = 48 + 984 - 30;
+  const rightColumnXs = preFinalRounds.map((_, index) => rightBase - branchColumnWidth - (index * (branchColumnWidth + branchGap)));
+  const centerCardWidth = 220;
+  const centerCardHeight = 92;
+  const centerCardX = Math.floor((CARD_WIDTH - centerCardWidth) / 2);
+  const centerCardY = 530;
 
-  fillRoundedRect(ctx, 48, 682, 984, 544, 30, palette.panel, palette.panelStroke);
-  drawSectionTitle(ctx, '淘汰賽模式進級路徑', '進級表保持為主體，同時把決賽中心位與輪次完成度上收。', 78, 708, palette);
-
-  if (rounds.length === 0) {
-    drawText(ctx, '尚未生成可分享的進級表內容。', 78, 780, {
+  if (preFinalRounds.length === 0 && !finalMatch) {
+    drawText(ctx, '尚未生成可分享的進級表內容。', 540, 640, {
       font: '600 28px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textMain,
+      align: 'center',
     });
   } else {
-    const columnGap = 14;
-    const columnWidth = Math.floor((924 - ((rounds.length - 1) * columnGap)) / Math.max(1, rounds.length));
-    const columnStartX = 78;
-    const columnStartY = 748;
-    const availableHeight = 430;
+    const leftLayouts = branchRounds.map((round) => computeBranchLayout(round.left.length, branchAreaTop, branchAreaHeight));
+    const rightLayouts = branchRounds.map((round) => computeBranchLayout(round.right.length, branchAreaTop, branchAreaHeight));
 
-    rounds.forEach((round, roundIndex) => {
-      const x = columnStartX + (roundIndex * (columnWidth + columnGap));
-      fillRoundedRect(ctx, x, columnStartY, columnWidth, availableHeight, 24, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
-      drawAdaptiveText(ctx, round.label, x + 16, columnStartY + 32, {
-        maxWidth: columnWidth - 32,
-        maxFontSize: rounds.length > 4 ? 17 : 19,
-        minFontSize: 12,
+    branchRounds.forEach((round, roundIndex) => {
+      const leftX = leftColumnXs[roundIndex];
+      const rightX = rightColumnXs[roundIndex];
+      const leftLayout = leftLayouts[roundIndex];
+      const rightLayout = rightLayouts[roundIndex];
+
+      drawAdaptiveText(ctx, round.label, leftX, branchAreaTop - 16, {
+        maxWidth: branchColumnWidth,
+        maxFontSize: 15,
+        minFontSize: 11,
         color: '#F6B73C',
         weight: 700,
       });
-      drawText(ctx, `${round.completedCount}/${round.total} 已完成`, x + 16, columnStartY + 56, {
-        font: '500 14px Arial, "Microsoft JhengHei", sans-serif',
+      drawText(ctx, `${round.completedCount}/${round.total}`, leftX + branchColumnWidth, branchAreaTop - 16, {
+        font: '500 12px Arial, "Microsoft JhengHei", sans-serif',
         color: palette.textMuted,
+        align: 'right',
+      });
+      drawAdaptiveText(ctx, round.label, rightX, branchAreaTop - 16, {
+        maxWidth: branchColumnWidth,
+        maxFontSize: 15,
+        minFontSize: 11,
+        color: '#F6B73C',
+        weight: 700,
+      });
+      drawText(ctx, `${round.completedCount}/${round.total}`, rightX + branchColumnWidth, branchAreaTop - 16, {
+        font: '500 12px Arial, "Microsoft JhengHei", sans-serif',
+        color: palette.textMuted,
+        align: 'right',
       });
 
-      const items = round.items.slice(0, Math.max(1, round.items.length));
-      const cardGap = items.length >= 6 ? 6 : 10;
-      const cardAreaTop = columnStartY + 74;
-      const cardAreaHeight = availableHeight - 92;
-      const rawCardHeight = Math.floor((cardAreaHeight - ((items.length - 1) * cardGap)) / Math.max(1, items.length));
-      const cardHeight = Math.max(42, Math.min(100, rawCardHeight));
-      const labelFontSize = cardHeight >= 80 ? 16 : cardHeight >= 64 ? 14 : 12;
-      const scoreFontSize = cardHeight >= 80 ? 18 : cardHeight >= 64 ? 16 : 14;
-      const firstLineY = cardHeight <= 50 ? 34 : cardHeight <= 64 ? 38 : 46;
-      const secondLineY = cardHeight <= 50 ? 50 : cardHeight <= 64 ? 58 : 72;
-      const scoreY = cardHeight <= 50 ? cardHeight - 8 : cardHeight <= 64 ? cardHeight - 10 : cardHeight - 12;
-
-      items.forEach((item, itemIndex) => {
-        const y = cardAreaTop + (itemIndex * (cardHeight + cardGap));
-        const cardFill = item.winnerSide ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)';
-        const cardStroke = item.statusLabel === '已完成' ? 'rgba(246,183,60,0.24)' : 'rgba(255,255,255,0.08)';
-        fillRoundedRect(ctx, x + 10, y, columnWidth - 20, cardHeight, 18, cardFill, cardStroke);
-        drawText(ctx, `M${item.matchNo}`, x + 22, y + 22, {
-          font: '600 13px Arial, "Microsoft JhengHei", sans-serif',
-          color: palette.textSoft,
-        });
-        drawText(ctx, item.statusLabel, x + columnWidth - 22, y + 22, {
-          font: '600 13px Arial, "Microsoft JhengHei", sans-serif',
-          color: palette.textSoft,
-          align: 'right',
-        });
-
-        drawAdaptiveText(ctx, item.playerALabel, x + 22, y + firstLineY, {
-          maxWidth: columnWidth - 58,
-          maxFontSize: labelFontSize,
-          minFontSize: 10,
-          color: item.winnerSide === 'A' ? '#F6B73C' : palette.textMain,
-          weight: 700,
-        });
-        drawAdaptiveText(ctx, item.playerBLabel, x + 22, y + secondLineY, {
-          maxWidth: columnWidth - 58,
-          maxFontSize: labelFontSize,
-          minFontSize: 10,
-          color: item.winnerSide === 'B' ? '#F6B73C' : palette.textMain,
-          weight: 700,
-        });
-
-        drawText(ctx, `${item.playerAFrames}:${item.playerBFrames}`, x + columnWidth - 22, y + scoreY, {
-          font: `700 ${scoreFontSize}px Arial, "Microsoft JhengHei", sans-serif`,
-          color: palette.textMain,
-          align: 'right',
-        });
+      round.left.forEach((item, itemIndex) => {
+        drawKnockoutCompactCard(ctx, leftX, leftLayout.positions[itemIndex] || branchAreaTop, branchColumnWidth, leftLayout.cardHeight, item, palette);
       });
+      round.right.forEach((item, itemIndex) => {
+        drawKnockoutCompactCard(ctx, rightX, rightLayout.positions[itemIndex] || branchAreaTop, branchColumnWidth, rightLayout.cardHeight, item, palette);
+      });
+
+      if (roundIndex < branchRounds.length - 1) {
+        drawBranchConnectors(
+          ctx,
+          Array.from({ length: round.left.length }, () => leftX),
+          leftLayout.positions,
+          branchColumnWidth,
+          leftLayout.cardHeight,
+          Array.from({ length: branchRounds[roundIndex + 1].left.length }, () => leftColumnXs[roundIndex + 1]),
+          leftLayouts[roundIndex + 1].positions,
+          branchColumnWidth,
+          leftLayouts[roundIndex + 1].cardHeight,
+          'left',
+        );
+        drawBranchConnectors(
+          ctx,
+          Array.from({ length: round.right.length }, () => rightX),
+          rightLayout.positions,
+          branchColumnWidth,
+          rightLayout.cardHeight,
+          Array.from({ length: branchRounds[roundIndex + 1].right.length }, () => rightColumnXs[roundIndex + 1]),
+          rightLayouts[roundIndex + 1].positions,
+          branchColumnWidth,
+          rightLayouts[roundIndex + 1].cardHeight,
+          'right',
+        );
+      }
     });
+
+    fillRoundedRect(ctx, centerCardX, centerCardY, centerCardWidth, centerCardHeight, 24, 'rgba(255,255,255,0.08)', 'rgba(246,183,60,0.24)', 1.5);
+    drawText(ctx, finalRound?.label || '決賽', centerCardX + (centerCardWidth / 2), centerCardY + 24, {
+      font: '600 15px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+      align: 'center',
+    });
+    drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
+      font: '700 30px Arial, "Microsoft JhengHei", sans-serif',
+      color: '#F6B73C',
+      align: 'center',
+    });
+    drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 80, {
+      maxWidth: centerCardWidth - 40,
+      maxFontSize: 13,
+      minFontSize: 10,
+      color: palette.textMuted,
+      weight: 500,
+      align: 'center',
+    });
+
+    if (branchRounds.length > 0) {
+      const lastLeftLayout = leftLayouts[leftLayouts.length - 1];
+      const lastRightLayout = rightLayouts[rightLayouts.length - 1];
+      const lastLeftX = leftColumnXs[leftColumnXs.length - 1];
+      const lastRightX = rightColumnXs[rightColumnXs.length - 1];
+      drawBranchConnectors(
+        ctx,
+        Array.from({ length: branchRounds[branchRounds.length - 1].left.length }, () => lastLeftX),
+        lastLeftLayout.positions,
+        branchColumnWidth,
+        lastLeftLayout.cardHeight,
+        [centerCardX],
+        [centerCardY],
+        centerCardWidth,
+        centerCardHeight,
+        'left',
+      );
+      drawBranchConnectors(
+        ctx,
+        Array.from({ length: branchRounds[branchRounds.length - 1].right.length }, () => lastRightX),
+        lastRightLayout.positions,
+        branchColumnWidth,
+        lastRightLayout.cardHeight,
+        [centerCardX],
+        [centerCardY],
+        centerCardWidth,
+        centerCardHeight,
+        'right',
+      );
+    }
   }
+
+  fillRoundedRect(ctx, 352, 806, 376, 84, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
+  drawText(ctx, '冠軍', 378, 834, {
+    font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+    color: palette.textSoft,
+  });
+  drawAdaptiveText(ctx, championLabel, 378, 866, {
+    maxWidth: 142,
+    maxFontSize: 22,
+    minFontSize: 14,
+    color: '#F6B73C',
+    weight: 700,
+  });
+  drawText(ctx, '亞軍', 562, 834, {
+    font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+    color: palette.textSoft,
+  });
+  drawAdaptiveText(ctx, runnerUpLabel, 562, 866, {
+    maxWidth: 142,
+    maxFontSize: 22,
+    minFontSize: 14,
+    color: palette.textMain,
+    weight: 700,
+  });
+
+  fillRoundedRect(ctx, 330, 914, 420, 232, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
+  drawSectionTitle(ctx, '賽事摘要', '中央空白區改放關鍵指標，補足 bracket 海報的資訊利用率。', 358, 954, palette);
+  centerSummaryCards.forEach((card, index) => {
+    const y = 994 + (index * 48);
+    fillRoundedRect(ctx, 358, y, 364, 40, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
+    drawText(ctx, card.label, 374, y + 25, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, card.value, 476, y + 25, {
+      maxWidth: 112,
+      maxFontSize: 16,
+      minFontSize: 12,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawAdaptiveText(ctx, card.detail, 610, y + 25, {
+      maxWidth: 96,
+      maxFontSize: 12,
+      minFontSize: 10,
+      color: palette.textMuted,
+      weight: 500,
+      align: 'right',
+    });
+  });
 
   drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · CueAim Snooker');
   triggerCanvasDownload(canvas, `${safeFilePart(title || 'knockout-bracket')}-share-card.png`);
