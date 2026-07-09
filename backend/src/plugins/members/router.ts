@@ -1216,10 +1216,15 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
       const clubId = req.query.clubId ? String(req.query.clubId).trim() : '';
       const month = req.query.month ? String(req.query.month).trim() : '';
+      const minPointsRaw = req.query.minPoints == null ? '' : String(req.query.minPoints).trim();
+      const minPoints = minPointsRaw ? Number(minPointsRaw) : 0;
 
       if (month) {
         const range = parseMonthRangeUtc(month);
         if (!range) return res.status(400).json({ error: 'month invalid' });
+      }
+      if (minPointsRaw && (!Number.isFinite(minPoints) || minPoints < 0)) {
+        return res.status(400).json({ error: 'minPoints invalid' });
       }
 
       const rows = await listUnifiedBreakRows({
@@ -1227,6 +1232,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
         memberId,
         clubId,
         month,
+        minPoints,
       });
       res.json(rows);
     } catch (err: any) {

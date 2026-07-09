@@ -4,6 +4,7 @@ import { getMyClubId, requireClubAdmin, requireMember } from '../src/core/club/a
 import { prisma } from '../src/core/db/prisma.js';
 import { isFeatureEnabled } from '../src/core/features/featureAccess.js';
 import { listResolvedModuleStates, syncModuleRegistry } from '../src/core/modules/config.js';
+import { getClubHighbreakSettings, getEffectiveClubHighbreakSettings, updateClubHighbreakSettings } from '../src/core/modules/highbreakSettings.js';
 import { createBookingRouter } from '../src/plugins/booking/router.js';
 import { createClubMessageRouter } from '../src/plugins/club-messages/router.js';
 import { createClubHighbreakRouter } from '../src/plugins/highbreak/router.js';
@@ -380,6 +381,53 @@ router.get('/my-members', async (req, res) => {
         });
         
         res.json(members);
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+router.get('/highbreak/settings', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    try {
+        const result = await getEffectiveClubHighbreakSettings(clubId);
+        res.json({
+            clubId,
+            ...result,
+        });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+router.put('/highbreak/settings', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+    try {
+        const body = req.body || {};
+        const patch: Record<string, any> = {};
+        if (body.displayThresholdMode !== undefined) {
+            patch.displayThresholdMode = String(body.displayThresholdMode || '').trim().toUpperCase();
+        }
+        if (body.displayThresholdDefault !== undefined) {
+            patch.displayThresholdDefault = Number(body.displayThresholdDefault);
+        }
+        if (Object.keys(patch).length === 0) {
+            return res.status(400).json({ error: 'no_valid_fields' });
+        }
+        const clubSettings = await updateClubHighbreakSettings(clubId, patch);
+        const effective = await getEffectiveClubHighbreakSettings(clubId);
+        res.json({
+            ok: true,
+            clubId,
+            clubSettings,
+            moduleSettings: effective.moduleSettings,
+            effectiveMinPoints: effective.effectiveMinPoints,
+        });
     } catch (error) {
         res.status(500).json({ error: String(error) });
     }

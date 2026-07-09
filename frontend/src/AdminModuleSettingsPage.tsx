@@ -134,7 +134,7 @@ const AdminModuleSettingsPage: React.FC = () => {
                       </div>
                     </label>
                   </div>
-                ) : (
+                ) : section.type === 'toggles' ? (
                   <div className="grid grid-cols-1 gap-3">
                     {section.toggles.map((item) => (
                       <label key={item.field} className="flex items-center justify-between gap-3 bg-black/30 border border-white/10 rounded px-3 py-3">
@@ -149,6 +149,52 @@ const AdminModuleSettingsPage: React.FC = () => {
                         />
                       </label>
                     ))}
+                  </div>
+                ) : section.type === 'numbers' ? (
+                  <div className="grid grid-cols-1 gap-3">
+                    {section.items.map((item) => (
+                      <label key={item.field} className="bg-black/30 border border-white/10 rounded px-3 py-3 block">
+                        <div className="text-sm">{item.label}</div>
+                        {item.description ? <div className="text-xs cue-muted mt-1">{item.description}</div> : null}
+                        <input
+                          type="number"
+                          min={item.min}
+                          max={item.max}
+                          step={item.step || 1}
+                          value={draft[item.field] ?? ''}
+                          onChange={(e) => setDraft((prev) => ({
+                            ...prev,
+                            [item.field]: e.target.value === '' ? '' : Number(e.target.value),
+                          }))}
+                          className="mt-3 w-full px-3 py-2 rounded cue-input"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    <label className="bg-black/30 border border-white/10 rounded px-3 py-3 block">
+                      <div className="text-sm">選擇預設口徑</div>
+                      <div className="text-xs cue-muted mt-1">{section.description}</div>
+                      <select
+                        value={draft[section.field] ?? ''}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, [section.field]: e.target.value }))}
+                        className="mt-3 w-full px-3 py-2 rounded cue-input"
+                      >
+                        {section.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-2 space-y-1">
+                        {section.options.map((option) => (
+                          <div key={`${section.field}-${option.value}`} className="text-xs cue-muted">
+                            {option.label}：{option.description || ''}
+                          </div>
+                        ))}
+                      </div>
+                    </label>
                   </div>
                 )}
               </div>

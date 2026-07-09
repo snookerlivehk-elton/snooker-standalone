@@ -4,6 +4,80 @@
 
 ## 最新已完成（2026-07-09）
 
+- 已完成會員頁 / 場館頁正式比賽 break 歷史與統計修正：
+  - `backend/src/core/highbreak/unifiedBreakRows.ts`
+    - 新增 unified merged source，合併顯式 `BreakRecord` 與 `TournamentFrame` fallback rows
+  - `backend/src/plugins/members/router.ts`
+  - `backend/src/plugins/highbreak/router.ts`
+    - `/api/me/breaks`、`/api/club/breaks`、場館最高榜與月榜已改走統一資料來源，避免正式賽 frame summary 與 break 歷史再度失步
+  - 根因已確認為：
+    - 正式賽 break 曾同時分散在 `match/frame summary` 與 `BreakRecord`
+    - 會員頁與場館頁原本只讀 `BreakRecord`，因此會漏算只存在於 frame summary 的正式賽 break
+- Tournament scoring / break workflow 已再收斂為「只記錄 `20+`，不再手填最高 break」：
+  - `frontend/src/venue/modules/VenueTournamentScoringMainPanel.tsx`
+  - `frontend/src/venue/modules/useTournamentScoringDerivedState.ts`
+  - `backend/src/plugins/tournaments/service.ts`
+  - `backend/src/plugins/members/router.ts`
+    - 記分區已移除手填 `最高 break`
+    - 改由該局已記錄的 `20+` 自動回算摘要
+    - 會員頁 / 公開頁相關文案已同步改為 `最高 20+`
+- Highbreak / Tournament break debugging session 已完成 cleanup：
+  - 已移除 members/highbreak router 內的 post-fix instrumentation
+  - 已刪除 `.dbg/`
+  - 已刪除 `debug-member-break-stats.md`
+- 已新增下一階段方案文件：
+  - `HIGHBREAK_VIDEO_THRESHOLD_BLUEPRINT.md`
+    - 記錄場館 Highbreak 影片補錄
+    - 記錄 `20+` 收錄下限與多門檻顯示 / 統計模型
+    - 規劃 Super Admin 預設門檻、場館預設門檻、`minPoints` API 與 Batch 拆分
+- Highbreak 多門檻與影片補錄已完成第一輪落地（Batch 1 ~ Batch 3）：
+  - `backend/src/core/highbreak/unifiedBreakRows.ts`
+    - 已支援 `minPoints`
+    - 已補 `EXPLICIT / FRAME_FALLBACK` metadata，供前端判斷是否可直接補影片或需要 materialize
+  - `backend/src/plugins/highbreak/router.ts`
+    - 場館 `/breaks`、最高榜、月榜已支援 `minPoints`
+    - 已新增場館端影片更新 API，可將 `FRAME_FALLBACK` 自動轉為正式 `BreakRecord`
+  - `backend/src/plugins/members/router.ts`
+    - `/api/me/breaks` 已支援 `minPoints`
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+    - 場館 Highbreak 已加入 `20+ / 30+ / 40+ / 50+` 門檻切換
+    - 會內紀錄列表已支援 `補上影片 / 編輯影片`
+  - `frontend/src/lib/api.ts`
+    - 已新增 club highbreak settings / update video / `minPoints` 查詢 wrapper
+- Highbreak 設定流已完成第一版：
+  - `backend/src/core/modules/highbreakSettings.ts`
+    - 新增 highbreak 模組設定 helper
+    - 支援：
+      - `systemDisplayThresholdDefault`
+      - `displayThresholdOptions`
+      - `defaultLeaderboardScope`
+      - club `displayThresholdMode`
+      - club `displayThresholdDefault`
+  - `backend/src/core/modules/adminModuleSettings.ts`
+  - `frontend/src/admin/moduleSettingsRegistry.ts`
+  - `frontend/src/AdminModuleSettingsPage.tsx`
+    - `Highbreak` 已正式接入 Super Admin 共用設定頁
+  - `backend/routes/club.ts`
+    - 已新增：
+      - `GET /api/club/highbreak/settings`
+      - `PUT /api/club/highbreak/settings`
+    - 場館可選擇：
+      - `跟隨系統`
+      - `場館自訂`
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+    - 載入時會讀取 effective threshold
+    - 點選門檻按鈕時，可直接切換成場館自訂標準
+- 本輪驗證：
+  - `backend npm run build` 已通過
+  - `frontend npm run build` 已通過
+  - break stats debug cleanup 後 diagnostics 乾淨
+- Git 狀態：
+  - `771d94d` `fix: merge tournament break history sources`
+  - `0ec99be` `refactor: shift tournament breaks to 20-plus workflow`
+  - `1ab0e53` `chore: clean up break stats debug instrumentation`
+  - 待提交 checkpoint：
+    - Highbreak Batch 1 ~ 3（影片補錄、`minPoints`、系統/場館預設門檻）
+
 - Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
   - `VenueTournamentLeagueSchedulePanel.tsx`
     - `League rounds` 改為更扁平、可展開的輪次視圖，降低卡片擠壓與首屏雜訊
@@ -29,6 +103,30 @@
   - 目的：
     - 保留批次辨識能力
     - 降低報名名單、participants 與對局卡上的名稱長度
+- `Method Z` 已加入正式環境可控的權限閘與入口隱藏：
+  - `backend/src/plugins/tournaments/router.ts`
+    - 新增 `GET /api/club/tournaments/test-tools/access`
+    - `bootstrap / simulate / cleanup` 三個測試工具 API 會先檢查 env 開關與白名單帳號
+    - 支援：
+      - `TOURNAMENT_METHOD_Z_ENABLED`
+      - `TOURNAMENT_METHOD_Z_ALLOWED_MEMBER_IDS`
+      - `TOURNAMENT_METHOD_Z_ALLOWED_EMAILS`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+  - `frontend/src/venue/modules/VenueTournamentLeagueWorkspaceActions.tsx`
+  - `frontend/src/venue/modules/VenueTournamentKnockoutWorkspaceActions.tsx`
+    - 前端會先讀取 access 狀態；未授權時直接隱藏 `方法 Z` 入口，避免一般 operator 誤入
+- 後台 tournaments 操作說明已補至最新工作流：
+  - `frontend/src/venue/modules/VenueTournamentsModule.tsx`
+    - 頂部 `HelpGuide` 已重寫，內容更新為報名確認 → 正式參賽名單 → 聯賽 / 淘汰賽賽程 → 輸入賽果 → tournament `20+`
+  - `frontend/src/venue/modules/VenueTournamentLeagueWorkspaceHeader.tsx`
+  - `frontend/src/venue/modules/VenueTournamentKnockoutWorkspaceHeader.tsx`
+    - 補上聯賽 / 淘汰賽工作台短版 SOP
+  - `frontend/src/venue/modules/VenueTournamentScoringMainPanel.tsx`
+  - `frontend/src/venue/modules/VenueTournamentScoringWorkspace.tsx`
+    - 補上 `輸入賽果` 操作順序提示，並把 `Scoring Breadcrumb` 中文化為 `記分定位`
+  - `frontend/src/venue/modules/VenueTournamentTestToolsPanel.tsx`
+    - 補上「只供測試用途」的風險提示
 - 本輪驗證：
   - `frontend npm run build` 已通過
   - `backend npm run build` 已通過
@@ -40,6 +138,8 @@
   - `6a3a3a1` `feat: collapse tournament workspace sections`
   - `2fc18ce` `feat: tighten tournament workspace navigation`
   - `a1ada1a` `fix: localize tournament workspace labels`
+  - `98ee4dc` `chore: shorten method z member labels`
+  - `bad880a` `feat: gate tournament method z tools`
 
 - Tournament venue workbench 已完成一輪「必要範圍」的 `League / Knockout` format 分流重構，主模組現更接近 orchestration shell：
   - `VenueTournamentsModule.tsx`

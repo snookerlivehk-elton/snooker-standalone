@@ -17,6 +17,33 @@ export async function getClubProfile(apiUrl: string, memberId: string) {
   return res.json();
 }
 
+export async function getClubHighbreakSettings(apiUrl: string, memberId: string) {
+  const res = await fetch(`${apiUrl}/api/club/highbreak/settings`, {
+    headers: { 'x-member-id': memberId },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '讀取場館 highbreak 設定失敗');
+  }
+  return res.json();
+}
+
+export async function updateClubHighbreakSettings(apiUrl: string, memberId: string, patch: {
+  displayThresholdMode?: 'FOLLOW_SYSTEM' | 'CUSTOM';
+  displayThresholdDefault?: number;
+}) {
+  const res = await fetch(`${apiUrl}/api/club/highbreak/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(patch || {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '更新場館 highbreak 設定失敗');
+  }
+  return res.json();
+}
+
 export async function updateClubProfile(apiUrl: string, memberId: string, data: any) {
   const res = await fetch(`${apiUrl}/api/club/my-profile`, {
     method: 'POST',
@@ -93,11 +120,14 @@ export async function createClubBreak(
 export async function getClubBreaks(
   apiUrl: string,
   memberId: string,
-  params?: { month?: string; memberId?: string }
+  params?: { month?: string; memberId?: string; minPoints?: number }
 ) {
   const sp = new URLSearchParams();
   if (params?.month) sp.set('month', params.month);
   if (params?.memberId) sp.set('memberId', params.memberId);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/breaks${qs ? `?${qs}` : ''}`, {
     headers: { 'x-member-id': memberId },
@@ -109,9 +139,53 @@ export async function getClubBreaks(
   return res.json();
 }
 
-export async function getClubLeaderboardHighest(apiUrl: string, clubId: string, limit?: number) {
+export async function updateClubBreakVideo(
+  apiUrl: string,
+  memberId: string,
+  breakId: string,
+  payload: {
+    videoUrl?: string | null;
+    note?: string | null;
+    source?: string;
+    tournamentId?: string;
+    tournamentMatchId?: string;
+    frameNo?: number;
+    points?: number;
+    recordedAt?: string;
+    thresholdSnapshot?: number;
+    targetMemberId?: string;
+  },
+) {
+  const body: any = {
+    videoUrl: payload.videoUrl,
+    ...(payload.note !== undefined ? { note: payload.note } : {}),
+    ...(payload.source ? { source: payload.source } : {}),
+    ...(payload.tournamentId ? { tournamentId: payload.tournamentId } : {}),
+    ...(payload.tournamentMatchId ? { tournamentMatchId: payload.tournamentMatchId } : {}),
+    ...(typeof payload.frameNo === 'number' ? { frameNo: payload.frameNo } : {}),
+    ...(typeof payload.points === 'number' ? { points: payload.points } : {}),
+    ...(payload.recordedAt ? { recordedAt: payload.recordedAt } : {}),
+    ...(typeof payload.thresholdSnapshot === 'number' ? { thresholdSnapshot: payload.thresholdSnapshot } : {}),
+    ...(payload.targetMemberId ? { memberId: payload.targetMemberId } : {}),
+  };
+  const res = await fetch(`${apiUrl}/api/club/breaks/${encodeURIComponent(breakId)}/video`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-member-id': memberId },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || '更新影片連結失敗');
+  }
+  return res.json();
+}
+
+export async function getClubLeaderboardHighest(apiUrl: string, clubId: string, limit?: number, minPoints?: number) {
   const sp = new URLSearchParams();
   if (limit) sp.set('limit', String(limit));
+  if (typeof minPoints === 'number' && Number.isFinite(minPoints) && minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/leaderboard/highest${qs ? `?${qs}` : ''}`);
   if (!res.ok) {
@@ -121,10 +195,13 @@ export async function getClubLeaderboardHighest(apiUrl: string, clubId: string, 
   return res.json();
 }
 
-export async function getClubLeaderboardMonthly(apiUrl: string, clubId: string, month: string, limit?: number) {
+export async function getClubLeaderboardMonthly(apiUrl: string, clubId: string, month: string, limit?: number, minPoints?: number) {
   const sp = new URLSearchParams();
   sp.set('month', month);
   if (limit) sp.set('limit', String(limit));
+  if (typeof minPoints === 'number' && Number.isFinite(minPoints) && minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/club/${encodeURIComponent(clubId)}/leaderboard/monthly?${qs}`);
   if (!res.ok) {
@@ -862,10 +939,13 @@ export async function getMyJoinedClubs(apiUrl: string, memberId: string) {
   return res.json();
 }
 
-export async function getMyBreaks(apiUrl: string, memberId: string, params?: { clubId?: string; month?: string }) {
+export async function getMyBreaks(apiUrl: string, memberId: string, params?: { clubId?: string; month?: string; minPoints?: number }) {
   const sp = new URLSearchParams();
   if (params?.clubId) sp.set('clubId', params.clubId);
   if (params?.month) sp.set('month', params.month);
+  if (typeof params?.minPoints === 'number' && Number.isFinite(params.minPoints) && params.minPoints > 0) {
+    sp.set('minPoints', String(Math.floor(params.minPoints)));
+  }
   const qs = sp.toString();
   const res = await fetch(`${apiUrl}/api/me/breaks${qs ? `?${qs}` : ''}`, {
     headers: { 'x-member-id': memberId },

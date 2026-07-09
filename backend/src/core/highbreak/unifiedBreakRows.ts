@@ -5,6 +5,7 @@ type ListUnifiedBreakRowsArgs = {
   memberId?: string;
   clubId?: string;
   month?: string;
+  minPoints?: number;
 };
 
 function toRecordedAt(row: any): Date | null {
@@ -33,15 +34,25 @@ function buildBreakKey(matchId: string, frameNo: number, memberId: string) {
   return `${matchId}::${frameNo}::${memberId}`;
 }
 
+function normalizeMinPoints(raw?: number) {
+  const value = Number(raw || 0);
+  if (!Number.isFinite(value)) throw new Error('minPoints invalid');
+  if (value <= 0) return 0;
+  return Math.max(1, Math.floor(value));
+}
+
 export async function listUnifiedBreakRows({
   prismaClient,
   memberId = '',
   clubId = '',
   month = '',
+  minPoints = 0,
 }: ListUnifiedBreakRowsArgs) {
+  const normalizedMinPoints = normalizeMinPoints(minPoints);
   const explicitWhere: any = { deleted_at: null };
   if (memberId) explicitWhere.member_id = memberId;
   if (clubId) explicitWhere.club_id = clubId;
+  if (normalizedMinPoints > 0) explicitWhere.points = { gte: normalizedMinPoints };
   if (month) {
     const range = parseMonthRangeUtc(month);
     if (!range) throw new Error('month invalid');
@@ -75,8 +86,8 @@ export async function listUnifiedBreakRows({
 
   const frameWhere: any = {
     OR: [
-      { player_a_highest_break: { gte: 20 } },
-      { player_b_highest_break: { gte: 20 } },
+      { player_a_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
+      { player_b_highest_break: { gte: Math.max(20, normalizedMinPoints || 20) } },
     ],
   };
   if (clubId || memberId) {
@@ -168,6 +179,9 @@ export async function listUnifiedBreakRows({
         note: null,
         created_at: recordedAt,
         source: 'FRAME_FALLBACK',
+        source_key: key,
+        can_edit_video: true,
+        video_edit_mode: 'MATERIALIZE',
         member: candidate.member,
         club: tournament.club
           ? {
@@ -190,6 +204,9 @@ export async function listUnifiedBreakRows({
     ...explicitRows.map((row: any) => ({
       ...row,
       source: 'EXPLICIT',
+      source_key: String(row?.id || ''),
+      can_edit_video: true,
+      video_edit_mode: 'PATCH',
       club: row.club
         ? {
             ...row.club,

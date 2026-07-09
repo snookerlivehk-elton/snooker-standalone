@@ -4,12 +4,17 @@ import { API_URL } from '../../config';
 import {
   createClubBreak,
   getClubBreaks,
+  getClubHighbreakSettings,
   getClubLeaderboardHighest,
   getClubLeaderboardMonthly,
   getClubMembers,
   getClubProfile,
+  updateClubHighbreakSettings,
+  updateClubBreakVideo,
 } from '../../lib/api';
 import { useFeatureEnabled } from '../../lib/features';
+
+const BREAK_THRESHOLD_OPTIONS = [20, 30, 40, 50];
 
 type VenueHighbreakModuleProps = {
   operatorId: string;
@@ -70,10 +75,17 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   const [breakNote, setBreakNote] = useState('');
   const [breakFilterMonth, setBreakFilterMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [breakFilterMember, setBreakFilterMember] = useState('');
+  const [breakMinPoints, setBreakMinPoints] = useState(20);
   const [leaderMonth, setLeaderMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [leaderHighest, setLeaderHighest] = useState<any[]>([]);
   const [leaderMonthly, setLeaderMonthly] = useState<any[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingBreakId, setEditingBreakId] = useState('');
+  const [editingVideoUrl, setEditingVideoUrl] = useState('');
+  const [videoSaving, setVideoSaving] = useState(false);
+  const [thresholdOptions, setThresholdOptions] = useState<number[]>(BREAK_THRESHOLD_OPTIONS);
+  const [thresholdMode, setThresholdMode] = useState<'FOLLOW_SYSTEM' | 'CUSTOM'>('FOLLOW_SYSTEM');
+  const [thresholdSaving, setThresholdSaving] = useState(false);
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
@@ -90,6 +102,16 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       ]);
       setClubId(String((clubProfileRes as any)?.id || '').trim());
       setClubMembers(Array.isArray(clubMembersRes) ? clubMembersRes : []);
+      const highbreakSettingsRes = await getClubHighbreakSettings(API_URL, operatorId).catch(() => null);
+      const nextOptions = Array.isArray((highbreakSettingsRes as any)?.moduleSettings?.displayThresholdOptions)
+        ? (highbreakSettingsRes as any).moduleSettings.displayThresholdOptions
+        : BREAK_THRESHOLD_OPTIONS;
+      setThresholdOptions(nextOptions);
+      setThresholdMode(String((highbreakSettingsRes as any)?.clubSettings?.displayThresholdMode || 'FOLLOW_SYSTEM').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM');
+      const effectiveMinPoints = Number((highbreakSettingsRes as any)?.effectiveMinPoints || 0);
+      if (Number.isFinite(effectiveMinPoints) && effectiveMinPoints >= 20) {
+        setBreakMinPoints(effectiveMinPoints);
+      }
     } catch (e: any) {
       showNotice(e?.message || '載入單杆資料失敗', 3000);
     } finally {
@@ -102,9 +124,13 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
     setBreaksLoading(true);
     try {
       const [rows, highest, monthly] = await Promise.all([
-        getClubBreaks(API_URL, operatorId, { month: breakFilterMonth, memberId: breakFilterMember || undefined }).catch(() => []),
-        getClubLeaderboardHighest(API_URL, clubId, 10).catch(() => []),
-        getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10).catch(() => []),
+        getClubBreaks(API_URL, operatorId, {
+          month: breakFilterMonth,
+          memberId: breakFilterMember || undefined,
+          minPoints: breakMinPoints,
+        }).catch(() => []),
+        getClubLeaderboardHighest(API_URL, clubId, 10, breakMinPoints).catch(() => []),
+        getClubLeaderboardMonthly(API_URL, clubId, leaderMonth, 10, breakMinPoints).catch(() => []),
       ]);
       setBreaks(Array.isArray(rows) ? rows : []);
       setLeaderHighest(Array.isArray(highest) ? highest : []);
@@ -117,7 +143,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
     } finally {
       setBreaksLoading(false);
     }
-  }, [breakFilterMember, breakFilterMonth, clubId, enabled, leaderMonth, operatorId, showNotice]);
+  }, [breakFilterMember, breakFilterMonth, breakMinPoints, clubId, enabled, leaderMonth, operatorId, showNotice]);
 
   useEffect(() => {
     loadContext();
@@ -146,16 +172,16 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
         <div className="flex flex-wrap gap-2 items-center">
           <HelpGuide
             title="場館 Highbreak"
-            intro="新增場館會內 highbreak 記錄，並按月份/會員查詢與統計。"
+            intro="新增場館會內 highbreak 記錄，並按月份、會員與顯示門檻查看列表、排行榜與影片補錄。"
             steps={[
-              '右上角先選擇月份與會員（可選）作為篩選條件，按「重新整理」更新列表。',
+              '右上角先選擇月份、會員與顯示標準（例如 20+ / 40+），按「重新整理」更新列表。',
               '要新增記錄：下方選擇會員、輸入分數與日期（可選：影片連結/備註），按「新增」。',
-              '列表與榜單會同時顯示場館紀錄與正式賽事 `20+`，並標示比賽/場館/日期時間。',
+              '比賽完結後，可在列表的「影片」欄直接補上或修改影片連結；若該列來自賽事 fallback，系統會自動轉成正式記錄。',
             ]}
             tips={[
               '影片連結建議使用可直接開啟的 https:// URL。',
               '如看不到某會員，請先到「會員管理」確認該會員已加入場館。',
-              '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡。',
+              '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡，並可按門檻切換顯示。',
             ]}
           />
           <input
@@ -177,11 +203,67 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-1 rounded cue-surface px-2 py-1">
+            <span className="text-xs cue-muted">標準</span>
+            {thresholdOptions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={async () => {
+                  setBreakMinPoints(value);
+                  if (thresholdMode === 'CUSTOM') return;
+                  try {
+                    setThresholdSaving(true);
+                    await updateClubHighbreakSettings(API_URL, operatorId, {
+                      displayThresholdMode: 'CUSTOM',
+                      displayThresholdDefault: value,
+                    });
+                    setThresholdMode('CUSTOM');
+                    showNotice(`已改用場館自訂 ${value}+ 標準`);
+                  } catch (e: any) {
+                    showNotice(e?.message || '更新場館標準失敗', 3000);
+                  } finally {
+                    setThresholdSaving(false);
+                  }
+                }}
+                className={`px-2 py-1 rounded text-xs ${breakMinPoints === value ? 'cue-button text-white font-semibold' : 'cue-surface-strong hover:brightness-95'}`}
+              >
+                {value}+
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={thresholdSaving}
+            onClick={async () => {
+              try {
+                setThresholdSaving(true);
+                const result = await updateClubHighbreakSettings(API_URL, operatorId, {
+                  displayThresholdMode: thresholdMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
+                  ...(thresholdMode === 'FOLLOW_SYSTEM' ? { displayThresholdDefault: breakMinPoints } : {}),
+                });
+                const nextMode = String((result as any)?.clubSettings?.displayThresholdMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
+                const nextEffective = Number((result as any)?.effectiveMinPoints || breakMinPoints);
+                setThresholdMode(nextMode);
+                if (Number.isFinite(nextEffective) && nextEffective >= 20) {
+                  setBreakMinPoints(nextEffective);
+                }
+                showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設標準' : '已改為場館自訂標準');
+              } catch (e: any) {
+                showNotice(e?.message || '更新場館標準失敗', 3000);
+              } finally {
+                setThresholdSaving(false);
+              }
+            }}
+            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
+          >
+            {thresholdSaving ? '儲存中...' : thresholdMode === 'FOLLOW_SYSTEM' ? '跟隨系統' : '場館自訂'}
+          </button>
           <button
             type="button"
             onClick={async () => {
               await Promise.all([loadContext(), loadBreakData()]);
-              showNotice('已更新單杆資料');
+              showNotice(`已更新 ${breakMinPoints}+ 單杆資料`);
             }}
             className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
           >
@@ -281,7 +363,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <div className="cue-surface rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
-            <div className="font-semibold">會內最高單杆 Top 10</div>
+            <div className="font-semibold">最高 {breakMinPoints}+ Top 10</div>
           </div>
           {leaderHighest.length === 0 ? (
             <div className="text-sm cue-muted">暫無資料</div>
@@ -328,7 +410,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
 
         <div className="cue-surface rounded-lg p-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
-            <div className="font-semibold">會內本月累計 Top 10</div>
+            <div className="font-semibold">{breakMinPoints}+ 本月累計 Top 10</div>
             <input
               type="month"
               value={leaderMonth}
@@ -362,7 +444,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
       </div>
 
       <div className="mt-6">
-        <div className="font-semibold mb-2">會內紀錄列表</div>
+        <div className="font-semibold mb-2">{breakMinPoints}+ 紀錄列表</div>
         {breaksLoading ? (
           <div className="text-sm cue-muted">載入中...</div>
         ) : breaks.length === 0 ? (
@@ -379,6 +461,7 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
                   <th className="py-2 px-2">場館</th>
                   <th className="py-2 px-2">影片</th>
                   <th className="py-2 px-2">備註</th>
+                  <th className="py-2 px-2">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -393,7 +476,19 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
                     </td>
                     <td className="py-2 px-2 cue-muted">{formatBreakClubLabel(row)}</td>
                     <td className="py-2 px-2">
-                      {normalizeVideoHref(row.video_url) ? (
+                      {editingBreakId === row.id ? (
+                        <div className="min-w-[220px] space-y-2">
+                          <input
+                            value={editingVideoUrl}
+                            onChange={(e) => setEditingVideoUrl(e.target.value)}
+                            className="w-full px-3 py-2 rounded cue-input"
+                            placeholder="https://..."
+                          />
+                          {String(row?.source || '').toUpperCase() === 'FRAME_FALLBACK' ? (
+                            <div className="text-[11px] cue-muted">儲存後會把這筆賽事 fallback 轉成正式單杆記錄。</div>
+                          ) : null}
+                        </div>
+                      ) : normalizeVideoHref(row.video_url) ? (
                         <a href={normalizeVideoHref(row.video_url) as string} target="_blank" rel="noreferrer" className="accent-blue underline">
                           連結
                         </a>
@@ -402,6 +497,65 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
                       )}
                     </td>
                     <td className="py-2 px-2 cue-muted">{row.note || '-'}</td>
+                    <td className="py-2 px-2">
+                      {editingBreakId === row.id ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={videoSaving}
+                            onClick={async () => {
+                              try {
+                                setVideoSaving(true);
+                                await updateClubBreakVideo(API_URL, operatorId, String(row.id || ''), {
+                                  videoUrl: editingVideoUrl.trim() || null,
+                                  source: String(row?.source || ''),
+                                  tournamentId: row?.tournament_id ? String(row.tournament_id) : undefined,
+                                  tournamentMatchId: row?.tournament_match_id ? String(row.tournament_match_id) : undefined,
+                                  frameNo: Number(row?.frame_no || 0) || undefined,
+                                  points: Number(row?.points || 0) || undefined,
+                                  recordedAt: row?.recorded_at ? String(row.recorded_at) : undefined,
+                                  thresholdSnapshot: Number(row?.threshold_snapshot || 0) || undefined,
+                                  targetMemberId: row?.member_id ? String(row.member_id) : undefined,
+                                });
+                                setEditingBreakId('');
+                                setEditingVideoUrl('');
+                                await loadBreakData();
+                                showNotice('已更新影片連結');
+                              } catch (e: any) {
+                                showNotice(e?.message || '更新影片連結失敗', 3000);
+                              } finally {
+                                setVideoSaving(false);
+                              }
+                            }}
+                            className="px-3 py-1 rounded cue-button text-white text-xs font-semibold disabled:opacity-60"
+                          >
+                            {videoSaving ? '儲存中...' : '儲存'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={videoSaving}
+                            onClick={() => {
+                              setEditingBreakId('');
+                              setEditingVideoUrl('');
+                            }}
+                            className="px-3 py-1 rounded cue-surface-strong text-xs"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBreakId(String(row.id || ''));
+                            setEditingVideoUrl(String(row?.video_url || ''));
+                          }}
+                          className="px-3 py-1 rounded cue-surface-strong text-xs hover:brightness-95"
+                        >
+                          {normalizeVideoHref(row.video_url) ? '編輯影片' : '補上影片'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

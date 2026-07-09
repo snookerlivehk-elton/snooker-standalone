@@ -22,6 +22,30 @@ export type ModuleToggleSectionConfig = {
   toggles: ModuleToggleItemConfig[];
 };
 
+export type ModuleNumberItemConfig = {
+  field: string;
+  label: string;
+  description?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+};
+
+export type ModuleNumberSectionConfig = {
+  type: 'numbers';
+  title: string;
+  description: string;
+  items: ModuleNumberItemConfig[];
+};
+
+export type ModuleSelectSectionConfig = {
+  type: 'select';
+  title: string;
+  description: string;
+  field: string;
+  options: Array<{ value: string; label: string; description?: string }>;
+};
+
 export type ModuleSettingsPageConfig = {
   moduleCode: string;
   title: string;
@@ -29,7 +53,7 @@ export type ModuleSettingsPageConfig = {
   overviewTab: 'system' | 'venue' | 'member' | 'competition';
   loadErrorMessage: string;
   saveSuccessMessage: string;
-  sections: Array<ModuleRequirementSectionConfig | ModuleToggleSectionConfig>;
+  sections: Array<ModuleRequirementSectionConfig | ModuleToggleSectionConfig | ModuleNumberSectionConfig | ModuleSelectSectionConfig>;
   defaultSettings: Record<string, any>;
 };
 
@@ -146,6 +170,47 @@ const MODULE_SETTINGS_PAGE_REGISTRY: Record<string, ModuleSettingsPageConfig> = 
       manualAdjustmentEnabled: true,
       manualAdjustmentEmailEnabled: false,
       settlementDeductionEmailEnabled: false,
+    },
+  },
+  highbreak: {
+    moduleCode: 'highbreak',
+    title: 'Highbreak 模組設定（Super Admin）',
+    description: '集中管理全站 Highbreak 預設顯示門檻、可選門檻清單，以及官方榜單的預設口徑。',
+    overviewTab: 'competition',
+    loadErrorMessage: '讀取 highbreak 模組設定失敗',
+    saveSuccessMessage: '已儲存 highbreak 模組設定',
+    sections: [
+      {
+        type: 'numbers',
+        title: '全站預設標準',
+        description: '控制會員頁、場館頁與後續榜單在未指定門檻時的預設顯示標準。',
+        items: [
+          {
+            field: 'systemDisplayThresholdDefault',
+            label: '全站預設單杆門檻',
+            description: '建議使用 20、30、40、50 等固定門檻；場館若未覆蓋，會沿用這個預設值。',
+            min: 20,
+            max: 200,
+            step: 10,
+          },
+        ],
+      },
+      {
+        type: 'select',
+        title: '官方榜單預設口徑',
+        description: '先保存官方榜單預設口徑，之後排行榜頁面會正式使用這個設定。',
+        field: 'defaultLeaderboardScope',
+        options: [
+          { value: 'ALL', label: '綜合', description: '同時包含場館會內紀錄與正式賽事單杆。' },
+          { value: 'VENUE', label: '會內', description: '只統計場館會內紀錄。' },
+          { value: 'TOURNAMENT', label: '賽事', description: '只統計正式賽事單杆。' },
+        ],
+      },
+    ],
+    defaultSettings: {
+      systemDisplayThresholdDefault: 40,
+      displayThresholdOptions: [20, 30, 40, 50],
+      defaultLeaderboardScope: 'ALL',
     },
   },
   club_messages: {

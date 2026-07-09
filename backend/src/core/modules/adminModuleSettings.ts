@@ -1,5 +1,6 @@
 import { getBookingModuleSettings, normalizeMemberRequirementLevel, updateBookingModuleSettings } from './bookingSettings.js';
 import { getClubMessagesModuleSettings, updateClubMessagesModuleSettings } from './clubMessagesSettings.js';
+import { getHighbreakModuleSettings, updateHighbreakModuleSettings } from './highbreakSettings.js';
 import { getLiveModuleSettings, updateLiveModuleSettings } from './liveSettings.js';
 import { getMembersModuleSettings, updateMembersModuleSettings } from './membersSettings.js';
 import { getPointsModuleSettings, updatePointsModuleSettings } from './pointsSettings.js';
@@ -87,6 +88,27 @@ const ADMIN_MODULE_SETTINGS_HANDLERS: Record<string, AdminModuleSettingsHandler>
         throw new Error('no_valid_fields');
       }
       return updatePointsModuleSettings(patch);
+    },
+  },
+  highbreak: {
+    moduleCode: 'highbreak',
+    pageLabel: 'Highbreak 設定頁',
+    getSettings: () => getHighbreakModuleSettings(),
+    updateSettings: async (body) => {
+      const patch: Record<string, any> = {};
+      if (body.systemDisplayThresholdDefault !== undefined) {
+        patch.systemDisplayThresholdDefault = Number(body.systemDisplayThresholdDefault);
+      }
+      if (Array.isArray(body.displayThresholdOptions)) {
+        patch.displayThresholdOptions = body.displayThresholdOptions;
+      }
+      if (body.defaultLeaderboardScope !== undefined) {
+        patch.defaultLeaderboardScope = String(body.defaultLeaderboardScope || '').trim().toUpperCase();
+      }
+      if (Object.keys(patch).length === 0) {
+        throw new Error('no_valid_fields');
+      }
+      return updateHighbreakModuleSettings(patch);
     },
   },
   club_messages: {

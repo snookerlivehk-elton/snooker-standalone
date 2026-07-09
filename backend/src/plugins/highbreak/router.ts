@@ -13,6 +13,13 @@ function normalizeBreakRecordType(raw: any): BreakRecordType | null {
   return null;
 }
 
+function parseMinPoints(raw: any) {
+  if (raw == null || String(raw).trim() === '') return 0;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error('minPoints invalid');
+  return Math.floor(value);
+}
+
 export function createClubHighbreakRouter() {
   const router = express.Router();
 
@@ -66,18 +73,195 @@ export function createClubHighbreakRouter() {
     if (!member) return;
     const clubId = await getMyClubId(member.id);
     if (!clubId) return res.status(404).json({ error: 'Club not found' });
-    const { month, memberId } = req.query as any;
+    const { month, memberId, minPoints } = req.query as any;
     if (month) {
       const range = parseMonthRangeUtc(String(month));
       if (!range) return res.status(400).json({ error: 'month invalid' });
+    }
+    let normalizedMinPoints = 0;
+    try {
+      normalizedMinPoints = parseMinPoints(minPoints);
+    } catch (err: any) {
+      return res.status(400).json({ error: String(err?.message || err) });
     }
     const rows = await listUnifiedBreakRows({
       prismaClient: prisma,
       clubId,
       memberId: memberId ? String(memberId).trim() : '',
       month: month ? String(month).trim() : '',
+      minPoints: normalizedMinPoints,
     });
     res.json(rows);
+  });
+
+  router.patch('/breaks/:id/video', async (req, res) => {
+    const member = await requireClubAdmin(req, res);
+    if (!member) return;
+    const clubId = await getMyClubId(member.id);
+    if (!clubId) return res.status(404).json({ error: 'Club not found' });
+
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'breakId required' });
+
+    const payload = req.body || {};
+    const videoUrl = payload.videoUrl == null ? null : String(payload.videoUrl).trim() || null;
+    const note = payload.note == null ? undefined : String(payload.note).trim() || null;
+    const source = String(payload.source || '').trim().toUpperCase();
+
+    try {
+      if (source === 'FRAME_FALLBACK') {
+        const tournamentMatchId = String(payload.tournamentMatchId || '').trim();
+        const memberId = String(payload.memberId || '').trim();
+        const tournamentId = String(payload.tournamentId || '').trim();
+        const frameNo = Math.max(1, Number(payload.frameNo || 0));
+        const points = Math.floor(Number(payload.points || 0));
+        const recordedAt = payload.recordedAt ? new Date(String(payload.recordedAt)) : new Date();
+
+        if (!tournamentMatchId || !memberId || !tournamentId) return res.status(400).json({ error: 'fallback payload invalid' });
+        if (!Number.isFinite(frameNo) || frameNo <= 0) return res.status(400).json({ error: 'frameNo invalid' });
+        if (!Number.isFinite(points) || points <= 0) return res.status(400).json({ error: 'points invalid' });
+        if (Number.isNaN(recordedAt.getTime())) return res.status(400).json({ error: 'recordedAt invalid' });
+
+        const match = await prisma.tournamentMatch.findUnique({
+          where: { id: tournamentMatchId },
+          include: {
+            tournament: {
+              select: {
+                id: true,
+                clubId: true,
+                tracked_break_threshold: true,
+              },
+            },
+            player_a_participant: { select: { member_id: true } },
+            player_b_participant: { select: { member_id: true } },
+          },
+        });
+        if (!match || String(match?.tournament?.clubId || '') !== clubId) return res.status(404).json({ error: 'break not found' });
+        if (String(match?.tournament?.id || '') !== tournamentId) return res.status(400).json({ error: 'tournamentId mismatch' });
+
+        const allowedMemberIds = new Set([
+          String(match?.player_a_participant?.member_id || ''),
+          String(match?.player_b_participant?.member_id || ''),
+        ].filter(Boolean));
+        if (!allowedMemberIds.has(memberId)) return res.status(400).json({ error: 'memberId not in match' });
+
+        const threshold = Math.max(1, Number(match?.tournament?.tracked_break_threshold || 20));
+        if (points < threshold) return res.status(400).json({ error: `points must be >= ${threshold}` });
+
+        const existing = await prisma.breakRecord.findFirst({
+          where: {
+            deleted_at: null,
+            club_id: clubId,
+            member_id: memberId,
+            record_type: 'TOURNAMENT',
+            tournament_id: tournamentId,
+            tournament_match_id: tournamentMatchId,
+            frame_no: frameNo,
+          },
+          orderBy: [{ points: 'desc' }, { recorded_at: 'desc' }],
+          include: {
+            member: { select: { id: true, name: true, email: true, member_code: true } },
+            club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+            tournament: { select: { id: true, title: true, startsAt: true, format: true, tracked_break_threshold: true } },
+          },
+        });
+
+        const row = existing
+          ? await prisma.breakRecord.update({
+              where: { id: existing.id },
+              data: {
+                video_url: videoUrl,
+                ...(note !== undefined ? { note } : {}),
+                updated_at: new Date(),
+              },
+              include: {
+                member: { select: { id: true, name: true, email: true, member_code: true } },
+                club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+                tournament: { select: { id: true, title: true, startsAt: true, format: true, tracked_break_threshold: true } },
+              },
+            })
+          : await prisma.breakRecord.create({
+              data: {
+                id: randomUUID(),
+                club_id: clubId,
+                member_id: memberId,
+                record_type: 'TOURNAMENT',
+                tournament_id: tournamentId,
+                tournament_match_id: tournamentMatchId,
+                frame_no: frameNo,
+                threshold_snapshot: threshold,
+                points,
+                recorded_at: recordedAt,
+                video_url: videoUrl,
+                note: note === undefined ? null : note,
+                created_by_member_id: member.id,
+              },
+              include: {
+                member: { select: { id: true, name: true, email: true, member_code: true } },
+                club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+                tournament: { select: { id: true, title: true, startsAt: true, format: true, tracked_break_threshold: true } },
+              },
+            });
+
+        return res.json({
+          ...row,
+          source: 'EXPLICIT',
+          source_key: String(row.id),
+          can_edit_video: true,
+          video_edit_mode: 'PATCH',
+          club: row.club
+            ? {
+                ...row.club,
+                name: row.club.name || row.club.member?.name || '',
+              }
+            : null,
+        });
+      }
+
+      const existing = await prisma.breakRecord.findFirst({
+        where: {
+          id,
+          club_id: clubId,
+          deleted_at: null,
+        },
+        include: {
+          member: { select: { id: true, name: true, email: true, member_code: true } },
+          club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+          tournament: { select: { id: true, title: true, startsAt: true, format: true, tracked_break_threshold: true } },
+        },
+      });
+      if (!existing) return res.status(404).json({ error: 'break not found' });
+
+      const row = await prisma.breakRecord.update({
+        where: { id: existing.id },
+        data: {
+          video_url: videoUrl,
+          ...(note !== undefined ? { note } : {}),
+          updated_at: new Date(),
+        },
+        include: {
+          member: { select: { id: true, name: true, email: true, member_code: true } },
+          club: { select: { id: true, name: true, logoUrl: true, member: { select: { name: true } } } },
+          tournament: { select: { id: true, title: true, startsAt: true, format: true, tracked_break_threshold: true } },
+        },
+      });
+
+      return res.json({
+        ...row,
+        source: 'EXPLICIT',
+        source_key: String(row.id),
+        can_edit_video: true,
+        video_edit_mode: 'PATCH',
+        club: row.club
+          ? {
+              ...row.club,
+              name: row.club.name || row.club.member?.name || '',
+            }
+          : null,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: String(err?.message || err) });
+    }
   });
 
   router.get('/:clubId/leaderboard/highest', async (req, res) => {
@@ -85,10 +269,17 @@ export function createClubHighbreakRouter() {
     if (!clubId) return res.status(400).json({ error: 'clubId required' });
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+    let minPoints = 0;
+    try {
+      minPoints = parseMinPoints(req.query.minPoints);
+    } catch (err: any) {
+      return res.status(400).json({ error: String(err?.message || err) });
+    }
 
     const allRows = await listUnifiedBreakRows({
       prismaClient: prisma,
       clubId,
+      minPoints,
     });
     const rows = [...allRows]
       .sort((a: any, b: any) => {
@@ -111,11 +302,18 @@ export function createClubHighbreakRouter() {
 
     const limitRaw = req.query.limit == null ? '' : String(req.query.limit);
     const limit = Math.min(50, Math.max(1, Number(limitRaw || 10) || 10));
+    let minPoints = 0;
+    try {
+      minPoints = parseMinPoints(req.query.minPoints);
+    } catch (err: any) {
+      return res.status(400).json({ error: String(err?.message || err) });
+    }
 
     const allRows = await listUnifiedBreakRows({
       prismaClient: prisma,
       clubId,
       month,
+      minPoints,
     });
     const groupedMap = new Map<string, { member: any; totalPoints: number }>();
     for (const row of allRows) {
