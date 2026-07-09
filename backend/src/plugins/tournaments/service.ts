@@ -504,6 +504,7 @@ async function recomputeMatchBreakStats(tx: any, matchId: string) {
 }
 
 async function advanceKnockoutWinner(tx: any, tournamentId: string, match: any, winnerParticipantId: string | null) {
+  if (String(match?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') return;
   if (!winnerParticipantId || !match.round_no || !match.match_no) return;
   const nextRoundNo = Number(match.round_no) + 1;
   const nextMatchNo = Math.ceil(Number(match.match_no) / 2);
@@ -532,40 +533,132 @@ async function advanceKnockoutWinner(tx: any, tournamentId: string, match: any, 
   });
 }
 
-async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, winnerParticipantId: string | null) {
-  await advanceKnockoutWinner(tx, tournamentId, match, winnerParticipantId);
-
-  const finalRound = await tx.tournamentMatch.aggregate({
-    where: { tournament_id: tournamentId },
+async function getKnockoutMainMaxRound(tx: any, tournamentId: string) {
+  const result = await tx.tournamentMatch.aggregate({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: 'KNOCKOUT_MAIN',
+    },
     _max: { round_no: true },
   });
-  const maxRound = Number(finalRound?._max?.round_no || 0);
+  return Number(result?._max?.round_no || 0);
+}
+
+async function findKnockoutThirdPlaceMatch(tx: any, tournamentId: string) {
+  return tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: 'KNOCKOUT_THIRD_PLACE',
+    },
+    orderBy: [{ round_no: 'asc' }, { match_no: 'asc' }],
+  });
+}
+
+async function advanceKnockoutLoserToThirdPlace(tx: any, tournamentId: string, match: any, loserParticipantId: string | null) {
+  if (!loserParticipantId) return false;
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+  if (stageCode !== 'KNOCKOUT_MAIN') return false;
+  const maxMainRound = await getKnockoutMainMaxRound(tx, tournamentId);
+  const roundNo = Number(match?.round_no || 0);
+  if (maxMainRound <= 1 || roundNo !== maxMainRound - 1) return false;
+  const thirdPlaceMatch = await findKnockoutThirdPlaceMatch(tx, tournamentId);
+  if (!thirdPlaceMatch) return false;
+
+  const patch = Number(match?.match_no || 0) % 2 === 1
+    ? { player_a_participant_id: loserParticipantId }
+    : { player_b_participant_id: loserParticipantId };
+  const nextPlayerA = patch.player_a_participant_id ?? thirdPlaceMatch.player_a_participant_id;
+  const nextPlayerB = patch.player_b_participant_id ?? thirdPlaceMatch.player_b_participant_id;
+
+  await tx.tournamentMatch.update({
+    where: { id: thirdPlaceMatch.id },
+    data: {
+      ...patch,
+      status: nextPlayerA && nextPlayerB ? 'READY' : 'PENDING',
+    },
+  });
+  return true;
+}
+
+async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, winnerParticipantId: string | null) {
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+  await advanceKnockoutWinner(tx, tournamentId, match, winnerParticipantId);
+
+  const maxRound = await getKnockoutMainMaxRound(tx, tournamentId);
   const roundNo = Number(match.round_no || 0);
   const loserParticipantId = winnerParticipantId
     ? String(match.player_a_participant_id || '') === String(winnerParticipantId)
       ? match.player_b_participant_id
       : match.player_a_participant_id
     : null;
-  if (loserParticipantId) {
-    const eliminationRank = roundNo > 0 && maxRound > 0
-      ? (2 ** Math.max(0, maxRound - roundNo)) + 1
-      : null;
-    await tx.tournamentParticipant.update({
-      where: { id: loserParticipantId },
-      data: {
-        status: 'ELIMINATED',
-        final_rank: eliminationRank,
+
+  const thirdPlaceAssigned = await advanceKnockoutLoserToThirdPlace(tx, tournamentId, match, loserParticipantId);
+
+  if (stageCode === 'KNOCKOUT_THIRD_PLACE') {
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ELIMINATED', final_rank: 3 },
+      });
+    }
+    if (loserParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: { status: 'ELIMINATED', final_rank: 4 },
+      });
+    }
+
+    const finalMatch = await tx.tournamentMatch.findFirst({
+      where: {
+        tournament_id: tournamentId,
+        stage_code: 'KNOCKOUT_MAIN',
+        round_no: maxRound,
       },
     });
-  }
-  if (winnerParticipantId && Number(match.round_no || 0) >= maxRound) {
     await tx.tournament.update({
       where: { id: tournamentId },
-      data: { workflow_status: 'COMPLETED' },
+      data: {
+        workflow_status: String(finalMatch?.status || '').trim().toUpperCase() === 'COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
+      },
     });
+    return;
+  }
+
+  if (loserParticipantId) {
+    if (thirdPlaceAssigned) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: {
+          status: 'ACTIVE',
+          final_rank: null,
+        },
+      });
+    } else {
+      const eliminationRank = roundNo > 0 && maxRound > 0
+        ? (2 ** Math.max(0, maxRound - roundNo)) + 1
+        : null;
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: {
+          status: 'ELIMINATED',
+          final_rank: eliminationRank,
+        },
+      });
+    }
+  }
+  if (winnerParticipantId && Number(match.round_no || 0) >= maxRound) {
+    const thirdPlaceMatch = await findKnockoutThirdPlaceMatch(tx, tournamentId);
     await tx.tournamentParticipant.update({
       where: { id: winnerParticipantId },
       data: { status: 'CHAMPION', final_rank: 1 },
+    });
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: {
+        workflow_status: thirdPlaceMatch && String(thirdPlaceMatch?.status || '').trim().toUpperCase() !== 'COMPLETED'
+          ? 'IN_PROGRESS'
+          : 'COMPLETED',
+      },
     });
   } else {
     if (winnerParticipantId) {
@@ -1119,6 +1212,7 @@ export const tournamentsService = {
       const bracketSize = nextPowerOfTwo(participants.length);
       const hasPreliminaryRound = participants.length !== previousPowerOfTwo(participants.length);
       const totalRounds = Math.ceil(Math.log2(bracketSize));
+      const enableThirdPlaceMatch = participants.length >= 4;
       const roundOnePairs = pairParticipants(participants, bracketSize);
 
       const created: any[] = [];
@@ -1146,6 +1240,25 @@ export const tournamentsService = {
           });
           created.push(row);
         }
+      }
+
+      if (enableThirdPlaceMatch) {
+        const thirdPlaceRow = await tx.tournamentMatch.create({
+          data: {
+            id: randomUUID(),
+            tournament_id: tournamentId,
+            stage_code: 'KNOCKOUT_THIRD_PLACE',
+            round_no: totalRounds,
+            match_no: 2,
+            player_a_participant_id: null,
+            player_b_participant_id: null,
+            winner_participant_id: null,
+            status: 'PENDING',
+            result_type: 'STANDARD',
+            best_of_frames: tournament.best_of_frames ?? null,
+          },
+        });
+        created.push(thirdPlaceRow);
       }
 
       for (const row of created.filter((item) => Number(item.round_no || 0) === 1 && item.winner_participant_id)) {
