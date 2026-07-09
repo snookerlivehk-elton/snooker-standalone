@@ -1228,52 +1228,6 @@ export function createMemberRouter(options: MemberRouterOptions) {
         clubId,
         month,
       });
-      const breakdown = rows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
-        const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
-        if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
-        acc[key].count += 1;
-        acc[key].totalPoints += Number(row?.points || 0);
-        acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
-        const source = String(row?.source || 'UNKNOWN');
-        acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
-        return acc;
-      }, {});
-      // #region debug-point A:me-breaks-query
-      fetch('http://127.0.0.1:7777/event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'member-break-stats',
-          runId: 'post-fix',
-          hypothesisId: 'A',
-          location: 'backend/src/plugins/members/router.ts:/api/me/breaks',
-          msg: '[DEBUG] /api/me/breaks returned rows',
-          data: {
-            memberId,
-            clubId: clubId || null,
-            month: month || null,
-            rowCount: rows.length,
-            breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
-              recordType,
-              count: item.count,
-              totalPoints: item.totalPoints,
-              maxPoints: item.maxPoints,
-              sources: item.sources,
-            })),
-            sample: rows.slice(0, 5).map((row: any) => ({
-              id: row.id,
-              recordType: row.record_type,
-              clubId: row.club_id,
-              tournamentId: row.tournament_id,
-              points: row.points,
-              recordedAt: row.recorded_at,
-              source: row.source,
-            })),
-          },
-          ts: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       res.json(rows);
     } catch (err: any) {
       res.status(500).json({ error: String(err?.message || err) });

@@ -100,50 +100,6 @@ export function createClubHighbreakRouter() {
       })
       .slice(0, limit);
     res.json(rows);
-    const breakdown = allRows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
-      const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
-      if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
-      acc[key].count += 1;
-      acc[key].totalPoints += Number(row?.points || 0);
-      acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
-      const source = String(row?.source || 'UNKNOWN');
-      acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
-      return acc;
-    }, {});
-    // #region debug-point B:club-highest-leaderboard
-    fetch('http://127.0.0.1:7777/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'member-break-stats',
-        runId: 'post-fix',
-        hypothesisId: 'B',
-        location: 'backend/src/plugins/highbreak/router.ts:/:clubId/leaderboard/highest',
-        msg: '[DEBUG] club highest leaderboard source rows',
-        data: {
-          clubId,
-          limit,
-          resultCount: rows.length,
-          breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
-            recordType,
-            count: item.count,
-            totalPoints: item.totalPoints,
-            maxPoints: item.maxPoints,
-            sources: item.sources,
-          })),
-          sample: rows.slice(0, 5).map((row: any) => ({
-            id: row.id,
-            memberId: row.member_id,
-            recordType: row.record_type,
-            tournamentId: row.tournament_id,
-            points: row.points,
-            source: row.source,
-          })),
-        },
-        ts: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
   });
 
   router.get('/:clubId/leaderboard/monthly', async (req, res) => {
@@ -186,47 +142,6 @@ export function createClubHighbreakRouter() {
       member: row.member,
       totalPoints: row.totalPoints,
     })));
-    const breakdown = allRows.reduce((acc: Record<string, { count: number; totalPoints: number; maxPoints: number; sources: Record<string, number> }>, row: any) => {
-      const key = String(row?.record_type || 'UNKNOWN').toUpperCase();
-      if (!acc[key]) acc[key] = { count: 0, totalPoints: 0, maxPoints: 0, sources: {} };
-      acc[key].count += 1;
-      acc[key].totalPoints += Number(row?.points || 0);
-      acc[key].maxPoints = Math.max(acc[key].maxPoints, Number(row?.points || 0));
-      const source = String(row?.source || 'UNKNOWN');
-      acc[key].sources[source] = (acc[key].sources[source] || 0) + 1;
-      return acc;
-    }, {});
-    // #region debug-point C:club-monthly-leaderboard
-    fetch('http://127.0.0.1:7777/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'member-break-stats',
-        runId: 'post-fix',
-        hypothesisId: 'C',
-        location: 'backend/src/plugins/highbreak/router.ts:/:clubId/leaderboard/monthly',
-        msg: '[DEBUG] club monthly leaderboard source rows',
-        data: {
-          clubId,
-          month: month || null,
-          limit,
-          groupedCount: grouped.length,
-          breakdown: Object.entries(breakdown).map(([recordType, item]) => ({
-            recordType,
-            count: item.count,
-            totalPoints: item.totalPoints,
-            maxPoints: item.maxPoints,
-            sources: item.sources,
-          })),
-          sample: grouped.slice(0, 5).map((row) => ({
-            memberId: row.memberId,
-            totalPoints: row.totalPoints || 0,
-          })),
-        },
-        ts: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
   });
 
   return router;
