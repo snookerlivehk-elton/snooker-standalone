@@ -17,6 +17,7 @@ type ClubPublicTournamentDetailModalProps = {
   openedTournamentRecentCompletedMatches: any[];
   openedTournamentStandings: any[];
   openedTournamentBracketColumns: any[];
+  openedTournamentThirdPlaceMatch: any;
   openedTournamentLeagueRounds: any[];
   tournamentOpenLoading: boolean;
   setTournamentOpen: (value: any) => void;
@@ -48,6 +49,7 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
   openedTournamentRecentCompletedMatches,
   openedTournamentStandings,
   openedTournamentBracketColumns,
+  openedTournamentThirdPlaceMatch,
   openedTournamentLeagueRounds,
   tournamentOpenLoading,
   setTournamentOpen,
@@ -135,6 +137,7 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
               openedTournamentParticipants={openedTournamentParticipants}
               openedTournamentMatches={openedTournamentMatches}
               openedTournamentBracketColumns={openedTournamentBracketColumns}
+              openedTournamentThirdPlaceMatch={openedTournamentThirdPlaceMatch}
               openedTournamentLeagueRounds={openedTournamentLeagueRounds}
               formatTournamentParticipantLabel={formatTournamentParticipantLabel}
               formatTournamentResultTypeLabel={formatTournamentResultTypeLabel}

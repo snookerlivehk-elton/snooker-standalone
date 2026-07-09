@@ -204,6 +204,8 @@ function nextPowerOfTwo(n: number) {
 }
 
 function formatPublicKnockoutRoundLabel(match: any, participantCount: number) {
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+  if (stageCode === 'KNOCKOUT_THIRD_PLACE') return '季軍戰';
   const roundNo = Number(match?.round_no || 0);
   if (roundNo <= 0) return '-';
   const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
@@ -1248,7 +1250,7 @@ const ClubPublicPage: React.FC = () => {
   }, [openedTournamentMatches]);
   const openedTournamentBracketColumns = useMemo(() => {
     const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
-    for (const row of openedTournamentMatches) {
+    for (const row of openedTournamentMatches.filter((candidate: any) => String(candidate?.stage_code || '').trim().toUpperCase() !== 'KNOCKOUT_THIRD_PLACE')) {
       const key = formatPublicKnockoutRoundLabel(row, openedTournamentParticipants.length);
       const roundNo = Number(row?.round_no || 0);
       const existing = grouped.get(key);
@@ -1294,6 +1296,10 @@ const ClubPublicPage: React.FC = () => {
         };
       });
   }, [openedTournamentMatches, openedTournamentParticipants.length]);
+  const openedTournamentThirdPlaceMatch = useMemo(
+    () => openedTournamentMatches.find((row: any) => String(row?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') || null,
+    [openedTournamentMatches],
+  );
 
   const openedTournamentParticipantSearchRows = useMemo(() => {
     const standingMap = new Map<string, any>(
@@ -1973,6 +1979,7 @@ const ClubPublicPage: React.FC = () => {
                 openedTournamentRecentCompletedMatches,
                 openedTournamentStandings,
                 openedTournamentBracketColumns,
+                openedTournamentThirdPlaceMatch,
                 openedTournamentLeagueRounds,
                 tournamentParticipantSearchQuery,
                 filteredOpenedTournamentParticipantSearchRows,

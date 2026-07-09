@@ -492,6 +492,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     leagueSummary,
     leagueRounds,
     podiumSummary,
+    thirdPlaceMatch,
   } = useTournamentStageViewData(participantsRows, matchesRows);
   const {
     activeFrame,
@@ -1419,6 +1420,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   selectedMatchId={selectedMatchId}
                   selectedTournamentBestOf={selectedTournament?.best_of_frames}
                   selectMatchForScoring={selectMatchForScoring}
+                  thirdPlaceMatch={thirdPlaceMatch}
                   tournamentTitle={selectedTournament?.title}
                 />
               )}

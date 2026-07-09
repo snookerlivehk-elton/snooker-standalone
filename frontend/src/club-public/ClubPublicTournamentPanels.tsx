@@ -22,6 +22,7 @@ const ClubPublicTournamentPanels: React.FC<any> = ({ state, actions, helpers, ap
     openedTournamentRecentCompletedMatches,
     openedTournamentStandings,
     openedTournamentBracketColumns,
+    openedTournamentThirdPlaceMatch,
     openedTournamentLeagueRounds,
     tournamentParticipantSearchQuery,
     filteredOpenedTournamentParticipantSearchRows,
@@ -202,6 +203,7 @@ const ClubPublicTournamentPanels: React.FC<any> = ({ state, actions, helpers, ap
             openedTournamentRecentCompletedMatches={openedTournamentRecentCompletedMatches}
             openedTournamentStandings={openedTournamentStandings}
             openedTournamentBracketColumns={openedTournamentBracketColumns}
+            openedTournamentThirdPlaceMatch={openedTournamentThirdPlaceMatch}
             openedTournamentLeagueRounds={openedTournamentLeagueRounds}
             tournamentOpenLoading={tournamentOpenLoading}
             setTournamentOpen={setTournamentOpen}

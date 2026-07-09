@@ -5,6 +5,7 @@ type ClubPublicTournamentStageSectionProps = {
   openedTournamentParticipants: any[];
   openedTournamentMatches: any[];
   openedTournamentBracketColumns: any[];
+  openedTournamentThirdPlaceMatch: any;
   openedTournamentLeagueRounds: any[];
   formatTournamentParticipantLabel: (participant: any) => string;
   formatTournamentResultTypeLabel: (value: any) => string;
@@ -20,6 +21,7 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
   openedTournamentParticipants,
   openedTournamentMatches,
   openedTournamentBracketColumns,
+  openedTournamentThirdPlaceMatch,
   openedTournamentLeagueRounds,
   formatTournamentParticipantLabel,
   formatTournamentResultTypeLabel,
@@ -99,6 +101,42 @@ const ClubPublicTournamentStageSection: React.FC<ClubPublicTournamentStageSectio
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {openedTournamentFormat === 'KNOCKOUT' && openedTournamentThirdPlaceMatch ? (
+        <div className="cue-surface-strong rounded-lg p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="font-semibold">季軍戰</div>
+              <div className="text-xs cue-muted mt-1">獨立於主線進級表顯示，方便分開查看第三名對決。</div>
+            </div>
+            <div className="text-xs cue-muted">{formatTournamentMatchStatusLabel(openedTournamentThirdPlaceMatch?.status)}</div>
+          </div>
+          <div className="rounded-lg cue-surface p-4">
+            <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
+              <span>{formatPublicKnockoutRoundLabel(openedTournamentThirdPlaceMatch, openedTournamentParticipants.length)} · M{openedTournamentThirdPlaceMatch?.match_no || '-'}</span>
+              <span>{formatTournamentResultTypeLabel(openedTournamentThirdPlaceMatch?.result_type)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => openTournamentParticipantPanel(openedTournamentThirdPlaceMatch?.player_a_participant)}
+              className="font-semibold truncate text-left hover:underline"
+            >
+              {formatTournamentParticipantLabel(openedTournamentThirdPlaceMatch?.player_a_participant)}
+            </button>
+            <div className="text-sm cue-muted my-1">
+              {Number(openedTournamentThirdPlaceMatch?.player_a_frames_won ?? 0)} : {Number(openedTournamentThirdPlaceMatch?.player_b_frames_won ?? 0)}
+            </div>
+            <button
+              type="button"
+              onClick={() => openTournamentParticipantPanel(openedTournamentThirdPlaceMatch?.player_b_participant)}
+              className="font-semibold truncate text-left hover:underline"
+            >
+              {formatTournamentParticipantLabel(openedTournamentThirdPlaceMatch?.player_b_participant)}
+            </button>
+            <div className="text-[11px] cue-muted mt-2">可點擊球手名稱查看個人戰況。</div>
           </div>
         </div>
       ) : null}

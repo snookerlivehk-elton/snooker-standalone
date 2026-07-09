@@ -29,6 +29,7 @@ type VenueTournamentScheduleBracketPanelProps = {
   selectedMatchId: string;
   selectedTournamentBestOf: any;
   selectMatchForScoring: (row: any) => void;
+  thirdPlaceMatch?: any;
   externalFilterPreset?: ScheduleFilterPreset | null;
   tournamentTitle?: string;
 };
@@ -47,6 +48,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   selectedMatchId,
   selectedTournamentBestOf,
   selectMatchForScoring,
+  thirdPlaceMatch = null,
   externalFilterPreset = null,
   tournamentTitle = '',
 }) => {
@@ -97,6 +99,13 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   };
 
   const getRoundTheme = (label: string) => {
+    if (label.includes('季軍戰')) {
+      return {
+        chipClassName: 'bg-orange-500/15 text-orange-200 border-orange-400/30',
+        cardClassName: 'border-orange-400/30 bg-orange-500/8',
+        headerClassName: 'text-orange-200',
+      };
+    }
     if (label.includes('決賽')) {
       return {
         chipClassName: 'bg-yellow-500/15 text-yellow-200 border-yellow-400/30',
@@ -221,6 +230,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   const selectedMatchContextLabel = selectedMatchRow
     ? `${selectedRoundContextLabel} · M${Math.max(1, Number(selectedMatchRow?.match_no || 1))}`
     : '';
+  const thirdPlaceSelected = thirdPlaceMatch && String(thirdPlaceMatch?.id || '') === selectedMatchId;
 
   const leaguePrintSummary = useMemo(() => {
     if (!isLeague) return null;
@@ -531,6 +541,49 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           selectedMatchId={selectedMatchId}
           selectedTournamentBestOf={selectedTournamentBestOf}
         />
+        {thirdPlaceMatch ? (
+          <div className={`mt-4 rounded-lg border p-3 ${
+            thirdPlaceSelected ? 'border-yellow-400/45 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(250,204,21,0.14)]' : 'cue-border cue-surface'
+          }`}>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <div className="font-semibold">季軍戰</div>
+                <div className="text-xs cue-muted mt-1">獨立於主線進級表顯示，不與決賽共用 bracket 欄位。</div>
+              </div>
+              <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getMatchStatusTone(thirdPlaceMatch?.status)}`}>
+                {formatMatchStatusLabel(thirdPlaceMatch?.status)}
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                selectedMatchId === String(thirdPlaceMatch?.id || '')
+                  ? 'border-yellow-400/45 bg-yellow-500/10'
+                  : 'cue-border cue-surface hover:brightness-95'
+              }`}
+              onClick={() => {
+                if (!thirdPlaceMatch?.player_a_participant_id || !thirdPlaceMatch?.player_b_participant_id) return;
+                selectMatchForScoring(thirdPlaceMatch);
+              }}
+            >
+              <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
+                <span>季軍戰 · M{thirdPlaceMatch?.match_no || '-'}</span>
+                <span>{formatMatchResultTypeLabel(thirdPlaceMatch?.result_type)}</span>
+              </div>
+              <div className="font-semibold">{formatParticipantLabel(thirdPlaceMatch?.player_a_participant)}</div>
+              <div className="text-sm cue-muted my-1">
+                {Number(thirdPlaceMatch?.player_a_frames_won ?? 0)} : {Number(thirdPlaceMatch?.player_b_frames_won ?? 0)}
+              </div>
+              <div className="font-semibold">{formatParticipantLabel(thirdPlaceMatch?.player_b_participant)}</div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+                <span className="cue-muted">{buildMatchMeta(thirdPlaceMatch)}</span>
+                <span className="cue-muted text-right">
+                  {buildMatchProgressSummary(thirdPlaceMatch, selectedTournamentBestOf)}
+                </span>
+              </div>
+            </button>
+          </div>
+        ) : null}
       </div>
     ) : null}
     {isLeague && leagueRounds.length > 0 ? (

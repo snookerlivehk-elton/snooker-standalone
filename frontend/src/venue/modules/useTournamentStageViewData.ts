@@ -11,6 +11,8 @@ function nextPowerOfTwo(n: number) {
 }
 
 export function formatKnockoutRoundLabel(match: any, participantCount: number) {
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+  if (stageCode === 'KNOCKOUT_THIRD_PLACE') return '季軍戰';
   const roundNo = Number(match?.round_no || 0);
   if (roundNo <= 0) return '-';
   const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
@@ -69,9 +71,13 @@ function getBracketColumnHeight(matchCount: number) {
 }
 
 export function useTournamentStageViewData(participantsRows: any[], matchesRows: any[]) {
+  const thirdPlaceMatch = useMemo(
+    () => matchesRows.find((row: any) => String(row?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') || null,
+    [matchesRows],
+  );
   const bracketColumns = useMemo(() => {
     const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
-    for (const row of matchesRows) {
+    for (const row of matchesRows.filter((candidate: any) => String(candidate?.stage_code || '').trim().toUpperCase() !== 'KNOCKOUT_THIRD_PLACE')) {
       const key = formatKnockoutRoundLabel(row, participantsRows.length);
       const roundNo = Number(row?.round_no || 0);
       const existing = grouped.get(key);
@@ -149,10 +155,12 @@ export function useTournamentStageViewData(participantsRows: any[], matchesRows:
   const podiumSummary = useMemo(() => {
     const champion = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 1) || null;
     const runnerUp = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 2) || null;
+    const thirdPlace = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 3) || null;
+    const fourthPlace = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 4) || null;
     const semiFinalists = participantsRows
       .filter((row: any) => Number(row?.final_rank || 0) === 3)
       .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0));
-    return { champion, runnerUp, semiFinalists };
+    return { champion, runnerUp, thirdPlace, fourthPlace, semiFinalists };
   }, [participantsRows]);
 
   return {
@@ -161,5 +169,6 @@ export function useTournamentStageViewData(participantsRows: any[], matchesRows:
     leagueSummary,
     leagueRounds,
     podiumSummary,
+    thirdPlaceMatch,
   };
 }

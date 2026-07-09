@@ -19,6 +19,14 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
   formatTournamentWorkflowLabel,
   formatTournamentParticipantLabel,
 }) => {
+  const thirdPlace = openedTournamentFormat === 'KNOCKOUT'
+    ? openedTournamentParticipants.find((row: any) => Number(row?.final_rank || 0) === 3) || null
+    : null;
+  const fourthPlace = openedTournamentFormat === 'KNOCKOUT'
+    ? openedTournamentParticipants.find((row: any) => Number(row?.final_rank || 0) === 4) || null
+    : null;
+  const hasThirdPlaceMatchResult = !!thirdPlace || !!fourthPlace;
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -79,7 +87,7 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
         </div>
       </div>
 
-      {!!openedTournament?.podium && (openedTournament.podium?.champion || openedTournament.podium?.runnerUp || (Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0)) ? (
+      {!!openedTournament?.podium && (openedTournament.podium?.champion || openedTournament.podium?.runnerUp || (Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0) || thirdPlace || fourthPlace) ? (
         <div className="grid gap-3 md:grid-cols-3">
           <div className="cue-surface-strong rounded-lg p-4">
             <div className="text-sm cue-muted">冠軍</div>
@@ -90,12 +98,20 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
             <div className="font-semibold mt-1">{openedTournament.podium?.runnerUp ? formatTournamentParticipantLabel(openedTournament.podium.runnerUp) : '-'}</div>
           </div>
           <div className="cue-surface-strong rounded-lg p-4">
-            <div className="text-sm cue-muted">四強</div>
-            <div className="font-semibold mt-1">
-              {Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0
-                ? openedTournament.podium.semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
-                : '-'}
-            </div>
+            <div className="text-sm cue-muted">{hasThirdPlaceMatchResult ? '季軍 / 殿軍' : '四強'}</div>
+            {hasThirdPlaceMatchResult ? (
+              <div className="font-semibold mt-1">
+                {thirdPlace ? formatTournamentParticipantLabel(thirdPlace) : '-'}
+                {' / '}
+                {fourthPlace ? formatTournamentParticipantLabel(fourthPlace) : '-'}
+              </div>
+            ) : (
+              <div className="font-semibold mt-1">
+                {Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0
+                  ? openedTournament.podium.semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
+                  : '-'}
+              </div>
+            )}
           </div>
         </div>
       ) : null}

@@ -33,20 +33,24 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   const blockedReasonExamples = blockedRows.map((row: any) => {
     const matchNo = Math.max(1, Number(row?.match_no || 1));
     const roundNo = Math.max(1, Number(row?.round_no || 1));
+    const stageCode = String(row?.stage_code || '').trim().toUpperCase();
     const currentLabel = formatKnockoutRoundLabel(row, participantsCount);
-    const leftMatchNo = Math.max(1, matchNo * 2 - 1);
-    const rightMatchNo = Math.max(1, matchNo * 2);
-    const leftSource = `上一輪 M${leftMatchNo}`;
-    const rightSource = `上一輪 M${rightMatchNo}`;
+    const leftMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' ? 1 : Math.max(1, matchNo * 2 - 1);
+    const rightMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' ? 2 : Math.max(1, matchNo * 2);
+    const leftSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M1 敗方' : `上一輪 M${leftMatchNo}`;
+    const rightSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M2 敗方' : `上一輪 M${rightMatchNo}`;
     const upstreamMatches = matchesRows.filter((candidate: any) => (
       Number(candidate?.round_no || 0) === roundNo - 1
+      && String(candidate?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_MAIN'
       && (Number(candidate?.match_no || 0) === leftMatchNo || Number(candidate?.match_no || 0) === rightMatchNo)
     ));
     const jumpTarget = upstreamMatches.find((candidate: any) => String(candidate?.status || '').trim().toUpperCase() !== 'COMPLETED')
       || upstreamMatches[0]
       || null;
     let reason = '等待上游對局完成';
-    if (roundNo <= 1) {
+    if (stageCode === 'KNOCKOUT_THIRD_PLACE') {
+      reason = `等待 ${leftSource} 與 ${rightSource} 補入`;
+    } else if (roundNo <= 1) {
       reason = '等待進級表初始配對完成';
     } else if (!row?.player_a_participant_id && !row?.player_b_participant_id) {
       reason = `等待 ${leftSource} 與 ${rightSource} 的勝方`;

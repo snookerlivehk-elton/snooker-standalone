@@ -1205,6 +1205,8 @@ export function createTournamentRouter() {
         ? {
             champion: participants.find((row: any) => Number(row?.final_rank || 0) === 1) || null,
             runnerUp: participants.find((row: any) => Number(row?.final_rank || 0) === 2) || null,
+            thirdPlace: participants.find((row: any) => Number(row?.final_rank || 0) === 3) || null,
+            fourthPlace: participants.find((row: any) => Number(row?.final_rank || 0) === 4) || null,
             semiFinalists: participants
               .filter((row: any) => Number(row?.final_rank || 0) === 3)
               .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0)),
