@@ -2361,7 +2361,7 @@ const Me: React.FC = () => {
                             onClick={() => setBreakCategory('ALL')}
                             className={`px-3 py-1.5 rounded text-sm font-semibold ${breakCategory === 'ALL' ? 'cue-button' : 'cue-surface hover:brightness-95'}`}
                           >
-                            全部
+                            綜合
                           </button>
                           <button
                             type="button"
@@ -2377,6 +2377,20 @@ const Me: React.FC = () => {
                           >
                             比賽
                           </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <div className="cue-surface-strong rounded-lg px-4 py-3">
+                            <div className="text-xs cue-muted">目前口徑</div>
+                            <div className="mt-1 font-semibold">{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '綜合'}</div>
+                          </div>
+                          <div className="cue-surface-strong rounded-lg px-4 py-3">
+                            <div className="text-xs cue-muted">目前標準</div>
+                            <div className="mt-1 font-semibold">{breakMinPoints}+ 單杆</div>
+                          </div>
+                          <div className="cue-surface-strong rounded-lg px-4 py-3">
+                            <div className="text-xs cue-muted">結果摘要</div>
+                            <div className="mt-1 font-semibold">共 {categorizedBreaks.length} 筆</div>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2495,7 +2509,7 @@ const Me: React.FC = () => {
                           </div>
 
                           <div className="text-xs cue-muted mt-2">
-                            目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '全部'} · 標準：{breakMinPoints}+ · 共 {categorizedBreaks.length} 筆
+                            目前分類：{breakCategory === 'TOURNAMENT' ? '比賽' : breakCategory === 'VENUE' ? '會內' : '綜合'} · 標準：{breakMinPoints}+ · 共 {categorizedBreaks.length} 筆
                           </div>
 
                           <div className="mt-3 overflow-x-auto -mx-2 px-2">

@@ -61,6 +61,10 @@ function formatBreakDateTime(raw: any) {
   return d.toLocaleString();
 }
 
+function formatModeLabel(mode: 'FOLLOW_SYSTEM' | 'CUSTOM', followLabel: string, customLabel: string) {
+  return mode === 'FOLLOW_SYSTEM' ? followLabel : customLabel;
+}
+
 const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   operatorId,
   enabled: enabledOverride,
@@ -97,6 +101,11 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
   const [scopeSaving, setScopeSaving] = useState(false);
 
   const breakScopeLabel = BREAK_SCOPE_OPTIONS.find((item) => item.value === breakScope)?.label || '綜合';
+  const selectedMemberLabel = breakFilterMember
+    ? clubMembers.find((cm: any) => String(cm?.member?.id || '') === breakFilterMember)?.member?.name || '指定會員'
+    : '全部會員';
+  const totalRows = Array.isArray(breaks) ? breaks.length : 0;
+  const highestPoints = leaderHighest.length > 0 ? Number(leaderHighest[0]?.points || 0) : 0;
 
   const showNotice = useCallback((message: string, timeout = 2500) => {
     setNotice(message);
@@ -199,149 +208,188 @@ const VenueHighbreakModule: React.FC<VenueHighbreakModuleProps> = ({
               '正式賽事 `20+` 由 tournaments 工作台輸入後，會自動出現在這裡，並可按門檻與口徑切換顯示。',
             ]}
           />
-          <input
-            type="month"
-            value={breakFilterMonth}
-            onChange={(e) => setBreakFilterMonth(e.target.value)}
-            className="px-3 py-2 rounded cue-input text-sm"
-          />
-          <select
-            value={breakFilterMember}
-            onChange={(e) => setBreakFilterMember(e.target.value)}
-            className="px-3 py-2 rounded cue-input text-sm"
-            disabled={membersLoading}
-          >
-            <option value="">全部會員</option>
-            {clubMembers.map((cm: any) => (
-              <option key={cm.member?.id || cm.id} value={cm.member?.id || ''}>
-                {cm.member?.name || '-'}{cm.member?.email ? ` (${cm.member.email})` : ''}
-              </option>
-            ))}
-          </select>
-          <div className="flex items-center gap-1 rounded cue-surface px-2 py-1">
-            <span className="text-xs cue-muted">標準</span>
-            {thresholdOptions.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={async () => {
-                  setBreakMinPoints(value);
-                  if (thresholdMode === 'CUSTOM') return;
-                  try {
-                    setThresholdSaving(true);
-                    await updateClubHighbreakSettings(API_URL, operatorId, {
-                      displayThresholdMode: 'CUSTOM',
-                      displayThresholdDefault: value,
-                    });
-                    setThresholdMode('CUSTOM');
-                    showNotice(`已改用場館自訂 ${value}+ 標準`);
-                  } catch (e: any) {
-                    showNotice(e?.message || '更新場館標準失敗', 3000);
-                  } finally {
-                    setThresholdSaving(false);
-                  }
-                }}
-                className={`px-2 py-1 rounded text-xs ${breakMinPoints === value ? 'cue-button text-white font-semibold' : 'cue-surface-strong hover:brightness-95'}`}
-              >
-                {value}+
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 rounded cue-surface px-2 py-1">
-            <span className="text-xs cue-muted">口徑</span>
-            {BREAK_SCOPE_OPTIONS.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={async () => {
-                  setBreakScope(item.value);
-                  if (scopeMode === 'CUSTOM') return;
-                  try {
-                    setScopeSaving(true);
-                    await updateClubHighbreakSettings(API_URL, operatorId, {
-                      leaderboardScopeMode: 'CUSTOM',
-                      leaderboardScopeDefault: item.value,
-                    });
-                    setScopeMode('CUSTOM');
-                    showNotice(`已改用場館自訂 ${item.label} 口徑`);
-                  } catch (e: any) {
-                    showNotice(e?.message || '更新場館口徑失敗', 3000);
-                  } finally {
-                    setScopeSaving(false);
-                  }
-                }}
-                className={`px-2 py-1 rounded text-xs ${breakScope === item.value ? 'cue-button text-white font-semibold' : 'cue-surface-strong hover:brightness-95'}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            disabled={thresholdSaving}
-            onClick={async () => {
-              try {
-                setThresholdSaving(true);
-                const result = await updateClubHighbreakSettings(API_URL, operatorId, {
-                  displayThresholdMode: thresholdMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
-                  ...(thresholdMode === 'FOLLOW_SYSTEM' ? { displayThresholdDefault: breakMinPoints } : {}),
-                });
-                const nextMode = String((result as any)?.clubSettings?.displayThresholdMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
-                const nextEffective = Number((result as any)?.effectiveMinPoints || breakMinPoints);
-                setThresholdMode(nextMode);
-                if (Number.isFinite(nextEffective) && nextEffective >= 20) {
-                  setBreakMinPoints(nextEffective);
-                }
-                showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設標準' : '已改為場館自訂標準');
-              } catch (e: any) {
-                showNotice(e?.message || '更新場館標準失敗', 3000);
-              } finally {
-                setThresholdSaving(false);
-              }
-            }}
-            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
-          >
-            {thresholdSaving ? '儲存中...' : thresholdMode === 'FOLLOW_SYSTEM' ? '跟隨系統' : '場館自訂'}
-          </button>
-          <button
-            type="button"
-            disabled={scopeSaving}
-            onClick={async () => {
-              try {
-                setScopeSaving(true);
-                const result = await updateClubHighbreakSettings(API_URL, operatorId, {
-                  leaderboardScopeMode: scopeMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
-                  ...(scopeMode === 'FOLLOW_SYSTEM' ? { leaderboardScopeDefault: breakScope } : {}),
-                });
-                const nextMode = String((result as any)?.clubSettings?.leaderboardScopeMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
-                const nextEffectiveScope = String((result as any)?.effectiveScope || 'ALL').toUpperCase();
-                setScopeMode(nextMode);
-                setBreakScope(nextEffectiveScope === 'VENUE' || nextEffectiveScope === 'TOURNAMENT' ? nextEffectiveScope : 'ALL');
-                showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設口徑' : '已改為場館自訂口徑');
-              } catch (e: any) {
-                showNotice(e?.message || '更新場館口徑失敗', 3000);
-              } finally {
-                setScopeSaving(false);
-              }
-            }}
-            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
-          >
-            {scopeSaving ? '儲存中...' : scopeMode === 'FOLLOW_SYSTEM' ? '口徑跟隨系統' : '口徑場館自訂'}
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              await Promise.all([loadContext(), loadBreakData()]);
-              showNotice(`已更新 ${breakScopeLabel} ${breakMinPoints}+ 單杆資料`);
-            }}
-            className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
-          >
-            {(membersLoading || breaksLoading) ? '載入中...' : '重新整理'}
-          </button>
         </div>
       </div>
 
       {notice ? <div className="mb-4 text-sm accent-yellow">{notice}</div> : null}
+
+      <div className="grid gap-3 md:grid-cols-4 mb-4">
+        <div className="cue-surface rounded-lg p-3">
+          <div className="text-xs cue-muted">目前標準</div>
+          <div className="mt-1 text-lg font-bold accent-yellow">{breakMinPoints}+</div>
+          <div className="mt-1 text-xs cue-muted">{formatModeLabel(thresholdMode, '跟隨系統預設', '場館自訂標準')}</div>
+        </div>
+        <div className="cue-surface rounded-lg p-3">
+          <div className="text-xs cue-muted">統計口徑</div>
+          <div className="mt-1 text-lg font-bold">{breakScopeLabel}</div>
+          <div className="mt-1 text-xs cue-muted">{formatModeLabel(scopeMode, '跟隨系統預設', '場館自訂口徑')}</div>
+        </div>
+        <div className="cue-surface rounded-lg p-3">
+          <div className="text-xs cue-muted">目前查詢</div>
+          <div className="mt-1 text-sm font-semibold">{breakFilterMonth || '全部月份'}</div>
+          <div className="mt-1 text-xs cue-muted">{selectedMemberLabel}</div>
+        </div>
+        <div className="cue-surface rounded-lg p-3">
+          <div className="text-xs cue-muted">結果摘要</div>
+          <div className="mt-1 text-sm font-semibold">列表 {totalRows} 筆</div>
+          <div className="mt-1 text-xs cue-muted">最高榜首 {highestPoints || 0} 分</div>
+        </div>
+      </div>
+
+      <div className="cue-surface rounded-lg p-3 mb-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold">查詢與口徑</div>
+            <div className="text-xs cue-muted">先切標準與口徑，再看列表、最高榜與本月榜。</div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <input
+              type="month"
+              value={breakFilterMonth}
+              onChange={(e) => setBreakFilterMonth(e.target.value)}
+              className="px-3 py-2 rounded cue-input text-sm"
+            />
+            <select
+              value={breakFilterMember}
+              onChange={(e) => setBreakFilterMember(e.target.value)}
+              className="px-3 py-2 rounded cue-input text-sm"
+              disabled={membersLoading}
+            >
+              <option value="">全部會員</option>
+              {clubMembers.map((cm: any) => (
+                <option key={cm.member?.id || cm.id} value={cm.member?.id || ''}>
+                  {cm.member?.name || '-'}{cm.member?.email ? ` (${cm.member.email})` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={async () => {
+                await Promise.all([loadContext(), loadBreakData()]);
+                showNotice(`已更新 ${breakScopeLabel} ${breakMinPoints}+ 單杆資料`);
+              }}
+              className="px-3 py-2 rounded cue-button hover:brightness-95 text-sm text-white font-semibold"
+            >
+              {(membersLoading || breaksLoading) ? '載入中...' : '重新整理'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1 rounded cue-surface-strong px-2 py-1">
+              <span className="text-xs cue-muted">標準</span>
+              {thresholdOptions.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={async () => {
+                    setBreakMinPoints(value);
+                    if (thresholdMode === 'CUSTOM') return;
+                    try {
+                      setThresholdSaving(true);
+                      await updateClubHighbreakSettings(API_URL, operatorId, {
+                        displayThresholdMode: 'CUSTOM',
+                        displayThresholdDefault: value,
+                      });
+                      setThresholdMode('CUSTOM');
+                      showNotice(`已改用場館自訂 ${value}+ 標準`);
+                    } catch (e: any) {
+                      showNotice(e?.message || '更新場館標準失敗', 3000);
+                    } finally {
+                      setThresholdSaving(false);
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs ${breakMinPoints === value ? 'cue-button text-white font-semibold' : 'cue-surface hover:brightness-95'}`}
+                >
+                  {value}+
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={thresholdSaving}
+              onClick={async () => {
+                try {
+                  setThresholdSaving(true);
+                  const result = await updateClubHighbreakSettings(API_URL, operatorId, {
+                    displayThresholdMode: thresholdMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
+                    ...(thresholdMode === 'FOLLOW_SYSTEM' ? { displayThresholdDefault: breakMinPoints } : {}),
+                  });
+                  const nextMode = String((result as any)?.clubSettings?.displayThresholdMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
+                  const nextEffective = Number((result as any)?.effectiveMinPoints || breakMinPoints);
+                  setThresholdMode(nextMode);
+                  if (Number.isFinite(nextEffective) && nextEffective >= 20) {
+                    setBreakMinPoints(nextEffective);
+                  }
+                  showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設標準' : '已改為場館自訂標準');
+                } catch (e: any) {
+                  showNotice(e?.message || '更新場館標準失敗', 3000);
+                } finally {
+                  setThresholdSaving(false);
+                }
+              }}
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
+            >
+              {thresholdSaving ? '儲存中...' : thresholdMode === 'FOLLOW_SYSTEM' ? '標準跟隨系統' : '標準場館自訂'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="flex items-center gap-1 rounded cue-surface-strong px-2 py-1">
+              <span className="text-xs cue-muted">口徑</span>
+              {BREAK_SCOPE_OPTIONS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={async () => {
+                    setBreakScope(item.value);
+                    if (scopeMode === 'CUSTOM') return;
+                    try {
+                      setScopeSaving(true);
+                      await updateClubHighbreakSettings(API_URL, operatorId, {
+                        leaderboardScopeMode: 'CUSTOM',
+                        leaderboardScopeDefault: item.value,
+                      });
+                      setScopeMode('CUSTOM');
+                      showNotice(`已改用場館自訂 ${item.label} 口徑`);
+                    } catch (e: any) {
+                      showNotice(e?.message || '更新場館口徑失敗', 3000);
+                    } finally {
+                      setScopeSaving(false);
+                    }
+                  }}
+                  className={`px-2 py-1 rounded text-xs ${breakScope === item.value ? 'cue-button text-white font-semibold' : 'cue-surface hover:brightness-95'}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={scopeSaving}
+              onClick={async () => {
+                try {
+                  setScopeSaving(true);
+                  const result = await updateClubHighbreakSettings(API_URL, operatorId, {
+                    leaderboardScopeMode: scopeMode === 'FOLLOW_SYSTEM' ? 'CUSTOM' : 'FOLLOW_SYSTEM',
+                    ...(scopeMode === 'FOLLOW_SYSTEM' ? { leaderboardScopeDefault: breakScope } : {}),
+                  });
+                  const nextMode = String((result as any)?.clubSettings?.leaderboardScopeMode || '').toUpperCase() === 'CUSTOM' ? 'CUSTOM' : 'FOLLOW_SYSTEM';
+                  const nextEffectiveScope = String((result as any)?.effectiveScope || 'ALL').toUpperCase();
+                  setScopeMode(nextMode);
+                  setBreakScope(nextEffectiveScope === 'VENUE' || nextEffectiveScope === 'TOURNAMENT' ? nextEffectiveScope : 'ALL');
+                  showNotice(nextMode === 'FOLLOW_SYSTEM' ? '已改為跟隨系統預設口徑' : '已改為場館自訂口徑');
+                } catch (e: any) {
+                  showNotice(e?.message || '更新場館口徑失敗', 3000);
+                } finally {
+                  setScopeSaving(false);
+                }
+              }}
+              className="px-3 py-2 rounded cue-surface-strong hover:brightness-95 text-sm"
+            >
+              {scopeSaving ? '儲存中...' : scopeMode === 'FOLLOW_SYSTEM' ? '口徑跟隨系統' : '口徑場館自訂'}
+            </button>
+            <div className="text-xs cue-muted">榜單月份：{leaderMonth || '未選擇'}，列表與榜單會一起沿用目前標準與口徑。</div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid gap-3 md:grid-cols-6">
         <div className="md:col-span-2">

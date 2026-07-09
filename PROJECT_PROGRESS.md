@@ -118,6 +118,19 @@
     - 場館公開頁排行榜已支援 scope 切換
   - `frontend/src/HomePage.tsx`
     - 首頁會員榜 / 場館榜已支援 scope 切換
+- Highbreak UI/UX 收斂已完成第一輪：
+  - `frontend/src/venue/modules/VenueHighbreakModule.tsx`
+    - 已新增目前標準 / 統計口徑 / 目前查詢 / 結果摘要 4 格摘要卡
+    - 已把原本分散在右上角的月份、會員、標準、口徑操作，收斂成單一「查詢與口徑」區塊
+    - `標準跟隨系統 / 標準場館自訂`、`口徑跟隨系統 / 口徑場館自訂` 文案已明確化
+  - `frontend/src/ClubPublicPage.tsx`
+    - 場館公開頁排行榜已補上目前口徑 / 目前標準 / 本月榜單月份 摘要
+  - `frontend/src/HomePage.tsx`
+    - 首頁排行榜已補上 Scope / Threshold / Tips 摘要卡
+    - 已明示會員榜與場館榜會同步套用同一組口徑與標準
+  - `frontend/src/Me.tsx`
+    - 單杆歷史已補上目前口徑 / 目前標準 / 結果摘要 摘要卡
+    - `全部` 已調整為 `綜合`，與 `ALL / VENUE / TOURNAMENT` 口徑命名一致
 - 本輪驗證：
   - `backend npm run build` 已通過
   - `frontend npm run build` 已通過
@@ -130,6 +143,7 @@
     - Highbreak Batch 1 ~ 3（影片補錄、`minPoints`、系統/場館預設門檻）
     - Highbreak Batch 4（會員頁 / 場館公開頁 / 首頁排行榜門檻切換）
     - Highbreak Batch 5（`VENUE / TOURNAMENT / ALL` scope 收斂）
+    - Highbreak UI/UX 收斂第一輪（操作入口與目前檢視摘要整理）
 
 - Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
   - `VenueTournamentLeagueSchedulePanel.tsx`

@@ -2118,6 +2118,20 @@ const ClubPublicPage: React.FC = () => {
                       />
                     </div>
                   </div>
+                  <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                    <div className="cue-surface-strong rounded-lg px-3 py-2">
+                      <div className="text-[11px] cue-muted">目前口徑</div>
+                      <div className="mt-1 text-sm font-semibold">{leaderScopeLabel}</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2">
+                      <div className="text-[11px] cue-muted">目前標準</div>
+                      <div className="mt-1 text-sm font-semibold">{leaderMinPoints}+ 單杆</div>
+                    </div>
+                    <div className="cue-surface-strong rounded-lg px-3 py-2">
+                      <div className="text-[11px] cue-muted">本月榜單</div>
+                      <div className="mt-1 text-sm font-semibold">{leaderMonth || '未選擇月份'}</div>
+                    </div>
+                  </div>
 
                   {leaderError && <div className="text-sm text-red-500 mb-2">{leaderError}</div>}
                   {leaderLoading && <div className="text-sm cue-muted mb-2">載入中...</div>}

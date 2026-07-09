@@ -494,6 +494,20 @@ const HomePage: React.FC = () => {
                   </button>
                 ))}
               </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="glass rounded-2xl px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.2em] cue-muted">Scope</div>
+                  <div className="mt-1 font-semibold">{leaderScope === 'VENUE' ? '會內' : leaderScope === 'TOURNAMENT' ? '賽事' : '綜合'}口徑</div>
+                </div>
+                <div className="glass rounded-2xl px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.2em] cue-muted">Threshold</div>
+                  <div className="mt-1 font-semibold">{leaderMinPoints}+ 標準</div>
+                </div>
+                <div className="glass rounded-2xl px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.2em] cue-muted">Tips</div>
+                  <div className="mt-1 text-sm cue-muted">會員榜與場館榜會同步套用同一個口徑與標準。</div>
+                </div>
+              </div>
               {leaderLoading ? (
                 <div className="glass rounded-2xl p-4 cue-muted">讀取中…</div>
               ) : leaderError ? (
