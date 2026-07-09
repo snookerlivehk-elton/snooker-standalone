@@ -13,6 +13,7 @@ type ClubPublicTournamentLiveSectionProps = {
   buildPublicTournamentLiveProgressLabel: (row: any, bestOfFrames: any) => string;
   formatTournamentMatchStatusLabel: (value: any) => string;
   formatTournamentParticipantLabel: (participant: any) => string;
+  openTournamentParticipantPanel: (participant: any) => void;
 };
 
 const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionProps> = ({
@@ -28,6 +29,7 @@ const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionP
   buildPublicTournamentLiveProgressLabel,
   formatTournamentMatchStatusLabel,
   formatTournamentParticipantLabel,
+  openTournamentParticipantPanel,
 }) => {
   if (openedTournamentMatches.length <= 0) return null;
 
@@ -75,11 +77,23 @@ const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionP
                   <div className="text-xs font-semibold accent-yellow">{formatTournamentMatchStatusLabel(row?.status)}</div>
                 </div>
                 <div className="mt-3">
-                  <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                  <button
+                    type="button"
+                    onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                    className="font-semibold text-left hover:underline"
+                  >
+                    {formatTournamentParticipantLabel(row?.player_a_participant)}
+                  </button>
                   <div className="text-sm cue-muted my-1">
                     {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
                   </div>
-                  <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                  <button
+                    type="button"
+                    onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                    className="font-semibold text-left hover:underline"
+                  >
+                    {formatTournamentParticipantLabel(row?.player_b_participant)}
+                  </button>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3 mt-3 text-xs">
                   <div className="cue-surface-strong rounded-lg p-2">{breakSummary.topLabel}</div>
@@ -87,6 +101,7 @@ const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionP
                   <div className="cue-surface-strong rounded-lg p-2">已完成 {Array.isArray(row?.frames) ? row.frames.length : 0} 局</div>
                 </div>
                 <div className="text-xs cue-muted mt-3">{breakSummary.latestLabel}</div>
+                <div className="text-xs cue-muted mt-2">可直接點擊球手名稱查看個人戰況。</div>
               </div>
             );
           })}
@@ -105,9 +120,21 @@ const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionP
                   <span>{formatPublicTournamentStageLabel(row, openedTournamentFormat, openedTournamentParticipants.length)}</span>
                   <span>{row?.scheduled_at ? new Date(String(row.scheduled_at)).toLocaleString() : '待定時間'}</span>
                 </div>
-                <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                <button
+                  type="button"
+                  onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                  className="font-semibold text-left hover:underline"
+                >
+                  {formatTournamentParticipantLabel(row?.player_a_participant)}
+                </button>
                 <div className="text-xs cue-muted my-1">vs</div>
-                <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                <button
+                  type="button"
+                  onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                  className="font-semibold text-left hover:underline"
+                >
+                  {formatTournamentParticipantLabel(row?.player_b_participant)}
+                </button>
               </div>
             ))}
           </div>
@@ -121,9 +148,21 @@ const ClubPublicTournamentLiveSection: React.FC<ClubPublicTournamentLiveSectionP
             {openedTournamentRecentCompletedMatches.map((row: any) => (
               <div key={String(row?.id || Math.random())} className="cue-surface rounded-lg p-3">
                 <div className="text-xs cue-muted">{formatPublicTournamentStageLabel(row, openedTournamentFormat, openedTournamentParticipants.length)}</div>
-                <div className="font-semibold mt-2">{formatTournamentParticipantLabel(row?.player_a_participant)}</div>
+                <button
+                  type="button"
+                  onClick={() => openTournamentParticipantPanel(row?.player_a_participant)}
+                  className="mt-2 font-semibold text-left hover:underline"
+                >
+                  {formatTournamentParticipantLabel(row?.player_a_participant)}
+                </button>
                 <div className="text-xs cue-muted my-1">{Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}</div>
-                <div className="font-semibold">{formatTournamentParticipantLabel(row?.player_b_participant)}</div>
+                <button
+                  type="button"
+                  onClick={() => openTournamentParticipantPanel(row?.player_b_participant)}
+                  className="font-semibold text-left hover:underline"
+                >
+                  {formatTournamentParticipantLabel(row?.player_b_participant)}
+                </button>
                 <div className="text-xs cue-muted mt-2">{buildPublicTournamentLiveProgressLabel(row, openedTournament?.bestOfFrames)}</div>
               </div>
             ))}

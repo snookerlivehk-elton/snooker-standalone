@@ -71,7 +71,7 @@ const ClubPublicTournamentParticipantPanel: React.FC<ClubPublicTournamentPartici
           <div>
             <div className="font-semibold">球手搜尋與個人詳情</div>
             <div className="text-xs cue-muted mt-1">
-              可直接搜尋球手，或從下方主視圖點選球手，在同一個賽事詳情視窗內查看個人戰況。
+              可直接搜尋球手，或從積分榜、進級表、賽況卡點選球手，在同一個賽事詳情視窗內查看個人戰況。
             </div>
           </div>
           <div className="text-xs cue-muted">參賽者 {openedTournamentParticipants.length} 人</div>

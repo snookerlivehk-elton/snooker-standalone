@@ -127,6 +127,7 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
               buildPublicTournamentLiveProgressLabel={buildPublicTournamentLiveProgressLabel}
               formatTournamentMatchStatusLabel={formatTournamentMatchStatusLabel}
               formatTournamentParticipantLabel={formatTournamentParticipantLabel}
+              openTournamentParticipantPanel={participantPanelProps.openTournamentParticipantPanel}
             />
 
             <ClubPublicTournamentStageSection
@@ -139,6 +140,7 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
               formatTournamentResultTypeLabel={formatTournamentResultTypeLabel}
               formatPublicKnockoutRoundLabel={formatPublicKnockoutRoundLabel}
               formatTournamentMatchStatusLabel={formatTournamentMatchStatusLabel}
+              openTournamentParticipantPanel={participantPanelProps.openTournamentParticipantPanel}
               PUBLIC_BRACKET_CONNECTOR_HALF_GAP={PUBLIC_BRACKET_CONNECTOR_HALF_GAP}
               PUBLIC_BRACKET_CARD_HEIGHT={PUBLIC_BRACKET_CARD_HEIGHT}
             />

@@ -50,7 +50,7 @@ const ClubPublicTournamentParticipantDetailSection: React.FC<ClubPublicTournamen
   return (
     <div className="mt-5 border-t cue-border pt-5">
       {!tournamentParticipantOpen ? (
-        <div className="text-sm cue-muted">先搜尋或從下方名單點選球手，即可查看個人戰況。</div>
+        <div className="text-sm cue-muted">先搜尋或從積分榜、進級表、賽況卡點選球手，即可查看個人戰況。</div>
       ) : tournamentParticipantDetailLoading ? (
         <div className="text-sm cue-muted">讀取球手戰況中…</div>
       ) : tournamentParticipantDetailError ? (
