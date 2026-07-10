@@ -110,8 +110,8 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
   if (variant === 'hero') {
     return (
       <div className={`rounded-2xl border p-5 ${heroTheme.shellClassName}`}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 lg:max-w-[52%]">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 xl:max-w-[52%]">
             <div className="flex flex-wrap items-center gap-2">
               <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${heroTheme.badgeClassName}`}>
                 <span className={`h-2 w-2 rounded-full ${heroTheme.accentDotClassName}`} />
@@ -146,7 +146,7 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
             </div>
           </div>
 
-          <div className="flex-1 rounded-2xl border border-white/10 bg-black/10 p-4">
+          <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/10 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold cue-muted">焦點輪次縮圖</div>
@@ -167,18 +167,18 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
               )}
             </div>
             {topFocusRow ? (
-              <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
-                <div className="rounded-xl cue-surface px-3 py-3">
+              <div className="mt-4 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
+                <div className="min-w-0 rounded-xl cue-surface px-3 py-3">
                   <div className="text-[11px] cue-muted">上線</div>
                   <div className="mt-1 font-semibold truncate">{formatTournamentParticipantLabel(topFocusRow?.player_a_participant)}</div>
                 </div>
-                <div className="text-center">
+                <div className="min-w-0 text-center">
                   <div className="text-xs cue-muted">{focusStages[0]?.label || '焦點對賽'}</div>
                   <div className={`mt-1 text-xl font-extrabold ${theme.accentClassName}`}>
                     {Number(topFocusRow?.player_a_frames_won ?? 0)} : {Number(topFocusRow?.player_b_frames_won ?? 0)}
                   </div>
                 </div>
-                <div className="rounded-xl cue-surface px-3 py-3">
+                <div className="min-w-0 rounded-xl cue-surface px-3 py-3">
                   <div className="text-[11px] cue-muted">下線</div>
                   <div className="mt-1 font-semibold truncate">{formatTournamentParticipantLabel(topFocusRow?.player_b_participant)}</div>
                 </div>
