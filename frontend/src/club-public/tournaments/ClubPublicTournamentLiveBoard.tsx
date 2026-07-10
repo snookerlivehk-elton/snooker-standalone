@@ -21,6 +21,19 @@ type ClubPublicTournamentLiveBoardProps = {
   renderPublicBoardParticipantActions: (tournament: any, row: any) => React.ReactNode;
 };
 
+function getTournamentBoardPriorityScore(tournament: any) {
+  return (Number(tournament?.summary?.liveMatchCount || 0) * 100)
+    + (Number(tournament?.summary?.readyMatchCount || 0) * 10)
+    + Number(tournament?.summary?.completedMatchCount || 0);
+}
+
+function getTournamentBoardBucket(tournament: any) {
+  if (Number(tournament?.summary?.liveMatchCount || 0) > 0) return 'live';
+  if (Number(tournament?.summary?.readyMatchCount || 0) > 0) return 'ready';
+  if (Number(tournament?.summary?.completedMatchCount || 0) > 0) return 'completed';
+  return 'quiet';
+}
+
 const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps> = ({
   tournamentLiveBoardLoading,
   tournamentLiveBoard,
@@ -40,16 +53,59 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   renderPublicBoardParticipantActions,
 }) => {
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
-    const aScore = (Number(a?.summary?.liveMatchCount || 0) * 100)
-      + (Number(a?.summary?.readyMatchCount || 0) * 10)
-      + Number(a?.summary?.completedMatchCount || 0);
-    const bScore = (Number(b?.summary?.liveMatchCount || 0) * 100)
-      + (Number(b?.summary?.readyMatchCount || 0) * 10)
-      + Number(b?.summary?.completedMatchCount || 0);
-    return bScore - aScore;
+    return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
   });
   const featuredTournament = sortedBoard[0] || null;
   const remainingTournaments = sortedBoard.slice(1);
+  const liveTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'live');
+  const readyTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'ready');
+  const completedTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'completed');
+  const quietTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'quiet');
+  const remainingShelves = [
+    {
+      key: 'live',
+      title: '其他進行中賽事',
+      summary: '先收斂仍在推進中的賽事，方便快速掃讀現場還有哪些桌次正在變化。',
+      countLabel: '追蹤中',
+      rows: liveTournaments,
+    },
+    {
+      key: 'ready',
+      title: '即將上場',
+      summary: '把下一批快要開始的賽事集中在同一區，讓訪客知道接下來要看哪一場。',
+      countLabel: '待開打',
+      rows: readyTournaments,
+    },
+    {
+      key: 'completed',
+      title: '最新完賽',
+      summary: '現場暫時沒有 live 時，這一區會成為追結果的第二視角。',
+      countLabel: '可回顧',
+      rows: [...completedTournaments, ...quietTournaments],
+    },
+  ].filter((section) => section.rows.length > 0);
+  const boardOverview = [
+    {
+      label: '進行中賽事',
+      value: sortedBoard.filter((row: any) => Number(row?.summary?.liveMatchCount || 0) > 0).length,
+      hint: '有 live 對局',
+    },
+    {
+      label: '即將上場賽事',
+      value: sortedBoard.filter((row: any) => Number(row?.summary?.readyMatchCount || 0) > 0).length,
+      hint: '可先追下一場',
+    },
+    {
+      label: '最近有結果',
+      value: sortedBoard.filter((row: any) => Number(row?.summary?.completedMatchCount || 0) > 0).length,
+      hint: '可直接看結果',
+    },
+    {
+      label: '公開賽事總數',
+      value: sortedBoard.length,
+      hint: '首頁集中掃讀',
+    },
+  ];
 
   const heroTitle = featuredTournament
     ? Number(featuredTournament?.summary?.liveMatchCount || 0) > 0
@@ -80,7 +136,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         <div className="flex items-center justify-between gap-3 mb-2">
           <div>
             <div className="font-semibold text-lg">公開賽況</div>
-            <div className="text-xs cue-muted mt-1">改成焦點賽事 + 其餘賽事列表，先讓訪客一眼看懂今天最值得追的公開對局。</div>
+            <div className="text-xs cue-muted mt-1">改成焦點賽事 + 狀態分區海報卡，先讓訪客一眼看懂今天最值得追的公開對局。</div>
           </div>
           <div className="text-xs cue-muted">
             {tournamentLiveBoardLoading ? '讀取中…' : `共 ${tournamentLiveBoard.length} 個賽事項目`}
@@ -94,6 +150,16 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         )}
         {!tournamentLiveBoardLoading && tournamentLiveBoard.length > 0 && (
           <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {boardOverview.map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/10 bg-black/10 px-4 py-3">
+                  <div className="text-xs cue-muted">{item.label}</div>
+                  <div className="mt-2 text-2xl font-semibold">{item.value}</div>
+                  <div className="mt-1 text-[11px] cue-muted">{item.hint}</div>
+                </div>
+              ))}
+            </div>
+
             {featuredTournament ? (
               <div className="cue-surface-strong rounded-2xl p-5 border border-white/10">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch">
@@ -200,30 +266,45 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold">其餘公開賽況</div>
-                    <div className="text-xs cue-muted mt-1">其餘賽事收斂成摘要卡，避免首屏被長列表拉得過高。</div>
+                    <div className="text-xs cue-muted mt-1">其餘賽事依狀態分區，改成小海報卡後可先掃讀 live，再看即將上場與最新結果。</div>
                   </div>
                   <div className="text-xs cue-muted">{remainingTournaments.length} 場</div>
                 </div>
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {remainingTournaments.map((tournament: any) => (
-                    <ClubPublicTournamentLiveBoardCard
-                      key={String(tournament?.id || Math.random())}
-                      tournament={tournament}
-                      tournaments={tournaments}
-                      setActiveTab={setActiveTab}
-                      setTournamentOpen={setTournamentOpen}
-                      formatTournamentFormatLabel={formatTournamentFormatLabel}
-                      formatTournamentWorkflowLabel={formatTournamentWorkflowLabel}
-                      buildPublicTournamentBreakSummary={buildPublicTournamentBreakSummary}
-                      formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
-                      normalizeTournamentFormat={normalizeTournamentFormat}
-                      buildPublicTournamentLiveProgressLabel={buildPublicTournamentLiveProgressLabel}
-                      formatTournamentMatchStatusLabel={formatTournamentMatchStatusLabel}
-                      formatTournamentParticipantLabel={formatTournamentParticipantLabel}
-                      openPublicBoardParticipantPanel={openPublicBoardParticipantPanel}
-                      renderPublicBoardParticipantActions={renderPublicBoardParticipantActions}
-                      compact
-                    />
+                <div className="space-y-4">
+                  {remainingShelves.map((section) => (
+                    <div key={section.key} className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">{section.title}</div>
+                          <div className="text-xs cue-muted mt-1">{section.summary}</div>
+                        </div>
+                        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold cue-muted">
+                          {section.countLabel} {section.rows.length} 場
+                        </div>
+                      </div>
+                      <div className="grid gap-3 xl:grid-cols-2">
+                        {section.rows.map((tournament: any) => (
+                          <ClubPublicTournamentLiveBoardCard
+                            key={String(tournament?.id || Math.random())}
+                            tournament={tournament}
+                            tournaments={tournaments}
+                            setActiveTab={setActiveTab}
+                            setTournamentOpen={setTournamentOpen}
+                            formatTournamentFormatLabel={formatTournamentFormatLabel}
+                            formatTournamentWorkflowLabel={formatTournamentWorkflowLabel}
+                            buildPublicTournamentBreakSummary={buildPublicTournamentBreakSummary}
+                            formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
+                            normalizeTournamentFormat={normalizeTournamentFormat}
+                            buildPublicTournamentLiveProgressLabel={buildPublicTournamentLiveProgressLabel}
+                            formatTournamentMatchStatusLabel={formatTournamentMatchStatusLabel}
+                            formatTournamentParticipantLabel={formatTournamentParticipantLabel}
+                            openPublicBoardParticipantPanel={openPublicBoardParticipantPanel}
+                            renderPublicBoardParticipantActions={renderPublicBoardParticipantActions}
+                            compact
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

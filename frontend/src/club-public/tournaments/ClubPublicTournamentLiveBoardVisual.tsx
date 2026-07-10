@@ -3,7 +3,7 @@ import React from 'react';
 type ClubPublicTournamentLiveBoardVisualProps = {
   tournament: any;
   compact?: boolean;
-  variant?: 'default' | 'hero';
+  variant?: 'default' | 'hero' | 'mini';
   formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string;
   normalizeTournamentFormat: (value: any) => any;
   formatTournamentParticipantLabel: (participant: any) => string;
@@ -186,6 +186,70 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
             ) : null}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (variant === 'mini') {
+    return (
+      <div className={`rounded-2xl border p-4 ${heroTheme.shellClassName}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold ${heroTheme.badgeClassName}`}>
+              <span className={`h-2 w-2 rounded-full ${heroTheme.accentDotClassName}`} />
+              {format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
+            </div>
+            <div className="mt-2 text-sm cue-muted">{statusLabel}</div>
+          </div>
+          <div className={`text-lg font-extrabold ${theme.accentClassName}`}>{progressPercent}%</div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
+            <div className="cue-muted">進行中</div>
+            <div className="mt-1 font-semibold">{liveCount}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
+            <div className="cue-muted">即將上場</div>
+            <div className="mt-1 font-semibold">{readyCount}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
+            <div className="cue-muted">已完成</div>
+            <div className="mt-1 font-semibold">{completedCount}</div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {featuredStages.length > 0 ? featuredStages.slice(0, 3).map((stage, index) => (
+            <React.Fragment key={stage.label}>
+              <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${theme.chipClassName}`}>
+                {stage.label}
+              </div>
+              {index < Math.min(featuredStages.length, 3) - 1 ? <div className="text-xs cue-muted">→</div> : null}
+            </React.Fragment>
+          )) : (
+            <div className="text-xs cue-muted">尚未形成可顯示的焦點輪次。</div>
+          )}
+        </div>
+
+        {topFocusRow ? (
+          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3">
+            <div className="min-w-0">
+              <div className="text-[11px] cue-muted">上線</div>
+              <div className="mt-1 truncate text-sm font-semibold">{formatTournamentParticipantLabel(topFocusRow?.player_a_participant)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[11px] cue-muted">{focusStages[0]?.label || '焦點對賽'}</div>
+              <div className={`mt-1 text-lg font-extrabold ${theme.accentClassName}`}>
+                {Number(topFocusRow?.player_a_frames_won ?? 0)} : {Number(topFocusRow?.player_b_frames_won ?? 0)}
+              </div>
+            </div>
+            <div className="min-w-0 text-right">
+              <div className="text-[11px] cue-muted">下線</div>
+              <div className="mt-1 truncate text-sm font-semibold">{formatTournamentParticipantLabel(topFocusRow?.player_b_participant)}</div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
