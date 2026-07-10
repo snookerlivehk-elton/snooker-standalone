@@ -2,6 +2,7 @@ import React from 'react';
 import ClubPublicTournamentLiveMatchesSection from './ClubPublicTournamentLiveMatchesSection';
 import ClubPublicTournamentReadyMatchesSection from './ClubPublicTournamentReadyMatchesSection';
 import ClubPublicTournamentRecentCompletedSection from './ClubPublicTournamentRecentCompletedSection';
+import ClubPublicTournamentLiveBoardVisual from './ClubPublicTournamentLiveBoardVisual';
 
 type ClubPublicTournamentLiveBoardCardProps = {
   tournament: any;
@@ -53,6 +54,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
     : readyCount > 0
       ? (Array.isArray(tournament?.readyMatches) ? tournament.readyMatches.slice(0, 2) : [])
       : (Array.isArray(tournament?.recentCompletedMatches) ? tournament.recentCompletedMatches.slice(0, 2) : []);
+  const participantCount = Number(tournament?.summary?.participantCount || 0);
 
   if (compact) {
     return (
@@ -86,12 +88,22 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
 
         <div className="mt-3 text-sm cue-muted">{highlightLabel}</div>
 
+        <div className="mt-3">
+          <ClubPublicTournamentLiveBoardVisual
+            tournament={tournament}
+            compact
+            formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
+            normalizeTournamentFormat={normalizeTournamentFormat}
+            formatTournamentParticipantLabel={formatTournamentParticipantLabel}
+          />
+        </div>
+
         {previewRows.length > 0 ? (
           <div className="mt-3 space-y-2">
             {previewRows.map((row: any) => (
               <div key={String(row?.id || Math.random())} className="rounded-lg cue-surface p-2">
                 <div className="text-[11px] cue-muted">
-                  {formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), 0)}
+                  {formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), participantCount)}
                 </div>
                 <div className="mt-1 text-sm font-semibold truncate">
                   {formatTournamentParticipantLabel(row?.player_a_participant)} vs {formatTournamentParticipantLabel(row?.player_b_participant)}

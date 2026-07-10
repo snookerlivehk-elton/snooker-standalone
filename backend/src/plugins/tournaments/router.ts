@@ -1042,6 +1042,16 @@ export function createTournamentRouter() {
       const ids = tournaments.map((row) => row.id);
       if (ids.length <= 0) return res.json([]);
 
+      const participantGroups = await prisma.tournamentParticipant.groupBy({
+        by: ['tournament_id'],
+        where: { tournament_id: { in: ids } },
+        _count: { _all: true },
+      });
+      const participantCountMap = new Map<string, number>();
+      for (const row of participantGroups) {
+        participantCountMap.set(String((row as any)?.tournament_id || ''), Number((row as any)?._count?._all || 0));
+      }
+
       const matches = await prisma.tournamentMatch.findMany({
         where: {
           tournament_id: { in: ids },
@@ -1118,6 +1128,7 @@ export function createTournamentRouter() {
           recentCompletedMatches,
           summary: {
             totalMatches: tournamentMatches.length,
+            participantCount: participantCountMap.get(String(tournament.id)) || 0,
             liveMatchCount: liveMatches.length,
             readyMatchCount,
             completedMatchCount,

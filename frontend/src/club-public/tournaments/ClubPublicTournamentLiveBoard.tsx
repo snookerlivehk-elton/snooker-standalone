@@ -1,5 +1,6 @@
 import React from 'react';
 import ClubPublicTournamentLiveBoardCard from './ClubPublicTournamentLiveBoardCard';
+import ClubPublicTournamentLiveBoardVisual from './ClubPublicTournamentLiveBoardVisual';
 
 type ClubPublicTournamentLiveBoardProps = {
   tournamentLiveBoardLoading: boolean;
@@ -71,6 +72,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         ? (Array.isArray(featuredTournament?.readyMatches) ? featuredTournament.readyMatches.slice(0, 2) : [])
         : (Array.isArray(featuredTournament?.recentCompletedMatches) ? featuredTournament.recentCompletedMatches.slice(0, 2) : [])
     : [];
+  const featuredParticipantCount = Number(featuredTournament?.summary?.participantCount || 0);
 
   return (
     <div className="mt-5 space-y-6">
@@ -93,16 +95,18 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         {!tournamentLiveBoardLoading && tournamentLiveBoard.length > 0 && (
           <div className="space-y-4">
             {featuredTournament ? (
-              <div className="cue-surface-strong rounded-xl p-5">
+              <div className="cue-surface-strong rounded-2xl p-5 border border-white/10">
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch">
                   <div className="xl:w-[38%]">
-                    <div className="text-xs font-semibold accent-yellow tracking-wide">{heroTitle}</div>
-                    <div className="font-semibold text-2xl mt-2">{String(featuredTournament?.title || '比賽')}</div>
+                    <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold accent-yellow tracking-wide">
+                      {heroTitle}
+                    </div>
+                    <div className="font-semibold text-3xl mt-3 leading-tight">{String(featuredTournament?.title || '比賽')}</div>
                     <div className="text-sm cue-muted mt-2">
                       {formatTournamentFormatLabel(featuredTournament?.format)} · {formatTournamentWorkflowLabel(featuredTournament?.workflow_status)}
                       {featuredTournament?.startsAt ? ` · ${new Date(String(featuredTournament.startsAt)).toLocaleString()}` : ''}
                     </div>
-                    <div className="text-sm cue-muted mt-3">{heroSummary}</div>
+                    <div className="text-sm cue-muted mt-3 leading-6">{heroSummary}</div>
                     <div className="grid grid-cols-3 gap-2 mt-4 text-sm">
                       <div className="rounded-lg cue-surface p-3">
                         <div className="text-xs cue-muted">進行中</div>
@@ -135,12 +139,21 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                   </div>
 
                   <div className="xl:flex-1 grid gap-3 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <ClubPublicTournamentLiveBoardVisual
+                        tournament={featuredTournament}
+                        variant="hero"
+                        formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
+                        normalizeTournamentFormat={normalizeTournamentFormat}
+                        formatTournamentParticipantLabel={formatTournamentParticipantLabel}
+                      />
+                    </div>
                     {featuredPreviewRows.map((row: any) => (
                       <div key={String(row?.id || Math.random())} className="rounded-xl cue-surface p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="text-xs cue-muted">
-                              {formatPublicTournamentStageLabel(row, normalizeTournamentFormat(featuredTournament?.format), 0)}
+                              {formatPublicTournamentStageLabel(row, normalizeTournamentFormat(featuredTournament?.format), featuredParticipantCount)}
                             </div>
                             <div className="text-xs cue-muted mt-1">
                               {buildPublicTournamentLiveProgressLabel(row, featuredTournament?.bestOfFrames)}
