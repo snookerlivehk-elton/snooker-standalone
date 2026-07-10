@@ -36,6 +36,34 @@ function getTournamentBoardBucket(tournament: any) {
   return 'quiet';
 }
 
+function getHeroContent(bucket: string, filtered: boolean) {
+  if (bucket === 'live') {
+    return {
+      title: filtered ? '進行中焦點賽事' : '本日焦點賽事',
+      summary: filtered
+        ? '已切到進行中分區，主視覺同步鎖定目前仍在推進的公開賽事。'
+        : '主視覺先顯示正在推進的賽事，讓訪客一進頁就先看最需要追蹤的對局。',
+      hint: '主視覺與下方分區已同步聚焦進行中賽事',
+    };
+  }
+  if (bucket === 'ready') {
+    return {
+      title: filtered ? '即將上場焦點' : '即將上場焦點',
+      summary: filtered
+        ? '已切到即將上場分區，主視覺改成下一場最值得等待的公開對局。'
+        : '若暫時未有 live 對局，首屏改為提醒即將上場的焦點賽事。',
+      hint: '主視覺與下方分區已同步聚焦即將上場賽事',
+    };
+  }
+  return {
+    title: filtered ? '最新完賽焦點' : '最新公開結果',
+    summary: filtered
+      ? '已切到最新完賽分區，主視覺回到最值得先看的最新公開賽果。'
+      : '若現場已沒有進行中對局，首屏則回落到最近完成的公開賽果。',
+    hint: '主視覺與下方分區已同步聚焦最新結果',
+  };
+}
+
 const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps> = ({
   tournamentLiveBoardLoading,
   tournamentLiveBoard,
@@ -59,8 +87,11 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
     return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
   });
-  const featuredTournament = sortedBoard[0] || null;
-  const remainingTournaments = sortedBoard.slice(1);
+  const activeHeroCandidates = activeShelf === 'all'
+    ? sortedBoard
+    : sortedBoard.filter((row: any) => getTournamentBoardBucket(row) === activeShelf);
+  const featuredTournament = activeHeroCandidates[0] || (activeShelf === 'all' ? (sortedBoard[0] || null) : null);
+  const remainingTournaments = sortedBoard.filter((row: any) => String(row?.id || '') !== String(featuredTournament?.id || ''));
   const liveTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'live');
   const readyTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'ready');
   const completedTournaments = remainingTournaments.filter((row: any) => getTournamentBoardBucket(row) === 'completed');
@@ -117,30 +148,20 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
       hint: '首頁集中掃讀',
     },
   ];
-
-  const heroTitle = featuredTournament
-    ? Number(featuredTournament?.summary?.liveMatchCount || 0) > 0
-      ? '本日焦點賽事'
-      : Number(featuredTournament?.summary?.readyMatchCount || 0) > 0
-        ? '即將上場焦點'
-        : '最新公開結果'
-    : '公開賽況';
+  const featuredBucket = featuredTournament ? getTournamentBoardBucket(featuredTournament) : 'quiet';
+  const heroContent = getHeroContent(featuredBucket, activeShelf !== 'all');
+  const heroTitle = featuredTournament ? heroContent.title : '公開賽況';
   const heroSummary = featuredTournament
-    ? Number(featuredTournament?.summary?.liveMatchCount || 0) > 0
-      ? '主視覺先顯示正在推進的賽事，讓訪客一進頁就先看最需要追蹤的對局。'
-      : Number(featuredTournament?.summary?.readyMatchCount || 0) > 0
-        ? '若暫時未有 live 對局，首屏改為提醒即將上場的焦點賽事。'
-        : '若現場已沒有進行中對局，首屏則回落到最近完成的公開賽果。'
+    ? heroContent.summary
     : '集中顯示目前可公開查看的賽事進度、即將上場與最近完成場次。';
   const featuredPreviewRows = featuredTournament
-    ? Number(featuredTournament?.summary?.liveMatchCount || 0) > 0
+    ? featuredBucket === 'live'
       ? (Array.isArray(featuredTournament?.liveMatches) ? featuredTournament.liveMatches.slice(0, 2) : [])
-      : Number(featuredTournament?.summary?.readyMatchCount || 0) > 0
+      : featuredBucket === 'ready'
         ? (Array.isArray(featuredTournament?.readyMatches) ? featuredTournament.readyMatches.slice(0, 2) : [])
         : (Array.isArray(featuredTournament?.recentCompletedMatches) ? featuredTournament.recentCompletedMatches.slice(0, 2) : [])
     : [];
   const featuredParticipantCount = Number(featuredTournament?.summary?.participantCount || 0);
-  const featuredBucket = featuredTournament ? getTournamentBoardBucket(featuredTournament) : 'quiet';
   const activeOverview = boardOverview.find((item) => item.key === activeShelf) || boardOverview[boardOverview.length - 1];
   const featuredMatchesActiveShelf = activeShelf !== 'all' && featuredBucket === activeShelf;
 
@@ -255,7 +276,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                         查看完整賽況
                       </button>
                       <div className="px-3 py-2 rounded cue-surface text-xs cue-muted">
-                        以首屏先看焦點，再往下看其餘賽事
+                        {activeShelf === 'all' ? '以首屏先看焦點，再往下看其餘賽事' : heroContent.hint}
                       </div>
                     </div>
                   </div>
