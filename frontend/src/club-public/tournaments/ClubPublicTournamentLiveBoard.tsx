@@ -2,6 +2,8 @@ import React from 'react';
 import ClubPublicTournamentLiveBoardCard from './ClubPublicTournamentLiveBoardCard';
 import ClubPublicTournamentLiveBoardVisual from './ClubPublicTournamentLiveBoardVisual';
 
+type BoardShelfKey = 'all' | 'live' | 'ready' | 'completed';
+
 type ClubPublicTournamentLiveBoardProps = {
   tournamentLiveBoardLoading: boolean;
   tournamentLiveBoard: any[];
@@ -52,6 +54,8 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   openPublicBoardParticipantPanel,
   renderPublicBoardParticipantActions,
 }) => {
+  const [activeShelf, setActiveShelf] = React.useState<BoardShelfKey>('all');
+  const shelfRefs = React.useRef<Partial<Record<Exclude<BoardShelfKey, 'all'>, HTMLDivElement | null>>>({});
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
     return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
   });
@@ -84,24 +88,31 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
       rows: [...completedTournaments, ...quietTournaments],
     },
   ].filter((section) => section.rows.length > 0);
+  const visibleShelves = activeShelf === 'all'
+    ? remainingShelves
+    : remainingShelves.filter((section) => section.key === activeShelf);
   const boardOverview = [
     {
+      key: 'live',
       label: '進行中賽事',
       value: sortedBoard.filter((row: any) => Number(row?.summary?.liveMatchCount || 0) > 0).length,
       hint: '有 live 對局',
     },
     {
+      key: 'ready',
       label: '即將上場賽事',
       value: sortedBoard.filter((row: any) => Number(row?.summary?.readyMatchCount || 0) > 0).length,
       hint: '可先追下一場',
     },
     {
+      key: 'completed',
       label: '最近有結果',
       value: sortedBoard.filter((row: any) => Number(row?.summary?.completedMatchCount || 0) > 0).length,
       hint: '可直接看結果',
     },
     {
-      label: '公開賽事總數',
+      key: 'all',
+      label: '全部公開賽事',
       value: sortedBoard.length,
       hint: '首頁集中掃讀',
     },
@@ -129,6 +140,17 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         : (Array.isArray(featuredTournament?.recentCompletedMatches) ? featuredTournament.recentCompletedMatches.slice(0, 2) : [])
     : [];
   const featuredParticipantCount = Number(featuredTournament?.summary?.participantCount || 0);
+  const featuredBucket = featuredTournament ? getTournamentBoardBucket(featuredTournament) : 'quiet';
+  const activeOverview = boardOverview.find((item) => item.key === activeShelf) || boardOverview[boardOverview.length - 1];
+  const featuredMatchesActiveShelf = activeShelf !== 'all' && featuredBucket === activeShelf;
+
+  React.useEffect(() => {
+    if (activeShelf === 'all') return;
+    const target = shelfRefs.current[activeShelf];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeShelf]);
 
   return (
     <div className="mt-5 space-y-6">
@@ -152,12 +174,46 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {boardOverview.map((item) => (
-                <div key={item.label} className="rounded-xl border border-white/10 bg-black/10 px-4 py-3">
-                  <div className="text-xs cue-muted">{item.label}</div>
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setActiveShelf(item.key as BoardShelfKey)}
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    activeShelf === item.key
+                      ? 'border-amber-300/40 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.18)]'
+                      : 'border-white/10 bg-black/10 hover:border-white/20 hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-xs cue-muted">{item.label}</div>
+                    <div className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold cue-muted">
+                      {activeShelf === item.key ? '聚焦中' : '點擊查看'}
+                    </div>
+                  </div>
                   <div className="mt-2 text-2xl font-semibold">{item.value}</div>
                   <div className="mt-1 text-[11px] cue-muted">{item.hint}</div>
-                </div>
+                </button>
               ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/10 px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold">{`目前聚焦：${activeOverview?.label || '全部公開賽事'}`}</div>
+                <div className="mt-1 text-xs cue-muted">
+                  {activeShelf === 'all'
+                    ? '顯示全部分區，按照進行中、即將上場、最新完賽的順序掃讀。'
+                    : '已收斂到對應分區；若該類別沒有其他賽事，會提示目前由焦點賽事承接。'}
+                </div>
+              </div>
+              {activeShelf !== 'all' ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveShelf('all')}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold hover:bg-white/10"
+                >
+                  顯示全部分區
+                </button>
+              ) : null}
             </div>
 
             {featuredTournament ? (
@@ -270,9 +326,24 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                   </div>
                   <div className="text-xs cue-muted">{remainingTournaments.length} 場</div>
                 </div>
+                {activeShelf !== 'all' && visibleShelves.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-white/15 bg-black/10 px-4 py-4 text-sm cue-muted">
+                    {featuredMatchesActiveShelf
+                      ? '這個類別目前已由上方焦點賽事承接，其他賽事暫時沒有可展示的卡片。'
+                      : '目前這個類別沒有其他可展示的公開賽事，先切回全部分區查看完整首頁。'}
+                  </div>
+                ) : null}
                 <div className="space-y-4">
-                  {remainingShelves.map((section) => (
-                    <div key={section.key} className="space-y-3">
+                  {visibleShelves.map((section) => (
+                    <div
+                      key={section.key}
+                      ref={(node) => {
+                        shelfRefs.current[section.key as Exclude<BoardShelfKey, 'all'>] = node;
+                      }}
+                      className={`space-y-3 rounded-2xl p-1 ${
+                        activeShelf === section.key ? 'ring-1 ring-amber-300/30' : ''
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="font-semibold">{section.title}</div>
