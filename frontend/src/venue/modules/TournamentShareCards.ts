@@ -613,6 +613,11 @@ function getKnockoutGroupLabel(groupIndex: number) {
   return alphabet[groupIndex] || `${groupIndex + 1}`;
 }
 
+function isAllRoundsFocusLabel(label: string) {
+  const normalized = String(label || '').trim();
+  return normalized === '全部輪次' || normalized === '金銀杯雙線進級表';
+}
+
 function buildKnockoutShareCardPlan({
   focusLabel,
   rounds,
@@ -631,7 +636,7 @@ function buildKnockoutShareCardPlan({
   const normalizedFocusLabel = String(focusLabel || '全部輪次').trim() || '全部輪次';
   const safeSummaryCards = Array.isArray(summaryCards) ? summaryCards.slice(0, 3) : [];
 
-  if (normalizedFocusLabel !== '全部輪次') {
+  if (!isAllRoundsFocusLabel(normalizedFocusLabel)) {
     const focusedRounds = safeRounds.filter((round) => round.label === normalizedFocusLabel);
     return [{
       fileLabel: 'focus',
@@ -644,7 +649,7 @@ function buildKnockoutShareCardPlan({
   if (!isLargeKnockoutShareCard(safeRounds)) {
     return [{
       fileLabel: 'full',
-      focusLabel: normalizedFocusLabel,
+      focusLabel: '全部輪次',
       rounds: safeRounds,
       summaryCards: safeSummaryCards,
     }];
