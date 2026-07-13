@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
 
 type ClubPublicTournamentOverviewSectionProps = {
   openedTournament: any;
@@ -19,13 +20,44 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
   formatTournamentWorkflowLabel,
   formatTournamentParticipantLabel,
 }) => {
+  const podiumSummary = buildTournamentPodiumSummary(openedTournamentParticipants, openedTournamentMatches);
   const thirdPlace = openedTournamentFormat === 'KNOCKOUT'
-    ? openedTournamentParticipants.find((row: any) => Number(row?.final_rank || 0) === 3) || null
+    ? podiumSummary.thirdPlace
     : null;
   const fourthPlace = openedTournamentFormat === 'KNOCKOUT'
-    ? openedTournamentParticipants.find((row: any) => Number(row?.final_rank || 0) === 4) || null
+    ? podiumSummary.fourthPlace
     : null;
   const hasThirdPlaceMatchResult = !!thirdPlace || !!fourthPlace;
+  const renderPodiumBlock = (title: string, block: any) => {
+    const hasThirdPlaceResult = !!block?.thirdPlace || !!block?.fourthPlace;
+    const semiFinalists = Array.isArray(block?.semiFinalists) ? block.semiFinalists : [];
+    if (!block?.champion && !block?.runnerUp && !hasThirdPlaceResult && semiFinalists.length <= 0) return null;
+    return (
+      <div className="cue-surface-strong rounded-lg p-4">
+        <div className="text-sm cue-muted">{title}</div>
+        <div className="grid gap-3 mt-3 md:grid-cols-3">
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">冠軍</div>
+            <div className="font-semibold mt-1">{block?.champion ? formatTournamentParticipantLabel(block.champion) : '-'}</div>
+          </div>
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">亞軍</div>
+            <div className="font-semibold mt-1">{block?.runnerUp ? formatTournamentParticipantLabel(block.runnerUp) : '-'}</div>
+          </div>
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">{hasThirdPlaceResult ? '季軍 / 殿軍' : '四強'}</div>
+            <div className="font-semibold mt-1">
+              {hasThirdPlaceResult
+                ? `${block?.thirdPlace ? formatTournamentParticipantLabel(block.thirdPlace) : '-'} / ${block?.fourthPlace ? formatTournamentParticipantLabel(block.fourthPlace) : '-'}`
+                : (semiFinalists.length > 0
+                    ? semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
+                    : '-')}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -87,15 +119,20 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
         </div>
       </div>
 
-      {!!openedTournament?.podium && (openedTournament.podium?.champion || openedTournament.podium?.runnerUp || (Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0) || thirdPlace || fourthPlace) ? (
+      {podiumSummary?.isGoldSilverCup ? (
+        <div className="grid gap-3">
+          {renderPodiumBlock('金杯三甲', podiumSummary.goldCup)}
+          {renderPodiumBlock('銀杯三甲', podiumSummary.silverCup)}
+        </div>
+      ) : ((podiumSummary.champion || podiumSummary.runnerUp || podiumSummary.semiFinalists.length > 0 || thirdPlace || fourthPlace) ? (
         <div className="grid gap-3 md:grid-cols-3">
           <div className="cue-surface-strong rounded-lg p-4">
             <div className="text-sm cue-muted">冠軍</div>
-            <div className="font-semibold mt-1">{openedTournament.podium?.champion ? formatTournamentParticipantLabel(openedTournament.podium.champion) : '-'}</div>
+            <div className="font-semibold mt-1">{podiumSummary.champion ? formatTournamentParticipantLabel(podiumSummary.champion) : '-'}</div>
           </div>
           <div className="cue-surface-strong rounded-lg p-4">
             <div className="text-sm cue-muted">亞軍</div>
-            <div className="font-semibold mt-1">{openedTournament.podium?.runnerUp ? formatTournamentParticipantLabel(openedTournament.podium.runnerUp) : '-'}</div>
+            <div className="font-semibold mt-1">{podiumSummary.runnerUp ? formatTournamentParticipantLabel(podiumSummary.runnerUp) : '-'}</div>
           </div>
           <div className="cue-surface-strong rounded-lg p-4">
             <div className="text-sm cue-muted">{hasThirdPlaceMatchResult ? '季軍 / 殿軍' : '四強'}</div>
@@ -107,14 +144,14 @@ const ClubPublicTournamentOverviewSection: React.FC<ClubPublicTournamentOverview
               </div>
             ) : (
               <div className="font-semibold mt-1">
-                {Array.isArray(openedTournament.podium?.semiFinalists) && openedTournament.podium.semiFinalists.length > 0
-                  ? openedTournament.podium.semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
+                {podiumSummary.semiFinalists.length > 0
+                  ? podiumSummary.semiFinalists.map((row: any) => formatTournamentParticipantLabel(row)).join(' / ')
                   : '-'}
               </div>
             )}
           </div>
         </div>
-      ) : null}
+      ) : null)}
     </>
   );
 };

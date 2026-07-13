@@ -675,7 +675,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   const handleGenerateKnockoutSchedule = async () => {
     const modeLabel = isGoldSilverCup ? '金銀杯' : '淘汰賽';
     if (!confirm(
-      `確定按目前正式名單生成${modeLabel}賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n${isGoldSilverCup ? '- 注意：Batch 1 先沿用淘汰賽單 bracket 骨架；金杯敗者掉入銀杯會在 Batch 2 補上\n' : ''}- 生成後如需改 seed 排列，應先重建賽程`
+      `確定按目前正式名單生成${modeLabel}賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n${isGoldSilverCup ? '- 注意：金銀杯將按目前 seed 建立金杯 / 銀杯雙 bracket，非 2^n 人數會自動處理 bye\n' : ''}- 生成後如需改 seed 排列，應先重建賽程`
     )) return;
     try {
       const result = await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
@@ -689,7 +689,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       if (preferredMatch) {
         showWorkflowFocusNotice(`已自動跳到${modeLabel}的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游籤表。`, 5200);
       }
-      showNotice(`已生成${modeLabel}賽程：${knockoutBracketEstimate.bracketSize || '-'} 強籤表，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個輪空。${isGoldSilverCup ? ' 目前仍為 Batch 1 骨架，銀杯掉落路由將在下一批補上。' : ''}${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 4200);
+      showNotice(`已生成${modeLabel}賽程：${knockoutBracketEstimate.bracketSize || '-'} 強籤表，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個輪空。${isGoldSilverCup ? ' 金銀杯已按雙 bracket 規則建立，金杯敗者會依路由掉入銀杯。' : ''}${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 4200);
     } catch (e: any) {
       showNotice(e?.message || `生成${modeLabel}賽程失敗`, 3000);
     }
@@ -911,7 +911,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           {format === 'LEAGUE'
             ? `目前建立為 ${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，生成賽程時會按此模式建立 round-robin fixtures。`
             : format === 'GOLD_SILVER_CUP'
-              ? `目前建立為金銀杯模式；Batch 1 先接入 format 與工作台骨架，Batch 2 才會落實金杯敗者掉入銀杯的雙 bracket 路由。現階段先沿用淘汰賽 seed 流程。`
+              ? '目前建立為金銀杯模式；系統會按 seed 建立金杯 / 銀杯雙 bracket，並在非 2^n 人數下自動處理 bye 與掉落路由。'
               : `目前建立為 Knockout，正式名單生成後可按 ${formatSeedModeLabel(seedMode)} 建立籤表。`}
         </div>
         <div className="md:col-span-2">
@@ -1319,9 +1319,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
 
           {isGoldSilverCup ? (
             <div className="mb-4 rounded-lg border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              <div className="font-semibold mb-1">金銀杯模式目前處於 Batch 1</div>
+              <div className="font-semibold mb-1">金銀杯模式已進入雙 bracket 階段</div>
               <div>
-                本批已接入 format、建賽、工作台識別與基本籤表骨架；金杯敗者掉入銀杯、雙 bracket 與金 / 銀杯三甲結算會在下一個 batch 落實。
+                目前已支援金杯敗者掉入銀杯、非 2^n 人數 bye、後台雙分區工作台，以及金 / 銀杯 podium 顯示；下一步會整理公開頁與海報展示。
               </div>
             </div>
           ) : null}

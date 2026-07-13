@@ -12,6 +12,9 @@ type VenueTournamentKnockoutWorkspaceOverviewProps = {
     thirdPlace: any;
     fourthPlace: any;
     semiFinalists: any[];
+    isGoldSilverCup?: boolean;
+    goldCup?: any;
+    silverCup?: any;
   };
   tournamentFormat: any;
   workflowStatus: string;
@@ -28,6 +31,36 @@ const VenueTournamentKnockoutWorkspaceOverview: React.FC<VenueTournamentKnockout
   workflowStatus,
 }) => {
   const hasThirdPlaceMatchResult = !!podiumSummary.thirdPlace || !!podiumSummary.fourthPlace;
+  const renderPodiumBlock = (title: string, block: any) => {
+    const hasThirdPlaceResult = !!block?.thirdPlace || !!block?.fourthPlace;
+    const semiFinalists = Array.isArray(block?.semiFinalists) ? block.semiFinalists : [];
+    if (!block?.champion && !block?.runnerUp && !hasThirdPlaceResult && semiFinalists.length <= 0) return null;
+    return (
+      <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+        <div className="text-sm font-semibold mb-3">{title}</div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">冠軍</div>
+            <div className="font-semibold mt-1">{block?.champion ? formatParticipantLabel(block.champion) : '-'}</div>
+          </div>
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">亞軍</div>
+            <div className="font-semibold mt-1">{block?.runnerUp ? formatParticipantLabel(block.runnerUp) : '-'}</div>
+          </div>
+          <div className="cue-surface rounded-lg p-3">
+            <div className="text-xs cue-muted">{hasThirdPlaceResult ? '季軍 / 殿軍' : '四強'}</div>
+            <div className="font-semibold mt-1">
+              {hasThirdPlaceResult
+                ? `${block?.thirdPlace ? formatParticipantLabel(block.thirdPlace) : '-'} / ${block?.fourthPlace ? formatParticipantLabel(block.fourthPlace) : '-'}`
+                : (semiFinalists.length > 0
+                    ? semiFinalists.map((row: any) => formatParticipantLabel(row)).join(' / ')
+                    : '-')}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -55,7 +88,12 @@ const VenueTournamentKnockoutWorkspaceOverview: React.FC<VenueTournamentKnockout
           </div>
         </div>
       </div>
-      {(podiumSummary.champion || podiumSummary.runnerUp || podiumSummary.semiFinalists.length > 0 || podiumSummary.thirdPlace || podiumSummary.fourthPlace) ? (
+      {podiumSummary?.isGoldSilverCup ? (
+        <div className="grid gap-3 mb-4">
+          {renderPodiumBlock('金杯三甲', podiumSummary.goldCup)}
+          {renderPodiumBlock('銀杯三甲', podiumSummary.silverCup)}
+        </div>
+      ) : ((podiumSummary.champion || podiumSummary.runnerUp || podiumSummary.semiFinalists.length > 0 || podiumSummary.thirdPlace || podiumSummary.fourthPlace) ? (
         <div className="grid gap-3 md:grid-cols-3 mb-4">
           <div className="cue-surface rounded-lg p-3">
             <div className="text-xs cue-muted">冠軍</div>
@@ -76,7 +114,7 @@ const VenueTournamentKnockoutWorkspaceOverview: React.FC<VenueTournamentKnockout
             </div>
           </div>
         </div>
-      ) : null}
+      ) : null)}
       <div className="text-xs cue-muted mb-4">{note}</div>
     </>
   );

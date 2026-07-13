@@ -1982,3 +1982,21 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - 驗證：
   - `frontend npm run build` 通過
   - `backend npm run build` 通過
+
+### Batch 2.3 進度（2026-07-13）
+
+- 已加入前端共用 podium helper：
+  - `frontend/src/lib/tournamentPodium.ts`
+  - 可統一推導一般淘汰賽與金銀杯的 podium 結構
+- 金銀杯 podium 顯示已可同時輸出：
+  - `金杯三甲`
+  - `銀杯三甲`
+- 後台工作台 overview 已接入新 podium 規則：
+  - 金銀杯不再只顯示單一 `final_rank`
+  - 改為分開展示金杯 / 銀杯 podium 區塊
+- 公開賽事詳情 overview 已接入同一套 podium 推導：
+  - 讓公開頁可直接看到金杯三甲與銀杯三甲
+- 同步清理金銀杯工作台中仍殘留的 Batch 1 提示文案
+- 驗證：
+  - `frontend npm run build` 通過
+  - `backend npm run build` 通過

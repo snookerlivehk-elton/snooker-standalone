@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
 
 const BRACKET_CARD_HEIGHT = 156;
 const BRACKET_BASE_GAP = 18;
@@ -188,15 +189,8 @@ export function useTournamentStageViewData(participantsRows: any[], matchesRows:
   }, [matchesRows]);
 
   const podiumSummary = useMemo(() => {
-    const champion = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 1) || null;
-    const runnerUp = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 2) || null;
-    const thirdPlace = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 3) || null;
-    const fourthPlace = participantsRows.find((row: any) => Number(row?.final_rank || 0) === 4) || null;
-    const semiFinalists = participantsRows
-      .filter((row: any) => Number(row?.final_rank || 0) === 3)
-      .sort((a: any, b: any) => Number(a?.seed || 0) - Number(b?.seed || 0));
-    return { champion, runnerUp, thirdPlace, fourthPlace, semiFinalists };
-  }, [participantsRows]);
+    return buildTournamentPodiumSummary(participantsRows, matchesRows);
+  }, [matchesRows, participantsRows]);
 
   return {
     bracketColumns,
