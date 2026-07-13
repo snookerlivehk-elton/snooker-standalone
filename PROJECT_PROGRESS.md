@@ -2000,3 +2000,23 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - 驗證：
   - `frontend npm run build` 通過
   - `backend npm run build` 通過
+
+### Batch 2.4 進度（2026-07-13）
+
+- 已補齊公開頁對金銀杯的輪次與進級表顯示：
+  - `frontend/src/ClubPublicPage.tsx` 改為直接共用 `formatKnockoutRoundLabel`
+  - 公開頁不再沿用只支援一般淘汰賽的舊 round label 規則
+- 已補齊公開賽況海報對金銀杯的版型判斷：
+  - 金銀杯海報預覽改與淘汰賽同樣使用橫向比例
+  - Hero 與卡片文案已可顯示 `GOLD / SILVER CUP POSTER`
+- 已補齊公開頁海報 helper 對金銀杯的摘要卡：
+  - 金銀杯海報改用 `金杯冠軍 / 金杯季軍 / 銀杯冠軍` 摘要
+  - focus label 改為 `金銀杯雙線進級表`
+- 已補齊公開賽事詳情中的雙 bracket 展示：
+  - `ClubPublicTournamentStageSection.tsx` 現可拆分顯示：
+    - `金杯進級表`
+    - `銀杯進級表`
+    - `金杯季軍戰`
+    - `銀杯季軍戰`
+- 驗證：
+  - `frontend npm run build` 通過

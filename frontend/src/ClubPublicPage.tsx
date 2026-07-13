@@ -31,6 +31,7 @@ import { readMemberSession, type MemberSession } from './lib/auth';
 import Tabs from './components/Tabs';
 import ClubPublicTournamentPanels from './club-public/ClubPublicTournamentPanels';
 import { useFeatureEnabled, useModuleVisible } from './lib/features';
+import { buildKnockoutBracketColumns, formatKnockoutRoundLabel } from './venue/modules/useTournamentStageViewData';
 
 function normalizeVideoHref(raw: any): string | null {
   const s = String(raw || '').trim();
@@ -203,28 +204,8 @@ function buildPublicTournamentBreakSummary(match: any) {
   };
 }
 
-function nextPowerOfTwo(n: number) {
-  let p = 1;
-  while (p < n) p *= 2;
-  return p;
-}
-
 function formatPublicKnockoutRoundLabel(match: any, participantCount: number) {
-  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
-  if (stageCode === 'KNOCKOUT_THIRD_PLACE') return '季軍戰';
-  const roundNo = Number(match?.round_no || 0);
-  if (roundNo <= 0) return '-';
-  const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
-  const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
-  if (hasPreliminaryRound && roundNo === 1) return '預賽';
-  const roundOffset = hasPreliminaryRound ? 1 : 0;
-  const adjustedRound = roundNo - roundOffset;
-  const totalMainRounds = Math.log2(bracketSize);
-  if (adjustedRound === totalMainRounds) return '決賽';
-  if (adjustedRound === totalMainRounds - 1) return '四強';
-  if (adjustedRound === totalMainRounds - 2) return '八強';
-  if (adjustedRound === totalMainRounds - 3) return '16 強';
-  return `第 ${roundNo} 輪`;
+  return formatKnockoutRoundLabel(match, participantCount);
 }
 
 function getPublicBracketColumnPaddingTop(roundIndex: number) {
@@ -1254,58 +1235,16 @@ const ClubPublicPage: React.FC = () => {
         items: [...items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0)),
       }));
   }, [openedTournamentMatches]);
-  const openedTournamentBracketColumns = useMemo(() => {
-    const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
-    for (const row of openedTournamentMatches.filter((candidate: any) => String(candidate?.stage_code || '').trim().toUpperCase() !== 'KNOCKOUT_THIRD_PLACE')) {
-      const key = formatPublicKnockoutRoundLabel(row, openedTournamentParticipants.length);
-      const roundNo = Number(row?.round_no || 0);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.items.push(row);
-        existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
-      } else {
-        grouped.set(key, { roundNo, items: [row] });
-      }
-    }
-    return Array.from(grouped.entries())
-      .sort((a, b) => a[1].roundNo - b[1].roundNo)
-      .map(([label, group], roundIndex, allColumns) => {
-        const sortedItems = [...group.items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
-        const paddingTop = getPublicBracketColumnPaddingTop(roundIndex);
-        const gap = getPublicBracketColumnGap(roundIndex);
-        const cardCenters = sortedItems.map((_: any, itemIndex: number) => (
-          paddingTop + itemIndex * (PUBLIC_BRACKET_CARD_HEIGHT + gap) + PUBLIC_BRACKET_CARD_HEIGHT / 2
-        ));
-        const connectors = roundIndex < allColumns.length - 1
-          ? Array.from({ length: Math.floor(sortedItems.length / 2) }, (_unused, pairIndex) => {
-              const topCenter = cardCenters[pairIndex * 2];
-              const bottomCenter = cardCenters[pairIndex * 2 + 1];
-              if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
-              return {
-                top: topCenter,
-                height: Math.max(0, bottomCenter - topCenter),
-              };
-            }).filter(Boolean)
-          : [];
-        return {
-          label,
-          roundIndex,
-          isFinal: roundIndex === allColumns.length - 1,
-          items: sortedItems,
-          paddingTop,
-          gap,
-          columnHeight: Math.max(
-            getPublicBracketColumnHeight(openedTournamentMatches.length),
-            paddingTop + (sortedItems.length * PUBLIC_BRACKET_CARD_HEIGHT) + Math.max(0, sortedItems.length - 1) * gap,
-          ),
-          connectors,
-        };
-      });
-  }, [openedTournamentMatches, openedTournamentParticipants.length]);
-  const openedTournamentThirdPlaceMatch = useMemo(
-    () => openedTournamentMatches.find((row: any) => String(row?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') || null,
-    [openedTournamentMatches],
+  const openedTournamentBracketColumns = useMemo(
+    () => buildKnockoutBracketColumns(openedTournamentMatches, openedTournamentParticipants.length),
+    [openedTournamentMatches, openedTournamentParticipants.length],
   );
+  const openedTournamentThirdPlaceMatch = useMemo(() => {
+    const preferredStageCodes = openedTournamentFormat === 'GOLD_SILVER_CUP'
+      ? ['GOLD_THIRD_PLACE', 'SILVER_THIRD_PLACE']
+      : ['KNOCKOUT_THIRD_PLACE'];
+    return openedTournamentMatches.find((row: any) => preferredStageCodes.includes(String(row?.stage_code || '').trim().toUpperCase())) || null;
+  }, [openedTournamentFormat, openedTournamentMatches]);
 
   const openedTournamentParticipantSearchRows = useMemo(() => {
     const standingMap = new Map<string, any>(

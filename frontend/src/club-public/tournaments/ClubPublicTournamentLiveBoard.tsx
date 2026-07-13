@@ -77,6 +77,17 @@ function getHeroContent(bucket: string) {
   };
 }
 
+function isLandscapePosterFormat(format: any, normalizeTournamentFormat: (value: any) => any) {
+  return normalizeTournamentFormat(format) !== 'LEAGUE';
+}
+
+function getPosterModeLabel(format: any, normalizeTournamentFormat: (value: any) => any) {
+  const normalizedFormat = normalizeTournamentFormat(format);
+  if (normalizedFormat === 'LEAGUE') return 'LEAGUE MODE POSTER';
+  if (normalizedFormat === 'GOLD_SILVER_CUP') return 'GOLD / SILVER CUP POSTER';
+  return 'KNOCKOUT MODE POSTER';
+}
+
 const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps> = ({
   API_URL,
   clubId,
@@ -115,7 +126,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
     ? heroContent.summary
     : '集中顯示目前可公開查看的賽事進度、即將上場與最近完成場次。';
   const featuredUpdatedAtLabel = getTournamentBoardUpdatedAtLabel(featuredTournament);
-  const featuredPosterIsLandscape = normalizeTournamentFormat(featuredTournament?.format) === 'KNOCKOUT';
+  const featuredPosterIsLandscape = isLandscapePosterFormat(featuredTournament?.format, normalizeTournamentFormat);
   const featuredPosterFrameClassName = featuredPosterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
 
   React.useEffect(() => {
@@ -194,7 +205,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                 <div className="space-y-4">
                   <div>
                     <div className="text-xs font-extrabold accent-yellow tracking-wide">
-                      {normalizeTournamentFormat(featuredTournament?.format) === 'LEAGUE' ? 'LEAGUE MODE POSTER' : 'KNOCKOUT MODE POSTER'}
+                        {getPosterModeLabel(featuredTournament?.format, normalizeTournamentFormat)}
                     </div>
                     <div className="font-semibold text-2xl mt-2 leading-tight">{String(featuredTournament?.title || '比賽')}</div>
                     <div className="text-sm cue-muted mt-2">{heroSummary}</div>

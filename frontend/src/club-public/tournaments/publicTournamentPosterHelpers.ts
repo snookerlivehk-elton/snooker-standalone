@@ -3,6 +3,7 @@ import {
   buildLeagueStandingsShareCardDataUrl,
 } from '../../venue/modules/TournamentShareCards';
 import { formatKnockoutRoundLabel } from '../../venue/modules/useTournamentStageViewData';
+import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
 
 export function buildLeaguePosterRows(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
   const standings = Array.isArray(detail?.standings) ? detail.standings : [];
@@ -96,6 +97,31 @@ export function buildKnockoutPosterSummaryCards(detail: any, formatTournamentPar
   ];
 }
 
+function buildGoldSilverCupPosterSummaryCards(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
+  const participants = Array.isArray(detail?.participants) ? detail.participants : [];
+  const matches = Array.isArray(detail?.matches) ? detail.matches : [];
+  const podiumSummary = buildTournamentPodiumSummary(participants, matches);
+  const goldCup = podiumSummary?.goldCup;
+  const silverCup = podiumSummary?.silverCup;
+  return [
+    {
+      label: '金杯冠軍',
+      value: formatTournamentParticipantLabel(goldCup?.champion),
+      detail: goldCup?.runnerUp ? `亞軍 ${formatTournamentParticipantLabel(goldCup.runnerUp)}` : '亞軍待定',
+    },
+    {
+      label: '金杯季軍',
+      value: formatTournamentParticipantLabel(goldCup?.thirdPlace),
+      detail: goldCup?.fourthPlace ? `殿軍 ${formatTournamentParticipantLabel(goldCup.fourthPlace)}` : '殿軍待定',
+    },
+    {
+      label: '銀杯冠軍',
+      value: formatTournamentParticipantLabel(silverCup?.champion),
+      detail: silverCup?.runnerUp ? `亞軍 ${formatTournamentParticipantLabel(silverCup.runnerUp)}` : '亞軍待定',
+    },
+  ];
+}
+
 export async function buildPublicTournamentPosterDataUrl(options: {
   detail: any;
   formatTournamentParticipantLabel: (participant: any) => string;
@@ -120,7 +146,9 @@ export async function buildPublicTournamentPosterDataUrl(options: {
     || detail?.clubLogoUrl
     || '',
   ).trim();
-  const isLeague = String(detail?.format || '').trim().toUpperCase() === 'LEAGUE';
+  const normalizedFormat = String(detail?.format || '').trim().toUpperCase();
+  const isLeague = normalizedFormat === 'LEAGUE';
+  const isGoldSilverCup = normalizedFormat === 'GOLD_SILVER_CUP';
   if (isLeague) {
     const rows = buildLeaguePosterRows(detail, formatTournamentParticipantLabel);
     if (rows.length <= 0) return '';
@@ -140,11 +168,13 @@ export async function buildPublicTournamentPosterDataUrl(options: {
   );
   if (rounds.length <= 0) return '';
   return buildKnockoutBracketShareCardDataUrl({
-    title: String(detail?.title || '淘汰賽模式進級表'),
+    title: String(detail?.title || (isGoldSilverCup ? '金銀杯模式進級表' : '淘汰賽模式進級表')),
     venueName,
     venueLogoUrl,
-    focusLabel: '全部輪次',
+    focusLabel: isGoldSilverCup ? '金銀杯雙線進級表' : '全部輪次',
     rounds,
-    summaryCards: buildKnockoutPosterSummaryCards(detail, formatTournamentParticipantLabel),
+    summaryCards: isGoldSilverCup
+      ? buildGoldSilverCupPosterSummaryCards(detail, formatTournamentParticipantLabel)
+      : buildKnockoutPosterSummaryCards(detail, formatTournamentParticipantLabel),
   });
 }

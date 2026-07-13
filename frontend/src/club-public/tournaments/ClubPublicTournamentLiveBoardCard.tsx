@@ -43,6 +43,17 @@ function getTournamentCardUpdatedAtLabel(tournament: any) {
   return new Date(times[0]).toLocaleString();
 }
 
+function isLandscapePosterFormat(format: any, normalizeTournamentFormat: (value: any) => any) {
+  return normalizeTournamentFormat(format) !== 'LEAGUE';
+}
+
+function getPosterModeLabel(format: any, normalizeTournamentFormat: (value: any) => any) {
+  const normalizedFormat = normalizeTournamentFormat(format);
+  if (normalizedFormat === 'LEAGUE') return 'LEAGUE MODE POSTER';
+  if (normalizedFormat === 'GOLD_SILVER_CUP') return 'GOLD / SILVER CUP POSTER';
+  return 'KNOCKOUT MODE POSTER';
+}
+
 const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardCardProps> = ({
   API_URL,
   clubId,
@@ -84,7 +95,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
   const updatedAtLabel = getTournamentCardUpdatedAtLabel(tournament);
   const [detailLoading, setDetailLoading] = React.useState(false);
   const [posterUrl, setPosterUrl] = React.useState('');
-  const posterIsLandscape = normalizeTournamentFormat(tournament?.format) === 'KNOCKOUT';
+  const posterIsLandscape = isLandscapePosterFormat(tournament?.format, normalizeTournamentFormat);
   const posterFrameClassName = posterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
 
   React.useEffect(() => {
@@ -139,7 +150,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-extrabold accent-yellow tracking-wide">
-              {normalizeTournamentFormat(tournament?.format) === 'LEAGUE' ? 'LEAGUE MODE POSTER' : 'KNOCKOUT MODE POSTER'}
+                {getPosterModeLabel(tournament?.format, normalizeTournamentFormat)}
             </div>
             <div className="mt-3 font-semibold text-lg leading-tight">{String(tournament?.title || '比賽')}</div>
             <div className="mt-2 flex flex-wrap gap-2">
