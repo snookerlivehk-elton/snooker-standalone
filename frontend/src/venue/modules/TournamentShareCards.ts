@@ -83,6 +83,12 @@ type PlannedKnockoutShareCard = {
   summaryCards: KnockoutShareSummaryCard[];
 };
 
+export type KnockoutShareCardPreviewItem = {
+  fileLabel?: string;
+  focusLabel: string;
+  imageUrl: string;
+};
+
 function safeFilePart(raw: any) {
   const s = String(raw || '').trim();
   return s.replace(/[^\w\-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'share-card';
@@ -1284,15 +1290,24 @@ async function renderKnockoutBracketShareCardCanvas({
 }
 
 export function buildKnockoutBracketShareCardDataUrl(args: DownloadKnockoutBracketShareCardArgs) {
+  return buildKnockoutBracketShareCardPreviewItems(args).then((items) => items[items.length - 1]?.imageUrl || '');
+}
+
+export function buildKnockoutBracketShareCardPreviewItems(args: DownloadKnockoutBracketShareCardArgs): Promise<KnockoutShareCardPreviewItem[]> {
   const variants = buildKnockoutShareCardPlan(args);
-  const preferredVariant = variants[variants.length - 1];
-  if (!preferredVariant) return Promise.resolve('');
-  return renderKnockoutBracketShareCardCanvas({
-    ...args,
-    focusLabel: preferredVariant.focusLabel,
-    rounds: preferredVariant.rounds,
-    summaryCards: preferredVariant.summaryCards,
-  }, PREVIEW_PIXEL_RATIO).then((canvas) => canvas.toDataURL('image/png'));
+  if (variants.length <= 0) return Promise.resolve([]);
+  return Promise.all(variants.map((variant) => (
+    renderKnockoutBracketShareCardCanvas({
+      ...args,
+      focusLabel: variant.focusLabel,
+      rounds: variant.rounds,
+      summaryCards: variant.summaryCards,
+    }, PREVIEW_PIXEL_RATIO).then((canvas) => ({
+      fileLabel: variant.fileLabel,
+      focusLabel: variant.focusLabel,
+      imageUrl: canvas.toDataURL('image/png'),
+    }))
+  )));
 }
 
 export function downloadKnockoutBracketShareCard(args: DownloadKnockoutBracketShareCardArgs) {

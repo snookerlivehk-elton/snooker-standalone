@@ -1,7 +1,7 @@
 import React from 'react';
 import ClubPublicTournamentLiveBoardCard from './ClubPublicTournamentLiveBoardCard';
-import ClubPublicTournamentPosterLightbox from './ClubPublicTournamentPosterLightbox';
-import { buildPublicTournamentPosterDataUrl } from './publicTournamentPosterHelpers';
+import TournamentPosterLightbox, { type TournamentPosterLightboxItem } from '../../components/TournamentPosterLightbox';
+import { buildPublicTournamentPosterPreviewItems } from './publicTournamentPosterHelpers';
 
 type ClubPublicTournamentLiveBoardProps = {
   API_URL: string;
@@ -112,8 +112,8 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
 }) => {
   const [featuredTournamentDetail, setFeaturedTournamentDetail] = React.useState<any | null>(null);
   const [featuredTournamentDetailLoading, setFeaturedTournamentDetailLoading] = React.useState(false);
-  const [featuredPosterUrl, setFeaturedPosterUrl] = React.useState('');
-  const [posterPreview, setPosterPreview] = React.useState<{ imageUrl: string; title: string } | null>(null);
+  const [featuredPosterItems, setFeaturedPosterItems] = React.useState<TournamentPosterLightboxItem[]>([]);
+  const [posterPreview, setPosterPreview] = React.useState<{ posters: TournamentPosterLightboxItem[]; initialIndex?: number } | null>(null);
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
     return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
   });
@@ -128,12 +128,13 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const featuredUpdatedAtLabel = getTournamentBoardUpdatedAtLabel(featuredTournament);
   const featuredPosterIsLandscape = isLandscapePosterFormat(featuredTournament?.format, normalizeTournamentFormat);
   const featuredPosterFrameClassName = featuredPosterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
+  const featuredPosterUrl = featuredPosterItems[0]?.imageUrl || '';
 
   React.useEffect(() => {
     let cancelled = false;
     if (!clubId || !featuredTournament?.id) {
       setFeaturedTournamentDetail(null);
-      setFeaturedPosterUrl('');
+      setFeaturedPosterItems([]);
       return;
     }
     setFeaturedTournamentDetailLoading(true);
@@ -157,19 +158,19 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   React.useEffect(() => {
     let cancelled = false;
     if (!featuredTournamentDetail) {
-      setFeaturedPosterUrl('');
+      setFeaturedPosterItems([]);
       return undefined;
     }
-    buildPublicTournamentPosterDataUrl({
+    buildPublicTournamentPosterPreviewItems({
         detail: featuredTournamentDetail,
         formatTournamentParticipantLabel,
         formatTournamentMatchStatusLabel,
       })
-      .then((url) => {
-        if (!cancelled) setFeaturedPosterUrl(url);
+      .then((items) => {
+        if (!cancelled) setFeaturedPosterItems(items);
       })
       .catch(() => {
-        if (!cancelled) setFeaturedPosterUrl('');
+        if (!cancelled) setFeaturedPosterItems([]);
       });
     return () => {
       cancelled = true;
@@ -223,16 +224,21 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                       <button
                         type="button"
                         onClick={() => setPosterPreview({
-                          imageUrl: featuredPosterUrl,
-                          title: `${String(featuredTournament?.title || '比賽')} 海報`,
+                          posters: featuredPosterItems,
+                          initialIndex: 0,
                         })}
-                        className={`flex w-full ${featuredPosterFrameClassName} items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-black/20 transition hover:border-white/20`}
+                        className={`relative flex w-full ${featuredPosterFrameClassName} items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-black/20 transition hover:border-white/20`}
                       >
                         <img
                           src={featuredPosterUrl}
                           alt={`${String(featuredTournament?.title || '比賽')} 海報`}
                           className="h-full w-full object-contain"
                         />
+                        {featuredPosterItems.length > 1 ? (
+                          <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/65 px-3 py-1 text-[11px] font-semibold text-white">
+                            共 {featuredPosterItems.length} 張
+                          </div>
+                        ) : null}
                       </button>
                     </div>
                   ) : (
@@ -245,7 +251,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
 
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="px-3 py-2 rounded cue-surface text-xs cue-muted">
-                      這裡直接顯示與後台分享卡相同的海報結果
+                      {featuredPosterItems.length > 1 ? `這裡可直接查看整組 ${featuredPosterItems.length} 張分組海報` : '這裡直接顯示與後台分享卡相同的海報結果'}
                     </div>
                     <button
                       type="button"
@@ -304,10 +310,10 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
         )}
       </div>
 
-      <ClubPublicTournamentPosterLightbox
+      <TournamentPosterLightbox
         open={!!posterPreview}
-        imageUrl={posterPreview?.imageUrl || ''}
-        title={posterPreview?.title || '海報預覽'}
+        posters={posterPreview?.posters || []}
+        initialIndex={posterPreview?.initialIndex || 0}
         onClose={() => setPosterPreview(null)}
       />
     </div>

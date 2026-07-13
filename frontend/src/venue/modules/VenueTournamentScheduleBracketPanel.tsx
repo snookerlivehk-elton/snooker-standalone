@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import TournamentPosterLightbox, { type TournamentPosterLightboxItem } from '../../components/TournamentPosterLightbox';
 import { formatKnockoutRoundLabel, formatLeagueRoundLabel } from './useTournamentStageViewData';
 import { buildKnockoutBracketPrintHtml } from './KnockoutBracketPrint';
 import { buildLeagueSchedulePrintHtml } from './LeagueSchedulePrint';
-import { downloadKnockoutBracketShareCard } from './TournamentShareCards';
+import { buildKnockoutBracketShareCardPreviewItems, downloadKnockoutBracketShareCard } from './TournamentShareCards';
 import LeagueSchedulePanel from './VenueTournamentLeagueSchedulePanel';
 import KnockoutBracketPanel from './VenueTournamentKnockoutBracketPanel';
 import VenueTournamentMatchesFilters, { type MatchQuickFilterKey, type MatchStatusFilterKey } from './VenueTournamentMatchesFilters';
@@ -59,6 +60,10 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
   const [quickFilter, setQuickFilter] = useState<'ALL' | 'SCORABLE' | 'UNFINISHED'>('ALL');
   const [focusedRoundLabel, setFocusedRoundLabel] = useState<string>('ALL');
+  const [shareCardPreviewItems, setShareCardPreviewItems] = useState<TournamentPosterLightboxItem[]>([]);
+  const [shareCardPreviewLoading, setShareCardPreviewLoading] = useState(false);
+  const [shareCardPreviewIndex, setShareCardPreviewIndex] = useState(0);
+  const [shareCardPreviewOpen, setShareCardPreviewOpen] = useState(false);
 
   const formatMatchStatusLabel = (value: any) => {
     const normalized = String(value || '').trim().toUpperCase();
@@ -272,6 +277,115 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     { key: 'UNFINISHED', label: '只看未完成' },
   ];
 
+  const knockoutShareSummaryCards = useMemo(() => {
+    if (isLeague) return [];
+    const highestBreakCandidate = filteredMatchesRows.reduce((best: any, row: any) => {
+      const aBreak = Number(row?.player_a_max_break || 0);
+      const bBreak = Number(row?.player_b_max_break || 0);
+      const next = aBreak >= bBreak
+        ? {
+            breakValue: aBreak,
+            playerLabel: formatParticipantLabel(row?.player_a_participant),
+          }
+        : {
+            breakValue: bBreak,
+            playerLabel: formatParticipantLabel(row?.player_b_participant),
+          };
+      return Number(next.breakValue || 0) > Number(best?.breakValue || 0) ? next : best;
+    }, null);
+    const highestScoringMatch = filteredMatchesRows.reduce((best: any, row: any) => {
+      const totalFrames = Number(row?.player_a_frames_won || 0) + Number(row?.player_b_frames_won || 0);
+      if (totalFrames <= Number(best?.totalFrames || -1)) return best;
+      return {
+        totalFrames,
+        valueLabel: `${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)}`,
+        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} vs ${formatParticipantLabel(row?.player_b_participant)}`,
+      };
+    }, null);
+    const largestMarginMatch = filteredMatchesRows.reduce((best: any, row: any) => {
+      const diff = Math.abs(Number(row?.player_a_frames_won || 0) - Number(row?.player_b_frames_won || 0));
+      if (diff <= Number(best?.diff || -1)) return best;
+      return {
+        diff,
+        valueLabel: `${diff} 局`,
+        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} ${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)} ${formatParticipantLabel(row?.player_b_participant)}`,
+      };
+    }, null);
+    return [
+      {
+        label: '最高單杆',
+        value: highestBreakCandidate?.breakValue ? String(highestBreakCandidate.breakValue) : '-',
+        detail: highestBreakCandidate?.playerLabel || '未有紀錄',
+      },
+      {
+        label: '最高得分',
+        value: highestScoringMatch?.valueLabel || '-',
+        detail: highestScoringMatch?.detailLabel || '未有紀錄',
+      },
+      {
+        label: '最高得失局',
+        value: largestMarginMatch?.valueLabel || '-',
+        detail: largestMarginMatch?.detailLabel || '未有紀錄',
+      },
+    ];
+  }, [filteredMatchesRows, formatParticipantLabel, isLeague]);
+
+  const knockoutShareRounds = useMemo(() => {
+    if (isLeague) return [];
+    return filteredBracketColumns.map((column: any) => ({
+      label: String(column?.label || '-'),
+      total: Number(column?.summary?.total || column?.items?.length || 0),
+      completedCount: Number(column?.summary?.completedCount || 0),
+      items: (Array.isArray(column?.items) ? column.items : []).map((row: any) => {
+        const winnerId = String(row?.winner_participant_id || '');
+        const aParticipantId = String(row?.player_a_participant_id || '');
+        const bParticipantId = String(row?.player_b_participant_id || '');
+        return {
+          matchNo: Math.max(1, Number(row?.match_no || 1)),
+          statusLabel: formatMatchStatusLabel(row?.status),
+          playerALabel: formatParticipantLabel(row?.player_a_participant),
+          playerBLabel: formatParticipantLabel(row?.player_b_participant),
+          playerAFrames: Number(row?.player_a_frames_won || 0),
+          playerBFrames: Number(row?.player_b_frames_won || 0),
+          winnerSide: winnerId && winnerId === aParticipantId ? 'A' : winnerId && winnerId === bParticipantId ? 'B' : null,
+        };
+      }),
+    }));
+  }, [filteredBracketColumns, formatParticipantLabel, isLeague]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isLeague || knockoutShareRounds.length <= 0) {
+      setShareCardPreviewItems([]);
+      return;
+    }
+    setShareCardPreviewLoading(true);
+    buildKnockoutBracketShareCardPreviewItems({
+      title: String(tournamentTitle || '淘汰賽模式進級表'),
+      venueName,
+      venueLogoUrl,
+      focusLabel: effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel,
+      summaryCards: knockoutShareSummaryCards,
+      rounds: knockoutShareRounds,
+    })
+      .then((items) => {
+        if (cancelled) return;
+        setShareCardPreviewItems(items.map((item) => ({
+          imageUrl: item.imageUrl,
+          title: `${String(tournamentTitle || '淘汰賽模式進級表')} · ${item.focusLabel}`,
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setShareCardPreviewItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) setShareCardPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveFocusedRoundLabel, isLeague, knockoutShareRounds, knockoutShareSummaryCards, tournamentTitle, venueLogoUrl, venueName]);
+
   const openPrintWindow = (html: string) => {
     const printWindow = window.open('about:blank', '_blank', 'width=1280,height=960');
     if (!printWindow) return null;
@@ -350,81 +464,13 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
 
   const handleDownloadKnockoutShareCard = () => {
     if (isLeague || filteredBracketColumns.length <= 0) return;
-    const highestBreakCandidate = filteredMatchesRows.reduce((best: any, row: any) => {
-      const aBreak = Number(row?.player_a_max_break || 0);
-      const bBreak = Number(row?.player_b_max_break || 0);
-      const next = aBreak >= bBreak
-        ? {
-            breakValue: aBreak,
-            playerLabel: formatParticipantLabel(row?.player_a_participant),
-            scoreLabel: `${Math.max(1, Number(row?.match_no || 1))} / ${aBreak}`,
-          }
-        : {
-            breakValue: bBreak,
-            playerLabel: formatParticipantLabel(row?.player_b_participant),
-            scoreLabel: `${Math.max(1, Number(row?.match_no || 1))} / ${bBreak}`,
-          };
-      return Number(next.breakValue || 0) > Number(best?.breakValue || 0) ? next : best;
-    }, null);
-    const highestScoringMatch = filteredMatchesRows.reduce((best: any, row: any) => {
-      const totalFrames = Number(row?.player_a_frames_won || 0) + Number(row?.player_b_frames_won || 0);
-      if (totalFrames <= Number(best?.totalFrames || -1)) return best;
-      return {
-        totalFrames,
-        valueLabel: `${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)}`,
-        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} vs ${formatParticipantLabel(row?.player_b_participant)}`,
-      };
-    }, null);
-    const largestMarginMatch = filteredMatchesRows.reduce((best: any, row: any) => {
-      const diff = Math.abs(Number(row?.player_a_frames_won || 0) - Number(row?.player_b_frames_won || 0));
-      if (diff <= Number(best?.diff || -1)) return best;
-      return {
-        diff,
-        valueLabel: `${diff} 局`,
-        detailLabel: `${formatParticipantLabel(row?.player_a_participant)} ${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)} ${formatParticipantLabel(row?.player_b_participant)}`,
-      };
-    }, null);
     downloadKnockoutBracketShareCard({
       title: String(tournamentTitle || '淘汰賽模式進級表'),
       venueName,
       venueLogoUrl,
       focusLabel: effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel,
-      summaryCards: [
-        {
-          label: '最高單杆',
-          value: highestBreakCandidate?.breakValue ? String(highestBreakCandidate.breakValue) : '-',
-          detail: highestBreakCandidate?.playerLabel || '未有紀錄',
-        },
-        {
-          label: '最高得分',
-          value: highestScoringMatch?.valueLabel || '-',
-          detail: highestScoringMatch?.detailLabel || '未有紀錄',
-        },
-        {
-          label: '最高得失局',
-          value: largestMarginMatch?.valueLabel || '-',
-          detail: largestMarginMatch?.detailLabel || '未有紀錄',
-        },
-      ],
-      rounds: filteredBracketColumns.map((column: any) => ({
-        label: String(column?.label || '-'),
-        total: Number(column?.summary?.total || column?.items?.length || 0),
-        completedCount: Number(column?.summary?.completedCount || 0),
-        items: (Array.isArray(column?.items) ? column.items : []).map((row: any) => {
-          const winnerId = String(row?.winner_participant_id || '');
-          const aParticipantId = String(row?.player_a_participant_id || '');
-          const bParticipantId = String(row?.player_b_participant_id || '');
-          return {
-            matchNo: Math.max(1, Number(row?.match_no || 1)),
-            statusLabel: formatMatchStatusLabel(row?.status),
-            playerALabel: formatParticipantLabel(row?.player_a_participant),
-            playerBLabel: formatParticipantLabel(row?.player_b_participant),
-            playerAFrames: Number(row?.player_a_frames_won || 0),
-            playerBFrames: Number(row?.player_b_frames_won || 0),
-            winnerSide: winnerId && winnerId === aParticipantId ? 'A' : winnerId && winnerId === bParticipantId ? 'B' : null,
-          };
-        }),
-      })),
+      summaryCards: knockoutShareSummaryCards,
+      rounds: knockoutShareRounds,
     });
   };
 
@@ -448,7 +494,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
                 onClick={handleDownloadKnockoutShareCard}
                 className="px-3 py-1.5 rounded cue-button text-xs font-semibold"
               >
-                下載分享圖 PNG
+                {shareCardPreviewItems.length > 1 ? `下載整組分享圖 PNG（${shareCardPreviewItems.length} 張）` : '下載分享圖 PNG'}
               </button>
             ) : null
           ) : null}
@@ -483,6 +529,54 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         />
       )}
     </div>
+    {!isLeague && !matchesLoading && matchesRows.length > 0 ? (
+      <div className="rounded-lg border cue-border bg-black/10 p-3 mb-3">
+        <div className="flex flex-col gap-1 mb-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="font-semibold">分享海報預覽</div>
+            <div className="text-xs cue-muted mt-1">
+              {shareCardPreviewItems.length > 1
+                ? `目前篩選條件會輸出 ${shareCardPreviewItems.length} 張海報，包含初期分組與後段總覽。`
+                : '目前篩選條件會輸出單張海報，可先在這裡檢查版面。'}
+            </div>
+          </div>
+          <div className="text-xs cue-muted">
+            {shareCardPreviewLoading ? '生成預覽中…' : shareCardPreviewItems.length > 0 ? `${shareCardPreviewItems.length} 張` : '尚未生成預覽'}
+          </div>
+        </div>
+        {shareCardPreviewLoading ? (
+          <div className="text-sm cue-muted">正在生成海報預覽…</div>
+        ) : shareCardPreviewItems.length <= 0 ? (
+          <div className="text-sm cue-muted">目前沒有可預覽的分享海報。</div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {shareCardPreviewItems.map((item, index) => (
+              <button
+                key={`${item.title}-${index}`}
+                type="button"
+                onClick={() => {
+                  setShareCardPreviewIndex(index);
+                  setShareCardPreviewOpen(true);
+                }}
+                className="group rounded-xl border border-white/10 bg-black/20 p-3 text-left transition hover:border-white/20"
+              >
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0 text-sm font-semibold truncate">{item.title}</div>
+                  <div className="text-[11px] cue-muted">點擊放大</div>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                  <img
+                    src={item.imageUrl}
+                    alt={item.title}
+                    className="aspect-[16/9] w-full object-contain transition group-hover:scale-[1.01]"
+                  />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null}
     {!matchesLoading && matchesRows.length > 0 ? (
       <div className={`rounded-lg border bg-black/10 p-3 mb-3 ${
         selectedMatchRow ? 'border-yellow-400/35 shadow-[0_0_0_1px_rgba(250,204,21,0.12)]' : 'cue-border'
@@ -616,6 +710,12 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         />
       </div>
     ) : null}
+    <TournamentPosterLightbox
+      open={shareCardPreviewOpen}
+      posters={shareCardPreviewItems}
+      initialIndex={shareCardPreviewIndex}
+      onClose={() => setShareCardPreviewOpen(false)}
+    />
   </>
   );
 };

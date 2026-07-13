@@ -1,9 +1,14 @@
 import {
-  buildKnockoutBracketShareCardDataUrl,
+  buildKnockoutBracketShareCardPreviewItems,
   buildLeagueStandingsShareCardDataUrl,
 } from '../../venue/modules/TournamentShareCards';
 import { formatKnockoutRoundLabel } from '../../venue/modules/useTournamentStageViewData';
 import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
+
+export type PublicTournamentPosterPreviewItem = {
+  imageUrl: string;
+  title: string;
+};
 
 export function buildLeaguePosterRows(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
   const standings = Array.isArray(detail?.standings) ? detail.standings : [];
@@ -127,6 +132,15 @@ export async function buildPublicTournamentPosterDataUrl(options: {
   formatTournamentParticipantLabel: (participant: any) => string;
   formatTournamentMatchStatusLabel: (value: any) => string;
 }) {
+  const items = await buildPublicTournamentPosterPreviewItems(options);
+  return items[items.length - 1]?.imageUrl || '';
+}
+
+export async function buildPublicTournamentPosterPreviewItems(options: {
+  detail: any;
+  formatTournamentParticipantLabel: (participant: any) => string;
+  formatTournamentMatchStatusLabel: (value: any) => string;
+}): Promise<PublicTournamentPosterPreviewItem[]> {
   const {
     detail,
     formatTournamentParticipantLabel,
@@ -151,8 +165,8 @@ export async function buildPublicTournamentPosterDataUrl(options: {
   const isGoldSilverCup = normalizedFormat === 'GOLD_SILVER_CUP';
   if (isLeague) {
     const rows = buildLeaguePosterRows(detail, formatTournamentParticipantLabel);
-    if (rows.length <= 0) return '';
-    return buildLeagueStandingsShareCardDataUrl({
+    if (rows.length <= 0) return [];
+    const imageUrl = await buildLeagueStandingsShareCardDataUrl({
       title: String(detail?.title || '聯賽模式積分榜'),
       venueName,
       venueLogoUrl,
@@ -160,15 +174,20 @@ export async function buildPublicTournamentPosterDataUrl(options: {
       pointsRuleLabel: `勝 ${Number(detail?.points_win ?? 3)} / 和 ${Number(detail?.points_draw ?? 1)} / 負 ${Number(detail?.points_loss ?? 0)}`,
       rows,
     });
+    return [{
+      imageUrl,
+      title: `${String(detail?.title || '聯賽模式積分榜')} 海報`,
+    }];
   }
   const rounds = buildKnockoutPosterRounds(
     detail,
     formatTournamentParticipantLabel,
     formatTournamentMatchStatusLabel,
   );
-  if (rounds.length <= 0) return '';
-  return buildKnockoutBracketShareCardDataUrl({
-    title: String(detail?.title || (isGoldSilverCup ? '金銀杯模式進級表' : '淘汰賽模式進級表')),
+  if (rounds.length <= 0) return [];
+  const posterTitle = String(detail?.title || (isGoldSilverCup ? '金銀杯模式進級表' : '淘汰賽模式進級表'));
+  const previewItems = await buildKnockoutBracketShareCardPreviewItems({
+    title: posterTitle,
     venueName,
     venueLogoUrl,
     focusLabel: isGoldSilverCup ? '金銀杯雙線進級表' : '全部輪次',
@@ -177,4 +196,8 @@ export async function buildPublicTournamentPosterDataUrl(options: {
       ? buildGoldSilverCupPosterSummaryCards(detail, formatTournamentParticipantLabel)
       : buildKnockoutPosterSummaryCards(detail, formatTournamentParticipantLabel),
   });
+  return previewItems.map((item) => ({
+    imageUrl: item.imageUrl,
+    title: `${posterTitle} · ${item.focusLabel}`,
+  }));
 }

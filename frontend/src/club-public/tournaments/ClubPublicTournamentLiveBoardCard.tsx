@@ -2,7 +2,7 @@ import React from 'react';
 import ClubPublicTournamentLiveMatchesSection from './ClubPublicTournamentLiveMatchesSection';
 import ClubPublicTournamentReadyMatchesSection from './ClubPublicTournamentReadyMatchesSection';
 import ClubPublicTournamentRecentCompletedSection from './ClubPublicTournamentRecentCompletedSection';
-import { buildPublicTournamentPosterDataUrl } from './publicTournamentPosterHelpers';
+import { buildPublicTournamentPosterPreviewItems, type PublicTournamentPosterPreviewItem } from './publicTournamentPosterHelpers';
 
 type ClubPublicTournamentLiveBoardCardProps = {
   API_URL: string;
@@ -23,7 +23,7 @@ type ClubPublicTournamentLiveBoardCardProps = {
   formatTournamentParticipantLabel: (participant: any) => string;
   openPublicBoardParticipantPanel: (tournament: any, participant: any) => void;
   renderPublicBoardParticipantActions: (tournament: any, row: any) => React.ReactNode;
-  onPreviewPoster: (poster: { imageUrl: string; title: string }) => void;
+  onPreviewPoster: (payload: { posters: PublicTournamentPosterPreviewItem[]; initialIndex?: number }) => void;
   compact?: boolean;
 };
 
@@ -94,14 +94,15 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
   const featuredPreviewRow = previewRows[0] || null;
   const updatedAtLabel = getTournamentCardUpdatedAtLabel(tournament);
   const [detailLoading, setDetailLoading] = React.useState(false);
-  const [posterUrl, setPosterUrl] = React.useState('');
+  const [posterItems, setPosterItems] = React.useState<PublicTournamentPosterPreviewItem[]>([]);
   const posterIsLandscape = isLandscapePosterFormat(tournament?.format, normalizeTournamentFormat);
   const posterFrameClassName = posterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
+  const posterUrl = posterItems[0]?.imageUrl || '';
 
   React.useEffect(() => {
     let cancelled = false;
     if (!compact || !clubId || !tournament?.id) {
-      setPosterUrl('');
+      setPosterItems([]);
       return;
     }
     setDetailLoading(true);
@@ -109,23 +110,23 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
       .then((detail) => {
         if (cancelled) return;
         if (!detail) {
-          setPosterUrl('');
+          setPosterItems([]);
           return;
         }
-        return buildPublicTournamentPosterDataUrl({
+        return buildPublicTournamentPosterPreviewItems({
           detail,
           formatTournamentParticipantLabel,
           formatTournamentMatchStatusLabel,
         })
-          .then((nextPosterUrl) => {
-            if (!cancelled) setPosterUrl(nextPosterUrl);
+          .then((nextPosterItems) => {
+            if (!cancelled) setPosterItems(nextPosterItems);
           })
           .catch(() => {
-            if (!cancelled) setPosterUrl('');
+            if (!cancelled) setPosterItems([]);
           });
       })
       .catch(() => {
-        if (!cancelled) setPosterUrl('');
+        if (!cancelled) setPosterItems([]);
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
@@ -177,16 +178,21 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
             <button
               type="button"
               onClick={() => onPreviewPoster({
-                imageUrl: posterUrl,
-                title: `${String(tournament?.title || '比賽')} 海報`,
+                posters: posterItems,
+                initialIndex: 0,
               })}
-              className={`flex w-full ${posterFrameClassName} items-center justify-center overflow-hidden rounded-[18px] border border-white/10 bg-black/20 transition hover:border-white/20`}
+              className={`relative flex w-full ${posterFrameClassName} items-center justify-center overflow-hidden rounded-[18px] border border-white/10 bg-black/20 transition hover:border-white/20`}
             >
               <img
                 src={posterUrl}
                 alt={`${String(tournament?.title || '比賽')} 海報縮圖`}
                 className="h-full w-full object-contain"
               />
+              {posterItems.length > 1 ? (
+                <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/65 px-3 py-1 text-[11px] font-semibold text-white">
+                  共 {posterItems.length} 張
+                </div>
+              ) : null}
             </button>
           ) : (
             <div className={`flex ${posterFrameClassName} items-center justify-center rounded-[18px] border border-dashed border-white/10 px-4 text-center text-sm cue-muted`}>
@@ -206,7 +212,9 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="text-xs cue-muted">點海報可放大，或進入完整詳情</div>
+          <div className="text-xs cue-muted">
+            {posterItems.length > 1 ? `點海報可查看全部 ${posterItems.length} 張分組海報` : '點海報可放大，或進入完整詳情'}
+          </div>
           <button
             type="button"
             onClick={() => {
