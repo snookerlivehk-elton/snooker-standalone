@@ -95,73 +95,78 @@ function getKnockoutStageSortValue(row: any) {
   return 999 + roundNo;
 }
 
+export function buildKnockoutBracketColumns(matchesRows: any[], participantsCount: number) {
+  const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
+  for (const row of matchesRows.filter((candidate: any) => String(candidate?.stage_code || '').trim().toUpperCase() !== 'KNOCKOUT_THIRD_PLACE')) {
+    const key = formatKnockoutRoundLabel(row, participantsCount);
+    const roundNo = Number(row?.round_no || 0);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.items.push(row);
+      existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
+    } else {
+      grouped.set(key, { roundNo, items: [row] });
+    }
+  }
+  return Array.from(grouped.entries())
+    .sort((a, b) => {
+      const aSort = Math.min(...a[1].items.map((item: any) => getKnockoutStageSortValue(item)));
+      const bSort = Math.min(...b[1].items.map((item: any) => getKnockoutStageSortValue(item)));
+      if (aSort !== bSort) return aSort - bSort;
+      return a[1].roundNo - b[1].roundNo;
+    })
+    .map(([label, group], roundIndex, allColumns) => {
+      const items = [...group.items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
+      const paddingTop = getBracketColumnPaddingTop(roundIndex);
+      const gap = getBracketColumnGap(roundIndex);
+      const cardCenters = items.map((_, itemIndex) => (
+        paddingTop + itemIndex * (BRACKET_CARD_HEIGHT + gap) + BRACKET_CARD_HEIGHT / 2
+      ));
+      const connectors = roundIndex < allColumns.length - 1
+        ? Array.from({ length: Math.floor(items.length / 2) }, (_unused, pairIndex) => {
+            const topCenter = cardCenters[pairIndex * 2];
+            const bottomCenter = cardCenters[pairIndex * 2 + 1];
+            if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
+            return {
+              top: topCenter,
+              height: Math.max(0, bottomCenter - topCenter),
+            };
+          }).filter(Boolean)
+        : [];
+      return {
+        label,
+        roundIndex,
+        isFinal: roundIndex === allColumns.length - 1,
+        items,
+        summary: {
+          total: items.length,
+          completedCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length,
+          liveCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'LIVE').length,
+          readyCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length,
+          pendingCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length,
+        },
+        paddingTop,
+        gap,
+        columnHeight: Math.max(
+          getBracketColumnHeight(matchesRows.length),
+          paddingTop + (items.length * BRACKET_CARD_HEIGHT) + Math.max(0, items.length - 1) * gap,
+        ),
+        connectors,
+        cardHeight: BRACKET_CARD_HEIGHT,
+        connectorHalfGap: BRACKET_CONNECTOR_HALF_GAP,
+      };
+    });
+}
+
 export function useTournamentStageViewData(participantsRows: any[], matchesRows: any[]) {
   const thirdPlaceMatch = useMemo(
     () => matchesRows.find((row: any) => String(row?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') || null,
     [matchesRows],
   );
-  const bracketColumns = useMemo(() => {
-    const grouped = new Map<string, { roundNo: number; items: Array<any> }>();
-    for (const row of matchesRows.filter((candidate: any) => String(candidate?.stage_code || '').trim().toUpperCase() !== 'KNOCKOUT_THIRD_PLACE')) {
-      const key = formatKnockoutRoundLabel(row, participantsRows.length);
-      const roundNo = Number(row?.round_no || 0);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.items.push(row);
-        existing.roundNo = existing.roundNo > 0 ? Math.min(existing.roundNo, roundNo || existing.roundNo) : roundNo;
-      } else {
-        grouped.set(key, { roundNo, items: [row] });
-      }
-    }
-    return Array.from(grouped.entries())
-      .sort((a, b) => {
-        const aSort = Math.min(...a[1].items.map((item: any) => getKnockoutStageSortValue(item)));
-        const bSort = Math.min(...b[1].items.map((item: any) => getKnockoutStageSortValue(item)));
-        if (aSort !== bSort) return aSort - bSort;
-        return a[1].roundNo - b[1].roundNo;
-      })
-      .map(([label, group], roundIndex, allColumns) => {
-        const items = [...group.items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
-        const paddingTop = getBracketColumnPaddingTop(roundIndex);
-        const gap = getBracketColumnGap(roundIndex);
-        const cardCenters = items.map((_, itemIndex) => (
-          paddingTop + itemIndex * (BRACKET_CARD_HEIGHT + gap) + BRACKET_CARD_HEIGHT / 2
-        ));
-        const connectors = roundIndex < allColumns.length - 1
-          ? Array.from({ length: Math.floor(items.length / 2) }, (_unused, pairIndex) => {
-              const topCenter = cardCenters[pairIndex * 2];
-              const bottomCenter = cardCenters[pairIndex * 2 + 1];
-              if (typeof topCenter !== 'number' || typeof bottomCenter !== 'number') return null;
-              return {
-                top: topCenter,
-                height: Math.max(0, bottomCenter - topCenter),
-              };
-            }).filter(Boolean)
-          : [];
-        return {
-          label,
-          roundIndex,
-          isFinal: roundIndex === allColumns.length - 1,
-          items,
-          summary: {
-            total: items.length,
-            completedCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'COMPLETED').length,
-            liveCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'LIVE').length,
-            readyCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'READY').length,
-            pendingCount: items.filter((row: any) => String(row?.status || '').toUpperCase() === 'PENDING').length,
-          },
-          paddingTop,
-          gap,
-          columnHeight: Math.max(
-            getBracketColumnHeight(matchesRows.length),
-            paddingTop + (items.length * BRACKET_CARD_HEIGHT) + Math.max(0, items.length - 1) * gap,
-          ),
-          connectors,
-          cardHeight: BRACKET_CARD_HEIGHT,
-          connectorHalfGap: BRACKET_CONNECTOR_HALF_GAP,
-        };
-      });
-  }, [matchesRows, participantsRows.length]);
+  const bracketColumns = useMemo(
+    () => buildKnockoutBracketColumns(matchesRows, participantsRows.length),
+    [matchesRows, participantsRows.length],
+  );
 
   const knockoutSummary = useMemo(() => buildKnockoutSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);
   const leagueSummary = useMemo(() => buildLeagueSummary(participantsRows, matchesRows), [participantsRows, matchesRows]);

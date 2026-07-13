@@ -235,6 +235,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     ? `${selectedRoundContextLabel} · M${Math.max(1, Number(selectedMatchRow?.match_no || 1))}`
     : '';
   const thirdPlaceSelected = thirdPlaceMatch && String(thirdPlaceMatch?.id || '') === selectedMatchId;
+  const thirdPlaceLabel = thirdPlaceMatch ? formatKnockoutRoundLabel(thirdPlaceMatch, participantsCount) : '季軍戰';
 
   const leaguePrintSummary = useMemo(() => {
     if (!isLeague) return null;
@@ -553,7 +554,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
           }`}>
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
-                <div className="font-semibold">季軍戰</div>
+                <div className="font-semibold">{thirdPlaceLabel}</div>
                 <div className="text-xs cue-muted mt-1">獨立於主線進級表顯示，不與決賽共用 bracket 欄位。</div>
               </div>
               <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getMatchStatusTone(thirdPlaceMatch?.status)}`}>
@@ -573,7 +574,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
               }}
             >
               <div className="flex items-center justify-between gap-2 text-xs cue-muted mb-2">
-                <span>季軍戰 · M{thirdPlaceMatch?.match_no || '-'}</span>
+                <span>{thirdPlaceLabel} · M{thirdPlaceMatch?.match_no || '-'}</span>
                 <span>{formatMatchResultTypeLabel(thirdPlaceMatch?.result_type)}</span>
               </div>
               <div className="font-semibold">{formatParticipantLabel(thirdPlaceMatch?.player_a_participant)}</div>

@@ -1966,3 +1966,19 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
 - 目前仍保留的下限：
   - `金銀杯模式` 仍要求至少 `8` 人
   - 暫未向下放寬至 `7` 人或以下，因為銀杯三甲與季軍戰完整性仍需再定義
+
+### Batch 2.2 進度（2026-07-13）
+
+- 已完成金銀杯後台工作台的第一版雙分區整理：
+  - 將 `金杯` 與 `銀杯` 分成兩個獨立進級表區塊
+  - 各自顯示對應 bracket 欄位與季軍戰卡片
+  - 上方補上金杯 / 銀杯對局統計摘要
+- 已抽出可重用的 bracket 欄位生成 helper：
+  - `buildKnockoutBracketColumns`
+  - 供金杯與銀杯各自重建欄位，避免混在同一組 round columns
+- 已調整流程摘要文案：
+  - 金銀杯下改用較保守但正確的 blocked / 上游提示
+  - 避免沿用舊淘汰賽邏輯而誤指向錯誤上游來源
+- 驗證：
+  - `frontend npm run build` 通過
+  - `backend npm run build` 通過

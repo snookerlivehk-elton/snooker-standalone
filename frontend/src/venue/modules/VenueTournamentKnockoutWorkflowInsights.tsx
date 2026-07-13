@@ -3,6 +3,7 @@ import { formatKnockoutRoundLabel } from './useTournamentStageViewData';
 
 type VenueTournamentKnockoutWorkflowInsightsProps = {
   matchesRows: any[];
+  modeLabel?: string;
   onJumpToMatch: (row: any) => void;
   participantsCount: number;
   selectedMatchId: string;
@@ -14,11 +15,16 @@ function getStatusCount(items: any[], status: string) {
 
 const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutWorkflowInsightsProps> = ({
   matchesRows,
+  modeLabel = '淘汰賽',
   onJumpToMatch,
   participantsCount,
   selectedMatchId,
 }) => {
   const [showAllBlocked, setShowAllBlocked] = React.useState(false);
+  const isGoldSilverCup = matchesRows.some((row: any) => {
+    const stageCode = String(row?.stage_code || '').trim().toUpperCase();
+    return stageCode.startsWith('GOLD_') || stageCode.startsWith('SILVER_');
+  });
   const scorableRows = matchesRows.filter((row: any) => {
     const status = String(row?.status || '').trim().toUpperCase();
     return !!row?.player_a_participant_id && !!row?.player_b_participant_id && status !== 'PENDING';
@@ -35,21 +41,44 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
     const roundNo = Math.max(1, Number(row?.round_no || 1));
     const stageCode = String(row?.stage_code || '').trim().toUpperCase();
     const currentLabel = formatKnockoutRoundLabel(row, participantsCount);
-    const leftMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' ? 1 : Math.max(1, matchNo * 2 - 1);
-    const rightMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' ? 2 : Math.max(1, matchNo * 2);
-    const leftSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M1 敗方' : `上一輪 M${leftMatchNo}`;
-    const rightSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M2 敗方' : `上一輪 M${rightMatchNo}`;
-    const upstreamMatches = matchesRows.filter((candidate: any) => (
-      Number(candidate?.round_no || 0) === roundNo - 1
-      && String(candidate?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_MAIN'
-      && (Number(candidate?.match_no || 0) === leftMatchNo || Number(candidate?.match_no || 0) === rightMatchNo)
-    ));
+    const leftMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' || stageCode === 'GOLD_THIRD_PLACE' || stageCode === 'SILVER_THIRD_PLACE'
+      ? 1
+      : Math.max(1, matchNo * 2 - 1);
+    const rightMatchNo = stageCode === 'KNOCKOUT_THIRD_PLACE' || stageCode === 'GOLD_THIRD_PLACE' || stageCode === 'SILVER_THIRD_PLACE'
+      ? 2
+      : Math.max(1, matchNo * 2);
+    const sourceStageCode = stageCode === 'GOLD_THIRD_PLACE'
+      ? 'GOLD_MAIN'
+      : stageCode === 'SILVER_THIRD_PLACE'
+        ? 'SILVER_MAIN'
+        : stageCode.startsWith('GOLD_')
+          ? 'GOLD_MAIN'
+          : stageCode.startsWith('SILVER_')
+            ? String(stageCode).startsWith('SILVER_MAIN') ? 'SILVER_MAIN' : 'SILVER_QUALIFIER'
+            : 'KNOCKOUT_MAIN';
+    const leftSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M1 敗方' : stageCode === 'GOLD_THIRD_PLACE' ? '金杯四強 M1 敗方' : stageCode === 'SILVER_THIRD_PLACE' ? '銀杯四強 M1 敗方' : `上一輪 M${leftMatchNo}`;
+    const rightSource = stageCode === 'KNOCKOUT_THIRD_PLACE' ? '四強 M2 敗方' : stageCode === 'GOLD_THIRD_PLACE' ? '金杯四強 M2 敗方' : stageCode === 'SILVER_THIRD_PLACE' ? '銀杯四強 M2 敗方' : `上一輪 M${rightMatchNo}`;
+    const upstreamMatches = isGoldSilverCup
+      ? matchesRows.filter((candidate: any) => (
+          Number(candidate?.round_no || 0) === roundNo - 1
+          && String(candidate?.stage_code || '').trim().toUpperCase() === sourceStageCode
+          && (Number(candidate?.match_no || 0) === leftMatchNo || Number(candidate?.match_no || 0) === rightMatchNo)
+        ))
+      : matchesRows.filter((candidate: any) => (
+          Number(candidate?.round_no || 0) === roundNo - 1
+          && String(candidate?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_MAIN'
+          && (Number(candidate?.match_no || 0) === leftMatchNo || Number(candidate?.match_no || 0) === rightMatchNo)
+        ));
     const jumpTarget = upstreamMatches.find((candidate: any) => String(candidate?.status || '').trim().toUpperCase() !== 'COMPLETED')
       || upstreamMatches[0]
       || null;
     let reason = '等待上游對局完成';
-    if (stageCode === 'KNOCKOUT_THIRD_PLACE') {
+    if (stageCode === 'KNOCKOUT_THIRD_PLACE' || stageCode === 'GOLD_THIRD_PLACE' || stageCode === 'SILVER_THIRD_PLACE') {
       reason = `等待 ${leftSource} 與 ${rightSource} 補入`;
+    } else if (isGoldSilverCup && stageCode === 'SILVER_MAIN' && roundNo === 1) {
+      reason = '等待銀杯資格輪勝方與金杯對應輪次敗者補入';
+    } else if (isGoldSilverCup && stageCode === 'SILVER_QUALIFIER' && roundNo === 1) {
+      reason = '等待金杯首輪敗者補入銀杯';
     } else if (roundNo <= 1) {
       reason = '等待進級表初始配對完成';
     } else if (!row?.player_a_participant_id && !row?.player_b_participant_id) {
@@ -85,7 +114,7 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
 
   let guidance = '先完成目前輪次，再讓下游進級表自動解鎖。';
   if (matchesRows.length === 0) {
-    guidance = '尚未生成淘汰賽模式進級表，先確認 seed 與名單後再建立賽程。';
+    guidance = `尚未生成${modeLabel}進級表，先確認 seed 與名單後再建立賽程。`;
   } else if (blockedRows.length > 0) {
     guidance = `目前有 ${blockedRows.length} 場仍被上游結果阻塞；完成已 ready / live 的對局後，系統會逐步補齊下游對戰。`;
   } else if (scorableRows.length > 0) {
@@ -95,7 +124,7 @@ const VenueTournamentKnockoutWorkflowInsights: React.FC<VenueTournamentKnockoutW
   return (
     <div className="cue-surface rounded-lg p-3 mb-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="font-semibold">淘汰賽模式流程摘要</div>
+      <div className="font-semibold">{modeLabel}流程摘要</div>
         <div className="text-xs cue-muted">{matchesRows.length ? `${matchesRows.length} 場對局` : '尚未生成進級表'}</div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
