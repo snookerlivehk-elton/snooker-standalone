@@ -22,6 +22,22 @@ type ClubPublicTournamentLiveBoardCardProps = {
   compact?: boolean;
 };
 
+function getTournamentCardUpdatedAtLabel(tournament: any) {
+  const candidates = [
+    tournament?.updatedAt,
+    tournament?.startsAt,
+    ...(Array.isArray(tournament?.liveMatches) ? tournament.liveMatches.flatMap((row: any) => [row?.updated_at, row?.started_at, row?.scheduled_at]) : []),
+    ...(Array.isArray(tournament?.readyMatches) ? tournament.readyMatches.flatMap((row: any) => [row?.updated_at, row?.scheduled_at]) : []),
+    ...(Array.isArray(tournament?.recentCompletedMatches) ? tournament.recentCompletedMatches.flatMap((row: any) => [row?.ended_at, row?.updated_at]) : []),
+  ];
+  const times = candidates
+    .map((value: any) => value ? new Date(String(value)).getTime() : 0)
+    .filter((value: number) => Number.isFinite(value) && value > 0)
+    .sort((a: number, b: number) => b - a);
+  if (times.length === 0) return '更新中';
+  return new Date(times[0]).toLocaleString();
+}
+
 const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardCardProps> = ({
   tournament,
   tournaments,
@@ -43,25 +59,30 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
   const readyCount = Number(tournament?.summary?.readyMatchCount || 0);
   const completedCount = Number(tournament?.summary?.completedMatchCount || 0);
   const highlightLabel = liveCount > 0
-    ? `目前有 ${liveCount} 場正在進行，適合優先查看即時比分。`
+    ? '目前正有對賽進行中，可直接查看焦點對局。'
     : readyCount > 0
-      ? `目前有 ${readyCount} 場即將上場，可先查看對戰組合。`
+      ? '下一場對賽已排好，可先看對戰組合。'
       : completedCount > 0
-        ? `最近已完成 ${completedCount} 場，可回看最新結果。`
-        : '目前以賽事概覽為主。';
+        ? '目前以最新公開結果作為主展示。'
+        : '目前以賽事海報概覽為主。';
   const previewRows = liveCount > 0
     ? (Array.isArray(tournament?.liveMatches) ? tournament.liveMatches.slice(0, 2) : [])
     : readyCount > 0
       ? (Array.isArray(tournament?.readyMatches) ? tournament.readyMatches.slice(0, 2) : [])
       : (Array.isArray(tournament?.recentCompletedMatches) ? tournament.recentCompletedMatches.slice(0, 2) : []);
-  const participantCount = Number(tournament?.summary?.participantCount || 0);
+  const featuredPreviewRow = previewRows[0] || null;
+  const updatedAtLabel = getTournamentCardUpdatedAtLabel(tournament);
 
   if (compact) {
     return (
       <div className="cue-surface-strong rounded-2xl border border-white/10 p-4 h-full">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[11px] font-extrabold accent-yellow tracking-wide">
+              {normalizeTournamentFormat(tournament?.format) === 'LEAGUE' ? 'LEAGUE MODE POSTER' : 'KNOCKOUT MODE POSTER'}
+            </div>
+            <div className="mt-3 font-semibold text-lg leading-tight">{String(tournament?.title || '比賽')}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
               <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold cue-muted">
                 {formatTournamentFormatLabel(tournament?.format)}
               </div>
@@ -69,18 +90,15 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
                 {formatTournamentWorkflowLabel(tournament?.workflow_status)}
               </div>
             </div>
-            <div className="mt-3 font-semibold text-lg leading-tight">{String(tournament?.title || '比賽')}</div>
-            <div className="text-xs cue-muted mt-1">
-              {tournament?.startsAt ? new Date(String(tournament.startsAt)).toLocaleString() : '未設定開賽時間'}
-            </div>
           </div>
-          <div className="rounded-full px-2.5 py-1 text-[11px] font-semibold cue-surface">
-            {liveCount > 0 ? '焦點中' : readyCount > 0 ? '即將上場' : '最近完成'}
+          <div className="text-right text-[11px] cue-muted">
+            <div>更新時間</div>
+            <div className="mt-1 font-semibold text-white">{updatedAtLabel}</div>
           </div>
         </div>
 
         <div className="mt-3 rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-          <div className="text-[11px] cue-muted">焦點摘要</div>
+          <div className="text-[11px] cue-muted">海報摘要</div>
           <div className="mt-1 text-sm cue-muted leading-6">{highlightLabel}</div>
         </div>
 
@@ -94,29 +112,20 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
           />
         </div>
 
-        {previewRows.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {previewRows.map((row: any) => (
-              <div key={String(row?.id || Math.random())} className="rounded-xl border border-white/10 bg-black/10 p-3">
-                <div className="flex items-center justify-between gap-2 text-[11px] cue-muted">
-                  <span>{formatPublicTournamentStageLabel(row, normalizeTournamentFormat(tournament?.format), participantCount)}</span>
-                  <span>{formatTournamentMatchStatusLabel(row?.status)}</span>
-                </div>
-                <div className="mt-2 text-sm font-semibold truncate">
-                  {formatTournamentParticipantLabel(row?.player_a_participant)} vs {formatTournamentParticipantLabel(row?.player_b_participant)}
-                </div>
-                <div className="mt-1 text-xs cue-muted">
-                  {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
-                </div>
-              </div>
-            ))}
+        {featuredPreviewRow ? (
+          <div className="mt-3 rounded-xl border border-white/10 bg-black/10 p-3">
+            <div className="text-[11px] cue-muted">焦點對賽</div>
+            <div className="mt-2 text-sm font-semibold truncate">
+              {formatTournamentParticipantLabel(featuredPreviewRow?.player_a_participant)} vs {formatTournamentParticipantLabel(featuredPreviewRow?.player_b_participant)}
+            </div>
+            <div className="mt-1 text-xs cue-muted">
+              {formatTournamentMatchStatusLabel(featuredPreviewRow?.status)}
+            </div>
           </div>
         ) : null}
 
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="text-xs cue-muted">
-            {participantCount > 0 ? `${participantCount} 位參賽者` : '參賽資料整理中'}
-          </div>
+          <div className="text-xs cue-muted">點入查看完整海報與詳情</div>
           <button
             type="button"
             onClick={() => {

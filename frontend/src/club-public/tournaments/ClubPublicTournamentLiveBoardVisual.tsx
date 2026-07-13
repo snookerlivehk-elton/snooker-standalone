@@ -30,22 +30,13 @@ function buildFocusStages(
   participantCount: number,
   formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string,
 ) {
-  const grouped = new Map<string, { label: string; total: number; live: number; ready: number; completed: number; roundNo: number }>();
+  const grouped = new Map<string, { label: string; roundNo: number }>();
   for (const row of focusRows) {
     const label = formatPublicTournamentStageLabel(row, format, participantCount);
-    const status = String(row?.status || '').trim().toUpperCase();
     const existing = grouped.get(label) || {
       label,
-      total: 0,
-      live: 0,
-      ready: 0,
-      completed: 0,
       roundNo: Number(row?.round_no || 0),
     };
-    existing.total += 1;
-    if (status === 'LIVE') existing.live += 1;
-    else if (status === 'READY') existing.ready += 1;
-    else if (status === 'COMPLETED') existing.completed += 1;
     grouped.set(label, existing);
   }
   return [...grouped.values()].sort((a, b) => a.roundNo - b.roundNo);
@@ -57,14 +48,12 @@ function getFormatTheme(format: string) {
       accentClassName: 'accent-yellow',
       chipClassName: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100',
       panelClassName: 'border-emerald-400/20 bg-emerald-500/5',
-      progressClassName: 'bg-emerald-400',
     };
   }
   return {
     accentClassName: 'accent-yellow',
     chipClassName: 'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100',
     panelClassName: 'border-fuchsia-400/20 bg-fuchsia-500/5',
-    progressClassName: 'bg-fuchsia-400',
   };
 }
 
@@ -93,12 +82,9 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
 }) => {
   const format = String(normalizeTournamentFormat(tournament?.format) || 'KNOCKOUT').toUpperCase();
   const participantCount = Number(tournament?.summary?.participantCount || 0);
-  const totalMatches = Math.max(0, Number(tournament?.summary?.totalMatches || 0));
-  const completedMatches = Math.max(0, Number(tournament?.summary?.completedMatchCount || 0));
   const focusRows = getUniqueFocusRows(tournament);
   const focusStages = buildFocusStages(focusRows, format, participantCount, formatPublicTournamentStageLabel);
   const topFocusRow = focusRows[0] || null;
-  const progressPercent = totalMatches > 0 ? Math.min(100, Math.round((completedMatches / totalMatches) * 100)) : 0;
   const theme = getFormatTheme(format);
   const heroTheme = getHeroTheme(format);
   const liveCount = Number(tournament?.summary?.liveMatchCount || 0);
@@ -121,27 +107,12 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
                 {statusLabel}
               </div>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-                <div className="text-[11px] cue-muted">參賽 / 對局</div>
-                <div className="mt-1 font-semibold">{participantCount > 0 ? `${participantCount} 人 / ${totalMatches} 場` : `${totalMatches} 場`}</div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-                <div className="text-[11px] cue-muted">進行中 / 即將上場</div>
-                <div className="mt-1 font-semibold">{`${liveCount} / ${readyCount}`}</div>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-                <div className="text-[11px] cue-muted">已完成</div>
-                <div className="mt-1 font-semibold">{completedCount} 場</div>
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-                <div className={`h-full ${theme.progressClassName}`} style={{ width: `${progressPercent}%` }} />
-              </div>
-              <div className="mt-2 flex items-center justify-between text-xs cue-muted">
-                <span>整體進度 {progressPercent}%</span>
-                <span>{completedMatches} / {totalMatches} 場已完成</span>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 px-4 py-4">
+              <div className="text-xs font-semibold cue-muted">主視覺摘要</div>
+              <div className="mt-2 text-sm cue-muted leading-6">
+                {format === 'LEAGUE'
+                  ? '將聯賽目前最值得分享的 podium 與焦點對賽收斂成海報式版面。'
+                  : '將淘汰賽的主線推進與焦點對賽收斂成接近分享海報的閱讀方式。'}
               </div>
             </div>
           </div>
@@ -149,10 +120,10 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
           <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/10 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold cue-muted">焦點輪次縮圖</div>
-                <div className="text-sm cue-muted mt-1">先看主線或輪次節奏，再決定是否進入完整賽況。</div>
+                <div className="text-xs font-semibold cue-muted">海報主體</div>
+                <div className="text-sm cue-muted mt-1">先掃讀主線輪次，再決定是否點入完整賽況。</div>
               </div>
-              <div className={`text-sm font-semibold ${theme.accentClassName}`}>{format === 'LEAGUE' ? 'Standings-first' : 'Bracket-first'}</div>
+              <div className={`text-sm font-semibold ${theme.accentClassName}`}>Poster-first</div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {featuredStages.length > 0 ? featuredStages.map((stage, index) => (
@@ -167,9 +138,9 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
               )}
             </div>
             {topFocusRow ? (
-              <div className="mt-4 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
+              <div className="mt-5 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
                 <div className="min-w-0 rounded-xl cue-surface px-3 py-3">
-                  <div className="text-[11px] cue-muted">上線</div>
+                  <div className="text-[11px] cue-muted">球手 A</div>
                   <div className="mt-1 font-semibold truncate">{formatTournamentParticipantLabel(topFocusRow?.player_a_participant)}</div>
                 </div>
                 <div className="min-w-0 text-center">
@@ -179,11 +150,15 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
                   </div>
                 </div>
                 <div className="min-w-0 rounded-xl cue-surface px-3 py-3">
-                  <div className="text-[11px] cue-muted">下線</div>
+                  <div className="text-[11px] cue-muted">球手 B</div>
                   <div className="mt-1 font-semibold truncate">{formatTournamentParticipantLabel(topFocusRow?.player_b_participant)}</div>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-5 rounded-xl border border-white/10 bg-black/10 px-4 py-4 text-sm cue-muted">
+                目前尚未形成可公開展示的焦點對賽，請點入完整賽況查看完整版面。
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -201,22 +176,7 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
             </div>
             <div className="mt-2 text-sm cue-muted">{statusLabel}</div>
           </div>
-          <div className={`text-lg font-extrabold ${theme.accentClassName}`}>{progressPercent}%</div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
-            <div className="cue-muted">進行中</div>
-            <div className="mt-1 font-semibold">{liveCount}</div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
-            <div className="cue-muted">即將上場</div>
-            <div className="mt-1 font-semibold">{readyCount}</div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-center">
-            <div className="cue-muted">已完成</div>
-            <div className="mt-1 font-semibold">{completedCount}</div>
-          </div>
+          <div className={`text-sm font-semibold ${theme.accentClassName}`}>海報模式</div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -235,7 +195,7 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
         {topFocusRow ? (
           <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-3 py-3">
             <div className="min-w-0">
-              <div className="text-[11px] cue-muted">上線</div>
+              <div className="text-[11px] cue-muted">球手 A</div>
               <div className="mt-1 truncate text-sm font-semibold">{formatTournamentParticipantLabel(topFocusRow?.player_a_participant)}</div>
             </div>
             <div className="text-center">
@@ -245,11 +205,15 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
               </div>
             </div>
             <div className="min-w-0 text-right">
-              <div className="text-[11px] cue-muted">下線</div>
+              <div className="text-[11px] cue-muted">球手 B</div>
               <div className="mt-1 truncate text-sm font-semibold">{formatTournamentParticipantLabel(topFocusRow?.player_b_participant)}</div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-3 rounded-xl border border-white/10 bg-black/10 px-3 py-3 text-xs cue-muted">
+            暫未形成可公開展示的焦點對賽。
+          </div>
+        )}
       </div>
     );
   }
@@ -262,22 +226,12 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
             <div className="text-xs font-semibold tracking-wide cue-muted">聯賽模式縮覽</div>
             <div className="text-sm cue-muted mt-1">以輪次推進與最近焦點對局快速理解目前聯賽節奏。</div>
           </div>
-          <div className={`text-lg font-extrabold ${theme.accentClassName}`}>{progressPercent}%</div>
-        </div>
-        <div className="mt-3">
-          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-            <div className={`h-full ${theme.progressClassName}`} style={{ width: `${progressPercent}%` }} />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs cue-muted">
-            <span>已完成 {completedMatches} / {totalMatches} 場</span>
-            <span>{participantCount > 0 ? `${participantCount} 位參賽者` : '參賽資料整理中'}</span>
-          </div>
+          <div className={`text-sm font-semibold ${theme.accentClassName}`}>{participantCount > 0 ? `${participantCount} 人` : '待整理'}</div>
         </div>
         <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
           {focusStages.slice(0, compact ? 2 : 4).map((stage) => (
             <div key={stage.label} className={`rounded-lg border px-3 py-2 text-xs ${theme.chipClassName}`}>
               <div className="font-semibold">{stage.label}</div>
-              <div className="mt-1 opacity-80">{`${stage.live} live / ${stage.ready} ready / ${stage.completed} 完成`}</div>
             </div>
           ))}
         </div>
@@ -315,24 +269,6 @@ const ClubPublicTournamentLiveBoardVisual: React.FC<ClubPublicTournamentLiveBoar
         )) : (
           <div className="text-sm cue-muted">目前尚未有可公開顯示的焦點輪次。</div>
         )}
-      </div>
-      <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        <div className="rounded-lg cue-surface px-3 py-2">
-          <div className="text-[11px] cue-muted">主線完成</div>
-          <div className="mt-1 font-semibold">{completedMatches} / {totalMatches}</div>
-        </div>
-        <div className="rounded-lg cue-surface px-3 py-2">
-          <div className="text-[11px] cue-muted">Live / Ready</div>
-          <div className="mt-1 font-semibold">
-            {Number(tournament?.summary?.liveMatchCount || 0)} / {Number(tournament?.summary?.readyMatchCount || 0)}
-          </div>
-        </div>
-        {!compact ? (
-          <div className="rounded-lg cue-surface px-3 py-2">
-            <div className="text-[11px] cue-muted">最近結果</div>
-            <div className="mt-1 font-semibold">{Number(tournament?.summary?.completedMatchCount || 0)} 場</div>
-          </div>
-        ) : null}
       </div>
       {topFocusRow ? (
         <div className="mt-3 rounded-lg cue-surface px-3 py-2">
