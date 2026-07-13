@@ -330,26 +330,26 @@ function drawMetaRow(ctx: CanvasRenderingContext2D, chips: string[], palette: Sh
 }
 
 function drawSnookerhkLiveLogo(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  fillRoundedRect(ctx, x, y, 158, 158, 26, '#FF140A');
-  fillRoundedRect(ctx, x + 10, y + 60, 138, 40, 0, '#F3F4F6');
+  fillRoundedRect(ctx, x, y, 146, 146, 28, '#FF140A', 'rgba(255,255,255,0.18)');
+  fillRoundedRect(ctx, x + 9, y + 55, 128, 38, 2, '#F3F4F6');
 
-  drawText(ctx, 'HONG', x + 79, y + 34, {
-    font: '900 18px Arial, "Microsoft JhengHei", sans-serif',
+  drawText(ctx, 'HONG', x + 73, y + 31, {
+    font: '900 17px Arial, "Microsoft JhengHei", sans-serif',
     color: '#FFFFFF',
     align: 'center',
   });
-  drawText(ctx, 'KONG', x + 79, y + 56, {
-    font: '900 18px Arial, "Microsoft JhengHei", sans-serif',
+  drawText(ctx, 'KONG', x + 73, y + 52, {
+    font: '900 17px Arial, "Microsoft JhengHei", sans-serif',
     color: '#FFFFFF',
     align: 'center',
   });
-  drawText(ctx, 'Snooker', x + 79, y + 91, {
-    font: '900 italic 24px Arial, "Microsoft JhengHei", sans-serif',
+  drawText(ctx, 'Snooker', x + 73, y + 85, {
+    font: '900 italic 22px Arial, "Microsoft JhengHei", sans-serif',
     color: '#FF140A',
     align: 'center',
   });
-  drawText(ctx, 'LIVE', x + 79, y + 142, {
-    font: '900 46px Arial, "Microsoft JhengHei", sans-serif',
+  drawText(ctx, 'LIVE', x + 73, y + 131, {
+    font: '900 42px Arial, "Microsoft JhengHei", sans-serif',
     color: '#FFFFFF',
     align: 'center',
   });
@@ -366,31 +366,35 @@ function drawVenueIdentity(
   const label = String(venueName || 'Snookerhk.live').trim() || 'Snookerhk.live';
   let textX = x;
   let textWidth = maxWidth;
+  const avatarSize = 36;
+  const avatarRadius = avatarSize / 2;
 
   if (venueLogoImage) {
+    fillRoundedRect(ctx, x - 4, y - 32, Math.min(maxWidth, 340), 48, 24, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
+
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x + 16, y - 8, 16, 0, Math.PI * 2);
+    ctx.arc(x + avatarRadius + 6, y - 8, avatarRadius, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-    ctx.drawImage(venueLogoImage, x, y - 24, 32, 32);
+    ctx.drawImage(venueLogoImage, x + 6, y - 26, avatarSize, avatarSize);
     ctx.restore();
 
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x + 16, y - 8, 16.5, 0, Math.PI * 2);
+    ctx.arc(x + avatarRadius + 6, y - 8, avatarRadius + 1, 0, Math.PI * 2);
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+    ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
 
-    textX = x + 44;
-    textWidth = Math.max(80, maxWidth - 44);
+    textX = x + 56;
+    textWidth = Math.max(80, maxWidth - 56);
   }
 
   drawText(ctx, label, textX, y, {
-    font: '500 22px Arial, "Microsoft JhengHei", sans-serif',
+    font: '600 23px Arial, "Microsoft JhengHei", sans-serif',
     color: '#D8E5F4',
     maxWidth: textWidth,
   });
@@ -420,14 +424,14 @@ function drawTopBanner(
     color: palette.accent,
   });
   drawAdaptiveText(ctx, title, 78, 138, {
-    maxWidth: 760,
+    maxWidth: 706,
     maxFontSize: 52,
     minFontSize: 34,
     color: palette.textMain,
     weight: 700,
   });
-  drawVenueIdentity(ctx, subtitle, 78, 178, 760, venueLogoImage);
-  drawSnookerhkLiveLogo(ctx, 848, 64);
+  drawVenueIdentity(ctx, subtitle, 78, 178, 706, venueLogoImage);
+  drawSnookerhkLiveLogo(ctx, 866, 60);
   return drawMetaRow(ctx, chips, palette, 204);
 }
 
