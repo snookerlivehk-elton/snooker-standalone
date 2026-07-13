@@ -9,6 +9,7 @@ type VenueTournamentKnockoutWorkspaceMainContentProps = {
   formatDisplayDateTime: (value: any) => string;
   formatMatchResultTypeLabel: (value: any) => string;
   formatParticipantLabel: (participant: any) => string;
+  modeLabel?: string;
   leagueRounds: any[];
   matchesLoading: boolean;
   matchesRows: any[];
@@ -28,6 +29,7 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   formatDisplayDateTime,
   formatMatchResultTypeLabel,
   formatParticipantLabel,
+  modeLabel = '淘汰賽',
   leagueRounds,
   matchesLoading,
   matchesRows,
@@ -60,13 +62,13 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   const scheduleSummary = matchesLoading
     ? '進級表載入中...'
     : bracketColumns.length > 0
-      ? `共 ${bracketColumns.length} 個輪次欄位，淘汰賽模式主視圖以進級表為核心。`
-      : '尚未生成淘汰賽模式進級表。';
+      ? `共 ${bracketColumns.length} 個輪次欄位，${modeLabel}主視圖以進級表為核心。`
+      : `尚未生成${modeLabel}進級表。`;
 
   return (
     <div className="space-y-4">
       <VenueTournamentWorkspaceSectionCard
-        title="淘汰賽模式進級表"
+        title={`${modeLabel}進級表`}
         summary={scheduleSummary}
         priorityLabel="主要展示"
         expanded={expandedSections.schedule}
@@ -94,7 +96,7 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
       </VenueTournamentWorkspaceSectionCard>
 
       <VenueTournamentWorkspaceSectionCard
-        title="淘汰賽模式流程摘要"
+        title={`${modeLabel}流程摘要`}
         summary={insightsSummary}
         priorityLabel="輔助資訊"
         expanded={expandedSections.insights}

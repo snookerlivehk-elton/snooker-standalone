@@ -2012,7 +2012,7 @@ const Me: React.FC = () => {
                               <div key={`${row.tournamentId}-${row.format}`} className="rounded-lg px-3 py-2 cue-surface">
                                 <div className="font-semibold">{row.title}</div>
                                 <div className="text-xs cue-muted mt-1">
-                                  {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
+                                  {row.format === 'LEAGUE' ? '聯賽模式' : row.format === 'GOLD_SILVER_CUP' ? '金銀杯模式' : '淘汰賽模式'}
                                   {row.club?.name ? ` · ${row.club.name}` : ''}
                                   {row.startsAt ? ` · ${new Date(row.startsAt).toLocaleDateString()}` : ''}
                                 </div>
@@ -2055,7 +2055,7 @@ const Me: React.FC = () => {
                                     <td className="py-2 px-2">
                                       <div className="font-semibold">{row.tournamentTitle}</div>
                                       <div className="text-xs cue-muted mt-1">
-                                        {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
+                                        {row.format === 'LEAGUE' ? '聯賽模式' : row.format === 'GOLD_SILVER_CUP' ? '金銀杯模式' : '淘汰賽模式'}
                                         {row.club?.name ? ` · ${row.club.name}` : ''}
                                       </div>
                                     </td>
@@ -2180,7 +2180,7 @@ const Me: React.FC = () => {
                                       <td className="py-2 px-2">
                                         <div className="font-semibold">{row.tournamentTitle}</div>
                                         <div className="text-xs cue-muted mt-1">
-                                          {row.format === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式'}
+                                          {row.format === 'LEAGUE' ? '聯賽模式' : row.format === 'GOLD_SILVER_CUP' ? '金銀杯模式' : '淘汰賽模式'}
                                           {row.club?.name ? ` · ${row.club.name}` : ''}
                                         </div>
                                       </td>

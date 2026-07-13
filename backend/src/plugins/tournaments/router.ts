@@ -111,22 +111,28 @@ function getTournamentParticipantMatchResultKey(match: any, targetParticipantId:
   return winnerParticipantId === targetParticipantId ? 'WIN' : 'LOSS';
 }
 
-function buildTournamentParticipantRoundLabel(match: any, tournamentFormat: 'KNOCKOUT' | 'LEAGUE', participantCount: number) {
+function buildTournamentParticipantRoundLabel(match: any, tournamentFormat: 'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP', participantCount: number) {
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
   const roundNo = Number(match?.round_no || 0);
   if (roundNo <= 0) return tournamentFormat === 'LEAGUE' ? '循環賽' : '-';
   if (tournamentFormat === 'LEAGUE') return `第 ${roundNo} 輪`;
+  if (stageCode === 'GOLD_THIRD_PLACE') return '金杯季軍戰';
+  if (stageCode === 'SILVER_THIRD_PLACE') return '銀杯季軍戰';
+  if (stageCode === 'SILVER_QUALIFIER') return `銀杯資格輪 ${roundNo}`;
+  if (stageCode === 'SILVER_MAIN') return `銀杯主賽 R${roundNo}`;
   const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
   const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
-  if (hasPreliminaryRound && roundNo === 1) return '預賽';
+  const prefix = stageCode === 'GOLD_MAIN' ? '金杯 ' : '';
+  if (hasPreliminaryRound && roundNo === 1) return `${prefix}預賽`.trim();
   const roundOffset = hasPreliminaryRound ? 1 : 0;
   const stageSize = bracketSize / (2 ** Math.max(0, roundNo - 1));
-  if (stageSize <= 2) return '決賽';
-  if (stageSize === 4) return '4 強';
-  if (stageSize === 8) return '8 強';
-  if (stageSize === 16) return '16 強';
-  if (stageSize === 32) return '32 強';
-  if (stageSize === 64) return '64 強';
-  return `Round ${Math.max(1, roundNo - roundOffset)}`;
+  if (stageSize <= 2) return `${prefix}決賽`.trim();
+  if (stageSize === 4) return `${prefix}4 強`.trim();
+  if (stageSize === 8) return `${prefix}8 強`.trim();
+  if (stageSize === 16) return `${prefix}16 強`.trim();
+  if (stageSize === 32) return `${prefix}32 強`.trim();
+  if (stageSize === 64) return `${prefix}64 強`.trim();
+  return `${prefix}Round ${Math.max(1, roundNo - roundOffset)}`.trim();
 }
 
 function buildPublicTournamentParticipantDetail(options: {
@@ -139,7 +145,12 @@ function buildPublicTournamentParticipantDetail(options: {
   const { tournament, participant, standings, matches, participantCount } = options;
   const participantId = String(participant?.id || '').trim();
   const memberId = String(participant?.member_id || participant?.member?.id || '').trim();
-  const tournamentFormat = String(tournament?.format || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+  const tournamentFormatRaw = String(tournament?.format || '').trim().toUpperCase();
+  const tournamentFormat = tournamentFormatRaw === 'LEAGUE'
+    ? 'LEAGUE'
+    : tournamentFormatRaw === 'GOLD_SILVER_CUP'
+      ? 'GOLD_SILVER_CUP'
+      : 'KNOCKOUT';
   const standing = standings.find((row: any) => String(row?.participantId || '') === participantId) || null;
 
   const participantMatches = matches
@@ -519,7 +530,12 @@ export function createTournamentRouter() {
     const title = String(payload.title || '').trim();
     const description = payload.description == null ? null : String(payload.description).trim() || null;
     const signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
-    const format = String(payload.format || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+    const requestedFormat = String(payload.format || '').trim().toUpperCase();
+    const format = requestedFormat === 'LEAGUE'
+      ? 'LEAGUE'
+      : requestedFormat === 'GOLD_SILVER_CUP'
+        ? 'GOLD_SILVER_CUP'
+        : 'KNOCKOUT';
     const seedMode = String(payload.seedMode || 'MANUAL').trim().toUpperCase();
     const capacity = Number(payload.capacity ?? 32);
     const leagueRoundRobinMode = String(payload.leagueRoundRobinMode || 'SINGLE').trim().toUpperCase();
@@ -530,7 +546,7 @@ export function createTournamentRouter() {
     const startsAtRaw = payload.startsAt;
     const signupClosesAtRaw = payload.signupClosesAt ?? payload.deadline;
     if (!title) return res.status(400).json({ error: 'title required' });
-    if (!['KNOCKOUT', 'LEAGUE'].includes(format)) return res.status(400).json({ error: 'format invalid' });
+    if (!['KNOCKOUT', 'LEAGUE', 'GOLD_SILVER_CUP'].includes(format)) return res.status(400).json({ error: 'format invalid' });
     const cap = Number.isFinite(capacity) ? Math.max(1, Math.min(512, Math.floor(capacity))) : 32;
     if (bestOfFrames != null && (!Number.isFinite(bestOfFrames) || bestOfFrames <= 0)) return res.status(400).json({ error: 'bestOfFrames invalid' });
     if (!['SINGLE', 'DOUBLE'].includes(leagueRoundRobinMode)) return res.status(400).json({ error: 'leagueRoundRobinMode invalid' });
@@ -582,7 +598,7 @@ export function createTournamentRouter() {
     if (payload.signupGuide !== undefined) patch.signupGuide = payload.signupGuide == null ? null : String(payload.signupGuide).trim() || null;
     if (payload.format !== undefined) {
       const format = String(payload.format || '').trim().toUpperCase();
-      if (format && !['KNOCKOUT', 'LEAGUE'].includes(format)) {
+      if (format && !['KNOCKOUT', 'LEAGUE', 'GOLD_SILVER_CUP'].includes(format)) {
         return res.status(400).json({ error: 'format invalid' });
       }
       patch.format = format || 'KNOCKOUT';

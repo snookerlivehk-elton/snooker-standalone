@@ -155,7 +155,8 @@ export function createMemberRouter(options: MemberRouterOptions) {
       const mine = mySide === 'A' ? match?.player_a_participant : match?.player_b_participant;
       const opponent = mySide === 'A' ? match?.player_b_participant : match?.player_a_participant;
       const resultType = String(match?.result_type || 'STANDARD').toUpperCase();
-      const format = String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+      const formatRaw = String(match?.tournament?.format || 'KNOCKOUT').toUpperCase();
+      const format = formatRaw === 'LEAGUE' ? 'LEAGUE' : formatRaw === 'GOLD_SILVER_CUP' ? 'GOLD_SILVER_CUP' : 'KNOCKOUT';
       const framesWon = Number(mySide === 'A' ? match?.player_a_frames_won || 0 : match?.player_b_frames_won || 0);
       const framesLost = Number(mySide === 'A' ? match?.player_b_frames_won || 0 : match?.player_a_frames_won || 0);
       const totalPointsFor = Number(mySide === 'A' ? match?.player_a_total_points || 0 : match?.player_b_total_points || 0);
@@ -434,7 +435,11 @@ export function createMemberRouter(options: MemberRouterOptions) {
       tournament: {
         id: String(match?.tournament?.id || ''),
         title: String(match?.tournament?.title || '-'),
-        format: String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT',
+        format: String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE'
+          ? 'LEAGUE'
+          : String(match?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'GOLD_SILVER_CUP'
+            ? 'GOLD_SILVER_CUP'
+            : 'KNOCKOUT',
         startsAt: match?.tournament?.startsAt ?? null,
         workflowStatus: String(match?.tournament?.workflow_status || ''),
         status: String(match?.tournament?.status || ''),
@@ -818,7 +823,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
         firstChampionshipAt: null as string | null,
         latestChampionshipAt: null as string | null,
       };
-      const byFormat: Record<'KNOCKOUT' | 'LEAGUE', any> = {
+      const byFormat: Record<'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP', any> = {
         KNOCKOUT: {
           tournamentsEntered: 0,
           matchesPlayed: 0,
@@ -837,10 +842,20 @@ export function createMemberRouter(options: MemberRouterOptions) {
           breaks20Plus: 0,
           highestBreak: 0,
         },
+        GOLD_SILVER_CUP: {
+          tournamentsEntered: 0,
+          matchesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          breaks20Plus: 0,
+          highestBreak: 0,
+        },
       };
 
       for (const participant of participants) {
-        const format = String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+        const formatRaw = String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase();
+        const format = formatRaw === 'LEAGUE' ? 'LEAGUE' : formatRaw === 'GOLD_SILVER_CUP' ? 'GOLD_SILVER_CUP' : 'KNOCKOUT';
         byFormat[format].tournamentsEntered += 1;
         if (String(participant?.tournament?.workflow_status || '').toUpperCase() === 'COMPLETED') {
           summary.completedTournaments += 1;
@@ -875,7 +890,7 @@ export function createMemberRouter(options: MemberRouterOptions) {
 
       for (const row of recentMatches) {
         if (row.resultKey === 'BYE') continue;
-        if (row.format !== 'KNOCKOUT' && row.format !== 'LEAGUE') continue;
+        if (row.format !== 'KNOCKOUT' && row.format !== 'LEAGUE' && row.format !== 'GOLD_SILVER_CUP') continue;
         const format = row.format;
         summary.highestBreak = Math.max(summary.highestBreak, Number(row.maxBreak || 0));
         summary.matchesPlayed += 1;
@@ -924,7 +939,8 @@ export function createMemberRouter(options: MemberRouterOptions) {
       }
 
       for (const row of breaks) {
-        const format = String(row?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+        const formatRaw = String(row?.tournament?.format || 'KNOCKOUT').toUpperCase();
+        const format = formatRaw === 'LEAGUE' ? 'LEAGUE' : formatRaw === 'GOLD_SILVER_CUP' ? 'GOLD_SILVER_CUP' : 'KNOCKOUT';
         const points = Math.max(0, Number(row?.points || 0));
         summary.breaks20Plus += 1;
         summary.highestBreak = Math.max(summary.highestBreak, points);
@@ -940,7 +956,11 @@ export function createMemberRouter(options: MemberRouterOptions) {
         .map((participant) => ({
           tournamentId: String(participant?.tournament?.id || ''),
           title: String(participant?.tournament?.title || '-'),
-          format: String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT',
+          format: String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'LEAGUE'
+            ? 'LEAGUE'
+            : String(participant?.tournament?.format || 'KNOCKOUT').toUpperCase() === 'GOLD_SILVER_CUP'
+              ? 'GOLD_SILVER_CUP'
+              : 'KNOCKOUT',
           startsAt: participant?.tournament?.startsAt ?? null,
           workflowStatus: String(participant?.tournament?.workflow_status || ''),
           participantStatus: String(participant?.status || ''),

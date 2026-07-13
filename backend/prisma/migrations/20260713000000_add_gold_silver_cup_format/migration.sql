@@ -1,0 +1,6 @@
+DO $$
+BEGIN
+  ALTER TYPE "TournamentFormat" ADD VALUE IF NOT EXISTS 'GOLD_SILVER_CUP';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

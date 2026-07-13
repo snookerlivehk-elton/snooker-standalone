@@ -102,6 +102,6 @@ export type TournamentScoringWorkspace = {
   setResultQuickWinnerSide: React.Dispatch<React.SetStateAction<'A' | 'B'>>;
   setResultStartedAt: React.Dispatch<React.SetStateAction<string>>;
   showNotice: (message: string, timeout?: number) => void;
-  tournamentFormat: 'KNOCKOUT' | 'LEAGUE';
+  tournamentFormat: 'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP';
   updateFrameDraft: (index: number, patch: Partial<EditableFrame>) => void;
 };

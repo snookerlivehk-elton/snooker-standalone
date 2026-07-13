@@ -5,7 +5,7 @@ import { hashPassword, makeSalt } from '../../core/members/utils.js';
 const db = prisma as any;
 
 type Side = 'A' | 'B';
-type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type TournamentMatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
 
@@ -50,6 +50,118 @@ function pairParticipants<T extends { id: string }>(items: T[], bracketSize: num
     pairs.push([padded[i] ?? null, padded[bracketSize - 1 - i] ?? null]);
   }
   return pairs;
+}
+
+function pairBracketSlots<T>(items: T[], bracketSize: number): Array<[T | null, T | null]> {
+  const padded: Array<T | null> = [...items];
+  while (padded.length < bracketSize) padded.push(null);
+  const pairs: Array<[T | null, T | null]> = [];
+  for (let i = 0; i < bracketSize / 2; i += 1) {
+    pairs.push([padded[i] ?? null, padded[bracketSize - 1 - i] ?? null]);
+  }
+  return pairs;
+}
+
+type GoldSilverCupPlan = {
+  participantCount: number;
+  goldBracketSize: number;
+  goldRounds: number;
+  lastDropGoldRound: number;
+  goldPlayableMatchNosByRound: Record<number, number[]>;
+  silverStages: Array<{
+    stageIndex: number;
+    stageCode: 'SILVER_QUALIFIER' | 'SILVER_MAIN';
+    roundNo: number;
+    goldRoundNo: number;
+    carrySourceCount: number;
+    goldLoserMatchNos: number[];
+    goldLoserSourceIndexByMatchNo: Record<number, number>;
+    entrySourceCount: number;
+    bracketSize: number;
+    matchCount: number;
+    sourcePairs: Array<[number | null, number | null]>;
+  }>;
+  silverMainBracketSize: number;
+  silverMainRoundCount: number;
+};
+
+function buildGoldSilverCupPlan(participantCountRaw: number): GoldSilverCupPlan {
+  const participantCount = Math.max(0, Math.floor(Number(participantCountRaw || 0)));
+  if (participantCount < 8) {
+    throw new Error('Gold / Silver Cup currently requires at least 8 participants');
+  }
+  const goldBracketSize = nextPowerOfTwo(participantCount);
+  const goldRounds = Math.log2(goldBracketSize);
+  const lastDropGoldRound = goldRounds - 2;
+  const goldRoundOnePairs = pairBracketSlots(
+    Array.from({ length: participantCount }, (_unused, index) => index + 1),
+    goldBracketSize,
+  );
+  const goldPlayableMatchNosByRound: Record<number, number[]> = {};
+  let currentBranchPresence = goldRoundOnePairs.map(([a, b], index) => {
+    if (a && b) {
+      if (!goldPlayableMatchNosByRound[1]) goldPlayableMatchNosByRound[1] = [];
+      goldPlayableMatchNosByRound[1].push(index + 1);
+    }
+    return !!a || !!b;
+  });
+  for (let roundNo = 2; roundNo <= goldRounds; roundNo += 1) {
+    const nextBranchPresence: boolean[] = [];
+    const playableMatches: number[] = [];
+    for (let branchIndex = 0; branchIndex < currentBranchPresence.length; branchIndex += 2) {
+      const left = !!currentBranchPresence[branchIndex];
+      const right = !!currentBranchPresence[branchIndex + 1];
+      if (left && right) playableMatches.push((branchIndex / 2) + 1);
+      nextBranchPresence.push(left || right);
+    }
+    goldPlayableMatchNosByRound[roundNo] = playableMatches;
+    currentBranchPresence = nextBranchPresence;
+  }
+
+  let carrySourceCount = 0;
+  const silverStages: GoldSilverCupPlan['silverStages'] = [];
+  for (let goldRoundNo = 1; goldRoundNo <= lastDropGoldRound; goldRoundNo += 1) {
+    const goldLoserMatchNos = [...(goldPlayableMatchNosByRound[goldRoundNo] || [])];
+    const entrySourceCount = carrySourceCount + goldLoserMatchNos.length;
+    const bracketSize = nextPowerOfTwo(Math.max(2, entrySourceCount));
+    const matchCount = Math.max(1, bracketSize / 2);
+    const sourcePairs = pairBracketSlots(
+      Array.from({ length: entrySourceCount }, (_unused, index) => index + 1),
+      bracketSize,
+    );
+    const goldLoserSourceIndexByMatchNo = goldLoserMatchNos.reduce((acc, matchNo, index) => {
+      acc[matchNo] = carrySourceCount + index + 1;
+      return acc;
+    }, {} as Record<number, number>);
+    silverStages.push({
+      stageIndex: goldRoundNo,
+      stageCode: goldRoundNo === lastDropGoldRound ? 'SILVER_MAIN' : 'SILVER_QUALIFIER',
+      roundNo: goldRoundNo === lastDropGoldRound ? 1 : goldRoundNo,
+      goldRoundNo,
+      carrySourceCount,
+      goldLoserMatchNos,
+      goldLoserSourceIndexByMatchNo,
+      entrySourceCount,
+      bracketSize,
+      matchCount,
+      sourcePairs,
+    });
+    carrySourceCount = matchCount;
+  }
+
+  const silverMainStage = silverStages[silverStages.length - 1];
+  const silverMainBracketSize = Math.max(2, Number(silverMainStage?.bracketSize || 2));
+  const silverMainRoundCount = Math.max(1, Math.log2(silverMainBracketSize));
+  return {
+    participantCount,
+    goldBracketSize,
+    goldRounds,
+    lastDropGoldRound,
+    goldPlayableMatchNosByRound,
+    silverStages,
+    silverMainBracketSize,
+    silverMainRoundCount,
+  };
 }
 
 function shuffleArray<T>(items: T[]) {
@@ -98,7 +210,15 @@ function normalizeResultType(value: any): TournamentMatchResultType {
 }
 
 function normalizeTournamentFormat(value: any): TournamentFormat {
-  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'LEAGUE') return 'LEAGUE';
+  if (normalized === 'GOLD_SILVER_CUP') return 'GOLD_SILVER_CUP';
+  return 'KNOCKOUT';
+}
+
+function isKnockoutFamilyFormat(value: any) {
+  const format = normalizeTournamentFormat(value);
+  return format === 'KNOCKOUT' || format === 'GOLD_SILVER_CUP';
 }
 
 function getTargetWins(bestOfRaw: any) {
@@ -170,7 +290,7 @@ function buildMethodZSimulationPlan(match: any, tournament: any, generateBreaks:
     if (remainingFrames <= aNeeds) nextWinner = 'A';
     else if (remainingFrames <= bNeeds) nextWinner = 'B';
     else {
-      const bias = format === 'KNOCKOUT' ? 0.62 : 0.58;
+      const bias = isKnockoutFamilyFormat(format) ? 0.62 : 0.58;
       nextWinner = Math.random() < bias
         ? winnerSide
         : (winnerSide === 'A' ? 'B' : 'A');
@@ -671,6 +791,343 @@ async function finalizeKnockoutMatch(tx: any, tournamentId: string, match: any, 
       where: { id: tournamentId },
       data: { workflow_status: 'IN_PROGRESS' },
     });
+  }
+}
+
+async function getGoldSilverCupPlanForTournament(tx: any, tournamentId: string) {
+  const participantCount = await tx.tournamentParticipant.count({
+    where: {
+      tournament_id: tournamentId,
+    },
+  });
+  return buildGoldSilverCupPlan(participantCount);
+}
+
+function getMatchLoserParticipantId(match: any, winnerParticipantId: string | null) {
+  if (!winnerParticipantId) return null;
+  return String(match?.player_a_participant_id || '') === String(winnerParticipantId)
+    ? match?.player_b_participant_id || null
+    : match?.player_a_participant_id || null;
+}
+
+async function assignParticipantToStageMatch(
+  tx: any,
+  tournamentId: string,
+  stageCode: string,
+  roundNo: number,
+  matchNo: number,
+  side: 'A' | 'B',
+  participantId: string,
+) {
+  const match = await tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: stageCode,
+      round_no: roundNo,
+      match_no: matchNo,
+    },
+  });
+  if (!match) throw new Error(`Target match not found: ${stageCode} R${roundNo} M${matchNo}`);
+
+  const field = side === 'A' ? 'player_a_participant_id' : 'player_b_participant_id';
+  const currentValue = String(match?.[field] || '').trim();
+  if (currentValue && currentValue === String(participantId || '').trim()) return match;
+  if (currentValue && currentValue !== String(participantId || '').trim()) {
+    throw new Error(`Target match slot already occupied: ${stageCode} R${roundNo} M${matchNo} ${field}`);
+  }
+
+  const nextPlayerA = side === 'A' ? participantId : match.player_a_participant_id;
+  const nextPlayerB = side === 'B' ? participantId : match.player_b_participant_id;
+
+  return tx.tournamentMatch.update({
+    where: { id: match.id },
+    data: {
+      [field]: participantId,
+      status: nextPlayerA && nextPlayerB ? 'READY' : 'PENDING',
+    },
+  });
+}
+
+function getGoldSilverStageTarget(stage: GoldSilverCupPlan['silverStages'][number], sourceIndex: number) {
+  for (let matchIndex = 0; matchIndex < stage.sourcePairs.length; matchIndex += 1) {
+    const [left, right] = stage.sourcePairs[matchIndex] || [null, null];
+    if (left === sourceIndex) return { matchNo: matchIndex + 1, side: 'A' as const };
+    if (right === sourceIndex) return { matchNo: matchIndex + 1, side: 'B' as const };
+  }
+  throw new Error(`Silver stage source index not found: ${stage.stageCode} R${stage.roundNo} source ${sourceIndex}`);
+}
+
+async function advanceBracketWinner(
+  tx: any,
+  tournamentId: string,
+  stageCode: string,
+  match: any,
+  winnerParticipantId: string | null,
+) {
+  if (!winnerParticipantId || !match?.round_no || !match?.match_no) return;
+  const nextRoundNo = Number(match.round_no) + 1;
+  const nextMatchNo = Math.ceil(Number(match.match_no) / 2);
+  const nextMatch = await tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: stageCode,
+      round_no: nextRoundNo,
+      match_no: nextMatchNo,
+    },
+  });
+  if (!nextMatch) return;
+
+  const side = Number(match.match_no) % 2 === 1 ? 'A' : 'B';
+  await assignParticipantToStageMatch(tx, tournamentId, stageCode, nextRoundNo, nextMatchNo, side, winnerParticipantId);
+}
+
+async function advanceGoldLoserToGoldThirdPlace(tx: any, tournamentId: string, match: any, loserParticipantId: string | null) {
+  if (!loserParticipantId) return false;
+  const thirdPlaceMatch = await tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: 'GOLD_THIRD_PLACE',
+    },
+  });
+  if (!thirdPlaceMatch) return false;
+  const side = Number(match?.match_no || 0) % 2 === 1 ? 'A' : 'B';
+  await assignParticipantToStageMatch(tx, tournamentId, 'GOLD_THIRD_PLACE', Number(thirdPlaceMatch.round_no || 1), Number(thirdPlaceMatch.match_no || 1), side, loserParticipantId);
+  return true;
+}
+
+async function advanceSilverLoserToSilverThirdPlace(tx: any, tournamentId: string, match: any, loserParticipantId: string | null) {
+  if (!loserParticipantId) return false;
+  const thirdPlaceMatch = await tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: 'SILVER_THIRD_PLACE',
+    },
+  });
+  if (!thirdPlaceMatch) return false;
+  const side = Number(match?.match_no || 0) % 2 === 1 ? 'A' : 'B';
+  await assignParticipantToStageMatch(tx, tournamentId, 'SILVER_THIRD_PLACE', Number(thirdPlaceMatch.round_no || 1), Number(thirdPlaceMatch.match_no || 1), side, loserParticipantId);
+  return true;
+}
+
+async function maybeResolveGoldSilverStageBye(
+  tx: any,
+  tournamentId: string,
+  stage: GoldSilverCupPlan['silverStages'][number],
+  matchNo: number,
+) {
+  const pair = stage.sourcePairs[matchNo - 1] || [null, null];
+  const hasPermanentBye = !pair[0] || !pair[1];
+  if (!hasPermanentBye) return false;
+  const match = await tx.tournamentMatch.findFirst({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: stage.stageCode,
+      round_no: stage.roundNo,
+      match_no: matchNo,
+    },
+  });
+  if (!match) return false;
+  if (String(match?.status || '').trim().toUpperCase() === 'COMPLETED') return true;
+
+  const winnerParticipantId = match.player_a_participant_id || match.player_b_participant_id || null;
+  if (!winnerParticipantId) return false;
+
+  const updated = await tx.tournamentMatch.update({
+    where: { id: match.id },
+    data: {
+      status: 'COMPLETED',
+      result_type: 'BYE',
+      winner_participant_id: winnerParticipantId,
+      started_at: match.started_at ?? new Date(),
+      ended_at: new Date(),
+      player_a_frames_won: match.player_a_participant_id ? 1 : 0,
+      player_b_frames_won: match.player_b_participant_id ? 1 : 0,
+      player_a_total_points: 0,
+      player_b_total_points: 0,
+      player_a_max_break: 0,
+      player_b_max_break: 0,
+      player_a_20_plus_count: 0,
+      player_b_20_plus_count: 0,
+    },
+  });
+  await finalizeGoldSilverCupMatch(tx, tournamentId, updated, winnerParticipantId);
+  return true;
+}
+
+async function routeGoldLoserToSilver(tx: any, tournamentId: string, plan: GoldSilverCupPlan, goldMatch: any, loserParticipantId: string | null) {
+  if (!loserParticipantId) return false;
+  const goldRoundNo = Number(goldMatch?.round_no || 0);
+  if (goldRoundNo <= 0 || goldRoundNo > plan.lastDropGoldRound) return false;
+  const targetStage = plan.silverStages.find((stage) => stage.goldRoundNo === goldRoundNo);
+  if (!targetStage) return false;
+
+  await tx.tournamentParticipant.update({
+    where: { id: loserParticipantId },
+    data: {
+      status: 'ACTIVE',
+      final_rank: null,
+    },
+  });
+
+  const goldMatchNo = Number(goldMatch?.match_no || 0);
+  const sourceIndex = Number(targetStage.goldLoserSourceIndexByMatchNo[goldMatchNo] || 0);
+  if (!sourceIndex) return false;
+  const target = getGoldSilverStageTarget(targetStage, sourceIndex);
+  await assignParticipantToStageMatch(tx, tournamentId, targetStage.stageCode, targetStage.roundNo, target.matchNo, target.side, loserParticipantId);
+  await maybeResolveGoldSilverStageBye(tx, tournamentId, targetStage, target.matchNo);
+  return true;
+}
+
+async function routeSilverQualifierWinner(tx: any, tournamentId: string, plan: GoldSilverCupPlan, match: any, winnerParticipantId: string | null) {
+  if (!winnerParticipantId) return false;
+  const qualifierRoundNo = Number(match?.round_no || 0);
+  if (qualifierRoundNo <= 0) return false;
+  const currentStage = plan.silverStages.find((stage) => stage.stageCode === 'SILVER_QUALIFIER' && stage.roundNo === qualifierRoundNo);
+  const nextStage = plan.silverStages.find((stage) => stage.stageIndex === Number(currentStage?.stageIndex || 0) + 1);
+  if (!currentStage || !nextStage) return false;
+  const sourceIndex = Number(match?.match_no || 0);
+  const target = getGoldSilverStageTarget(nextStage, sourceIndex);
+  await assignParticipantToStageMatch(tx, tournamentId, nextStage.stageCode, nextStage.roundNo, target.matchNo, target.side, winnerParticipantId);
+  await maybeResolveGoldSilverStageBye(tx, tournamentId, nextStage, target.matchNo);
+  return true;
+}
+
+async function syncGoldSilverCupWorkflowStatus(tx: any, tournamentId: string) {
+  const rows = await tx.tournamentMatch.findMany({
+    where: {
+      tournament_id: tournamentId,
+      stage_code: { in: ['GOLD_MAIN', 'GOLD_THIRD_PLACE', 'SILVER_QUALIFIER', 'SILVER_MAIN', 'SILVER_THIRD_PLACE'] },
+    },
+    select: { status: true },
+  });
+  const statuses = rows.map((row: any) => String(row?.status || '').trim().toUpperCase());
+  const completedCount = statuses.filter((status: string) => status === 'COMPLETED').length;
+  const allCompleted = statuses.length > 0 && statuses.every((status: string) => status === 'COMPLETED');
+  const workflowStatus = allCompleted
+    ? 'COMPLETED'
+    : completedCount > 0
+      ? 'IN_PROGRESS'
+      : 'SEEDED';
+  await tx.tournament.update({
+    where: { id: tournamentId },
+    data: { workflow_status: workflowStatus },
+  });
+}
+
+async function finalizeGoldSilverCupMatch(tx: any, tournamentId: string, match: any, winnerParticipantId: string | null) {
+  const plan = await getGoldSilverCupPlanForTournament(tx, tournamentId);
+  const stageCode = String(match?.stage_code || '').trim().toUpperCase();
+  const loserParticipantId = getMatchLoserParticipantId(match, winnerParticipantId);
+
+  if (stageCode === 'GOLD_MAIN') {
+    await advanceBracketWinner(tx, tournamentId, 'GOLD_MAIN', match, winnerParticipantId);
+    const goldRoundNo = Number(match?.round_no || 0);
+    if (goldRoundNo === plan.goldRounds - 1) {
+      await advanceGoldLoserToGoldThirdPlace(tx, tournamentId, match, loserParticipantId);
+      if (loserParticipantId) {
+        await tx.tournamentParticipant.update({
+          where: { id: loserParticipantId },
+          data: { status: 'ACTIVE', final_rank: null },
+        });
+      }
+    } else if (goldRoundNo < plan.goldRounds) {
+      await routeGoldLoserToSilver(tx, tournamentId, plan, match, loserParticipantId);
+    }
+
+    if (goldRoundNo >= plan.goldRounds) {
+      if (winnerParticipantId) {
+        await tx.tournamentParticipant.update({
+          where: { id: winnerParticipantId },
+          data: { status: 'CHAMPION', final_rank: 1 },
+        });
+      }
+      if (loserParticipantId) {
+        await tx.tournamentParticipant.update({
+          where: { id: loserParticipantId },
+          data: { status: 'ELIMINATED', final_rank: 2 },
+        });
+      }
+    } else if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ACTIVE', final_rank: null },
+      });
+    }
+
+    await syncGoldSilverCupWorkflowStatus(tx, tournamentId);
+    return;
+  }
+
+  if (stageCode === 'GOLD_THIRD_PLACE') {
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ELIMINATED', final_rank: 3 },
+      });
+    }
+    if (loserParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: { status: 'ELIMINATED', final_rank: 4 },
+      });
+    }
+    await syncGoldSilverCupWorkflowStatus(tx, tournamentId);
+    return;
+  }
+
+  if (stageCode === 'SILVER_QUALIFIER') {
+    await routeSilverQualifierWinner(tx, tournamentId, plan, match, winnerParticipantId);
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ACTIVE', final_rank: null },
+      });
+    }
+    if (loserParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: { status: 'ELIMINATED' },
+      });
+    }
+    await syncGoldSilverCupWorkflowStatus(tx, tournamentId);
+    return;
+  }
+
+  if (stageCode === 'SILVER_MAIN') {
+    await advanceBracketWinner(tx, tournamentId, 'SILVER_MAIN', match, winnerParticipantId);
+    const silverRoundNo = Number(match?.round_no || 0);
+    if (silverRoundNo === plan.silverMainRoundCount - 1) {
+      await advanceSilverLoserToSilverThirdPlace(tx, tournamentId, match, loserParticipantId);
+    } else if (loserParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: { status: 'ELIMINATED' },
+      });
+    }
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ACTIVE', final_rank: null },
+      });
+    }
+    await syncGoldSilverCupWorkflowStatus(tx, tournamentId);
+    return;
+  }
+
+  if (stageCode === 'SILVER_THIRD_PLACE') {
+    if (winnerParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: winnerParticipantId },
+        data: { status: 'ACTIVE', final_rank: null },
+      });
+    }
+    if (loserParticipantId) {
+      await tx.tournamentParticipant.update({
+        where: { id: loserParticipantId },
+        data: { status: 'ELIMINATED' },
+      });
+    }
+    await syncGoldSilverCupWorkflowStatus(tx, tournamentId);
   }
 }
 
@@ -1194,7 +1651,7 @@ export const tournamentsService = {
   async generateKnockoutSchedule(clubId: string, tournamentId: string) {
     const tournament = await getOwnedTournament(clubId, tournamentId);
     const format = normalizeTournamentFormat(tournament.format);
-    if (format !== 'KNOCKOUT') throw new Error('Tournament format is not KNOCKOUT');
+    if (!isKnockoutFamilyFormat(format)) throw new Error('Tournament format is not knockout-family');
 
     return db.$transaction(async (tx: any) => {
       const existingCount = await tx.tournamentMatch.count({ where: { tournament_id: tournamentId } });
@@ -1208,6 +1665,130 @@ export const tournamentsService = {
         },
       });
       if (participants.length < 2) throw new Error('At least 2 active participants required');
+
+      if (format === 'GOLD_SILVER_CUP') {
+        const plan = buildGoldSilverCupPlan(participants.length);
+        const goldRoundOnePairs = pairParticipants(participants, plan.goldBracketSize);
+        const created: any[] = [];
+
+        for (let round = 1; round <= plan.goldRounds; round += 1) {
+          const matchCount = plan.goldBracketSize / (2 ** round);
+          for (let matchNo = 1; matchNo <= matchCount; matchNo += 1) {
+            const pair = round === 1 ? goldRoundOnePairs[matchNo - 1] : [null, null];
+            const [a, b] = pair || [null, null];
+            const autoWinner = a && !b ? a.id : (!a && b ? b.id : null);
+            const row = await tx.tournamentMatch.create({
+              data: {
+                id: randomUUID(),
+                tournament_id: tournamentId,
+                stage_code: 'GOLD_MAIN',
+                round_no: round,
+                match_no: matchNo,
+                player_a_participant_id: a?.id || null,
+                player_b_participant_id: b?.id || null,
+                winner_participant_id: autoWinner,
+                status: autoWinner ? 'COMPLETED' : (a && b ? 'READY' : 'PENDING'),
+                result_type: autoWinner ? 'BYE' : 'STANDARD',
+                best_of_frames: tournament.best_of_frames ?? null,
+              },
+            });
+            created.push(row);
+          }
+        }
+
+        const goldThirdPlaceRow = await tx.tournamentMatch.create({
+          data: {
+            id: randomUUID(),
+            tournament_id: tournamentId,
+            stage_code: 'GOLD_THIRD_PLACE',
+            round_no: plan.goldRounds,
+            match_no: 2,
+            player_a_participant_id: null,
+            player_b_participant_id: null,
+            winner_participant_id: null,
+            status: 'PENDING',
+            result_type: 'STANDARD',
+            best_of_frames: tournament.best_of_frames ?? null,
+          },
+        });
+        created.push(goldThirdPlaceRow);
+
+        for (const silverStage of plan.silverStages.filter((stage) => stage.stageCode === 'SILVER_QUALIFIER')) {
+          for (let matchNo = 1; matchNo <= silverStage.matchCount; matchNo += 1) {
+            const row = await tx.tournamentMatch.create({
+              data: {
+                id: randomUUID(),
+                tournament_id: tournamentId,
+                stage_code: 'SILVER_QUALIFIER',
+                round_no: silverStage.roundNo,
+                match_no: matchNo,
+                player_a_participant_id: null,
+                player_b_participant_id: null,
+                winner_participant_id: null,
+                status: 'PENDING',
+                result_type: 'STANDARD',
+                best_of_frames: tournament.best_of_frames ?? null,
+              },
+            });
+            created.push(row);
+          }
+        }
+
+        const silverMainStage = plan.silverStages.find((stage) => stage.stageCode === 'SILVER_MAIN');
+        for (let round = 1; round <= plan.silverMainRoundCount; round += 1) {
+          const matchCount = round === 1
+            ? Number(silverMainStage?.matchCount || 0)
+            : plan.silverMainBracketSize / (2 ** round);
+          for (let matchNo = 1; matchNo <= matchCount; matchNo += 1) {
+            const row = await tx.tournamentMatch.create({
+              data: {
+                id: randomUUID(),
+                tournament_id: tournamentId,
+                stage_code: 'SILVER_MAIN',
+                round_no: round,
+                match_no: matchNo,
+                player_a_participant_id: null,
+                player_b_participant_id: null,
+                winner_participant_id: null,
+                status: 'PENDING',
+                result_type: 'STANDARD',
+                best_of_frames: tournament.best_of_frames ?? null,
+              },
+            });
+            created.push(row);
+          }
+        }
+
+        if (plan.silverMainBracketSize >= 4) {
+          const silverThirdPlaceRow = await tx.tournamentMatch.create({
+            data: {
+              id: randomUUID(),
+              tournament_id: tournamentId,
+              stage_code: 'SILVER_THIRD_PLACE',
+              round_no: plan.silverMainRoundCount,
+              match_no: 2,
+              player_a_participant_id: null,
+              player_b_participant_id: null,
+              winner_participant_id: null,
+              status: 'PENDING',
+              result_type: 'STANDARD',
+              best_of_frames: tournament.best_of_frames ?? null,
+            },
+          });
+          created.push(silverThirdPlaceRow);
+        }
+
+        for (const row of created.filter((item) => Number(item.round_no || 0) === 1 && String(item.stage_code || '').trim().toUpperCase() === 'GOLD_MAIN' && item.winner_participant_id)) {
+          await finalizeGoldSilverCupMatch(tx, tournamentId, row, row.winner_participant_id);
+        }
+
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { workflow_status: 'SEEDED' },
+        });
+
+        return created;
+      }
 
       const bracketSize = nextPowerOfTwo(participants.length);
       const hasPreliminaryRound = participants.length !== previousPowerOfTwo(participants.length);
@@ -1337,7 +1918,7 @@ export const tournamentsService = {
   async resetKnockoutSchedule(clubId: string, tournamentId: string) {
     const tournament = await getOwnedTournament(clubId, tournamentId);
     const format = normalizeTournamentFormat(tournament.format);
-    if (format !== 'KNOCKOUT') throw new Error('Tournament format is not KNOCKOUT');
+    if (!isKnockoutFamilyFormat(format)) throw new Error('Tournament format is not knockout-family');
 
     return db.$transaction(async (tx: any) => {
       const matches = await tx.tournamentMatch.findMany({
@@ -1550,7 +2131,9 @@ export const tournamentsService = {
           },
         });
 
-        if (format === 'KNOCKOUT') {
+        if (format === 'GOLD_SILVER_CUP') {
+          await finalizeGoldSilverCupMatch(tx, tournamentId, updated, winnerParticipantId);
+        } else if (isKnockoutFamilyFormat(format)) {
           await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
         } else {
           await finalizeLeagueProgress(tx, tournament);
@@ -1602,7 +2185,7 @@ export const tournamentsService = {
       const targetWins = getTargetWins(bestOfFrames);
       const hasReachedTargetWins = playerAFramesWon >= targetWins || playerBFramesWon >= targetWins;
       const hasUsedAllFrames = frames.length >= bestOfFrames;
-      const isMatchCompleted = format === 'KNOCKOUT'
+      const isMatchCompleted = isKnockoutFamilyFormat(format)
         ? hasReachedTargetWins
         : hasReachedTargetWins || hasUsedAllFrames;
       const winnerParticipantId = playerAFramesWon === playerBFramesWon
@@ -1613,7 +2196,7 @@ export const tournamentsService = {
       if (String(match.status || '').toUpperCase() === 'COMPLETED' && !isMatchCompleted) {
         throw new Error('Completed match cannot be reverted to partial score');
       }
-      if (isMatchCompleted && !winnerParticipantId && format === 'KNOCKOUT') throw new Error('Knockout match cannot end in a draw');
+      if (isMatchCompleted && !winnerParticipantId && isKnockoutFamilyFormat(format)) throw new Error('Knockout-family match cannot end in a draw');
 
       const updated = await tx.tournamentMatch.update({
         where: { id: matchId },
@@ -1638,7 +2221,9 @@ export const tournamentsService = {
           where: { id: tournamentId },
           data: { workflow_status: 'IN_PROGRESS' },
         });
-      } else if (format === 'KNOCKOUT') {
+      } else if (format === 'GOLD_SILVER_CUP') {
+        await finalizeGoldSilverCupMatch(tx, tournamentId, updated, winnerParticipantId);
+      } else if (isKnockoutFamilyFormat(format)) {
         await finalizeKnockoutMatch(tx, tournamentId, updated, winnerParticipantId);
       } else {
         await finalizeLeagueProgress(tx, tournament);

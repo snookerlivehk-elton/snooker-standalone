@@ -55,7 +55,7 @@ type InboxItem = {
   raw?: any;
 };
 
-type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP';
 
 const PUBLIC_HIGHBREAK_FALLBACK_OPTIONS = [20, 30, 40, 50];
 const PUBLIC_HIGHBREAK_SCOPE_OPTIONS = [
@@ -84,11 +84,17 @@ function formatTournamentParticipantLabel(participant: any) {
 }
 
 function normalizeTournamentFormat(value: any): TournamentFormat {
-  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'LEAGUE') return 'LEAGUE';
+  if (normalized === 'GOLD_SILVER_CUP') return 'GOLD_SILVER_CUP';
+  return 'KNOCKOUT';
 }
 
 function formatTournamentFormatLabel(value: any) {
-  return normalizeTournamentFormat(value) === 'LEAGUE' ? '聯賽模式' : '淘汰賽模式';
+  const format = normalizeTournamentFormat(value);
+  if (format === 'LEAGUE') return '聯賽模式';
+  if (format === 'GOLD_SILVER_CUP') return '金銀杯模式';
+  return '淘汰賽模式';
 }
 
 function formatTournamentWorkflowLabel(value: any) {

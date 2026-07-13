@@ -13,22 +13,33 @@ function nextPowerOfTwo(n: number) {
 export function formatKnockoutRoundLabel(match: any, participantCount: number) {
   const stageCode = String(match?.stage_code || '').trim().toUpperCase();
   if (stageCode === 'KNOCKOUT_THIRD_PLACE') return '季軍戰';
+  if (stageCode === 'GOLD_THIRD_PLACE') return '金杯季軍戰';
+  if (stageCode === 'SILVER_THIRD_PLACE') return '銀杯季軍戰';
+  if (stageCode === 'SILVER_QUALIFIER') {
+    const roundNo = Number(match?.round_no || 0);
+    return roundNo > 0 ? `銀杯資格輪 ${roundNo}` : '銀杯資格輪';
+  }
+  if (stageCode === 'SILVER_MAIN') {
+    const roundNo = Number(match?.round_no || 0);
+    return roundNo > 0 ? `銀杯主賽 R${roundNo}` : '銀杯主賽';
+  }
   const roundNo = Number(match?.round_no || 0);
   if (roundNo <= 0) return '-';
   const bracketSize = nextPowerOfTwo(Math.max(2, participantCount || 2));
   const hasPreliminaryRound = participantCount > 0 && participantCount !== bracketSize;
-  if (hasPreliminaryRound && roundNo === 1) return '預賽';
+  const prefix = stageCode === 'GOLD_MAIN' ? '金杯 ' : '';
+  if (hasPreliminaryRound && roundNo === 1) return `${prefix}預賽`.trim();
   const roundOffset = hasPreliminaryRound ? 1 : 0;
   const stageSize = bracketSize / (2 ** Math.max(0, roundNo - 1));
-  if (stageSize <= 2) return '決賽';
-  if (stageSize === 4) return '4 強';
-  if (stageSize === 8) return '8 強';
-  if (stageSize === 16) return '16 強';
-  if (stageSize === 32) return '32 強';
-  if (stageSize === 64) return '64 強';
-  if (stageSize === 128) return '128 強';
-  if (stageSize === 256) return '256 強';
-  return `Round ${Math.max(1, roundNo - roundOffset)}`;
+  if (stageSize <= 2) return `${prefix}決賽`.trim();
+  if (stageSize === 4) return `${prefix}4 強`.trim();
+  if (stageSize === 8) return `${prefix}8 強`.trim();
+  if (stageSize === 16) return `${prefix}16 強`.trim();
+  if (stageSize === 32) return `${prefix}32 強`.trim();
+  if (stageSize === 64) return `${prefix}64 強`.trim();
+  if (stageSize === 128) return `${prefix}128 強`.trim();
+  if (stageSize === 256) return `${prefix}256 強`.trim();
+  return `${prefix}Round ${Math.max(1, roundNo - roundOffset)}`.trim();
 }
 
 export function formatLeagueRoundLabel(match: any) {
@@ -70,6 +81,20 @@ function getBracketColumnHeight(matchCount: number) {
   return matchCount * BRACKET_CARD_HEIGHT + Math.max(0, matchCount - 1) * BRACKET_BASE_GAP;
 }
 
+function getKnockoutStageSortValue(row: any) {
+  const stageCode = String(row?.stage_code || '').trim().toUpperCase();
+  const roundNo = Number(row?.round_no || 0);
+  if (stageCode === 'KNOCKOUT_PRELIM') return 50 + roundNo;
+  if (stageCode === 'KNOCKOUT_MAIN') return 100 + roundNo;
+  if (stageCode === 'KNOCKOUT_THIRD_PLACE') return 180;
+  if (stageCode === 'GOLD_MAIN') return 200 + roundNo;
+  if (stageCode === 'GOLD_THIRD_PLACE') return 280;
+  if (stageCode === 'SILVER_QUALIFIER') return 300 + roundNo;
+  if (stageCode === 'SILVER_MAIN') return 400 + roundNo;
+  if (stageCode === 'SILVER_THIRD_PLACE') return 480;
+  return 999 + roundNo;
+}
+
 export function useTournamentStageViewData(participantsRows: any[], matchesRows: any[]) {
   const thirdPlaceMatch = useMemo(
     () => matchesRows.find((row: any) => String(row?.stage_code || '').trim().toUpperCase() === 'KNOCKOUT_THIRD_PLACE') || null,
@@ -89,7 +114,12 @@ export function useTournamentStageViewData(participantsRows: any[], matchesRows:
       }
     }
     return Array.from(grouped.entries())
-      .sort((a, b) => a[1].roundNo - b[1].roundNo)
+      .sort((a, b) => {
+        const aSort = Math.min(...a[1].items.map((item: any) => getKnockoutStageSortValue(item)));
+        const bSort = Math.min(...b[1].items.map((item: any) => getKnockoutStageSortValue(item)));
+        if (aSort !== bSort) return aSort - bSort;
+        return a[1].roundNo - b[1].roundNo;
+      })
       .map(([label, group], roundIndex, allColumns) => {
         const items = [...group.items].sort((a, b) => Number(a?.match_no || 0) - Number(b?.match_no || 0));
         const paddingTop = getBracketColumnPaddingTop(roundIndex);

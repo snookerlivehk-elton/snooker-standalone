@@ -55,7 +55,7 @@ type VenueTournamentsModuleProps = {
   className?: string;
 };
 
-type TournamentFormat = 'KNOCKOUT' | 'LEAGUE';
+type TournamentFormat = 'KNOCKOUT' | 'LEAGUE' | 'GOLD_SILVER_CUP';
 type TournamentSeedMode = 'MANUAL' | 'RANKING' | 'RANDOM';
 type TournamentLeagueRoundRobinMode = 'SINGLE' | 'DOUBLE';
 type MatchResultType = 'STANDARD' | 'BYE' | 'WALKOVER' | 'FORFEIT';
@@ -69,11 +69,22 @@ function formatParticipantLabel(participant: any) {
 }
 
 function normalizeTournamentFormat(value: any): TournamentFormat {
-  return String(value || '').trim().toUpperCase() === 'LEAGUE' ? 'LEAGUE' : 'KNOCKOUT';
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'LEAGUE') return 'LEAGUE';
+  if (normalized === 'GOLD_SILVER_CUP') return 'GOLD_SILVER_CUP';
+  return 'KNOCKOUT';
 }
 
 function formatTournamentFormatLabel(value: any) {
-  return normalizeTournamentFormat(value) === 'LEAGUE' ? '聯賽' : '淘汰賽';
+  const format = normalizeTournamentFormat(value);
+  if (format === 'LEAGUE') return '聯賽';
+  if (format === 'GOLD_SILVER_CUP') return '金銀杯';
+  return '淘汰賽';
+}
+
+function isKnockoutFamilyFormat(value: any) {
+  const format = normalizeTournamentFormat(value);
+  return format === 'KNOCKOUT' || format === 'GOLD_SILVER_CUP';
 }
 
 function normalizeSeedMode(value: any): TournamentSeedMode {
@@ -450,12 +461,14 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   }, [matchesRows, selectedMatchId]);
   const tournamentFormat = normalizeTournamentFormat(selectedTournament?.format || format);
   const isLeague = tournamentFormat === 'LEAGUE';
+  const isGoldSilverCup = tournamentFormat === 'GOLD_SILVER_CUP';
+  const isKnockoutFamily = isKnockoutFamilyFormat(tournamentFormat);
   const workflowStatus = String(selectedTournament?.workflow_status || 'DRAFT').trim().toUpperCase();
   const hasParticipants = participantsRows.length > 0;
   const hasSchedule = matchesRows.length > 0;
   const canGenerateParticipants = confirmedRows.length > 0 && !hasSchedule;
   const canGenerateSchedule = participantsRows.length >= 2 && !hasSchedule;
-  const canEditSeeding = hasParticipants && !hasSchedule && !isLeague;
+  const canEditSeeding = hasParticipants && !hasSchedule && isKnockoutFamily;
   const hasPlayedMatches = matchesRows.some((row: any) => {
     const frames = Array.isArray(row?.frames) ? row.frames : [];
     return frames.length > 0 || !!row?.started_at || !!row?.ended_at;
@@ -469,7 +482,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         ? '先確認至少 1 位報名者，這裡才會開放。'
         : '目前未能生成正式名單。';
   const generateScheduleHint = canGenerateSchedule
-    ? `已有 ${participantsRows.length} 位正式參賽者，可生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
+    ? `已有 ${participantsRows.length} 位正式參賽者，可生成${isLeague ? '聯賽' : isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`
     : hasSchedule
       ? '賽程已存在；如要重新生成，請改用下方危險操作。'
       : participantsRows.length === 0
@@ -547,7 +560,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       : formatKnockoutRoundLabel(selectedMatch, participantsRows.length))
     : '';
   const selectedMatchBreadcrumbLabel = selectedMatch
-    ? `${isLeague ? '聯賽' : '淘汰賽'} / ${selectedMatchStageLabel} / M${Math.max(1, Number(selectedMatch?.match_no || 1))}`
+    ? `${isLeague ? '聯賽' : isGoldSilverCup ? '金銀杯' : '淘汰賽'} / ${selectedMatchStageLabel} / M${Math.max(1, Number(selectedMatch?.match_no || 1))}`
     : '';
   const {
     handleSubmitActiveFrameBreak,
@@ -599,17 +612,17 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     ? '先確認至少 1 位報名者，之後才可生成正式名單。'
     : hasSchedule
       ? hasPlayedMatches
-        ? `賽程已開始，正式名單${isLeague ? '' : '與 seedMode'}會鎖定，且不可再重建${isLeague ? '循環賽' : '淘汰賽籤表'}。`
-        : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? '聯賽' : '淘汰賽'}賽程。`
+        ? `賽程已開始，正式名單${isLeague ? '' : '與 seedMode'}會鎖定，且不可再重建${isLeague ? '循環賽' : isGoldSilverCup ? '金銀杯籤表' : '淘汰賽籤表'}。`
+        : `賽程已生成但尚未開打，可使用「重建賽程」清空目前${isLeague ? '聯賽' : isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`
       : !hasParticipants
         ? isLeague
           ? '先生成正式名單，再建立聯賽循環賽程。'
-          : '先生成正式名單，再決定 seedMode 與淘汰賽賽程。'
+            : `先生成正式名單，再決定 seedMode 與${isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`
         : participantsRows.length < 2
-          ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
+          ? `正式名單至少需要 2 位有效參賽者才可生成${isLeague ? '聯賽' : isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`
           : isLeague
             ? '目前可直接生成聯賽賽程。'
-            : '目前可調整種子及生成淘汰賽賽程。';
+            : `目前可調整種子及生成${isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`;
   const currentWorkflowStep: WorkflowStepKey = workflowStatus === 'COMPLETED'
     ? 'COMPLETED'
     : hasPlayedMatches || workflowStatus === 'IN_PROGRESS'
@@ -624,7 +637,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     : !hasParticipants
       ? `目前已有 ${confirmedRows.length} 位已確認報名，下一步是生成正式名單。`
       : !hasSchedule
-        ? `目前已有 ${participantsRows.length} 位正式參賽者，下一步是生成${isLeague ? '聯賽' : '淘汰賽'}賽程。`
+        ? `目前已有 ${participantsRows.length} 位正式參賽者，下一步是生成${isLeague ? '聯賽' : isGoldSilverCup ? '金銀杯' : '淘汰賽'}賽程。`
         : hasPlayedMatches
           ? '賽事已開始，現在以記分、進度追蹤與結果整理為主。'
           : '賽程已生成但尚未開打，可先安排首批對局並開始記分。';
@@ -660,8 +673,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
     }
   };
   const handleGenerateKnockoutSchedule = async () => {
+    const modeLabel = isGoldSilverCup ? '金銀杯' : '淘汰賽';
     if (!confirm(
-      `確定按目前正式名單生成淘汰賽賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n- 生成後如需改 seed 排列，應先重建賽程`
+      `確定按目前正式名單生成${modeLabel}賽程？\n\n- 正式參賽者：${participantsRows.length} 位\n- seedMode：${formatSeedModeLabel(seedMode)}\n- 預計籤表：${knockoutBracketEstimate.bracketSize || '-'} 強\n- 預計 Bye：${knockoutBracketEstimate.byeCount}\n${isGoldSilverCup ? '- 注意：Batch 1 先沿用淘汰賽單 bracket 骨架；金杯敗者掉入銀杯會在 Batch 2 補上\n' : ''}- 生成後如需改 seed 排列，應先重建賽程`
     )) return;
     try {
       const result = await generateTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
@@ -673,11 +687,11 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       const pendingCount = createdMatches.filter((row: any) => String(row?.status || '').trim().toUpperCase() === 'PENDING').length;
       const byeCount = createdMatches.filter((row: any) => String(row?.result_type || '').trim().toUpperCase() === 'BYE').length;
       if (preferredMatch) {
-        showWorkflowFocusNotice(`已自動跳到淘汰賽的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游籤表。`, 5200);
+        showWorkflowFocusNotice(`已自動跳到${modeLabel}的 ${formatScoringJumpTargetLabel(preferredMatch)}，可直接開始記分並推進下游籤表。`, 5200);
       }
-      showNotice(`已生成淘汰賽賽程：${knockoutBracketEstimate.bracketSize || '-'} 強籤表，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個輪空。${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 3800);
+      showNotice(`已生成${modeLabel}賽程：${knockoutBracketEstimate.bracketSize || '-'} 強籤表，共 ${createdMatches.length} 場；${readyCount} 場可直接開打，${pendingCount} 場待上游，${byeCount} 個輪空。${isGoldSilverCup ? ' 目前仍為 Batch 1 骨架，銀杯掉落路由將在下一批補上。' : ''}${preferredMatch ? ' 已自動選中下一場可記分對局。' : ''}`, 4200);
     } catch (e: any) {
-      showNotice(e?.message || '生成淘汰賽賽程失敗', 3000);
+      showNotice(e?.message || `生成${modeLabel}賽程失敗`, 3000);
     }
   };
   const handleResetLeagueSchedule = async () => {
@@ -703,8 +717,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
   };
   const handleResetKnockoutSchedule = async () => {
     if (!selectedId) return;
+    const modeLabel = isGoldSilverCup ? '金銀杯' : '淘汰賽';
     if (!confirm(
-      `確定要重建淘汰賽賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成對局\n- 正式名單會保留 ${participantsRows.length} 位\n- 既有 seed 仍可保留，但籤表、輪空與預賽配置會重新建立`
+      `確定要重建${modeLabel}賽程？\n\n- 目前會清空 ${matchesRows.length} 場已生成對局\n- 正式名單會保留 ${participantsRows.length} 位\n- 既有 seed 仍可保留，但籤表、輪空與預賽配置會重新建立`
     )) return;
     if (!confirm('再次確認：只適用於未開打賽程。若已有實際賽果、frame 或 break records，系統會拒絕重建。')) return;
     try {
@@ -715,9 +730,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
       const result = await resetTournamentKnockoutSchedule(API_URL, operatorId, selectedId);
       await Promise.all([loadSelectedPhase1Data(), loadRows()]);
       const preservedParticipants = Array.isArray((result as any)?.participants) ? (result as any).participants.length : participantsRows.length;
-      showNotice(`已清空 ${clearedMatches} 場淘汰賽對局，保留 ${preservedParticipants} 位正式參賽者，可重新調整 seed 與生成籤表。`, 3500);
+      showNotice(`已清空 ${clearedMatches} 場${modeLabel}對局，保留 ${preservedParticipants} 位正式參賽者，可重新調整 seed 與生成籤表。`, 3500);
     } catch (e: any) {
-      showNotice(e?.message || '重建淘汰賽賽程失敗', 3500);
+      showNotice(e?.message || `重建${modeLabel}賽程失敗`, 3500);
     } finally {
       setScheduleResetSaving(false);
     }
@@ -845,6 +860,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <select value={format} onChange={(e) => setFormat(normalizeTournamentFormat(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
             <option value="KNOCKOUT">Knockout</option>
             <option value="LEAGUE">League</option>
+            <option value="GOLD_SILVER_CUP">Gold / Silver Cup</option>
           </select>
         </div>
         <div className="md:col-span-1">
@@ -855,7 +871,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
           <label className="block text-sm mb-1 cue-muted">每場局數 / Best Of</label>
           <input value={bestOfFrames} onChange={(e) => setBestOfFrames(e.target.value)} className="w-full px-3 py-2 rounded cue-input" placeholder="5" type="number" min={1} />
         </div>
-        {format === 'KNOCKOUT' ? (
+        {isKnockoutFamilyFormat(format) ? (
           <div className="md:col-span-2">
             <label className="block text-sm mb-1 cue-muted">Seed 模式</label>
             <select value={seedMode} onChange={(e) => setSeedMode(normalizeSeedMode(e.target.value))} className="w-full px-3 py-2 rounded cue-input">
@@ -894,7 +910,9 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
         <div className="md:col-span-6 text-xs cue-muted">
           {format === 'LEAGUE'
             ? `目前建立為 ${formatLeagueRoundRobinModeLabel(leagueRoundRobinMode)}，生成賽程時會按此模式建立 round-robin fixtures。`
-            : `目前建立為 Knockout，正式名單生成後可按 ${formatSeedModeLabel(seedMode)} 建立籤表。`}
+            : format === 'GOLD_SILVER_CUP'
+              ? `目前建立為金銀杯模式；Batch 1 先接入 format 與工作台骨架，Batch 2 才會落實金杯敗者掉入銀杯的雙 bracket 路由。現階段先沿用淘汰賽 seed 流程。`
+              : `目前建立為 Knockout，正式名單生成後可按 ${formatSeedModeLabel(seedMode)} 建立籤表。`}
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm mb-1 cue-muted">截止日期</label>
@@ -967,7 +985,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                     startsAt: startsIso,
                     signupClosesAt: deadlineIso,
                   });
-                  showNotice(`已建立${format === 'LEAGUE' ? ' League' : ' Knockout'}比賽（草稿）`);
+                  showNotice(`已建立${format === 'LEAGUE' ? ' League' : format === 'GOLD_SILVER_CUP' ? ' 金銀杯' : ' Knockout'}比賽（草稿）`);
                   resetEditor();
                 }
                 await loadRows();
@@ -978,7 +996,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               }
             }}
           >
-            {selectedId ? '更新' : format === 'LEAGUE' ? '建立 League' : '建立 Knockout'}
+            {selectedId ? '更新' : format === 'LEAGUE' ? '建立 League' : format === 'GOLD_SILVER_CUP' ? '建立 金銀杯' : '建立 Knockout'}
           </button>
           <button
             type="button"
@@ -1266,6 +1284,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               generateParticipantsHint={generateParticipantsHint}
               generateScheduleHint={generateScheduleHint}
               isRefreshing={participantsLoading || matchesLoading}
+              modeLabel={isGoldSilverCup ? '金銀杯' : '淘汰賽'}
               resetScheduleHint={resetScheduleHint}
               scheduleResetSaving={scheduleResetSaving}
               testToolsAvailable={testToolsAccess.available}
@@ -1296,6 +1315,15 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
               }}
               showNotice={showNotice}
             />
+          ) : null}
+
+          {isGoldSilverCup ? (
+            <div className="mb-4 rounded-lg border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="font-semibold mb-1">金銀杯模式目前處於 Batch 1</div>
+              <div>
+                本批已接入 format、建賽、工作台識別與基本籤表骨架；金杯敗者掉入銀杯、雙 bracket 與金 / 銀杯三甲結算會在下一個 batch 落實。
+              </div>
+            </div>
           ) : null}
 
           {isLeague ? (
@@ -1415,6 +1443,7 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   formatDisplayDateTime={formatDisplayDateTime}
                   formatMatchResultTypeLabel={formatMatchResultTypeLabel}
                   formatParticipantLabel={formatParticipantLabel}
+                  modeLabel={isGoldSilverCup ? '金銀杯' : '淘汰賽'}
                   leagueRounds={leagueRounds}
                   matchesLoading={matchesLoading}
                   matchesRows={matchesRows}

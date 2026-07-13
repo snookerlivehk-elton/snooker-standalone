@@ -131,6 +131,20 @@
   - `frontend/src/Me.tsx`
     - 單杆歷史已補上目前口徑 / 目前標準 / 結果摘要 摘要卡
     - `全部` 已調整為 `綜合`，與 `ALL / VENUE / TOURNAMENT` 口徑命名一致
+- 已新增賽事展示重構藍圖：
+  - `TOURNAMENT_DISPLAY_SHARE_BLUEPRINT.md`
+    - 規劃 `聯賽模式 / 淘汰賽模式` 的主視圖重構
+    - 明確方向為：
+      - `聯賽模式 = 積分榜為主，球手詳情下沉`
+      - `淘汰賽模式 = 進級表為主，球手 / 對局詳情下沉`
+    - 規劃固定模板分享圖輸出：
+      - 聯賽模式積分榜圖片
+      - 淘汰賽模式進級表圖片
+    - 已整理：
+      - 命名替換清單
+      - 元件重組方向
+      - 分享圖策略
+      - Batch 1 ~ 4 執行順序
 - 本輪驗證：
   - `backend npm run build` 已通過
   - `frontend npm run build` 已通過
@@ -144,6 +158,7 @@
     - Highbreak Batch 4（會員頁 / 場館公開頁 / 首頁排行榜門檻切換）
     - Highbreak Batch 5（`VENUE / TOURNAMENT / ALL` scope 收斂）
     - Highbreak UI/UX 收斂第一輪（操作入口與目前檢視摘要整理）
+    - Tournament 展示重構藍圖（聯賽模式 / 淘汰賽模式 / 分享圖）
 
 - Tournament venue workbench 已完成一輪以「操作員可用性」為主的 UI 收斂與文案本地化：
   - `VenueTournamentLeagueSchedulePanel.tsx`
@@ -1744,3 +1759,210 @@ commit：`bbcceed`（feat: add homepage + site notice + global leaderboards）
   - `feature access`
   - `plugin routes`
   - `plugin migrations ownership`
+
+---
+
+## 金銀杯模式研究與開發建議（2026-07-13）
+
+### 規則研究結論
+
+- 網上常見的相關賽制主要有三類：
+  - `Cup + Consolation / Plate`
+    - 先按前置成績分流為兩個獨立淘汰賽，非中途掉落
+  - `Consolation / Plate drop-down`
+    - 主賽敗者掉入次級盃賽，常見為首輪或指定輪次敗者進入 consolation / plate
+  - `MONRAD / multiple plates`
+    - 每輪敗者都會與敗者繼續比賽，可排出更完整名次，但 bye 與路由更複雜
+- 使用者希望的「金杯負方進入銀杯」最接近：
+  - `主淘汰賽 + 掉落銀杯` 的自訂混合賽制
+  - 不等同標準 `Cup + Consolation`
+  - 亦不等同完整 `Double Elimination`
+
+### 建議產品定義
+
+- 新增新賽制：
+  - `金銀杯模式`
+- 建議 V1 規則：
+  - 所有參賽者先進入 `金杯`
+  - 金杯每場敗者掉入 `銀杯對應輪次`
+  - 金杯冠軍為總冠軍
+  - 銀杯冠軍為次級冠軍
+  - 金杯、銀杯各自設 `季軍戰`
+  - 產出：
+    - `金杯冠軍 / 亞軍 / 季軍`
+    - `銀杯冠軍 / 亞軍 / 季軍`
+  - `銀杯冠軍` 不回頭挑戰 `金杯冠軍`
+
+### 開發前需先定死的規則
+
+- 敗者掉入銀杯的範圍：
+  - 建議除金杯決賽敗者外，其餘金杯敗者可掉入銀杯
+- 掉落輪次規則：
+  - 建議採「對應輪次掉落」，而不是全部重回銀杯第一輪
+- bye 規則：
+  - V1 優先保證 `2^n` 人數穩定
+  - 非 `2^n` 可沿用既有 bye 邏輯，但 bye 不算敗者
+- 棄權 / DQ / walkover：
+  - 建議預設不可掉入銀杯
+- 排名輸出：
+  - 先分開輸出 `金杯三甲` 與 `銀杯三甲`
+  - 不強行合併成單一總排名
+
+### 系統實作建議
+
+- 不建議把它當成現有 `淘汰賽` 的小修小補
+- 建議作為新 workflow / format 實作：
+  - `backend`
+    - tournament format 新增 `GOLD_SILVER_CUP`
+    - 賽程引擎需同時管理 `goldBracket + silverBracket`
+    - 金杯賽果需同時推進：
+      - 金杯勝者晉級
+      - 金杯敗者掉入銀杯
+  - `frontend venue`
+    - 後台需同時展示金杯與銀杯兩套 bracket
+    - 記分後需同步刷新兩邊路由結果
+  - `public / poster`
+    - 後續需支援雙盃展示與雙盃海報
+
+### 建議 Batch 排程
+
+- `Batch 0`
+  - 規則確認 / checklist / SOP
+  - 明確定義：
+    - 掉落規則
+    - bye
+    - 棄權
+    - 三甲規則
+- `Batch 1`
+  - 後端資料模型與 format enum
+  - 建立 `GOLD_SILVER_CUP` 基本骨架
+- `Batch 2`
+  - 賽程生成器：
+    - 金杯 bracket
+    - 銀杯 bracket
+    - 掉落路由
+- `Batch 3`
+  - 後台 bracket UI
+  - 支援雙盃顯示與基本記分流
+- `Batch 4`
+  - 金 / 銀杯冠亞季結算
+  - 結果摘要與狀態文案
+- `Batch 5`
+  - 公開頁與分享海報支援
+
+### 建議時程
+
+- 精簡可上線版：
+  - 約 `4 ~ 5` 天
+- 含公開頁 / 海報 / 邊界情況的完整版：
+  - 約 `6 ~ 8` 天
+
+### 目前建議採用的 V1 範圍
+
+- 優先支援：
+  - `2^n` 參賽人數
+  - 金銀杯雙 bracket
+  - 雙方季軍戰
+- 暫不優先處理：
+  - 非 `2^n` 的複雜 bye 例外
+  - 多層 plate / MONRAD
+  - 銀杯回挑金杯的 grand final
+
+### 研究參考方向
+
+- `Cup + Consolation` 的雙 bracket 概念：
+  - Score7
+- `Consolation bracket` 的掉落與次級冠軍概念：
+  - Pickleball
+  - RFU Cup & Plate
+- `multiple plates / MONRAD` 的延伸思路：
+  - ManageMyMatch
+
+### Batch 1 進度（2026-07-13）
+
+- 已完成 `GOLD_SILVER_CUP` 的基礎接入：
+  - Prisma enum 新增 `GOLD_SILVER_CUP`
+  - 新增 migration：
+    - `20260713000000_add_gold_silver_cup_format`
+- 後端已完成：
+  - tournaments service / router 接受 `GOLD_SILVER_CUP`
+  - 先把 `GOLD_SILVER_CUP` 併入 `knockout-family` 的共用流程
+  - Batch 1 階段先沿用現有 knockout 單 bracket 骨架
+  - 會員統計 / 歷史資料 API 已可識別 `GOLD_SILVER_CUP`
+- 前端已完成：
+  - 場館後台建賽表單新增 `Gold / Silver Cup`
+  - 場館工作台已可顯示 `金銀杯` 格式名稱與提示文案
+  - 場館工作台於 `Batch 1` 階段明確標示：
+    - 已接入 format / 建賽 / 基本籤表骨架
+    - 金杯敗者掉入銀杯與雙 bracket 將於 `Batch 2` 補上
+  - 公開頁 / 會員中心的賽制名稱顯示已能識別 `金銀杯模式`
+- 驗證：
+  - `frontend npm run build` 通過
+  - `backend npm run build` 通過
+
+### Batch 1 尚未處理
+
+- 未落實 `金杯敗者 -> 銀杯` 的掉落路由
+- 未生成 `goldBracket + silverBracket` 雙 bracket
+- 未處理金 / 銀杯獨立冠亞季結算
+- 未處理公開頁 / 海報的雙盃展示
+
+### 下一步（Batch 2）
+
+- 實作金銀杯賽程生成器：
+  - 金杯 bracket
+  - 銀杯 bracket
+  - 金杯敗者掉落銀杯的 route map
+- 先優先支援：
+  - `2^n` 參賽人數
+  - 單一明確掉落規則
+
+### Batch 2 進度（2026-07-13）
+
+- 已開始落實 `金銀杯` 的雙 bracket 核心：
+  - 後端 service 新增 `GoldSilverCupPlan`
+  - stage code 已拆分為：
+    - `GOLD_MAIN`
+    - `GOLD_THIRD_PLACE`
+    - `SILVER_QUALIFIER`
+    - `SILVER_MAIN`
+    - `SILVER_THIRD_PLACE`
+- 已完成後端第一版邏輯：
+  - 建立金杯主賽 bracket
+  - 建立銀杯資格輪 / 主賽 / 季軍戰骨架
+  - 金杯敗者可按 route map 掉入銀杯
+  - 銀杯資格輪勝者可晉級銀杯主賽
+  - 金 / 銀杯 workflow status 可同步更新
+- 已完成前端第一版識別：
+  - `useTournamentStageViewData.ts` 已能辨識：
+    - 金杯輪次
+    - 銀杯資格輪
+    - 銀杯主賽
+    - 金 / 銀杯季軍戰
+  - 後台工作台標題已可按 `金銀杯` 顯示
+
+### Batch 2 尚待確認 / 收尾
+
+- 需進一步實測：
+  - `8 / 16 / 32` 人數的 route map 是否完全正確
+  - `bye / walkover / forfeit` 在金銀杯下的實際行為
+  - 銀杯季軍戰與最終排名輸出是否符合預期
+- 前端目前仍屬：
+  - 已能識別雙盃 stage
+  - 但尚未做真正的雙欄或雙分區專屬版面整理
+
+### Batch 2.1 進度（2026-07-13）
+
+- 已開始支援 `非 2^n` 人數的金銀杯賽程規則：
+  - 金杯改為補到下一個 `2^n bracket`
+  - 高 seed 可於金杯首輪自動 `bye`
+  - 金杯 `bye` 不產生敗者，因此不掉入銀杯
+- 銀杯 route plan 已改為按「實際可產生敗者的 gold match」計算：
+  - 不再假設所有 gold 首輪 match 都一定有敗者
+  - 因此 `12 / 20 / 24` 等人數可形成較合理的銀杯入口
+- 銀杯已開始支援局部 `bye`：
+  - 部分銀杯入口位可直接晉級下一輪
+  - 以符合金杯掉落人數並非整齊 `2^n` 的實際情況
+- 目前仍保留的下限：
+  - `金銀杯模式` 仍要求至少 `8` 人
+  - 暫未向下放寬至 `7` 人或以下，因為銀杯三甲與季軍戰完整性仍需再定義
