@@ -115,6 +115,8 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
     ? heroContent.summary
     : '集中顯示目前可公開查看的賽事進度、即將上場與最近完成場次。';
   const featuredUpdatedAtLabel = getTournamentBoardUpdatedAtLabel(featuredTournament);
+  const featuredPosterIsLandscape = normalizeTournamentFormat(featuredTournament?.format) === 'KNOCKOUT';
+  const featuredPosterFrameClassName = featuredPosterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
 
   React.useEffect(() => {
     let cancelled = false;
@@ -202,8 +204,10 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                   </div>
 
                   {featuredTournamentDetailLoading ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-10 text-sm cue-muted">
-                      正在生成海報預覽...
+                    <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                      <div className={`flex ${featuredPosterFrameClassName} items-center justify-center rounded-[20px] border border-dashed border-white/10 bg-black/20 px-4 text-sm cue-muted`}>
+                        正在生成海報預覽...
+                      </div>
                     </div>
                   ) : featuredPosterUrl ? (
                     <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
@@ -213,18 +217,20 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                           imageUrl: featuredPosterUrl,
                           title: `${String(featuredTournament?.title || '比賽')} 海報`,
                         })}
-                        className="block w-full overflow-hidden rounded-[20px] border border-white/10 bg-black/20 transition hover:border-white/20"
+                        className={`flex w-full ${featuredPosterFrameClassName} items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-black/20 transition hover:border-white/20`}
                       >
                         <img
                           src={featuredPosterUrl}
                           alt={`${String(featuredTournament?.title || '比賽')} 海報`}
-                          className="w-full"
+                          className="h-full w-full object-contain"
                         />
                       </button>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-8 text-sm cue-muted">
-                      目前未能生成與後台一致的海報預覽，請先點入完整賽況查看。
+                    <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                      <div className={`flex ${featuredPosterFrameClassName} items-center justify-center rounded-[20px] border border-dashed border-white/10 px-4 text-sm cue-muted`}>
+                        目前未能生成與後台一致的海報預覽，請先點入完整賽況查看。
+                      </div>
                     </div>
                   )}
 

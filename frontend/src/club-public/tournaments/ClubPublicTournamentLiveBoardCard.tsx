@@ -84,6 +84,8 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
   const updatedAtLabel = getTournamentCardUpdatedAtLabel(tournament);
   const [detailLoading, setDetailLoading] = React.useState(false);
   const [posterUrl, setPosterUrl] = React.useState('');
+  const posterIsLandscape = normalizeTournamentFormat(tournament?.format) === 'KNOCKOUT';
+  const posterFrameClassName = posterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
 
   React.useEffect(() => {
     let cancelled = false;
@@ -159,7 +161,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
 
         <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 p-3">
           {detailLoading ? (
-            <div className="flex min-h-[320px] items-center justify-center rounded-[18px] border border-dashed border-white/10 text-sm cue-muted">
+            <div className={`flex ${posterFrameClassName} items-center justify-center rounded-[18px] border border-dashed border-white/10 bg-black/20 text-sm cue-muted`}>
               正在生成海報縮圖...
             </div>
           ) : posterUrl ? (
@@ -169,16 +171,16 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
                 imageUrl: posterUrl,
                 title: `${String(tournament?.title || '比賽')} 海報`,
               })}
-              className="block w-full overflow-hidden rounded-[18px] border border-white/10 bg-black/20 transition hover:border-white/20"
+              className={`flex w-full ${posterFrameClassName} items-center justify-center overflow-hidden rounded-[18px] border border-white/10 bg-black/20 transition hover:border-white/20`}
             >
               <img
                 src={posterUrl}
                 alt={`${String(tournament?.title || '比賽')} 海報縮圖`}
-                className="w-full"
+                className="h-full w-full object-contain"
               />
             </button>
           ) : (
-            <div className="flex min-h-[320px] items-center justify-center rounded-[18px] border border-dashed border-white/10 px-4 text-center text-sm cue-muted">
+            <div className={`flex ${posterFrameClassName} items-center justify-center rounded-[18px] border border-dashed border-white/10 px-4 text-center text-sm cue-muted`}>
               暫時未能生成海報縮圖，請點入完整賽況查看。
             </div>
           )}
