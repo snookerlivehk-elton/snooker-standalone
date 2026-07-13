@@ -64,6 +64,8 @@ type SharePalette = {
 
 const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1350;
+const PREVIEW_PIXEL_RATIO = 2;
+const DOWNLOAD_PIXEL_RATIO = 3;
 
 function safeFilePart(raw: any) {
   const s = String(raw || '').trim();
@@ -206,14 +208,16 @@ function drawAdaptiveText(
   return size;
 }
 
-function createCanvasCard() {
+function createCanvasCard(pixelRatio = 1) {
   const canvas = document.createElement('canvas');
-  canvas.width = CARD_WIDTH;
-  canvas.height = CARD_HEIGHT;
+  const safePixelRatio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  canvas.width = Math.round(CARD_WIDTH * safePixelRatio);
+  canvas.height = Math.round(CARD_HEIGHT * safePixelRatio);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas not supported');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  ctx.scale(safePixelRatio, safePixelRatio);
   return { canvas, ctx };
 }
 
@@ -565,8 +569,8 @@ function renderLeagueStandingsShareCardCanvas({
   dimensionLabel,
   pointsRuleLabel,
   rows,
-}: DownloadLeagueStandingsShareCardArgs) {
-  const { canvas, ctx } = createCanvasCard();
+}: DownloadLeagueStandingsShareCardArgs, pixelRatio = 1) {
+  const { canvas, ctx } = createCanvasCard(pixelRatio);
   const palette = getLeaguePalette();
   const visibleRows = rows.slice(0, 8);
   const leader = rows[0] || null;
@@ -717,11 +721,11 @@ function renderLeagueStandingsShareCardCanvas({
 }
 
 export function buildLeagueStandingsShareCardDataUrl(args: DownloadLeagueStandingsShareCardArgs) {
-  return renderLeagueStandingsShareCardCanvas(args).toDataURL('image/png');
+  return renderLeagueStandingsShareCardCanvas(args, PREVIEW_PIXEL_RATIO).toDataURL('image/png');
 }
 
 export function downloadLeagueStandingsShareCard(args: DownloadLeagueStandingsShareCardArgs) {
-  const canvas = renderLeagueStandingsShareCardCanvas(args);
+  const canvas = renderLeagueStandingsShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO);
   triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'league-standings')}-share-card.png`);
 }
 
@@ -730,8 +734,8 @@ function renderKnockoutBracketShareCardCanvas({
   focusLabel,
   rounds,
   summaryCards = [],
-}: DownloadKnockoutBracketShareCardArgs) {
-  const { canvas, ctx } = createCanvasCard();
+}: DownloadKnockoutBracketShareCardArgs, pixelRatio = 1) {
+  const { canvas, ctx } = createCanvasCard(pixelRatio);
   const palette = getKnockoutPalette();
   const finalRound = rounds[rounds.length - 1] || null;
   const finalMatch = finalRound?.items?.[0] || null;
@@ -974,10 +978,10 @@ function renderKnockoutBracketShareCardCanvas({
 }
 
 export function buildKnockoutBracketShareCardDataUrl(args: DownloadKnockoutBracketShareCardArgs) {
-  return renderKnockoutBracketShareCardCanvas(args).toDataURL('image/png');
+  return renderKnockoutBracketShareCardCanvas(args, PREVIEW_PIXEL_RATIO).toDataURL('image/png');
 }
 
 export function downloadKnockoutBracketShareCard(args: DownloadKnockoutBracketShareCardArgs) {
-  const canvas = renderKnockoutBracketShareCardCanvas(args);
+  const canvas = renderKnockoutBracketShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO);
   triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}-share-card.png`);
 }
