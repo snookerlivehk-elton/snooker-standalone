@@ -95,13 +95,22 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
     getPublicClubTournament(API_URL, clubId, String(tournament.id), sessionMemberId || undefined)
       .then((detail) => {
         if (cancelled) return;
-        const nextPosterUrl = detail ? buildPublicTournamentPosterDataUrl({
+        if (!detail) {
+          setPosterUrl('');
+          return;
+        }
+        return buildPublicTournamentPosterDataUrl({
           detail,
           formatPublicTournamentStageLabel,
           formatTournamentParticipantLabel,
           formatTournamentMatchStatusLabel,
-        }) : '';
-        setPosterUrl(nextPosterUrl);
+        })
+          .then((nextPosterUrl) => {
+            if (!cancelled) setPosterUrl(nextPosterUrl);
+          })
+          .catch(() => {
+            if (!cancelled) setPosterUrl('');
+          });
       })
       .catch(() => {
         if (!cancelled) setPosterUrl('');

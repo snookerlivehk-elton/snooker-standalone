@@ -23,6 +23,8 @@ type VenueTournamentLeagueWorkspaceMainContentProps = {
   selectMatchForScoring: (row: any) => void;
   standingsRows: any[];
   tournamentTitle?: string;
+  venueName?: string;
+  venueLogoUrl?: string;
 };
 
 const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueWorkspaceMainContentProps> = ({
@@ -43,6 +45,8 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
   selectMatchForScoring,
   standingsRows,
   tournamentTitle,
+  venueName,
+  venueLogoUrl,
 }) => {
   const [expandedSections, setExpandedSections] = React.useState({
     insights: false,
@@ -118,6 +122,8 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
           pointsWin={pointsWin}
           standingsRows={standingsRows}
           tournamentTitle={tournamentTitle}
+          venueName={venueName}
+          venueLogoUrl={venueLogoUrl}
           formatParticipantLabel={formatParticipantLabel}
         />
       </VenueTournamentWorkspaceSectionCard>
@@ -145,6 +151,8 @@ const VenueTournamentLeagueWorkspaceMainContent: React.FC<VenueTournamentLeagueW
           selectedTournamentBestOf={selectedTournamentBestOf}
           selectMatchForScoring={selectMatchForScoring}
           tournamentTitle={tournamentTitle}
+          venueName={venueName}
+          venueLogoUrl={venueLogoUrl}
         />
       </VenueTournamentWorkspaceSectionCard>
     </div>

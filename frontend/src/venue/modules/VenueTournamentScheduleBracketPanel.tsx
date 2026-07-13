@@ -32,6 +32,8 @@ type VenueTournamentScheduleBracketPanelProps = {
   thirdPlaceMatch?: any;
   externalFilterPreset?: ScheduleFilterPreset | null;
   tournamentTitle?: string;
+  venueName?: string;
+  venueLogoUrl?: string;
 };
 
 const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBracketPanelProps> = ({
@@ -51,6 +53,8 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
   thirdPlaceMatch = null,
   externalFilterPreset = null,
   tournamentTitle = '',
+  venueName,
+  venueLogoUrl,
 }) => {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LIVE' | 'READY' | 'COMPLETED' | 'PENDING'>('ALL');
   const [quickFilter, setQuickFilter] = useState<'ALL' | 'SCORABLE' | 'UNFINISHED'>('ALL');
@@ -381,6 +385,8 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     }, null);
     downloadKnockoutBracketShareCard({
       title: String(tournamentTitle || '淘汰賽模式進級表'),
+      venueName,
+      venueLogoUrl,
       focusLabel: effectiveFocusedRoundLabel === 'ALL' ? '全部輪次' : effectiveFocusedRoundLabel,
       summaryCards: [
         {

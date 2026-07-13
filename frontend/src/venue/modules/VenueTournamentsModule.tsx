@@ -1405,6 +1405,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   selectMatchForScoring={selectMatchForScoring}
                   standingsRows={standingsRows}
                   tournamentTitle={String(selectedTournament?.title || '')}
+                  venueName={String((selectedTournament as any)?.club?.name || '')}
+                  venueLogoUrl={String((selectedTournament as any)?.club?.logoUrl || '')}
                 />
               ) : (
                 <VenueTournamentKnockoutWorkspaceMainContent
@@ -1422,6 +1424,8 @@ const VenueTournamentsModule: React.FC<VenueTournamentsModuleProps> = ({
                   selectMatchForScoring={selectMatchForScoring}
                   thirdPlaceMatch={thirdPlaceMatch}
                   tournamentTitle={selectedTournament?.title}
+                  venueName={String((selectedTournament as any)?.club?.name || '')}
+                  venueLogoUrl={String((selectedTournament as any)?.club?.logoUrl || '')}
                 />
               )}
             </div>

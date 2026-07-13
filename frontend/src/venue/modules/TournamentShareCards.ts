@@ -36,6 +36,8 @@ type KnockoutShareSummaryCard = {
 
 type DownloadLeagueStandingsShareCardArgs = {
   title: string;
+  venueName?: string;
+  venueLogoUrl?: string;
   dimensionLabel: string;
   pointsRuleLabel: string;
   rows: LeagueShareRow[];
@@ -43,6 +45,8 @@ type DownloadLeagueStandingsShareCardArgs = {
 
 type DownloadKnockoutBracketShareCardArgs = {
   title: string;
+  venueName?: string;
+  venueLogoUrl?: string;
   focusLabel: string;
   rounds: KnockoutShareRound[];
   summaryCards?: KnockoutShareSummaryCard[];
@@ -232,6 +236,21 @@ function formatShareTimestamp() {
   });
 }
 
+function loadCanvasImage(src: string | undefined | null): Promise<HTMLImageElement | null> {
+  const url = String(src || '').trim();
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (!url.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+    }
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
 function hexToRgba(hex: string, alpha: number) {
   const normalized = String(hex || '').replace('#', '').trim();
   if (normalized.length !== 6) return `rgba(255,255,255,${alpha})`;
@@ -239,18 +258,6 @@ function hexToRgba(hex: string, alpha: number) {
   const g = Number.parseInt(normalized.slice(2, 4), 16);
   const b = Number.parseInt(normalized.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function getMonogram(text: string) {
-  const cleaned = String(text || '')
-    .replace(/[^\w\u4e00-\u9fff]+/g, ' ')
-    .trim();
-  if (!cleaned) return 'SB';
-  const tokens = cleaned.split(/\s+/).filter(Boolean);
-  if (tokens.length >= 2) return `${tokens[0][0] || ''}${tokens[1][0] || ''}`.toUpperCase();
-  const first = tokens[0];
-  const chars = Array.from(first);
-  return chars.slice(0, Math.min(2, chars.length)).join('').toUpperCase();
 }
 
 function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string, alpha = 0.24) {
@@ -294,19 +301,6 @@ function drawBackground(ctx: CanvasRenderingContext2D, palette: SharePalette) {
   drawOrb(ctx, 760, 1120, 420, palette.accent, 0.12);
 }
 
-function drawBrandBadge(ctx: CanvasRenderingContext2D, x: number, y: number, monogram: string, palette: SharePalette) {
-  const outer = ctx.createLinearGradient(x - 44, y - 44, x + 44, y + 44);
-  outer.addColorStop(0, `${palette.accent}`);
-  outer.addColorStop(1, `${palette.accentSoft}`);
-  fillRoundedRect(ctx, x - 44, y - 44, 88, 88, 28, outer);
-  fillRoundedRect(ctx, x - 38, y - 38, 76, 76, 24, 'rgba(8,12,26,0.72)', 'rgba(255,255,255,0.12)');
-  drawText(ctx, monogram, x, y + 10, {
-    font: '700 30px Arial, "Microsoft JhengHei", sans-serif',
-    color: '#FFFFFF',
-    align: 'center',
-  });
-}
-
 function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, palette: SharePalette) {
   ctx.save();
   ctx.font = '600 18px Arial, "Microsoft JhengHei", sans-serif';
@@ -335,17 +329,86 @@ function drawMetaRow(ctx: CanvasRenderingContext2D, chips: string[], palette: Sh
   return cursorY + 40;
 }
 
+function drawSnookerhkLiveLogo(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  fillRoundedRect(ctx, x, y, 158, 158, 26, '#FF140A');
+  fillRoundedRect(ctx, x + 10, y + 60, 138, 40, 0, '#F3F4F6');
+
+  drawText(ctx, 'HONG', x + 79, y + 34, {
+    font: '900 18px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#FFFFFF',
+    align: 'center',
+  });
+  drawText(ctx, 'KONG', x + 79, y + 56, {
+    font: '900 18px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#FFFFFF',
+    align: 'center',
+  });
+  drawText(ctx, 'Snooker', x + 79, y + 91, {
+    font: '900 italic 24px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#FF140A',
+    align: 'center',
+  });
+  drawText(ctx, 'LIVE', x + 79, y + 142, {
+    font: '900 46px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#FFFFFF',
+    align: 'center',
+  });
+}
+
+function drawVenueIdentity(
+  ctx: CanvasRenderingContext2D,
+  venueName: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  venueLogoImage?: HTMLImageElement | null,
+) {
+  const label = String(venueName || 'Snookerhk.live').trim() || 'Snookerhk.live';
+  let textX = x;
+  let textWidth = maxWidth;
+
+  if (venueLogoImage) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + 16, y - 8, 16, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(venueLogoImage, x, y - 24, 32, 32);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + 16, y - 8, 16.5, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    textX = x + 44;
+    textWidth = Math.max(80, maxWidth - 44);
+  }
+
+  drawText(ctx, label, textX, y, {
+    font: '500 22px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#D8E5F4',
+    maxWidth: textWidth,
+  });
+}
+
 function drawTopBanner(
   ctx: CanvasRenderingContext2D,
   {
     title,
     subtitle,
+    venueLogoImage,
     palette,
     eyebrow,
     chips,
   }: {
     title: string;
     subtitle: string;
+    venueLogoImage?: HTMLImageElement | null;
     palette: SharePalette;
     eyebrow: string;
     chips: string[];
@@ -363,24 +426,8 @@ function drawTopBanner(
     color: palette.textMain,
     weight: 700,
   });
-  drawText(ctx, subtitle, 78, 178, {
-    font: '400 22px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMuted,
-    maxWidth: 760,
-  });
-  drawText(ctx, '更新時間', 834, 96, {
-    font: '600 16px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-  });
-  drawText(ctx, formatShareTimestamp(), 834, 126, {
-    font: '600 22px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMain,
-  });
-  drawText(ctx, '官方分享版', 834, 158, {
-    font: '500 16px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textMuted,
-  });
-  drawBrandBadge(ctx, 950, 170, getMonogram(title), palette);
+  drawVenueIdentity(ctx, subtitle, 78, 178, 760, venueLogoImage);
+  drawSnookerhkLiveLogo(ctx, 848, 64);
   return drawMetaRow(ctx, chips, palette, 204);
 }
 
@@ -564,13 +611,16 @@ function drawBranchConnectors(
   ctx.restore();
 }
 
-function renderLeagueStandingsShareCardCanvas({
+ async function renderLeagueStandingsShareCardCanvas({
   title,
+  venueName,
+  venueLogoUrl,
   dimensionLabel,
   pointsRuleLabel,
   rows,
 }: DownloadLeagueStandingsShareCardArgs, pixelRatio = 1) {
   const { canvas, ctx } = createCanvasCard(pixelRatio);
+  const venueLogoImage = await loadCanvasImage(venueLogoUrl);
   const palette = getLeaguePalette();
   const visibleRows = rows.slice(0, 8);
   const leader = rows[0] || null;
@@ -581,7 +631,8 @@ function renderLeagueStandingsShareCardCanvas({
   drawBackground(ctx, palette);
   drawTopBanner(ctx, {
     title: title || '聯賽模式積分榜',
-    subtitle: '聯賽模式海報版分享圖',
+    subtitle: String(venueName || 'Snookerhk.live'),
+    venueLogoImage,
     eyebrow: 'LEAGUE MODE POSTER',
     chips: [dimensionLabel || '整個聯賽', `參賽 ${rows.length} 人`, pointsRuleLabel || '勝和負積分規則'],
     palette,
@@ -716,26 +767,29 @@ function renderLeagueStandingsShareCardCanvas({
     });
   });
 
-  drawFooter(ctx, palette, '聯賽模式海報版分享圖 · CueAim Snooker');
+  drawFooter(ctx, palette, '聯賽模式海報版分享圖 · Snookerhk.live');
   return canvas;
 }
 
 export function buildLeagueStandingsShareCardDataUrl(args: DownloadLeagueStandingsShareCardArgs) {
-  return renderLeagueStandingsShareCardCanvas(args, PREVIEW_PIXEL_RATIO).toDataURL('image/png');
+  return renderLeagueStandingsShareCardCanvas(args, PREVIEW_PIXEL_RATIO).then((canvas) => canvas.toDataURL('image/png'));
 }
 
 export function downloadLeagueStandingsShareCard(args: DownloadLeagueStandingsShareCardArgs) {
-  const canvas = renderLeagueStandingsShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO);
-  triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'league-standings')}-share-card.png`);
+  return renderLeagueStandingsShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO)
+    .then((canvas) => triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'league-standings')}-share-card.png`));
 }
 
-function renderKnockoutBracketShareCardCanvas({
+async function renderKnockoutBracketShareCardCanvas({
   title,
+  venueName,
+  venueLogoUrl,
   focusLabel,
   rounds,
   summaryCards = [],
 }: DownloadKnockoutBracketShareCardArgs, pixelRatio = 1) {
   const { canvas, ctx } = createCanvasCard(pixelRatio);
+  const venueLogoImage = await loadCanvasImage(venueLogoUrl);
   const palette = getKnockoutPalette();
   const finalRound = rounds[rounds.length - 1] || null;
   const finalMatch = finalRound?.items?.[0] || null;
@@ -767,7 +821,8 @@ function renderKnockoutBracketShareCardCanvas({
   drawBackground(ctx, palette);
   drawTopBanner(ctx, {
     title: title || '淘汰賽模式進級表',
-    subtitle: '淘汰賽海報版分享圖',
+    subtitle: String(venueName || 'Snookerhk.live'),
+    venueLogoImage,
     eyebrow: 'KNOCKOUT MODE POSTER',
     chips: [focusLabel || '全部輪次', `共 ${rounds.length} 輪`, `完成 ${completedMatches}/${totalMatches} 場`],
     palette,
@@ -973,15 +1028,15 @@ function renderKnockoutBracketShareCardCanvas({
     });
   });
 
-  drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · CueAim Snooker');
+  drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · Snookerhk.live');
   return canvas;
 }
 
 export function buildKnockoutBracketShareCardDataUrl(args: DownloadKnockoutBracketShareCardArgs) {
-  return renderKnockoutBracketShareCardCanvas(args, PREVIEW_PIXEL_RATIO).toDataURL('image/png');
+  return renderKnockoutBracketShareCardCanvas(args, PREVIEW_PIXEL_RATIO).then((canvas) => canvas.toDataURL('image/png'));
 }
 
 export function downloadKnockoutBracketShareCard(args: DownloadKnockoutBracketShareCardArgs) {
-  const canvas = renderKnockoutBracketShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO);
-  triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}-share-card.png`);
+  return renderKnockoutBracketShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO)
+    .then((canvas) => triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}-share-card.png`));
 }

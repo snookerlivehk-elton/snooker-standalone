@@ -478,6 +478,11 @@ export function createTournamentRouter() {
         where: { clubId },
         orderBy: [{ createdAt: 'desc' }],
         take: 200,
+        include: {
+          club: {
+            select: { id: true, name: true, logoUrl: true },
+          },
+        },
       });
       const ids = rows.map((r) => r.id);
       const counts = ids.length > 0

@@ -96,7 +96,7 @@ export function buildKnockoutPosterSummaryCards(detail: any, formatTournamentPar
   ];
 }
 
-export function buildPublicTournamentPosterDataUrl(options: {
+export async function buildPublicTournamentPosterDataUrl(options: {
   detail: any;
   formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string;
   formatTournamentParticipantLabel: (participant: any) => string;
@@ -108,12 +108,28 @@ export function buildPublicTournamentPosterDataUrl(options: {
     formatTournamentParticipantLabel,
     formatTournamentMatchStatusLabel,
   } = options;
+  const venueName = String(
+    detail?.club?.name
+    || detail?.tournament?.club?.name
+    || detail?.clubName
+    || '',
+  ).trim();
+  const venueLogoUrl = String(
+    detail?.club?.logoUrl
+    || detail?.club?.logo_url
+    || detail?.tournament?.club?.logoUrl
+    || detail?.tournament?.club?.logo_url
+    || detail?.clubLogoUrl
+    || '',
+  ).trim();
   const isLeague = String(detail?.format || '').trim().toUpperCase() === 'LEAGUE';
   if (isLeague) {
     const rows = buildLeaguePosterRows(detail, formatTournamentParticipantLabel);
     if (rows.length <= 0) return '';
     return buildLeagueStandingsShareCardDataUrl({
       title: String(detail?.title || '聯賽模式積分榜'),
+      venueName,
+      venueLogoUrl,
       dimensionLabel: '整個聯賽',
       pointsRuleLabel: `勝 ${Number(detail?.points_win ?? 3)} / 和 ${Number(detail?.points_draw ?? 1)} / 負 ${Number(detail?.points_loss ?? 0)}`,
       rows,
@@ -128,6 +144,8 @@ export function buildPublicTournamentPosterDataUrl(options: {
   if (rounds.length <= 0) return '';
   return buildKnockoutBracketShareCardDataUrl({
     title: String(detail?.title || '淘汰賽模式進級表'),
+    venueName,
+    venueLogoUrl,
     focusLabel: '全部輪次',
     rounds,
     summaryCards: buildKnockoutPosterSummaryCards(detail, formatTournamentParticipantLabel),

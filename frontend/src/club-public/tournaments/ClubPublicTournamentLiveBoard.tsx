@@ -142,20 +142,26 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   }, [API_URL, clubId, featuredTournament?.id, getPublicClubTournament, sessionMemberId]);
 
   React.useEffect(() => {
+    let cancelled = false;
     if (!featuredTournamentDetail) {
       setFeaturedPosterUrl('');
-      return;
+      return undefined;
     }
-    try {
-      setFeaturedPosterUrl(buildPublicTournamentPosterDataUrl({
+    buildPublicTournamentPosterDataUrl({
         detail: featuredTournamentDetail,
         formatPublicTournamentStageLabel,
         formatTournamentParticipantLabel,
         formatTournamentMatchStatusLabel,
-      }));
-    } catch {
-      setFeaturedPosterUrl('');
-    }
+      })
+      .then((url) => {
+        if (!cancelled) setFeaturedPosterUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setFeaturedPosterUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [
     featuredTournamentDetail,
     formatPublicTournamentStageLabel,

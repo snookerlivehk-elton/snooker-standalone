@@ -18,6 +18,8 @@ type VenueTournamentKnockoutWorkspaceMainContentProps = {
   selectMatchForScoring: (row: any) => void;
   thirdPlaceMatch: any;
   tournamentTitle?: string;
+  venueName?: string;
+  venueLogoUrl?: string;
 };
 
 const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnockoutWorkspaceMainContentProps> = ({
@@ -35,6 +37,8 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
   selectMatchForScoring,
   thirdPlaceMatch,
   tournamentTitle,
+  venueName,
+  venueLogoUrl,
 }) => {
   const [expandedSections, setExpandedSections] = React.useState({
     insights: false,
@@ -84,6 +88,8 @@ const VenueTournamentKnockoutWorkspaceMainContent: React.FC<VenueTournamentKnock
           selectMatchForScoring={selectMatchForScoring}
           thirdPlaceMatch={thirdPlaceMatch}
           tournamentTitle={tournamentTitle}
+          venueName={venueName}
+          venueLogoUrl={venueLogoUrl}
         />
       </VenueTournamentWorkspaceSectionCard>
 

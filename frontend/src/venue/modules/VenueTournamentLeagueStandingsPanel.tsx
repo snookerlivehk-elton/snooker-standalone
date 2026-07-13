@@ -8,6 +8,8 @@ type VenueTournamentLeagueStandingsPanelProps = {
   pointsWin: number;
   standingsRows: any[];
   tournamentTitle?: string;
+  venueName?: string;
+  venueLogoUrl?: string;
   formatParticipantLabel: (participant: any) => string;
 };
 
@@ -18,6 +20,8 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
   pointsWin,
   standingsRows,
   tournamentTitle,
+  venueName,
+  venueLogoUrl,
   formatParticipantLabel,
 }) => {
   const [dimensionMode, setDimensionMode] = useState<'ALL' | 'MONTH' | 'ROUND'>('ALL');
@@ -609,6 +613,8 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
     if (chartData.rows.length <= 0) return;
     downloadLeagueStandingsShareCard({
       title: String(tournamentTitle || '聯賽模式積分榜'),
+      venueName,
+      venueLogoUrl,
       dimensionLabel: activeDimensionLabel,
       pointsRuleLabel: `勝 ${Number(pointsWin || 0)} / 和 ${Number(pointsDraw || 0)} / 負 ${Number(pointsLoss || 0)}`,
       rows: chartData.rows.map((row: any) => ({
