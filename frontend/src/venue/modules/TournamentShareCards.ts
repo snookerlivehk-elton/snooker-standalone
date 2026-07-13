@@ -73,6 +73,8 @@ const KNOCKOUT_CARD_HEIGHT = 1080;
 const PREVIEW_PIXEL_RATIO = 2;
 const DOWNLOAD_PIXEL_RATIO = 3;
 const LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD = 32;
+const LARGE_KNOCKOUT_TOTAL_MATCH_THRESHOLD = 40;
+const LARGE_KNOCKOUT_ROUND_COUNT_THRESHOLD = 8;
 const LARGE_KNOCKOUT_GROUP_MATCH_LIMIT = 8;
 const LARGE_KNOCKOUT_OVERVIEW_ROUNDS = 4;
 
@@ -604,8 +606,18 @@ function getKnockoutLargestRoundTotal(rounds: KnockoutShareRound[]) {
   return rounds.reduce((best, round) => Math.max(best, Number(round?.total || round?.items?.length || 0)), 0);
 }
 
+function getKnockoutTotalMatchCount(rounds: KnockoutShareRound[]) {
+  return rounds.reduce((sum, round) => sum + Number(round?.total || round?.items?.length || 0), 0);
+}
+
 function isLargeKnockoutShareCard(rounds: KnockoutShareRound[]) {
-  return getKnockoutLargestRoundTotal(rounds) >= LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD;
+  const largestRoundTotal = getKnockoutLargestRoundTotal(rounds);
+  if (largestRoundTotal >= LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD) return true;
+
+  const totalMatches = getKnockoutTotalMatchCount(rounds);
+  if (largestRoundTotal >= 16 && totalMatches >= LARGE_KNOCKOUT_TOTAL_MATCH_THRESHOLD) return true;
+
+  return largestRoundTotal >= 16 && rounds.length >= LARGE_KNOCKOUT_ROUND_COUNT_THRESHOLD;
 }
 
 function getKnockoutGroupLabel(groupIndex: number) {
