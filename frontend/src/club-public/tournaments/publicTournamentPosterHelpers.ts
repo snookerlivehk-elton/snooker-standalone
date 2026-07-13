@@ -142,13 +142,42 @@ function buildGoldSilverCupPosterSummaryCards(detail: any, formatTournamentParti
   ];
 }
 
+function buildCupSpecificPosterSummaryCards(
+  detail: any,
+  formatTournamentParticipantLabel: (participant: any) => string,
+  cup: 'gold' | 'silver',
+) {
+  const participants = Array.isArray(detail?.participants) ? detail.participants : [];
+  const matches = Array.isArray(detail?.matches) ? detail.matches : [];
+  const podiumSummary = buildTournamentPodiumSummary(participants, matches);
+  const cupSummary = cup === 'gold' ? podiumSummary?.goldCup : podiumSummary?.silverCup;
+  const cupLabel = cup === 'gold' ? '金杯' : '銀杯';
+  return [
+    {
+      label: `${cupLabel}冠軍`,
+      value: formatTournamentParticipantLabel(cupSummary?.champion),
+      detail: '冠軍',
+    },
+    {
+      label: `${cupLabel}亞軍`,
+      value: formatTournamentParticipantLabel(cupSummary?.runnerUp),
+      detail: '亞軍',
+    },
+    {
+      label: `${cupLabel}季軍`,
+      value: formatTournamentParticipantLabel(cupSummary?.thirdPlace),
+      detail: '季軍',
+    },
+  ];
+}
+
 export async function buildPublicTournamentPosterDataUrl(options: {
   detail: any;
   formatTournamentParticipantLabel: (participant: any) => string;
   formatTournamentMatchStatusLabel: (value: any) => string;
 }) {
   const items = await buildPublicTournamentPosterPreviewItems(options);
-  return items[items.length - 1]?.imageUrl || '';
+  return items[0]?.imageUrl || '';
 }
 
 export async function buildPublicTournamentPosterPreviewItems(options: {
@@ -201,6 +230,42 @@ export async function buildPublicTournamentPosterPreviewItems(options: {
   );
   if (rounds.length <= 0) return [];
   const posterTitle = String(detail?.title || (isGoldSilverCup ? '金銀杯模式進級表' : '淘汰賽模式進級表'));
+  if (isGoldSilverCup) {
+    const goldRounds = rounds.filter((round) => String(round?.label || '').trim().startsWith('金杯'));
+    const silverRounds = rounds.filter((round) => String(round?.label || '').trim().startsWith('銀杯'));
+    const [goldPreviewItems, silverPreviewItems] = await Promise.all([
+      goldRounds.length > 0
+        ? buildKnockoutBracketShareCardPreviewItems({
+            title: `${posterTitle} - 金杯`,
+            venueName,
+            venueLogoUrl,
+            focusLabel: '全部輪次',
+            rounds: goldRounds,
+            summaryCards: buildCupSpecificPosterSummaryCards(detail, formatTournamentParticipantLabel, 'gold'),
+          })
+        : Promise.resolve([]),
+      silverRounds.length > 0
+        ? buildKnockoutBracketShareCardPreviewItems({
+            title: `${posterTitle} - 銀杯`,
+            venueName,
+            venueLogoUrl,
+            focusLabel: '全部輪次',
+            rounds: silverRounds,
+            summaryCards: buildCupSpecificPosterSummaryCards(detail, formatTournamentParticipantLabel, 'silver'),
+          })
+        : Promise.resolve([]),
+    ]);
+    return [
+      ...goldPreviewItems.map((item) => ({
+        imageUrl: item.imageUrl,
+        title: `${posterTitle} - 金杯 · ${item.focusLabel}`,
+      })),
+      ...silverPreviewItems.map((item) => ({
+        imageUrl: item.imageUrl,
+        title: `${posterTitle} - 銀杯 · ${item.focusLabel}`,
+      })),
+    ];
+  }
   const previewItems = await buildKnockoutBracketShareCardPreviewItems({
     title: posterTitle,
     venueName,

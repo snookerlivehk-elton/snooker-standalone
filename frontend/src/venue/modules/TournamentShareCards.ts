@@ -631,6 +631,14 @@ function isGoldSilverCupPodiumSummaryCards(cards: KnockoutShareSummaryCard[]) {
   return labels.some((label) => label.startsWith('金杯')) && labels.some((label) => label.startsWith('銀杯'));
 }
 
+function isGoldCupRoundLabel(label: string) {
+  return String(label || '').trim().startsWith('金杯');
+}
+
+function isSilverCupRoundLabel(label: string) {
+  return String(label || '').trim().startsWith('銀杯');
+}
+
 function buildKnockoutShareCardPlan({
   focusLabel,
   rounds,
@@ -818,6 +826,121 @@ function drawBranchConnectors(
     });
   });
   ctx.restore();
+}
+
+function drawMirroredKnockoutSection(
+  ctx: CanvasRenderingContext2D,
+  {
+    rounds,
+    top,
+    height,
+    title,
+    subtitle,
+    palette,
+  }: {
+    rounds: KnockoutShareRound[];
+    top: number;
+    height: number;
+    title: string;
+    subtitle: string;
+    palette: SharePalette;
+  },
+) {
+  if (!Array.isArray(rounds) || rounds.length <= 0) return;
+
+  fillRoundedRect(ctx, 84, top, 1752, height, 24, 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.08)');
+  drawText(ctx, title, 112, top + 26, {
+    font: '700 18px Arial, "Microsoft JhengHei", sans-serif',
+    color: '#F6B73C',
+  });
+  drawText(ctx, subtitle, 112, top + 50, {
+    font: '400 12px Arial, "Microsoft JhengHei", sans-serif',
+    color: palette.textMuted,
+  });
+
+  const branchRounds = rounds.map((round) => ({
+    label: round.label,
+    total: round.total,
+    completedCount: round.completedCount,
+    ...splitKnockoutBranchItems(round.items),
+  }));
+  const branchAreaTop = top + 78;
+  const branchAreaHeight = height - 98;
+  const innerGap = rounds.length >= 4 ? 220 : 280;
+  const branchGap = 18;
+  const sideAvailableWidth = Math.floor((1752 - innerGap - ((Math.max(1, rounds.length) - 1) * branchGap * 2)) / 2);
+  const branchColumnWidth = Math.max(108, Math.min(164, Math.floor(sideAvailableWidth / Math.max(1, rounds.length))));
+  const leftColumnXs = rounds.map((_, index) => 112 + (index * (branchColumnWidth + branchGap)));
+  const rightBase = 84 + 1752 - 28;
+  const rightColumnXs = rounds.map((_, index) => rightBase - branchColumnWidth - (index * (branchColumnWidth + branchGap)));
+  const leftLayouts = branchRounds.map((round) => computeBranchLayout(round.left.length, branchAreaTop, branchAreaHeight));
+  const rightLayouts = branchRounds.map((round) => computeBranchLayout(round.right.length, branchAreaTop, branchAreaHeight));
+
+  branchRounds.forEach((round, roundIndex) => {
+    const leftX = leftColumnXs[roundIndex];
+    const rightX = rightColumnXs[roundIndex];
+    const leftLayout = leftLayouts[roundIndex];
+    const rightLayout = rightLayouts[roundIndex];
+
+    drawAdaptiveText(ctx, round.label, leftX, top + 68, {
+      maxWidth: branchColumnWidth,
+      maxFontSize: 15,
+      minFontSize: 10,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, `${round.completedCount}/${round.total}`, leftX + branchColumnWidth, top + 68, {
+      font: '500 11px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textMuted,
+      align: 'right',
+    });
+    drawAdaptiveText(ctx, round.label, rightX, top + 68, {
+      maxWidth: branchColumnWidth,
+      maxFontSize: 15,
+      minFontSize: 10,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, `${round.completedCount}/${round.total}`, rightX + branchColumnWidth, top + 68, {
+      font: '500 11px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textMuted,
+      align: 'right',
+    });
+
+    round.left.forEach((item, itemIndex) => {
+      drawKnockoutCompactCard(ctx, leftX, leftLayout.positions[itemIndex] || branchAreaTop, branchColumnWidth, leftLayout.cardHeight, item, palette);
+    });
+    round.right.forEach((item, itemIndex) => {
+      drawKnockoutCompactCard(ctx, rightX, rightLayout.positions[itemIndex] || branchAreaTop, branchColumnWidth, rightLayout.cardHeight, item, palette);
+    });
+
+    if (roundIndex < branchRounds.length - 1) {
+      drawBranchConnectors(
+        ctx,
+        Array.from({ length: round.left.length }, () => leftX),
+        leftLayout.positions,
+        branchColumnWidth,
+        leftLayout.cardHeight,
+        Array.from({ length: branchRounds[roundIndex + 1].left.length }, () => leftColumnXs[roundIndex + 1]),
+        leftLayouts[roundIndex + 1].positions,
+        branchColumnWidth,
+        leftLayouts[roundIndex + 1].cardHeight,
+        'left',
+      );
+      drawBranchConnectors(
+        ctx,
+        Array.from({ length: round.right.length }, () => rightX),
+        rightLayout.positions,
+        branchColumnWidth,
+        rightLayout.cardHeight,
+        Array.from({ length: branchRounds[roundIndex + 1].right.length }, () => rightColumnXs[roundIndex + 1]),
+        rightLayouts[roundIndex + 1].positions,
+        branchColumnWidth,
+        rightLayouts[roundIndex + 1].cardHeight,
+        'right',
+      );
+    }
+  });
 }
 
  async function renderLeagueStandingsShareCardCanvas({
@@ -1031,6 +1154,9 @@ async function renderKnockoutBracketShareCardCanvas({
   const isGroupedPoster = isGroupedKnockoutFocusLabel(focusLabel);
   const isOverviewPoster = isOverviewKnockoutFocusLabel(focusLabel);
   const isGoldSilverCupOverviewPoster = isOverviewPoster && isGoldSilverCupPodiumSummaryCards(centerSummaryCards);
+  const goldCupRounds = rounds.filter((round) => isGoldCupRoundLabel(round.label));
+  const silverCupRounds = rounds.filter((round) => isSilverCupRoundLabel(round.label));
+  const shouldRenderDualCupSections = (isGroupedPoster || isOverviewPoster) && goldCupRounds.length > 0 && silverCupRounds.length > 0;
   const shouldRenderCenterStageCard = !isGroupedPoster;
 
   drawBackground(ctx, palette, KNOCKOUT_CARD_WIDTH, KNOCKOUT_CARD_HEIGHT);
@@ -1082,7 +1208,24 @@ async function renderKnockoutBracketShareCardCanvas({
   const centerCardX = Math.floor((KNOCKOUT_CARD_WIDTH - centerCardWidth) / 2);
   const centerCardY = 482;
 
-  if (preFinalRounds.length === 0 && !finalMatch) {
+  if (shouldRenderDualCupSections) {
+    drawMirroredKnockoutSection(ctx, {
+      rounds: goldCupRounds,
+      top: 388,
+      height: 182,
+      title: isGroupedPoster ? '金杯分組路線' : '金杯後段總覽',
+      subtitle: isGroupedPoster ? '金杯主線按分組拆開顯示，避免 64+ 場次重疊。' : '後段總覽集中顯示金杯主線、季軍戰與決賽相關輪次。',
+      palette,
+    });
+    drawMirroredKnockoutSection(ctx, {
+      rounds: silverCupRounds,
+      top: 584,
+      height: 182,
+      title: isGroupedPoster ? '銀杯分組路線' : '銀杯後段總覽',
+      subtitle: isGroupedPoster ? '銀杯獨立成區塊展示，不再與金杯共用同一條中心軸。' : '銀杯後段與 podium 分開整理，方便清楚閱讀雙盃結果。',
+      palette,
+    });
+  } else if (preFinalRounds.length === 0 && !finalMatch) {
     drawText(ctx, '尚未生成可分享的進級表內容。', 960, 600, {
       font: '600 28px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textMain,
@@ -1228,7 +1371,31 @@ async function renderKnockoutBracketShareCardCanvas({
     }
   }
 
-  if (isGoldSilverCupOverviewPoster) {
+  if (shouldRenderDualCupSections && centerSummaryCards.length > 3) {
+    fillRoundedRect(ctx, 520, 782, 880, 96, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
+    drawText(ctx, '金杯三甲', 560, 816, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, centerSummaryCards.slice(0, 3).map((card) => `${card.detail} ${card.value}`).join('  ·  '), 560, 852, {
+      maxWidth: 360,
+      maxFontSize: 18,
+      minFontSize: 10,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, '銀杯三甲', 1010, 816, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, centerSummaryCards.slice(3, 6).map((card) => `${card.detail} ${card.value}`).join('  ·  '), 1010, 852, {
+      maxWidth: 340,
+      maxFontSize: 18,
+      minFontSize: 10,
+      color: palette.textMain,
+      weight: 700,
+    });
+  } else if (isGoldSilverCupOverviewPoster) {
     fillRoundedRect(ctx, 520, 714, 880, 96, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
     drawText(ctx, '金杯三甲', 560, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
@@ -1303,7 +1470,7 @@ async function renderKnockoutBracketShareCardCanvas({
     });
   }
 
-  const summarySectionY = isGoldSilverCupOverviewPoster ? 826 : 832;
+  const summarySectionY = shouldRenderDualCupSections ? 888 : (isGoldSilverCupOverviewPoster ? 826 : 832);
   const summarySectionHeight = centerSummaryCards.length > 3 ? 154 : 126;
   fillRoundedRect(ctx, 458, summarySectionY, 1004, summarySectionHeight, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
   drawSectionTitle(ctx, '賽事摘要', centerSummaryCards.length > 3 ? '後段總覽補上金杯與銀杯 podium，避免只見主線而看不到雙盃名次。' : '底部改為橫向摘要列，讓橫版海報同時保留 bracket 與關鍵數據。', 490, summarySectionY + 40, palette);

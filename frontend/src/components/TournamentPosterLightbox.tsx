@@ -81,6 +81,24 @@ const TournamentPosterLightbox: React.FC<TournamentPosterLightboxProps> = ({
             </button>
           </div>
         </div>
+        {canNavigate ? (
+          <div className="mb-3 flex gap-2 overflow-x-auto rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+            {posters.map((poster, index) => (
+              <button
+                key={`${poster.title}-${index}`}
+                type="button"
+                onClick={() => setCurrentIndex(index)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  index === currentIndex
+                    ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100'
+                    : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                {poster.title || `海報 ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-white/10 bg-black/30 p-2 sm:p-4">
           <img
             src={activePoster.imageUrl}
