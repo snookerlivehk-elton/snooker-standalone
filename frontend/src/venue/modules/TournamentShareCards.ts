@@ -66,8 +66,10 @@ type SharePalette = {
   textSoft: string;
 };
 
-const CARD_WIDTH = 1080;
-const CARD_HEIGHT = 1350;
+const LEAGUE_CARD_WIDTH = 1080;
+const LEAGUE_CARD_HEIGHT = 1350;
+const KNOCKOUT_CARD_WIDTH = 1920;
+const KNOCKOUT_CARD_HEIGHT = 1080;
 const PREVIEW_PIXEL_RATIO = 2;
 const DOWNLOAD_PIXEL_RATIO = 3;
 const LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD = 32;
@@ -222,11 +224,11 @@ function drawAdaptiveText(
   return size;
 }
 
-function createCanvasCard(pixelRatio = 1) {
+function createCanvasCard(pixelRatio = 1, width = LEAGUE_CARD_WIDTH, height = LEAGUE_CARD_HEIGHT) {
   const canvas = document.createElement('canvas');
   const safePixelRatio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-  canvas.width = Math.round(CARD_WIDTH * safePixelRatio);
-  canvas.height = Math.round(CARD_HEIGHT * safePixelRatio);
+  canvas.width = Math.round(width * safePixelRatio);
+  canvas.height = Math.round(height * safePixelRatio);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas not supported');
   ctx.imageSmoothingEnabled = true;
@@ -278,37 +280,47 @@ function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, radius: nu
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
-function drawGridOverlay(ctx: CanvasRenderingContext2D, color = 'rgba(255,255,255,0.045)') {
+function drawGridOverlay(
+  ctx: CanvasRenderingContext2D,
+  color = 'rgba(255,255,255,0.045)',
+  width = LEAGUE_CARD_WIDTH,
+  height = LEAGUE_CARD_HEIGHT,
+) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
-  for (let x = 0; x <= CARD_WIDTH; x += 54) {
+  for (let x = 0; x <= width; x += 54) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, CARD_HEIGHT);
+    ctx.lineTo(x, height);
     ctx.stroke();
   }
-  for (let y = 0; y <= CARD_HEIGHT; y += 54) {
+  for (let y = 0; y <= height; y += 54) {
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(CARD_WIDTH, y);
+    ctx.lineTo(width, y);
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, palette: SharePalette) {
-  const gradient = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
+function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  palette: SharePalette,
+  width = LEAGUE_CARD_WIDTH,
+  height = LEAGUE_CARD_HEIGHT,
+) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, palette.topLeft);
   gradient.addColorStop(0.33, palette.topRight);
   gradient.addColorStop(0.72, palette.bottomLeft);
   gradient.addColorStop(1, palette.bottomRight);
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  drawGridOverlay(ctx);
+  ctx.fillRect(0, 0, width, height);
+  drawGridOverlay(ctx, 'rgba(255,255,255,0.045)', width, height);
   drawOrb(ctx, 170, 160, 340, palette.accent);
-  drawOrb(ctx, 940, 220, 280, palette.accent, 0.18);
-  drawOrb(ctx, 760, 1120, 420, palette.accent, 0.12);
+  drawOrb(ctx, width - 140, 220, 280, palette.accent, 0.18);
+  drawOrb(ctx, Math.max(420, Math.floor(width * 0.72)), height - 230, 420, palette.accent, 0.12);
 }
 
 function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, palette: SharePalette) {
@@ -325,14 +337,26 @@ function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, text: str
   return width;
 }
 
-function drawMetaRow(ctx: CanvasRenderingContext2D, chips: string[], palette: SharePalette, startY: number) {
-  let cursorX = 78;
+function drawMetaRow(
+  ctx: CanvasRenderingContext2D,
+  chips: string[],
+  palette: SharePalette,
+  startY: number,
+  {
+    startX = 78,
+    wrapRight = 920,
+  }: {
+    startX?: number;
+    wrapRight?: number;
+  } = {},
+) {
+  let cursorX = startX;
   let cursorY = startY;
   chips.forEach((chip) => {
     const width = drawChip(ctx, cursorX, cursorY, chip, palette);
     cursorX += width + 10;
-    if (cursorX > 920) {
-      cursorX = 78;
+    if (cursorX > wrapRight) {
+      cursorX = startX;
       cursorY += 50;
     }
   });
@@ -419,6 +443,7 @@ function drawTopBanner(
     palette,
     eyebrow,
     chips,
+    layout,
   }: {
     title: string;
     subtitle: string;
@@ -426,23 +451,57 @@ function drawTopBanner(
     palette: SharePalette;
     eyebrow: string;
     chips: string[];
+    layout?: {
+      panelX?: number;
+      panelY?: number;
+      panelWidth?: number;
+      panelHeight?: number;
+      leftX?: number;
+      eyebrowY?: number;
+      titleY?: number;
+      titleMaxWidth?: number;
+      subtitleY?: number;
+      subtitleMaxWidth?: number;
+      logoX?: number;
+      logoY?: number;
+      metaStartY?: number;
+      metaWrapRight?: number;
+    };
   },
 ) {
-  fillRoundedRect(ctx, 48, 42, 984, 222, 34, 'rgba(9,12,25,0.30)', 'rgba(255,255,255,0.1)');
-  drawText(ctx, eyebrow, 78, 84, {
+  const panelX = layout?.panelX ?? 48;
+  const panelY = layout?.panelY ?? 42;
+  const panelWidth = layout?.panelWidth ?? 984;
+  const panelHeight = layout?.panelHeight ?? 222;
+  const leftX = layout?.leftX ?? 78;
+  const eyebrowY = layout?.eyebrowY ?? 84;
+  const titleY = layout?.titleY ?? 138;
+  const titleMaxWidth = layout?.titleMaxWidth ?? 706;
+  const subtitleY = layout?.subtitleY ?? 178;
+  const subtitleMaxWidth = layout?.subtitleMaxWidth ?? titleMaxWidth;
+  const logoX = layout?.logoX ?? 866;
+  const logoY = layout?.logoY ?? 60;
+  const metaStartY = layout?.metaStartY ?? 204;
+  const metaWrapRight = layout?.metaWrapRight ?? 920;
+
+  fillRoundedRect(ctx, panelX, panelY, panelWidth, panelHeight, 34, 'rgba(9,12,25,0.30)', 'rgba(255,255,255,0.1)');
+  drawText(ctx, eyebrow, leftX, eyebrowY, {
     font: '700 18px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.accent,
   });
-  drawAdaptiveText(ctx, title, 78, 138, {
-    maxWidth: 706,
+  drawAdaptiveText(ctx, title, leftX, titleY, {
+    maxWidth: titleMaxWidth,
     maxFontSize: 52,
     minFontSize: 34,
     color: palette.textMain,
     weight: 700,
   });
-  drawVenueIdentity(ctx, subtitle, 78, 178, 706, venueLogoImage);
-  drawSnookerhkLiveLogo(ctx, 866, 60);
-  return drawMetaRow(ctx, chips, palette, 204);
+  drawVenueIdentity(ctx, subtitle, leftX, subtitleY, subtitleMaxWidth, venueLogoImage);
+  drawSnookerhkLiveLogo(ctx, logoX, logoY);
+  return drawMetaRow(ctx, chips, palette, metaStartY, {
+    startX: leftX,
+    wrapRight: metaWrapRight,
+  });
 }
 
 function drawSectionTitle(ctx: CanvasRenderingContext2D, title: string, subtitle: string, x: number, y: number, palette: SharePalette) {
@@ -456,12 +515,27 @@ function drawSectionTitle(ctx: CanvasRenderingContext2D, title: string, subtitle
   });
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D, palette: SharePalette, leftLabel: string) {
-  drawText(ctx, leftLabel, 78, 1296, {
+function drawFooter(
+  ctx: CanvasRenderingContext2D,
+  palette: SharePalette,
+  leftLabel: string,
+  {
+    width = LEAGUE_CARD_WIDTH,
+    height = LEAGUE_CARD_HEIGHT,
+    leftX = 78,
+    bottomY = height - 54,
+  }: {
+    width?: number;
+    height?: number;
+    leftX?: number;
+    bottomY?: number;
+  } = {},
+) {
+  drawText(ctx, leftLabel, leftX, bottomY, {
     font: '500 16px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.textSoft,
   });
-  drawText(ctx, formatShareTimestamp(), 1000, 1296, {
+  drawText(ctx, formatShareTimestamp(), width - 80, bottomY, {
     font: '500 16px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.textSoft,
     align: 'right',
@@ -728,7 +802,7 @@ function drawBranchConnectors(
   pointsRuleLabel,
   rows,
 }: DownloadLeagueStandingsShareCardArgs, pixelRatio = 1) {
-  const { canvas, ctx } = createCanvasCard(pixelRatio);
+  const { canvas, ctx } = createCanvasCard(pixelRatio, LEAGUE_CARD_WIDTH, LEAGUE_CARD_HEIGHT);
   const venueLogoImage = await loadCanvasImage(venueLogoUrl);
   const palette = getLeaguePalette();
   const visibleRows = rows.slice(0, 8);
@@ -737,7 +811,7 @@ function drawBranchConnectors(
   const bestForm = [...rows].sort((a, b) => b.matchPoints - a.matchPoints || b.frameDiff - a.frameDiff)[0] || null;
   const podium = rows.slice(0, 3);
 
-  drawBackground(ctx, palette);
+  drawBackground(ctx, palette, LEAGUE_CARD_WIDTH, LEAGUE_CARD_HEIGHT);
   drawTopBanner(ctx, {
     title: title || '聯賽模式積分榜',
     subtitle: String(venueName || 'Snookerhk.live'),
@@ -897,7 +971,7 @@ async function renderKnockoutBracketShareCardCanvas({
   rounds,
   summaryCards = [],
 }: DownloadKnockoutBracketShareCardArgs, pixelRatio = 1) {
-  const { canvas, ctx } = createCanvasCard(pixelRatio);
+  const { canvas, ctx } = createCanvasCard(pixelRatio, KNOCKOUT_CARD_WIDTH, KNOCKOUT_CARD_HEIGHT);
   const venueLogoImage = await loadCanvasImage(venueLogoUrl);
   const palette = getKnockoutPalette();
   const finalRound = rounds[rounds.length - 1] || null;
@@ -929,7 +1003,7 @@ async function renderKnockoutBracketShareCardCanvas({
   }));
   const centerSummaryCards = summaryCards.slice(0, 3);
 
-  drawBackground(ctx, palette);
+  drawBackground(ctx, palette, KNOCKOUT_CARD_WIDTH, KNOCKOUT_CARD_HEIGHT);
   drawTopBanner(ctx, {
     title: title || '淘汰賽模式進級表',
     subtitle: String(venueName || 'Snookerhk.live'),
@@ -937,32 +1011,48 @@ async function renderKnockoutBracketShareCardCanvas({
     eyebrow: 'KNOCKOUT MODE POSTER',
     chips: [focusLabel || '全部輪次', `共 ${rounds.length} 輪`, `完成 ${completedMatches}/${totalMatches} 場`],
     palette,
+    layout: {
+      panelX: 48,
+      panelY: 36,
+      panelWidth: 1824,
+      panelHeight: 168,
+      leftX: 84,
+      eyebrowY: 76,
+      titleY: 126,
+      titleMaxWidth: 1380,
+      subtitleY: 164,
+      subtitleMaxWidth: 1380,
+      logoX: 1690,
+      logoY: 48,
+      metaStartY: 146,
+      metaWrapRight: 1570,
+    },
   });
 
-  fillRoundedRect(ctx, 48, 286, 984, 940, 34, palette.panel, palette.panelStroke);
-  drawBracketRibbon(ctx, 392, 314, 296, focusLabel === '全部輪次' ? '淘汰賽模式進級表' : String(focusLabel || '淘汰賽模式進級表'), palette);
-  drawText(ctx, '左右分支歸中，中央保留決賽與賽事摘要，讓分享圖更貼近 bracket 海報版式。', 540, 382, {
+  fillRoundedRect(ctx, 48, 236, 1824, 760, 34, palette.panel, palette.panelStroke);
+  drawBracketRibbon(ctx, 760, 268, 400, focusLabel === '全部輪次' ? '淘汰賽模式進級表' : String(focusLabel || '淘汰賽模式進級表'), palette);
+  drawText(ctx, '改用橫版版心，保留 bracket 橫向展開空間，讓 16 人以上淘汰賽更接近真實賽會海報閱讀方式。', 960, 340, {
     font: '400 16px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.textMuted,
     align: 'center',
   });
 
-  const branchAreaTop = 420;
-  const branchAreaHeight = 360;
-  const innerGap = 220;
-  const branchGap = 18;
-  const sideAvailableWidth = Math.floor((984 - innerGap - ((Math.max(1, preFinalRounds.length) - 1) * branchGap * 2)) / 2);
-  const branchColumnWidth = Math.max(82, Math.min(132, Math.floor(sideAvailableWidth / Math.max(1, preFinalRounds.length))));
-  const leftColumnXs = preFinalRounds.map((_, index) => 78 + (index * (branchColumnWidth + branchGap)));
-  const rightBase = 48 + 984 - 30;
+  const branchAreaTop = 388;
+  const branchAreaHeight = 278;
+  const innerGap = 360;
+  const branchGap = 24;
+  const sideAvailableWidth = Math.floor((1824 - innerGap - ((Math.max(1, preFinalRounds.length) - 1) * branchGap * 2)) / 2);
+  const branchColumnWidth = Math.max(118, Math.min(188, Math.floor(sideAvailableWidth / Math.max(1, preFinalRounds.length))));
+  const leftColumnXs = preFinalRounds.map((_, index) => 88 + (index * (branchColumnWidth + branchGap)));
+  const rightBase = 48 + 1824 - 88;
   const rightColumnXs = preFinalRounds.map((_, index) => rightBase - branchColumnWidth - (index * (branchColumnWidth + branchGap)));
-  const centerCardWidth = 220;
-  const centerCardHeight = 92;
-  const centerCardX = Math.floor((CARD_WIDTH - centerCardWidth) / 2);
-  const centerCardY = 530;
+  const centerCardWidth = 300;
+  const centerCardHeight = 110;
+  const centerCardX = Math.floor((KNOCKOUT_CARD_WIDTH - centerCardWidth) / 2);
+  const centerCardY = 482;
 
   if (preFinalRounds.length === 0 && !finalMatch) {
-    drawText(ctx, '尚未生成可分享的進級表內容。', 540, 640, {
+    drawText(ctx, '尚未生成可分享的進級表內容。', 960, 600, {
       font: '600 28px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textMain,
       align: 'center',
@@ -979,25 +1069,25 @@ async function renderKnockoutBracketShareCardCanvas({
 
       drawAdaptiveText(ctx, round.label, leftX, branchAreaTop - 16, {
         maxWidth: branchColumnWidth,
-        maxFontSize: 15,
+        maxFontSize: 17,
         minFontSize: 11,
         color: '#F6B73C',
         weight: 700,
       });
       drawText(ctx, `${round.completedCount}/${round.total}`, leftX + branchColumnWidth, branchAreaTop - 16, {
-        font: '500 12px Arial, "Microsoft JhengHei", sans-serif',
+        font: '500 13px Arial, "Microsoft JhengHei", sans-serif',
         color: palette.textMuted,
         align: 'right',
       });
       drawAdaptiveText(ctx, round.label, rightX, branchAreaTop - 16, {
         maxWidth: branchColumnWidth,
-        maxFontSize: 15,
+        maxFontSize: 17,
         minFontSize: 11,
         color: '#F6B73C',
         weight: 700,
       });
       drawText(ctx, `${round.completedCount}/${round.total}`, rightX + branchColumnWidth, branchAreaTop - 16, {
-        font: '500 12px Arial, "Microsoft JhengHei", sans-serif',
+        font: '500 13px Arial, "Microsoft JhengHei", sans-serif',
         color: palette.textMuted,
         align: 'right',
       });
@@ -1039,19 +1129,19 @@ async function renderKnockoutBracketShareCardCanvas({
 
     fillRoundedRect(ctx, centerCardX, centerCardY, centerCardWidth, centerCardHeight, 24, 'rgba(255,255,255,0.08)', 'rgba(246,183,60,0.24)', 1.5);
     drawText(ctx, finalRound?.label || (shouldRenderSingleRoundAsBranches ? '焦點輪次' : '決賽'), centerCardX + (centerCardWidth / 2), centerCardY + 24, {
-      font: '600 15px Arial, "Microsoft JhengHei", sans-serif',
+      font: '600 18px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
       align: 'center',
     });
     if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
       drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
-        font: '700 30px Arial, "Microsoft JhengHei", sans-serif',
+        font: '700 38px Arial, "Microsoft JhengHei", sans-serif',
         color: '#F6B73C',
         align: 'center',
       });
-      drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 80, {
+      drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 96, {
         maxWidth: centerCardWidth - 40,
-        maxFontSize: 13,
+        maxFontSize: 14,
         minFontSize: 10,
         color: palette.textMuted,
         weight: 500,
@@ -1059,13 +1149,13 @@ async function renderKnockoutBracketShareCardCanvas({
       });
     } else {
       drawText(ctx, `${completedMatches}/${Math.max(1, totalMatches)}`, centerCardX + (centerCardWidth / 2), centerCardY + 56, {
-        font: '700 28px Arial, "Microsoft JhengHei", sans-serif',
+        font: '700 34px Arial, "Microsoft JhengHei", sans-serif',
         color: '#F6B73C',
         align: 'center',
       });
-      drawAdaptiveText(ctx, shouldRenderSingleRoundAsBranches ? '本張海報聚焦單一輪次對局' : '初期分組與後段總覽會分開輸出', centerCardX + 20, centerCardY + 80, {
+      drawAdaptiveText(ctx, shouldRenderSingleRoundAsBranches ? '本張海報聚焦單一輪次對局' : '初期分組與後段總覽會分開輸出', centerCardX + 20, centerCardY + 96, {
         maxWidth: centerCardWidth - 40,
-        maxFontSize: 12,
+        maxFontSize: 13,
         minFontSize: 10,
         color: palette.textMuted,
         weight: 500,
@@ -1105,73 +1195,74 @@ async function renderKnockoutBracketShareCardCanvas({
     }
   }
 
-  fillRoundedRect(ctx, 352, 806, 376, 84, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
+  fillRoundedRect(ctx, 650, 714, 620, 92, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
   if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
-    drawText(ctx, '冠軍', 378, 834, {
+    drawText(ctx, '冠軍', 690, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
     });
-    drawAdaptiveText(ctx, championLabel, 378, 866, {
-      maxWidth: 142,
-      maxFontSize: 22,
+    drawAdaptiveText(ctx, championLabel, 690, 784, {
+      maxWidth: 240,
+      maxFontSize: 26,
       minFontSize: 14,
       color: '#F6B73C',
       weight: 700,
     });
-    drawText(ctx, '亞軍', 562, 834, {
+    drawText(ctx, '亞軍', 1010, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
     });
-    drawAdaptiveText(ctx, runnerUpLabel, 562, 866, {
-      maxWidth: 142,
-      maxFontSize: 22,
+    drawAdaptiveText(ctx, runnerUpLabel, 1010, 784, {
+      maxWidth: 220,
+      maxFontSize: 26,
       minFontSize: 14,
       color: palette.textMain,
       weight: 700,
     });
   } else {
-    drawText(ctx, '焦點輪次', 378, 834, {
+    drawText(ctx, '焦點輪次', 690, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
     });
-    drawAdaptiveText(ctx, finalRound?.label || focusLabel || '全部輪次', 378, 866, {
-      maxWidth: 142,
-      maxFontSize: 20,
+    drawAdaptiveText(ctx, finalRound?.label || focusLabel || '全部輪次', 690, 784, {
+      maxWidth: 240,
+      maxFontSize: 24,
       minFontSize: 13,
       color: '#F6B73C',
       weight: 700,
     });
-    drawText(ctx, '尚餘對局', 562, 834, {
+    drawText(ctx, '尚餘對局', 1010, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
     });
-    drawAdaptiveText(ctx, `${Math.max(0, totalMatches - completedMatches)} 場`, 562, 866, {
-      maxWidth: 142,
-      maxFontSize: 22,
+    drawAdaptiveText(ctx, `${Math.max(0, totalMatches - completedMatches)} 場`, 1010, 784, {
+      maxWidth: 200,
+      maxFontSize: 26,
       minFontSize: 14,
       color: palette.textMain,
       weight: 700,
     });
   }
 
-  fillRoundedRect(ctx, 330, 914, 420, 232, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
-  drawSectionTitle(ctx, '賽事摘要', '中央空白區改放關鍵指標，補足 bracket 海報的資訊利用率。', 358, 954, palette);
+  fillRoundedRect(ctx, 458, 832, 1004, 126, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
+  drawSectionTitle(ctx, '賽事摘要', '底部改為橫向摘要列，讓橫版海報同時保留 bracket 與關鍵數據。', 490, 872, palette);
   centerSummaryCards.forEach((card, index) => {
-    const y = 994 + (index * 48);
-    fillRoundedRect(ctx, 358, y, 364, 40, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
-    drawText(ctx, card.label, 374, y + 25, {
+    const x = 490 + (index * 320);
+    const y = 898;
+    fillRoundedRect(ctx, x, y, 292, 42, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
+    drawText(ctx, card.label, x + 16, y + 26, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
     });
-    drawAdaptiveText(ctx, card.value, 476, y + 25, {
-      maxWidth: 112,
+    drawAdaptiveText(ctx, card.value, x + 110, y + 26, {
+      maxWidth: 84,
       maxFontSize: 16,
       minFontSize: 12,
       color: '#F6B73C',
       weight: 700,
     });
-    drawAdaptiveText(ctx, card.detail, 610, y + 25, {
-      maxWidth: 96,
+    drawAdaptiveText(ctx, card.detail, x + 276, y + 26, {
+      maxWidth: 118,
       maxFontSize: 12,
       minFontSize: 10,
       color: palette.textMuted,
@@ -1180,7 +1271,12 @@ async function renderKnockoutBracketShareCardCanvas({
     });
   });
 
-  drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · Snookerhk.live');
+  drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · Snookerhk.live', {
+    width: KNOCKOUT_CARD_WIDTH,
+    height: KNOCKOUT_CARD_HEIGHT,
+    leftX: 84,
+    bottomY: 1038,
+  });
   return canvas;
 }
 
