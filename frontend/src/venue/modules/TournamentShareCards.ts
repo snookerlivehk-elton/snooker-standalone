@@ -560,7 +560,7 @@ function drawBranchConnectors(
   ctx.restore();
 }
 
-export function downloadLeagueStandingsShareCard({
+function renderLeagueStandingsShareCardCanvas({
   title,
   dimensionLabel,
   pointsRuleLabel,
@@ -713,10 +713,19 @@ export function downloadLeagueStandingsShareCard({
   });
 
   drawFooter(ctx, palette, '聯賽模式海報版分享圖 · CueAim Snooker');
-  triggerCanvasDownload(canvas, `${safeFilePart(title || 'league-standings')}-share-card.png`);
+  return canvas;
 }
 
-export function downloadKnockoutBracketShareCard({
+export function buildLeagueStandingsShareCardDataUrl(args: DownloadLeagueStandingsShareCardArgs) {
+  return renderLeagueStandingsShareCardCanvas(args).toDataURL('image/png');
+}
+
+export function downloadLeagueStandingsShareCard(args: DownloadLeagueStandingsShareCardArgs) {
+  const canvas = renderLeagueStandingsShareCardCanvas(args);
+  triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'league-standings')}-share-card.png`);
+}
+
+function renderKnockoutBracketShareCardCanvas({
   title,
   focusLabel,
   rounds,
@@ -961,5 +970,14 @@ export function downloadKnockoutBracketShareCard({
   });
 
   drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · CueAim Snooker');
-  triggerCanvasDownload(canvas, `${safeFilePart(title || 'knockout-bracket')}-share-card.png`);
+  return canvas;
+}
+
+export function buildKnockoutBracketShareCardDataUrl(args: DownloadKnockoutBracketShareCardArgs) {
+  return renderKnockoutBracketShareCardCanvas(args).toDataURL('image/png');
+}
+
+export function downloadKnockoutBracketShareCard(args: DownloadKnockoutBracketShareCardArgs) {
+  const canvas = renderKnockoutBracketShareCardCanvas(args);
+  triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}-share-card.png`);
 }

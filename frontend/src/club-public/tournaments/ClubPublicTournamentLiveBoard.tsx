@@ -1,8 +1,15 @@
 import React from 'react';
 import ClubPublicTournamentLiveBoardCard from './ClubPublicTournamentLiveBoardCard';
-import ClubPublicTournamentLiveBoardVisual from './ClubPublicTournamentLiveBoardVisual';
+import {
+  buildKnockoutBracketShareCardDataUrl,
+  buildLeagueStandingsShareCardDataUrl,
+} from '../../venue/modules/TournamentShareCards';
 
 type ClubPublicTournamentLiveBoardProps = {
+  API_URL: string;
+  clubId?: string | null;
+  sessionMemberId?: string | null;
+  getPublicClubTournament: (apiUrl: string, clubId: string, tournamentId: string, memberId?: string) => Promise<any>;
   tournamentLiveBoardLoading: boolean;
   tournamentLiveBoard: any[];
   tournamentLiveBoardError: string;
@@ -50,6 +57,99 @@ function getTournamentBoardUpdatedAtLabel(tournament: any) {
   return new Date(times[0]).toLocaleString();
 }
 
+function buildLeaguePosterRows(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
+  const standings = Array.isArray(detail?.standings) ? detail.standings : [];
+  return standings.slice(0, 8).map((row: any, index: number) => ({
+    position: Number(row?.position || index + 1),
+    label: String(row?.label || formatTournamentParticipantLabel(row?.participant) || '-'),
+    played: Number(row?.played || 0),
+    won: Number(row?.won || 0),
+    drawn: Number(row?.drawn || 0),
+    lost: Number(row?.lost || 0),
+    matchPoints: Number(row?.matchPoints || 0),
+    frameDiff: Number(row?.frameDiff || 0),
+    breaks20Plus: Number(row?.breaks20Plus || 0),
+    maxBreak: Number(row?.maxBreak || 0),
+  }));
+}
+
+function buildKnockoutPosterRounds(
+  detail: any,
+  formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string,
+  formatTournamentParticipantLabel: (participant: any) => string,
+  formatTournamentMatchStatusLabel: (value: any) => string,
+) {
+  const matches = Array.isArray(detail?.matches) ? detail.matches : [];
+  const participantCount = Math.max(0, Number(detail?.summary?.participantCount || detail?.participants?.length || 0));
+  const groups = new Map<string, { label: string; roundNo: number; items: any[] }>();
+  for (const row of matches) {
+    const label = formatPublicTournamentStageLabel(row, 'KNOCKOUT', participantCount);
+    const key = `${Number(row?.round_no || 0)}-${label}`;
+    const winnerId = String(row?.winner_participant_id || '');
+    const aId = String(row?.player_a_participant_id || '');
+    const bId = String(row?.player_b_participant_id || '');
+    const item = {
+      matchNo: Math.max(1, Number(row?.match_no || 1)),
+      statusLabel: formatTournamentMatchStatusLabel(row?.status),
+      playerALabel: formatTournamentParticipantLabel(row?.player_a_participant),
+      playerBLabel: formatTournamentParticipantLabel(row?.player_b_participant),
+      playerAFrames: Number(row?.player_a_frames_won || 0),
+      playerBFrames: Number(row?.player_b_frames_won || 0),
+      winnerSide: winnerId && winnerId === aId ? 'A' : winnerId && winnerId === bId ? 'B' : null,
+    };
+    const existing = groups.get(key) || {
+      label,
+      roundNo: Number(row?.round_no || 0),
+      items: [],
+    };
+    existing.items.push(item);
+    groups.set(key, existing);
+  }
+  return [...groups.values()]
+    .sort((a, b) => a.roundNo - b.roundNo)
+    .map((group) => ({
+      label: group.label,
+      total: group.items.length,
+      completedCount: group.items.filter((item) => String(item?.statusLabel || '').includes('完成')).length,
+      items: group.items.sort((a, b) => a.matchNo - b.matchNo),
+    }));
+}
+
+function buildKnockoutPosterSummaryCards(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
+  const matches = Array.isArray(detail?.matches) ? detail.matches : [];
+  const highestBreakCandidate = matches.reduce((best: any, row: any) => {
+    const aBreak = Number(row?.player_a_max_break || 0);
+    const bBreak = Number(row?.player_b_max_break || 0);
+    const next = aBreak >= bBreak
+      ? { breakValue: aBreak, detail: formatTournamentParticipantLabel(row?.player_a_participant) || '未有紀錄' }
+      : { breakValue: bBreak, detail: formatTournamentParticipantLabel(row?.player_b_participant) || '未有紀錄' };
+    return Number(next.breakValue || 0) > Number(best?.breakValue || 0) ? next : best;
+  }, null);
+  const highestScoringMatch = matches.reduce((best: any, row: any) => {
+    const totalFrames = Number(row?.player_a_frames_won || 0) + Number(row?.player_b_frames_won || 0);
+    if (totalFrames <= Number(best?.totalFrames || -1)) return best;
+    return {
+      totalFrames,
+      value: `${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)}`,
+      detail: `${formatTournamentParticipantLabel(row?.player_a_participant)} vs ${formatTournamentParticipantLabel(row?.player_b_participant)}`,
+    };
+  }, null);
+  const largestMarginMatch = matches.reduce((best: any, row: any) => {
+    const diff = Math.abs(Number(row?.player_a_frames_won || 0) - Number(row?.player_b_frames_won || 0));
+    if (diff <= Number(best?.diff || -1)) return best;
+    return {
+      diff,
+      value: `${diff} 局`,
+      detail: `${formatTournamentParticipantLabel(row?.player_a_participant)} ${Number(row?.player_a_frames_won || 0)}:${Number(row?.player_b_frames_won || 0)} ${formatTournamentParticipantLabel(row?.player_b_participant)}`,
+    };
+  }, null);
+  return [
+    { label: '最高單杆', value: highestBreakCandidate?.breakValue ? String(highestBreakCandidate.breakValue) : '-', detail: highestBreakCandidate?.detail || '未有紀錄' },
+    { label: '最高得分', value: highestScoringMatch?.value || '-', detail: highestScoringMatch?.detail || '未有紀錄' },
+    { label: '最高得失局', value: largestMarginMatch?.value || '-', detail: largestMarginMatch?.detail || '未有紀錄' },
+  ];
+}
+
 function getHeroContent(bucket: string) {
   if (bucket === 'live') {
     return {
@@ -73,6 +173,10 @@ function getHeroContent(bucket: string) {
 }
 
 const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps> = ({
+  API_URL,
+  clubId,
+  sessionMemberId,
+  getPublicClubTournament,
   tournamentLiveBoardLoading,
   tournamentLiveBoard,
   tournamentLiveBoardError,
@@ -90,6 +194,9 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   openPublicBoardParticipantPanel,
   renderPublicBoardParticipantActions,
 }) => {
+  const [featuredTournamentDetail, setFeaturedTournamentDetail] = React.useState<any | null>(null);
+  const [featuredTournamentDetailLoading, setFeaturedTournamentDetailLoading] = React.useState(false);
+  const [featuredPosterUrl, setFeaturedPosterUrl] = React.useState('');
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
     return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
   });
@@ -101,15 +208,79 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const heroSummary = featuredTournament
     ? heroContent.summary
     : '集中顯示目前可公開查看的賽事進度、即將上場與最近完成場次。';
-  const featuredPreviewRows = featuredTournament
-    ? featuredBucket === 'live'
-      ? (Array.isArray(featuredTournament?.liveMatches) ? featuredTournament.liveMatches.slice(0, 2) : [])
-      : featuredBucket === 'ready'
-        ? (Array.isArray(featuredTournament?.readyMatches) ? featuredTournament.readyMatches.slice(0, 2) : [])
-        : (Array.isArray(featuredTournament?.recentCompletedMatches) ? featuredTournament.recentCompletedMatches.slice(0, 2) : [])
-    : [];
-  const featuredParticipantCount = Number(featuredTournament?.summary?.participantCount || 0);
   const featuredUpdatedAtLabel = getTournamentBoardUpdatedAtLabel(featuredTournament);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!clubId || !featuredTournament?.id) {
+      setFeaturedTournamentDetail(null);
+      setFeaturedPosterUrl('');
+      return;
+    }
+    setFeaturedTournamentDetailLoading(true);
+    getPublicClubTournament(API_URL, clubId, String(featuredTournament.id), sessionMemberId || undefined)
+      .then((detail) => {
+        if (cancelled) return;
+        setFeaturedTournamentDetail(detail && typeof detail === 'object' ? detail : null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFeaturedTournamentDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setFeaturedTournamentDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [API_URL, clubId, featuredTournament?.id, getPublicClubTournament, sessionMemberId]);
+
+  React.useEffect(() => {
+    if (!featuredTournamentDetail) {
+      setFeaturedPosterUrl('');
+      return;
+    }
+    try {
+      const isLeague = String(featuredTournamentDetail?.format || '').trim().toUpperCase() === 'LEAGUE';
+      if (isLeague) {
+        const rows = buildLeaguePosterRows(featuredTournamentDetail, formatTournamentParticipantLabel);
+        if (rows.length <= 0) {
+          setFeaturedPosterUrl('');
+          return;
+        }
+        setFeaturedPosterUrl(buildLeagueStandingsShareCardDataUrl({
+          title: String(featuredTournamentDetail?.title || '聯賽模式積分榜'),
+          dimensionLabel: '整個聯賽',
+          pointsRuleLabel: `勝 ${Number(featuredTournamentDetail?.points_win ?? 3)} / 和 ${Number(featuredTournamentDetail?.points_draw ?? 1)} / 負 ${Number(featuredTournamentDetail?.points_loss ?? 0)}`,
+          rows,
+        }));
+        return;
+      }
+      const rounds = buildKnockoutPosterRounds(
+        featuredTournamentDetail,
+        formatPublicTournamentStageLabel,
+        formatTournamentParticipantLabel,
+        formatTournamentMatchStatusLabel,
+      );
+      if (rounds.length <= 0) {
+        setFeaturedPosterUrl('');
+        return;
+      }
+      setFeaturedPosterUrl(buildKnockoutBracketShareCardDataUrl({
+        title: String(featuredTournamentDetail?.title || '淘汰賽模式進級表'),
+        focusLabel: '全部輪次',
+        rounds,
+        summaryCards: buildKnockoutPosterSummaryCards(featuredTournamentDetail, formatTournamentParticipantLabel),
+      }));
+    } catch {
+      setFeaturedPosterUrl('');
+    }
+  }, [
+    featuredTournamentDetail,
+    formatPublicTournamentStageLabel,
+    formatTournamentMatchStatusLabel,
+    formatTournamentParticipantLabel,
+  ]);
 
   return (
     <div className="mt-5 space-y-6">
@@ -133,95 +304,48 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
           <div className="space-y-4">
             {featuredTournament ? (
               <div className="cue-surface-strong rounded-2xl p-5 border border-white/10">
-                <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch">
-                  <div className="xl:w-[38%]">
+                <div className="space-y-4">
+                  <div>
                     <div className="text-xs font-extrabold accent-yellow tracking-wide">
                       {normalizeTournamentFormat(featuredTournament?.format) === 'LEAGUE' ? 'LEAGUE MODE POSTER' : 'KNOCKOUT MODE POSTER'}
                     </div>
-                    <div className="font-semibold text-3xl mt-3 leading-tight">{String(featuredTournament?.title || '比賽')}</div>
-                    <div className="text-sm cue-muted mt-2">{heroTitle}</div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold cue-muted">
-                        {formatTournamentFormatLabel(featuredTournament?.format)}
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold cue-muted">
-                        {formatTournamentWorkflowLabel(featuredTournament?.workflow_status)}
-                      </div>
-                    </div>
-                    <div className="text-sm cue-muted mt-3 leading-6">{heroSummary}</div>
-                    <div className="mt-4 rounded-xl border border-white/10 bg-black/10 px-4 py-3">
-                      <div className="text-[11px] cue-muted">更新時間</div>
-                      <div className="mt-1 text-sm font-semibold">{featuredUpdatedAtLabel}</div>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('signup');
-                          setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(featuredTournament?.id || '')) || featuredTournament);
-                        }}
-                        className="px-4 py-2 rounded cue-button text-sm font-semibold"
-                      >
-                        查看完整賽況
-                      </button>
-                      <div className="px-3 py-2 rounded cue-surface text-xs cue-muted">
-                        {heroContent.hint}
-                      </div>
-                    </div>
+                    <div className="font-semibold text-2xl mt-2 leading-tight">{String(featuredTournament?.title || '比賽')}</div>
+                    <div className="text-sm cue-muted mt-2">{heroSummary}</div>
+                    <div className="text-xs cue-muted mt-2">更新時間：{featuredUpdatedAtLabel}</div>
                   </div>
 
-                  <div className="xl:flex-1 grid gap-3 md:grid-cols-2">
-                    <div className="md:col-span-2">
-                      <ClubPublicTournamentLiveBoardVisual
-                        tournament={featuredTournament}
-                        variant="hero"
-                        formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
-                        normalizeTournamentFormat={normalizeTournamentFormat}
-                        formatTournamentParticipantLabel={formatTournamentParticipantLabel}
+                  {featuredTournamentDetailLoading ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-10 text-sm cue-muted">
+                      正在生成海報預覽...
+                    </div>
+                  ) : featuredPosterUrl ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
+                      <img
+                        src={featuredPosterUrl}
+                        alt={`${String(featuredTournament?.title || '比賽')} 海報`}
+                        className="w-full rounded-[20px] border border-white/10 bg-black/20"
                       />
                     </div>
-                    {featuredPreviewRows.map((row: any) => (
-                      <div key={String(row?.id || Math.random())} className="rounded-xl cue-surface p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-xs cue-muted">
-                              {formatPublicTournamentStageLabel(row, normalizeTournamentFormat(featuredTournament?.format), featuredParticipantCount)}
-                            </div>
-                            <div className="text-xs cue-muted mt-1">
-                              {buildPublicTournamentLiveProgressLabel(row, featuredTournament?.bestOfFrames)}
-                            </div>
-                          </div>
-                          <div className="text-xs font-semibold accent-yellow">
-                            {formatTournamentMatchStatusLabel(row?.status)}
-                          </div>
-                        </div>
-                        <div className="mt-4 space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => openPublicBoardParticipantPanel(featuredTournament, row?.player_a_participant)}
-                            className="font-semibold text-left hover:underline"
-                          >
-                            {formatTournamentParticipantLabel(row?.player_a_participant)}
-                          </button>
-                          <div className="text-sm cue-muted">
-                            {Number(row?.player_a_frames_won ?? 0)} : {Number(row?.player_b_frames_won ?? 0)}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openPublicBoardParticipantPanel(featuredTournament, row?.player_b_participant)}
-                            className="font-semibold text-left hover:underline"
-                          >
-                            {formatTournamentParticipantLabel(row?.player_b_participant)}
-                          </button>
-                        </div>
-                        {renderPublicBoardParticipantActions(featuredTournament, row)}
-                      </div>
-                    ))}
-                    {featuredPreviewRows.length === 0 ? (
-                      <div className="rounded-xl cue-surface p-4 text-sm cue-muted md:col-span-2">
-                        目前焦點賽事暫未有可展示的即時對局，請點入詳情查看完整賽程與參賽資訊。
-                      </div>
-                    ) : null}
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-8 text-sm cue-muted">
+                      目前未能生成與後台一致的海報預覽，請先點入完整賽況查看。
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="px-3 py-2 rounded cue-surface text-xs cue-muted">
+                      這裡直接顯示與後台分享卡相同的海報結果
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('signup');
+                        setTournamentOpen(tournaments.find((row: any) => String(row?.id || '') === String(featuredTournament?.id || '')) || featuredTournament);
+                      }}
+                      className="px-4 py-2 rounded cue-button text-sm font-semibold"
+                    >
+                      查看完整賽況
+                    </button>
                   </div>
                 </div>
               </div>

@@ -123,6 +123,10 @@ const ClubPublicTournamentPanels: React.FC<any> = ({ state, actions, helpers, ap
     <>
       {activeTab === 'scoreboard' && (
         <ClubPublicTournamentLiveBoard
+          API_URL={API_URL}
+          clubId={clubId}
+          sessionMemberId={sessionMemberId}
+          getPublicClubTournament={getPublicClubTournament}
           tournamentLiveBoardLoading={tournamentLiveBoardLoading}
           tournamentLiveBoard={tournamentLiveBoard}
           tournamentLiveBoardError={tournamentLiveBoardError}
