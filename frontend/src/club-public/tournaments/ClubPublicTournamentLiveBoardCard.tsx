@@ -23,6 +23,7 @@ type ClubPublicTournamentLiveBoardCardProps = {
   formatTournamentParticipantLabel: (participant: any) => string;
   openPublicBoardParticipantPanel: (tournament: any, participant: any) => void;
   renderPublicBoardParticipantActions: (tournament: any, row: any) => React.ReactNode;
+  onPreviewPoster: (poster: { imageUrl: string; title: string }) => void;
   compact?: boolean;
 };
 
@@ -61,6 +62,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
   formatTournamentParticipantLabel,
   openPublicBoardParticipantPanel,
   renderPublicBoardParticipantActions,
+  onPreviewPoster,
   compact = false,
 }) => {
   const liveCount = Number(tournament?.summary?.liveMatchCount || 0);
@@ -152,11 +154,20 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
               正在生成海報縮圖...
             </div>
           ) : posterUrl ? (
-            <img
-              src={posterUrl}
-              alt={`${String(tournament?.title || '比賽')} 海報縮圖`}
-              className="w-full rounded-[18px] border border-white/10 bg-black/20"
-            />
+            <button
+              type="button"
+              onClick={() => onPreviewPoster({
+                imageUrl: posterUrl,
+                title: `${String(tournament?.title || '比賽')} 海報`,
+              })}
+              className="block w-full overflow-hidden rounded-[18px] border border-white/10 bg-black/20 transition hover:border-white/20"
+            >
+              <img
+                src={posterUrl}
+                alt={`${String(tournament?.title || '比賽')} 海報縮圖`}
+                className="w-full"
+              />
+            </button>
           ) : (
             <div className="flex min-h-[320px] items-center justify-center rounded-[18px] border border-dashed border-white/10 px-4 text-center text-sm cue-muted">
               暫時未能生成海報縮圖，請點入完整賽況查看。
@@ -175,7 +186,7 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="text-xs cue-muted">點入查看完整海報與詳情</div>
+          <div className="text-xs cue-muted">點海報可放大，或進入完整詳情</div>
           <button
             type="button"
             onClick={() => {
