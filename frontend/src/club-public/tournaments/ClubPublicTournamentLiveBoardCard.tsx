@@ -2,9 +2,13 @@ import React from 'react';
 import ClubPublicTournamentLiveMatchesSection from './ClubPublicTournamentLiveMatchesSection';
 import ClubPublicTournamentReadyMatchesSection from './ClubPublicTournamentReadyMatchesSection';
 import ClubPublicTournamentRecentCompletedSection from './ClubPublicTournamentRecentCompletedSection';
-import ClubPublicTournamentLiveBoardVisual from './ClubPublicTournamentLiveBoardVisual';
+import { buildPublicTournamentPosterDataUrl } from './publicTournamentPosterHelpers';
 
 type ClubPublicTournamentLiveBoardCardProps = {
+  API_URL: string;
+  clubId?: string | null;
+  sessionMemberId?: string | null;
+  getPublicClubTournament: (apiUrl: string, clubId: string, tournamentId: string, memberId?: string) => Promise<any>;
   tournament: any;
   tournaments: any[];
   setActiveTab: (value: string) => void;
@@ -39,6 +43,10 @@ function getTournamentCardUpdatedAtLabel(tournament: any) {
 }
 
 const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardCardProps> = ({
+  API_URL,
+  clubId,
+  sessionMemberId,
+  getPublicClubTournament,
   tournament,
   tournaments,
   setActiveTab,
@@ -72,6 +80,47 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
       : (Array.isArray(tournament?.recentCompletedMatches) ? tournament.recentCompletedMatches.slice(0, 2) : []);
   const featuredPreviewRow = previewRows[0] || null;
   const updatedAtLabel = getTournamentCardUpdatedAtLabel(tournament);
+  const [detailLoading, setDetailLoading] = React.useState(false);
+  const [posterUrl, setPosterUrl] = React.useState('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!compact || !clubId || !tournament?.id) {
+      setPosterUrl('');
+      return;
+    }
+    setDetailLoading(true);
+    getPublicClubTournament(API_URL, clubId, String(tournament.id), sessionMemberId || undefined)
+      .then((detail) => {
+        if (cancelled) return;
+        const nextPosterUrl = detail ? buildPublicTournamentPosterDataUrl({
+          detail,
+          formatPublicTournamentStageLabel,
+          formatTournamentParticipantLabel,
+          formatTournamentMatchStatusLabel,
+        }) : '';
+        setPosterUrl(nextPosterUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPosterUrl('');
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    API_URL,
+    clubId,
+    compact,
+    formatPublicTournamentStageLabel,
+    formatTournamentMatchStatusLabel,
+    formatTournamentParticipantLabel,
+    getPublicClubTournament,
+    sessionMemberId,
+    tournament?.id,
+  ]);
 
   if (compact) {
     return (
@@ -97,32 +146,33 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
           </div>
         </div>
 
+        <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 p-3">
+          {detailLoading ? (
+            <div className="flex min-h-[320px] items-center justify-center rounded-[18px] border border-dashed border-white/10 text-sm cue-muted">
+              正在生成海報縮圖...
+            </div>
+          ) : posterUrl ? (
+            <img
+              src={posterUrl}
+              alt={`${String(tournament?.title || '比賽')} 海報縮圖`}
+              className="w-full rounded-[18px] border border-white/10 bg-black/20"
+            />
+          ) : (
+            <div className="flex min-h-[320px] items-center justify-center rounded-[18px] border border-dashed border-white/10 px-4 text-center text-sm cue-muted">
+              暫時未能生成海報縮圖，請點入完整賽況查看。
+            </div>
+          )}
+        </div>
+
         <div className="mt-3 rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-          <div className="text-[11px] cue-muted">海報摘要</div>
+          <div className="text-[11px] cue-muted">海報狀態</div>
           <div className="mt-1 text-sm cue-muted leading-6">{highlightLabel}</div>
-        </div>
-
-        <div className="mt-3">
-          <ClubPublicTournamentLiveBoardVisual
-            tournament={tournament}
-            variant="mini"
-            formatPublicTournamentStageLabel={formatPublicTournamentStageLabel}
-            normalizeTournamentFormat={normalizeTournamentFormat}
-            formatTournamentParticipantLabel={formatTournamentParticipantLabel}
-          />
-        </div>
-
-        {featuredPreviewRow ? (
-          <div className="mt-3 rounded-xl border border-white/10 bg-black/10 p-3">
-            <div className="text-[11px] cue-muted">焦點對賽</div>
-            <div className="mt-2 text-sm font-semibold truncate">
-              {formatTournamentParticipantLabel(featuredPreviewRow?.player_a_participant)} vs {formatTournamentParticipantLabel(featuredPreviewRow?.player_b_participant)}
+          {featuredPreviewRow ? (
+            <div className="mt-2 text-xs cue-muted">
+              焦點對賽：{formatTournamentParticipantLabel(featuredPreviewRow?.player_a_participant)} vs {formatTournamentParticipantLabel(featuredPreviewRow?.player_b_participant)}
             </div>
-            <div className="mt-1 text-xs cue-muted">
-              {formatTournamentMatchStatusLabel(featuredPreviewRow?.status)}
-            </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="text-xs cue-muted">點入查看完整海報與詳情</div>
