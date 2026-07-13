@@ -2,6 +2,7 @@ import {
   buildKnockoutBracketShareCardDataUrl,
   buildLeagueStandingsShareCardDataUrl,
 } from '../../venue/modules/TournamentShareCards';
+import { formatKnockoutRoundLabel } from '../../venue/modules/useTournamentStageViewData';
 
 export function buildLeaguePosterRows(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
   const standings = Array.isArray(detail?.standings) ? detail.standings : [];
@@ -21,7 +22,6 @@ export function buildLeaguePosterRows(detail: any, formatTournamentParticipantLa
 
 export function buildKnockoutPosterRounds(
   detail: any,
-  formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string,
   formatTournamentParticipantLabel: (participant: any) => string,
   formatTournamentMatchStatusLabel: (value: any) => string,
 ) {
@@ -29,7 +29,7 @@ export function buildKnockoutPosterRounds(
   const participantCount = Math.max(0, Number(detail?.summary?.participantCount || detail?.participants?.length || 0));
   const groups = new Map<string, { label: string; roundNo: number; items: any[] }>();
   for (const row of matches) {
-    const label = formatPublicTournamentStageLabel(row, 'KNOCKOUT', participantCount);
+    const label = formatKnockoutRoundLabel(row, participantCount);
     const key = `${Number(row?.round_no || 0)}-${label}`;
     const winnerId = String(row?.winner_participant_id || '');
     const aId = String(row?.player_a_participant_id || '');
@@ -98,13 +98,11 @@ export function buildKnockoutPosterSummaryCards(detail: any, formatTournamentPar
 
 export async function buildPublicTournamentPosterDataUrl(options: {
   detail: any;
-  formatPublicTournamentStageLabel: (row: any, format: any, participantCount: number) => string;
   formatTournamentParticipantLabel: (participant: any) => string;
   formatTournamentMatchStatusLabel: (value: any) => string;
 }) {
   const {
     detail,
-    formatPublicTournamentStageLabel,
     formatTournamentParticipantLabel,
     formatTournamentMatchStatusLabel,
   } = options;
@@ -137,7 +135,6 @@ export async function buildPublicTournamentPosterDataUrl(options: {
   }
   const rounds = buildKnockoutPosterRounds(
     detail,
-    formatPublicTournamentStageLabel,
     formatTournamentParticipantLabel,
     formatTournamentMatchStatusLabel,
   );

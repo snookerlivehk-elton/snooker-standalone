@@ -151,7 +151,6 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
     }
     buildPublicTournamentPosterDataUrl({
         detail: featuredTournamentDetail,
-        formatPublicTournamentStageLabel,
         formatTournamentParticipantLabel,
         formatTournamentMatchStatusLabel,
       })
@@ -166,7 +165,6 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
     };
   }, [
     featuredTournamentDetail,
-    formatPublicTournamentStageLabel,
     formatTournamentMatchStatusLabel,
     formatTournamentParticipantLabel,
   ]);

@@ -460,6 +460,7 @@ function drawTopBanner(
       eyebrowY?: number;
       titleY?: number;
       titleMaxWidth?: number;
+      venueX?: number;
       subtitleY?: number;
       subtitleMaxWidth?: number;
       logoX?: number;
@@ -477,6 +478,7 @@ function drawTopBanner(
   const eyebrowY = layout?.eyebrowY ?? 84;
   const titleY = layout?.titleY ?? 138;
   const titleMaxWidth = layout?.titleMaxWidth ?? 706;
+  const venueX = layout?.venueX ?? leftX;
   const subtitleY = layout?.subtitleY ?? 178;
   const subtitleMaxWidth = layout?.subtitleMaxWidth ?? titleMaxWidth;
   const logoX = layout?.logoX ?? 866;
@@ -496,7 +498,7 @@ function drawTopBanner(
     color: palette.textMain,
     weight: 700,
   });
-  drawVenueIdentity(ctx, subtitle, leftX, subtitleY, subtitleMaxWidth, venueLogoImage);
+  drawVenueIdentity(ctx, subtitle, venueX, subtitleY, subtitleMaxWidth, venueLogoImage);
   drawSnookerhkLiveLogo(ctx, logoX, logoY);
   return drawMetaRow(ctx, chips, palette, metaStartY, {
     startX: leftX,
@@ -1015,29 +1017,30 @@ async function renderKnockoutBracketShareCardCanvas({
       panelX: 48,
       panelY: 36,
       panelWidth: 1824,
-      panelHeight: 168,
+      panelHeight: 196,
       leftX: 84,
       eyebrowY: 76,
       titleY: 126,
-      titleMaxWidth: 1380,
-      subtitleY: 164,
-      subtitleMaxWidth: 1380,
+      titleMaxWidth: 620,
+      venueX: 760,
+      subtitleY: 126,
+      subtitleMaxWidth: 720,
       logoX: 1690,
       logoY: 48,
-      metaStartY: 146,
+      metaStartY: 174,
       metaWrapRight: 1570,
     },
   });
 
-  fillRoundedRect(ctx, 48, 236, 1824, 760, 34, palette.panel, palette.panelStroke);
-  drawBracketRibbon(ctx, 760, 268, 400, focusLabel === '全部輪次' ? '淘汰賽模式進級表' : String(focusLabel || '淘汰賽模式進級表'), palette);
-  drawText(ctx, '改用橫版版心，保留 bracket 橫向展開空間，讓 16 人以上淘汰賽更接近真實賽會海報閱讀方式。', 960, 340, {
+  fillRoundedRect(ctx, 48, 252, 1824, 744, 34, palette.panel, palette.panelStroke);
+  drawBracketRibbon(ctx, 760, 284, 400, focusLabel === '全部輪次' ? '淘汰賽模式進級表' : String(focusLabel || '淘汰賽模式進級表'), palette);
+  drawText(ctx, '改用橫版版心，保留 bracket 橫向展開空間，讓 16 人以上淘汰賽更接近真實賽會海報閱讀方式。', 960, 356, {
     font: '400 16px Arial, "Microsoft JhengHei", sans-serif',
     color: palette.textMuted,
     align: 'center',
   });
 
-  const branchAreaTop = 388;
+  const branchAreaTop = 404;
   const branchAreaHeight = 278;
   const innerGap = 360;
   const branchGap = 24;

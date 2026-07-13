@@ -103,7 +103,6 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
         }
         return buildPublicTournamentPosterDataUrl({
           detail,
-          formatPublicTournamentStageLabel,
           formatTournamentParticipantLabel,
           formatTournamentMatchStatusLabel,
         })
@@ -127,7 +126,6 @@ const ClubPublicTournamentLiveBoardCard: React.FC<ClubPublicTournamentLiveBoardC
     API_URL,
     clubId,
     compact,
-    formatPublicTournamentStageLabel,
     formatTournamentMatchStatusLabel,
     formatTournamentParticipantLabel,
     getPublicClubTournament,
