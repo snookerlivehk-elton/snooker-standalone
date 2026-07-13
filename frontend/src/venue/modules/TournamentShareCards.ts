@@ -70,6 +70,16 @@ const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1350;
 const PREVIEW_PIXEL_RATIO = 2;
 const DOWNLOAD_PIXEL_RATIO = 3;
+const LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD = 32;
+const LARGE_KNOCKOUT_GROUP_MATCH_LIMIT = 8;
+const LARGE_KNOCKOUT_OVERVIEW_ROUNDS = 4;
+
+type PlannedKnockoutShareCard = {
+  fileLabel?: string;
+  focusLabel: string;
+  rounds: KnockoutShareRound[];
+  summaryCards: KnockoutShareSummaryCard[];
+};
 
 function safeFilePart(raw: any) {
   const s = String(raw || '').trim();
@@ -499,6 +509,101 @@ function splitKnockoutBranchItems(items: KnockoutShareMatch[]) {
   };
 }
 
+function buildKnockoutRoundSubset(round: KnockoutShareRound, items: KnockoutShareMatch[]): KnockoutShareRound {
+  return {
+    label: String(round?.label || '-'),
+    total: items.length,
+    completedCount: items.filter((item) => String(item?.statusLabel || '').includes('完成')).length,
+    items,
+  };
+}
+
+function getKnockoutLargestRoundTotal(rounds: KnockoutShareRound[]) {
+  return rounds.reduce((best, round) => Math.max(best, Number(round?.total || round?.items?.length || 0)), 0);
+}
+
+function isLargeKnockoutShareCard(rounds: KnockoutShareRound[]) {
+  return getKnockoutLargestRoundTotal(rounds) >= LARGE_KNOCKOUT_FIRST_ROUND_MATCH_THRESHOLD;
+}
+
+function getKnockoutGroupLabel(groupIndex: number) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  return alphabet[groupIndex] || `${groupIndex + 1}`;
+}
+
+function buildKnockoutShareCardPlan({
+  focusLabel,
+  rounds,
+  summaryCards = [],
+}: DownloadKnockoutBracketShareCardArgs): PlannedKnockoutShareCard[] {
+  const safeRounds = (Array.isArray(rounds) ? rounds : [])
+    .map((round) => ({
+      label: String(round?.label || '-'),
+      total: Number(round?.total || round?.items?.length || 0),
+      completedCount: Number(round?.completedCount || 0),
+      items: Array.isArray(round?.items) ? round.items : [],
+    }))
+    .filter((round) => round.items.length > 0);
+  if (safeRounds.length <= 0) return [];
+
+  const normalizedFocusLabel = String(focusLabel || '全部輪次').trim() || '全部輪次';
+  const safeSummaryCards = Array.isArray(summaryCards) ? summaryCards.slice(0, 3) : [];
+
+  if (normalizedFocusLabel !== '全部輪次') {
+    const focusedRounds = safeRounds.filter((round) => round.label === normalizedFocusLabel);
+    return [{
+      fileLabel: 'focus',
+      focusLabel: normalizedFocusLabel,
+      rounds: focusedRounds.length > 0 ? focusedRounds : safeRounds,
+      summaryCards: safeSummaryCards,
+    }];
+  }
+
+  if (!isLargeKnockoutShareCard(safeRounds)) {
+    return [{
+      fileLabel: 'full',
+      focusLabel: normalizedFocusLabel,
+      rounds: safeRounds,
+      summaryCards: safeSummaryCards,
+    }];
+  }
+
+  const overviewRoundCount = Math.min(LARGE_KNOCKOUT_OVERVIEW_ROUNDS, safeRounds.length);
+  const overviewRounds = safeRounds.slice(-overviewRoundCount);
+  const earlyRounds = safeRounds.slice(0, Math.max(0, safeRounds.length - overviewRoundCount));
+  const firstEarlyRoundTotal = Number(earlyRounds[0]?.total || earlyRounds[0]?.items?.length || 0);
+  const groupCount = Math.max(2, Math.ceil(firstEarlyRoundTotal / LARGE_KNOCKOUT_GROUP_MATCH_LIMIT));
+
+  const groupedVariants = Array.from({ length: groupCount }, (_, groupIndex) => {
+    const groupedRounds = earlyRounds
+      .map((round) => {
+        const safeItems = Array.isArray(round?.items) ? round.items : [];
+        const start = Math.floor((groupIndex * safeItems.length) / groupCount);
+        const end = Math.floor(((groupIndex + 1) * safeItems.length) / groupCount);
+        return buildKnockoutRoundSubset(round, safeItems.slice(start, end));
+      })
+      .filter((round) => round.items.length > 0);
+    if (groupedRounds.length <= 0) return null;
+    const groupLabel = getKnockoutGroupLabel(groupIndex);
+    return {
+      fileLabel: `group-${groupIndex + 1}`,
+      focusLabel: `初期分組 ${groupLabel}`,
+      rounds: groupedRounds,
+      summaryCards: safeSummaryCards,
+    };
+  }).filter(Boolean) as PlannedKnockoutShareCard[];
+
+  return [
+    ...groupedVariants,
+    {
+      fileLabel: 'overview',
+      focusLabel: '後段總覽',
+      rounds: overviewRounds.length > 0 ? overviewRounds : safeRounds,
+      summaryCards: safeSummaryCards,
+    },
+  ];
+}
+
 function computeBranchLayout(itemCount: number, areaTop: number, areaHeight: number) {
   if (itemCount <= 0) return { cardHeight: 56, gap: 10, positions: [] as number[] };
   const gap = itemCount >= 6 ? 6 : itemCount >= 4 ? 8 : 12;
@@ -797,6 +902,8 @@ async function renderKnockoutBracketShareCardCanvas({
   const palette = getKnockoutPalette();
   const finalRound = rounds[rounds.length - 1] || null;
   const finalMatch = finalRound?.items?.[0] || null;
+  const isChampionshipView = Number(finalRound?.total || finalRound?.items?.length || 0) <= 1 || String(finalRound?.label || '').includes('決賽');
+  const shouldRenderSingleRoundAsBranches = rounds.length === 1 && Number(finalRound?.total || finalRound?.items?.length || 0) > 1;
   const championLabel = finalMatch
     ? finalMatch.winnerSide === 'A'
       ? finalMatch.playerALabel
@@ -813,7 +920,7 @@ async function renderKnockoutBracketShareCardCanvas({
     : '-';
   const totalMatches = rounds.reduce((sum, round) => sum + Number(round?.total || 0), 0);
   const completedMatches = rounds.reduce((sum, round) => sum + Number(round?.completedCount || 0), 0);
-  const preFinalRounds = rounds.slice(0, -1);
+  const preFinalRounds = shouldRenderSingleRoundAsBranches ? rounds : rounds.slice(0, -1);
   const branchRounds = preFinalRounds.map((round) => ({
     label: round.label,
     total: round.total,
@@ -931,24 +1038,40 @@ async function renderKnockoutBracketShareCardCanvas({
     });
 
     fillRoundedRect(ctx, centerCardX, centerCardY, centerCardWidth, centerCardHeight, 24, 'rgba(255,255,255,0.08)', 'rgba(246,183,60,0.24)', 1.5);
-    drawText(ctx, finalRound?.label || '決賽', centerCardX + (centerCardWidth / 2), centerCardY + 24, {
+    drawText(ctx, finalRound?.label || (shouldRenderSingleRoundAsBranches ? '焦點輪次' : '決賽'), centerCardX + (centerCardWidth / 2), centerCardY + 24, {
       font: '600 15px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
       align: 'center',
     });
-    drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
-      font: '700 30px Arial, "Microsoft JhengHei", sans-serif',
-      color: '#F6B73C',
-      align: 'center',
-    });
-    drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 80, {
-      maxWidth: centerCardWidth - 40,
-      maxFontSize: 13,
-      minFontSize: 10,
-      color: palette.textMuted,
-      weight: 500,
-      align: 'center',
-    });
+    if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
+      drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
+        font: '700 30px Arial, "Microsoft JhengHei", sans-serif',
+        color: '#F6B73C',
+        align: 'center',
+      });
+      drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 80, {
+        maxWidth: centerCardWidth - 40,
+        maxFontSize: 13,
+        minFontSize: 10,
+        color: palette.textMuted,
+        weight: 500,
+        align: 'center',
+      });
+    } else {
+      drawText(ctx, `${completedMatches}/${Math.max(1, totalMatches)}`, centerCardX + (centerCardWidth / 2), centerCardY + 56, {
+        font: '700 28px Arial, "Microsoft JhengHei", sans-serif',
+        color: '#F6B73C',
+        align: 'center',
+      });
+      drawAdaptiveText(ctx, shouldRenderSingleRoundAsBranches ? '本張海報聚焦單一輪次對局' : '初期分組與後段總覽會分開輸出', centerCardX + 20, centerCardY + 80, {
+        maxWidth: centerCardWidth - 40,
+        maxFontSize: 12,
+        minFontSize: 10,
+        color: palette.textMuted,
+        weight: 500,
+        align: 'center',
+      });
+    }
 
     if (branchRounds.length > 0) {
       const lastLeftLayout = leftLayouts[leftLayouts.length - 1];
@@ -983,28 +1106,53 @@ async function renderKnockoutBracketShareCardCanvas({
   }
 
   fillRoundedRect(ctx, 352, 806, 376, 84, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
-  drawText(ctx, '冠軍', 378, 834, {
-    font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-  });
-  drawAdaptiveText(ctx, championLabel, 378, 866, {
-    maxWidth: 142,
-    maxFontSize: 22,
-    minFontSize: 14,
-    color: '#F6B73C',
-    weight: 700,
-  });
-  drawText(ctx, '亞軍', 562, 834, {
-    font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
-    color: palette.textSoft,
-  });
-  drawAdaptiveText(ctx, runnerUpLabel, 562, 866, {
-    maxWidth: 142,
-    maxFontSize: 22,
-    minFontSize: 14,
-    color: palette.textMain,
-    weight: 700,
-  });
+  if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
+    drawText(ctx, '冠軍', 378, 834, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, championLabel, 378, 866, {
+      maxWidth: 142,
+      maxFontSize: 22,
+      minFontSize: 14,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, '亞軍', 562, 834, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, runnerUpLabel, 562, 866, {
+      maxWidth: 142,
+      maxFontSize: 22,
+      minFontSize: 14,
+      color: palette.textMain,
+      weight: 700,
+    });
+  } else {
+    drawText(ctx, '焦點輪次', 378, 834, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, finalRound?.label || focusLabel || '全部輪次', 378, 866, {
+      maxWidth: 142,
+      maxFontSize: 20,
+      minFontSize: 13,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, '尚餘對局', 562, 834, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, `${Math.max(0, totalMatches - completedMatches)} 場`, 562, 866, {
+      maxWidth: 142,
+      maxFontSize: 22,
+      minFontSize: 14,
+      color: palette.textMain,
+      weight: 700,
+    });
+  }
 
   fillRoundedRect(ctx, 330, 914, 420, 232, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
   drawSectionTitle(ctx, '賽事摘要', '中央空白區改放關鍵指標，補足 bracket 海報的資訊利用率。', 358, 954, palette);
@@ -1037,10 +1185,29 @@ async function renderKnockoutBracketShareCardCanvas({
 }
 
 export function buildKnockoutBracketShareCardDataUrl(args: DownloadKnockoutBracketShareCardArgs) {
-  return renderKnockoutBracketShareCardCanvas(args, PREVIEW_PIXEL_RATIO).then((canvas) => canvas.toDataURL('image/png'));
+  const variants = buildKnockoutShareCardPlan(args);
+  const preferredVariant = variants[variants.length - 1];
+  if (!preferredVariant) return Promise.resolve('');
+  return renderKnockoutBracketShareCardCanvas({
+    ...args,
+    focusLabel: preferredVariant.focusLabel,
+    rounds: preferredVariant.rounds,
+    summaryCards: preferredVariant.summaryCards,
+  }, PREVIEW_PIXEL_RATIO).then((canvas) => canvas.toDataURL('image/png'));
 }
 
 export function downloadKnockoutBracketShareCard(args: DownloadKnockoutBracketShareCardArgs) {
-  return renderKnockoutBracketShareCardCanvas(args, DOWNLOAD_PIXEL_RATIO)
-    .then((canvas) => triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}-share-card.png`));
+  const variants = buildKnockoutShareCardPlan(args);
+  if (variants.length <= 0) return Promise.resolve();
+  return variants.reduce((promise, variant, index) => promise.then(() => (
+    renderKnockoutBracketShareCardCanvas({
+      ...args,
+      focusLabel: variant.focusLabel,
+      rounds: variant.rounds,
+      summaryCards: variant.summaryCards,
+    }, DOWNLOAD_PIXEL_RATIO).then((canvas) => {
+      const suffix = variants.length > 1 ? `-${variant.fileLabel || `part-${index + 1}`}` : '';
+      triggerCanvasDownload(canvas, `${safeFilePart(args.title || 'knockout-bracket')}${suffix}-share-card.png`);
+    })
+  )), Promise.resolve());
 }
