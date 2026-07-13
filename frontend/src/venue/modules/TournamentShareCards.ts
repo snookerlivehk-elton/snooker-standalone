@@ -618,6 +618,19 @@ function isAllRoundsFocusLabel(label: string) {
   return normalized === '全部輪次' || normalized === '金銀杯雙線進級表';
 }
 
+function isGroupedKnockoutFocusLabel(label: string) {
+  return String(label || '').trim().startsWith('初期分組 ');
+}
+
+function isOverviewKnockoutFocusLabel(label: string) {
+  return String(label || '').trim() === '後段總覽';
+}
+
+function isGoldSilverCupPodiumSummaryCards(cards: KnockoutShareSummaryCard[]) {
+  const labels = cards.map((card) => String(card?.label || '').trim());
+  return labels.some((label) => label.startsWith('金杯')) && labels.some((label) => label.startsWith('銀杯'));
+}
+
 function buildKnockoutShareCardPlan({
   focusLabel,
   rounds,
@@ -634,7 +647,7 @@ function buildKnockoutShareCardPlan({
   if (safeRounds.length <= 0) return [];
 
   const normalizedFocusLabel = String(focusLabel || '全部輪次').trim() || '全部輪次';
-  const safeSummaryCards = Array.isArray(summaryCards) ? summaryCards.slice(0, 3) : [];
+  const safeSummaryCards = Array.isArray(summaryCards) ? summaryCards.slice(0, 6) : [];
 
   if (!isAllRoundsFocusLabel(normalizedFocusLabel)) {
     const focusedRounds = safeRounds.filter((round) => round.label === normalizedFocusLabel);
@@ -1014,7 +1027,11 @@ async function renderKnockoutBracketShareCardCanvas({
     completedCount: round.completedCount,
     ...splitKnockoutBranchItems(round.items),
   }));
-  const centerSummaryCards = summaryCards.slice(0, 3);
+  const centerSummaryCards = summaryCards.slice(0, 6);
+  const isGroupedPoster = isGroupedKnockoutFocusLabel(focusLabel);
+  const isOverviewPoster = isOverviewKnockoutFocusLabel(focusLabel);
+  const isGoldSilverCupOverviewPoster = isOverviewPoster && isGoldSilverCupPodiumSummaryCards(centerSummaryCards);
+  const shouldRenderCenterStageCard = !isGroupedPoster;
 
   drawBackground(ctx, palette, KNOCKOUT_CARD_WIDTH, KNOCKOUT_CARD_HEIGHT);
   drawTopBanner(ctx, {
@@ -1141,43 +1158,45 @@ async function renderKnockoutBracketShareCardCanvas({
       }
     });
 
-    fillRoundedRect(ctx, centerCardX, centerCardY, centerCardWidth, centerCardHeight, 24, 'rgba(255,255,255,0.08)', 'rgba(246,183,60,0.24)', 1.5);
-    drawText(ctx, finalRound?.label || (shouldRenderSingleRoundAsBranches ? '焦點輪次' : '決賽'), centerCardX + (centerCardWidth / 2), centerCardY + 24, {
-      font: '600 18px Arial, "Microsoft JhengHei", sans-serif',
-      color: palette.textSoft,
-      align: 'center',
-    });
-    if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
-      drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
-        font: '700 38px Arial, "Microsoft JhengHei", sans-serif',
-        color: '#F6B73C',
+    if (shouldRenderCenterStageCard) {
+      fillRoundedRect(ctx, centerCardX, centerCardY, centerCardWidth, centerCardHeight, 24, 'rgba(255,255,255,0.08)', 'rgba(246,183,60,0.24)', 1.5);
+      drawText(ctx, finalRound?.label || (shouldRenderSingleRoundAsBranches ? '焦點輪次' : '決賽'), centerCardX + (centerCardWidth / 2), centerCardY + 24, {
+        font: '600 18px Arial, "Microsoft JhengHei", sans-serif',
+        color: palette.textSoft,
         align: 'center',
       });
-      drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 96, {
-        maxWidth: centerCardWidth - 40,
-        maxFontSize: 14,
-        minFontSize: 10,
-        color: palette.textMuted,
-        weight: 500,
-        align: 'center',
-      });
-    } else {
-      drawText(ctx, `${completedMatches}/${Math.max(1, totalMatches)}`, centerCardX + (centerCardWidth / 2), centerCardY + 56, {
-        font: '700 34px Arial, "Microsoft JhengHei", sans-serif',
-        color: '#F6B73C',
-        align: 'center',
-      });
-      drawAdaptiveText(ctx, shouldRenderSingleRoundAsBranches ? '本張海報聚焦單一輪次對局' : '初期分組與後段總覽會分開輸出', centerCardX + 20, centerCardY + 96, {
-        maxWidth: centerCardWidth - 40,
-        maxFontSize: 13,
-        minFontSize: 10,
-        color: palette.textMuted,
-        weight: 500,
-        align: 'center',
-      });
+      if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
+        drawText(ctx, finalMatch ? `${finalMatch.playerAFrames} : ${finalMatch.playerBFrames}` : '-', centerCardX + (centerCardWidth / 2), centerCardY + 56, {
+          font: '700 38px Arial, "Microsoft JhengHei", sans-serif',
+          color: '#F6B73C',
+          align: 'center',
+        });
+        drawAdaptiveText(ctx, finalMatch ? `${finalMatch.playerALabel} vs ${finalMatch.playerBLabel}` : '尚未形成決賽對戰', centerCardX + 20, centerCardY + 96, {
+          maxWidth: centerCardWidth - 40,
+          maxFontSize: 14,
+          minFontSize: 10,
+          color: palette.textMuted,
+          weight: 500,
+          align: 'center',
+        });
+      } else {
+        drawText(ctx, `${completedMatches}/${Math.max(1, totalMatches)}`, centerCardX + (centerCardWidth / 2), centerCardY + 56, {
+          font: '700 34px Arial, "Microsoft JhengHei", sans-serif',
+          color: '#F6B73C',
+          align: 'center',
+        });
+        drawAdaptiveText(ctx, shouldRenderSingleRoundAsBranches ? '本張海報聚焦單一輪次對局' : '初期分組與後段總覽會分開輸出', centerCardX + 20, centerCardY + 96, {
+          maxWidth: centerCardWidth - 40,
+          maxFontSize: 13,
+          minFontSize: 10,
+          color: palette.textMuted,
+          weight: 500,
+          align: 'center',
+        });
+      }
     }
 
-    if (branchRounds.length > 0) {
+    if (branchRounds.length > 0 && shouldRenderCenterStageCard) {
       const lastLeftLayout = leftLayouts[leftLayouts.length - 1];
       const lastRightLayout = rightLayouts[rightLayouts.length - 1];
       const lastLeftX = leftColumnXs[leftColumnXs.length - 1];
@@ -1209,8 +1228,34 @@ async function renderKnockoutBracketShareCardCanvas({
     }
   }
 
-  fillRoundedRect(ctx, 650, 714, 620, 92, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
-  if (isChampionshipView && !shouldRenderSingleRoundAsBranches) {
+  if (isGoldSilverCupOverviewPoster) {
+    fillRoundedRect(ctx, 520, 714, 880, 96, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
+    drawText(ctx, '金杯三甲', 560, 748, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, centerSummaryCards.slice(0, 3).map((card) => `${card.detail} ${card.value}`).join('  ·  '), 560, 784, {
+      maxWidth: 360,
+      maxFontSize: 18,
+      minFontSize: 10,
+      color: '#F6B73C',
+      weight: 700,
+    });
+    drawText(ctx, '銀杯三甲', 1010, 748, {
+      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+      color: palette.textSoft,
+    });
+    drawAdaptiveText(ctx, centerSummaryCards.slice(3, 6).map((card) => `${card.detail} ${card.value}`).join('  ·  '), 1010, 784, {
+      maxWidth: 340,
+      maxFontSize: 18,
+      minFontSize: 10,
+      color: palette.textMain,
+      weight: 700,
+    });
+  } else {
+    fillRoundedRect(ctx, 650, 714, 620, 92, 24, 'rgba(246,183,60,0.10)', 'rgba(246,183,60,0.22)');
+  }
+  if (!isGoldSilverCupOverviewPoster && isChampionshipView && !shouldRenderSingleRoundAsBranches) {
     drawText(ctx, '冠軍', 690, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
@@ -1233,7 +1278,7 @@ async function renderKnockoutBracketShareCardCanvas({
       color: palette.textMain,
       weight: 700,
     });
-  } else {
+  } else if (!isGoldSilverCupOverviewPoster) {
     drawText(ctx, '焦點輪次', 690, 748, {
       font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
       color: palette.textSoft,
@@ -1258,32 +1303,56 @@ async function renderKnockoutBracketShareCardCanvas({
     });
   }
 
-  fillRoundedRect(ctx, 458, 832, 1004, 126, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
-  drawSectionTitle(ctx, '賽事摘要', '底部改為橫向摘要列，讓橫版海報同時保留 bracket 與關鍵數據。', 490, 872, palette);
-  centerSummaryCards.forEach((card, index) => {
-    const x = 490 + (index * 320);
-    const y = 898;
-    fillRoundedRect(ctx, x, y, 292, 42, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
-    drawText(ctx, card.label, x + 16, y + 26, {
-      font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
-      color: palette.textSoft,
+  const summarySectionY = isGoldSilverCupOverviewPoster ? 826 : 832;
+  const summarySectionHeight = centerSummaryCards.length > 3 ? 154 : 126;
+  fillRoundedRect(ctx, 458, summarySectionY, 1004, summarySectionHeight, 28, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.10)');
+  drawSectionTitle(ctx, '賽事摘要', centerSummaryCards.length > 3 ? '後段總覽補上金杯與銀杯 podium，避免只見主線而看不到雙盃名次。' : '底部改為橫向摘要列，讓橫版海報同時保留 bracket 與關鍵數據。', 490, summarySectionY + 40, palette);
+  if (centerSummaryCards.length > 3) {
+    centerSummaryCards.slice(0, 6).forEach((card, index) => {
+      const col = index % 3;
+      const row = Math.floor(index / 3);
+      const x = 490 + (col * 320);
+      const y = summarySectionY + 66 + (row * 48);
+      fillRoundedRect(ctx, x, y, 292, 38, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
+      drawText(ctx, card.label, x + 16, y + 24, {
+        font: '600 13px Arial, "Microsoft JhengHei", sans-serif',
+        color: palette.textSoft,
+      });
+      drawAdaptiveText(ctx, card.value, x + 276, y + 24, {
+        maxWidth: 170,
+        maxFontSize: 13,
+        minFontSize: 10,
+        color: row === 0 ? '#F6B73C' : palette.textMain,
+        weight: 700,
+        align: 'right',
+      });
     });
-    drawAdaptiveText(ctx, card.value, x + 110, y + 26, {
-      maxWidth: 84,
-      maxFontSize: 16,
-      minFontSize: 12,
-      color: '#F6B73C',
-      weight: 700,
+  } else {
+    centerSummaryCards.forEach((card, index) => {
+      const x = 490 + (index * 320);
+      const y = summarySectionY + 66;
+      fillRoundedRect(ctx, x, y, 292, 42, 16, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.08)');
+      drawText(ctx, card.label, x + 16, y + 26, {
+        font: '600 14px Arial, "Microsoft JhengHei", sans-serif',
+        color: palette.textSoft,
+      });
+      drawAdaptiveText(ctx, card.value, x + 110, y + 26, {
+        maxWidth: 84,
+        maxFontSize: 16,
+        minFontSize: 12,
+        color: '#F6B73C',
+        weight: 700,
+      });
+      drawAdaptiveText(ctx, card.detail, x + 276, y + 26, {
+        maxWidth: 118,
+        maxFontSize: 12,
+        minFontSize: 10,
+        color: palette.textMuted,
+        weight: 500,
+        align: 'right',
+      });
     });
-    drawAdaptiveText(ctx, card.detail, x + 276, y + 26, {
-      maxWidth: 118,
-      maxFontSize: 12,
-      minFontSize: 10,
-      color: palette.textMuted,
-      weight: 500,
-      align: 'right',
-    });
-  });
+  }
 
   drawFooter(ctx, palette, '淘汰賽模式海報版分享圖 · Snookerhk.live', {
     width: KNOCKOUT_CARD_WIDTH,

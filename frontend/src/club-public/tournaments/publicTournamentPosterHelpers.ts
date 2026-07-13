@@ -112,17 +112,32 @@ function buildGoldSilverCupPosterSummaryCards(detail: any, formatTournamentParti
     {
       label: '金杯冠軍',
       value: formatTournamentParticipantLabel(goldCup?.champion),
-      detail: goldCup?.runnerUp ? `亞軍 ${formatTournamentParticipantLabel(goldCup.runnerUp)}` : '亞軍待定',
+      detail: '冠軍',
+    },
+    {
+      label: '金杯亞軍',
+      value: formatTournamentParticipantLabel(goldCup?.runnerUp),
+      detail: '亞軍',
     },
     {
       label: '金杯季軍',
       value: formatTournamentParticipantLabel(goldCup?.thirdPlace),
-      detail: goldCup?.fourthPlace ? `殿軍 ${formatTournamentParticipantLabel(goldCup.fourthPlace)}` : '殿軍待定',
+      detail: '季軍',
     },
     {
       label: '銀杯冠軍',
       value: formatTournamentParticipantLabel(silverCup?.champion),
-      detail: silverCup?.runnerUp ? `亞軍 ${formatTournamentParticipantLabel(silverCup.runnerUp)}` : '亞軍待定',
+      detail: '冠軍',
+    },
+    {
+      label: '銀杯亞軍',
+      value: formatTournamentParticipantLabel(silverCup?.runnerUp),
+      detail: '亞軍',
+    },
+    {
+      label: '銀杯季軍',
+      value: formatTournamentParticipantLabel(silverCup?.thirdPlace),
+      detail: '季軍',
     },
   ];
 }
