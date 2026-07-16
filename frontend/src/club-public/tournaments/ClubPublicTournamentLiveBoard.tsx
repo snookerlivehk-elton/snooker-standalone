@@ -1,8 +1,7 @@
 import React from 'react';
 import ClubPublicTournamentLiveBoardCard from './ClubPublicTournamentLiveBoardCard';
 import TournamentPosterLightbox, { type TournamentPosterLightboxItem } from '../../components/TournamentPosterLightbox';
-import PublicTournamentHtmlPoster from './PublicTournamentHtmlPoster';
-import { buildPublicTournamentHtmlPosterItems, buildPublicTournamentPosterPreviewItems, type PublicTournamentHtmlPosterItem } from './publicTournamentPosterHelpers';
+import { buildPublicTournamentPosterPreviewItems } from './publicTournamentPosterHelpers';
 
 type ClubPublicTournamentLiveBoardProps = {
   API_URL: string;
@@ -114,8 +113,6 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const [featuredTournamentDetail, setFeaturedTournamentDetail] = React.useState<any | null>(null);
   const [featuredTournamentDetailLoading, setFeaturedTournamentDetailLoading] = React.useState(false);
   const [featuredPosterItems, setFeaturedPosterItems] = React.useState<TournamentPosterLightboxItem[]>([]);
-  const [featuredHtmlPosterItems, setFeaturedHtmlPosterItems] = React.useState<PublicTournamentHtmlPosterItem[]>([]);
-  const [featuredPosterIndex, setFeaturedPosterIndex] = React.useState(0);
   const [posterPreview, setPosterPreview] = React.useState<{ posters: TournamentPosterLightboxItem[]; initialIndex?: number } | null>(null);
   const sortedBoard = [...(Array.isArray(tournamentLiveBoard) ? tournamentLiveBoard : [])].sort((a: any, b: any) => {
     return getTournamentBoardPriorityScore(b) - getTournamentBoardPriorityScore(a);
@@ -132,7 +129,6 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const featuredPosterIsLandscape = isLandscapePosterFormat(featuredTournament?.format, normalizeTournamentFormat);
   const featuredPosterFrameClassName = featuredPosterIsLandscape ? 'aspect-[16/9]' : 'aspect-[1080/1350]';
   const featuredPosterUrl = featuredPosterItems[0]?.imageUrl || '';
-  const featuredHtmlPoster = featuredHtmlPosterItems[featuredPosterIndex] || null;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -163,34 +159,18 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
     let cancelled = false;
     if (!featuredTournamentDetail) {
       setFeaturedPosterItems([]);
-      setFeaturedHtmlPosterItems([]);
-      setFeaturedPosterIndex(0);
       return undefined;
     }
-    Promise.all([
-      buildPublicTournamentPosterPreviewItems({
+    buildPublicTournamentPosterPreviewItems({
         detail: featuredTournamentDetail,
         formatTournamentParticipantLabel,
         formatTournamentMatchStatusLabel,
-      }),
-      Promise.resolve(buildPublicTournamentHtmlPosterItems({
-        detail: featuredTournamentDetail,
-        formatTournamentParticipantLabel,
-        formatTournamentMatchStatusLabel,
-      })),
-    ])
-      .then(([items, htmlItems]) => {
-        if (cancelled) return;
-        setFeaturedPosterItems(items);
-        setFeaturedHtmlPosterItems(htmlItems);
-        setFeaturedPosterIndex(0);
+      })
+      .then((items) => {
+        if (!cancelled) setFeaturedPosterItems(items);
       })
       .catch(() => {
-        if (!cancelled) {
-          setFeaturedPosterItems([]);
-          setFeaturedHtmlPosterItems([]);
-          setFeaturedPosterIndex(0);
-        }
+        if (!cancelled) setFeaturedPosterItems([]);
       });
     return () => {
       cancelled = true;
@@ -238,34 +218,6 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
                       <div className={`flex ${featuredPosterFrameClassName} items-center justify-center rounded-[20px] border border-dashed border-white/10 bg-black/20 px-4 text-sm cue-muted`}>
                         正在生成海報預覽...
                       </div>
-                    </div>
-                  ) : featuredHtmlPoster ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
-                      {featuredHtmlPosterItems.length > 1 ? (
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {featuredHtmlPosterItems.map((item, index) => (
-                            <button
-                              key={`${item.title}-${index}`}
-                              type="button"
-                              onClick={() => setFeaturedPosterIndex(index)}
-                              className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
-                                index === featuredPosterIndex
-                                  ? 'border-yellow-400/40 bg-yellow-500/15 text-yellow-100'
-                                  : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                              }`}
-                            >
-                              {item.focusLabel}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                      <PublicTournamentHtmlPoster
-                        item={featuredHtmlPoster}
-                        onClick={() => setPosterPreview({
-                          posters: featuredPosterItems,
-                          initialIndex: Math.min(featuredPosterIndex, Math.max(0, featuredPosterItems.length - 1)),
-                        })}
-                      />
                     </div>
                   ) : featuredPosterUrl ? (
                     <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
