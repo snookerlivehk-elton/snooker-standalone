@@ -1,4 +1,4 @@
-type LeagueShareRow = {
+export type LeagueShareRow = {
   position: number;
   label: string;
   played: number;
@@ -11,7 +11,7 @@ type LeagueShareRow = {
   maxBreak: number;
 };
 
-type KnockoutShareMatch = {
+export type KnockoutShareMatch = {
   matchNo: number;
   statusLabel: string;
   playerALabel: string;
@@ -21,14 +21,14 @@ type KnockoutShareMatch = {
   winnerSide: 'A' | 'B' | null;
 };
 
-type KnockoutShareRound = {
+export type KnockoutShareRound = {
   label: string;
   total: number;
   completedCount: number;
   items: KnockoutShareMatch[];
 };
 
-type KnockoutShareSummaryCard = {
+export type KnockoutShareSummaryCard = {
   label: string;
   value: string;
   detail: string;
@@ -78,7 +78,7 @@ const LARGE_KNOCKOUT_ROUND_COUNT_THRESHOLD = 8;
 const LARGE_KNOCKOUT_GROUP_MATCH_LIMIT = 8;
 const LARGE_KNOCKOUT_OVERVIEW_ROUNDS = 4;
 
-type PlannedKnockoutShareCard = {
+export type PlannedKnockoutShareCard = {
   fileLabel?: string;
   focusLabel: string;
   rounds: KnockoutShareRound[];
@@ -651,7 +651,7 @@ function isSilverCupRoundLabel(label: string) {
   return String(label || '').trim().startsWith('銀杯');
 }
 
-function buildKnockoutShareCardPlan({
+export function buildKnockoutShareCardPlan({
   focusLabel,
   rounds,
   summaryCards = [],

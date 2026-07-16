@@ -1,6 +1,10 @@
 import {
   buildKnockoutBracketShareCardPreviewItems,
   buildLeagueStandingsShareCardDataUrl,
+  buildKnockoutShareCardPlan,
+  type LeagueShareRow,
+  type KnockoutShareRound,
+  type KnockoutShareSummaryCard,
 } from '../../venue/modules/TournamentShareCards';
 import { formatKnockoutRoundLabel } from '../../venue/modules/useTournamentStageViewData';
 import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
@@ -8,6 +12,19 @@ import { buildTournamentPodiumSummary } from '../../lib/tournamentPodium';
 export type PublicTournamentPosterPreviewItem = {
   imageUrl: string;
   title: string;
+};
+
+export type PublicTournamentHtmlPosterItem = {
+  title: string;
+  modeLabel: string;
+  venueName: string;
+  venueLogoUrl: string;
+  focusLabel: string;
+  chips: string[];
+  kind: 'league' | 'knockout';
+  rows?: LeagueShareRow[];
+  rounds?: KnockoutShareRound[];
+  summaryCards?: KnockoutShareSummaryCard[];
 };
 
 export function buildLeaguePosterRows(detail: any, formatTournamentParticipantLabel: (participant: any) => string) {
@@ -146,7 +163,7 @@ function buildCupSpecificPosterSummaryCards(
   detail: any,
   formatTournamentParticipantLabel: (participant: any) => string,
   cup: 'gold' | 'silver',
-) {
+): KnockoutShareSummaryCard[] {
   const participants = Array.isArray(detail?.participants) ? detail.participants : [];
   const matches = Array.isArray(detail?.matches) ? detail.matches : [];
   const podiumSummary = buildTournamentPodiumSummary(participants, matches);
@@ -169,6 +186,127 @@ function buildCupSpecificPosterSummaryCards(
       detail: '季軍',
     },
   ];
+}
+
+function buildLeagueHtmlPosterItems(detail: any, venueName: string, venueLogoUrl: string, formatTournamentParticipantLabel: (participant: any) => string): PublicTournamentHtmlPosterItem[] {
+  const rows = buildLeaguePosterRows(detail, formatTournamentParticipantLabel);
+  if (rows.length <= 0) return [];
+  return [{
+    title: String(detail?.title || '聯賽模式積分榜'),
+    modeLabel: 'LEAGUE MODE POSTER',
+    venueName,
+    venueLogoUrl,
+    focusLabel: '整個聯賽',
+    chips: [
+      '整個聯賽',
+      `共 ${rows.length} 位`,
+      `勝 ${Number(detail?.points_win ?? 3)} / 和 ${Number(detail?.points_draw ?? 1)} / 負 ${Number(detail?.points_loss ?? 0)}`,
+    ],
+    kind: 'league',
+    rows,
+    summaryCards: [],
+  }];
+}
+
+export function buildPublicTournamentHtmlPosterItems(options: {
+  detail: any;
+  formatTournamentParticipantLabel: (participant: any) => string;
+  formatTournamentMatchStatusLabel: (value: any) => string;
+}): PublicTournamentHtmlPosterItem[] {
+  const {
+    detail,
+    formatTournamentParticipantLabel,
+    formatTournamentMatchStatusLabel,
+  } = options;
+  const venueName = String(
+    detail?.club?.name
+    || detail?.tournament?.club?.name
+    || detail?.clubName
+    || '',
+  ).trim();
+  const venueLogoUrl = String(
+    detail?.club?.logoUrl
+    || detail?.club?.logo_url
+    || detail?.tournament?.club?.logoUrl
+    || detail?.tournament?.club?.logo_url
+    || detail?.clubLogoUrl
+    || '',
+  ).trim();
+  const normalizedFormat = String(detail?.format || '').trim().toUpperCase();
+  const isLeague = normalizedFormat === 'LEAGUE';
+  const isGoldSilverCup = normalizedFormat === 'GOLD_SILVER_CUP';
+  if (isLeague) {
+    return buildLeagueHtmlPosterItems(detail, venueName, venueLogoUrl, formatTournamentParticipantLabel);
+  }
+
+  const rounds = buildKnockoutPosterRounds(
+    detail,
+    formatTournamentParticipantLabel,
+    formatTournamentMatchStatusLabel,
+  );
+  if (rounds.length <= 0) return [];
+
+  const posterTitle = String(detail?.title || (isGoldSilverCup ? '金銀杯模式進級表' : '淘汰賽模式進級表'));
+  const mapPlanItems = (
+    title: string,
+    modeLabel: string,
+    planItems: ReturnType<typeof buildKnockoutShareCardPlan>,
+  ): PublicTournamentHtmlPosterItem[] => (
+    planItems.map((item) => ({
+      title: `${title} · ${item.focusLabel}`,
+      modeLabel,
+      venueName,
+      venueLogoUrl,
+      focusLabel: item.focusLabel,
+      chips: [
+        item.focusLabel,
+        `共 ${item.rounds.length} 輪`,
+        `完成 ${item.rounds.reduce((sum, round) => sum + Number(round?.completedCount || 0), 0)}/${item.rounds.reduce((sum, round) => sum + Number(round?.total || round?.items?.length || 0), 0)} 場`,
+      ],
+      kind: 'knockout',
+      rounds: item.rounds,
+      summaryCards: item.summaryCards,
+    }))
+  );
+
+  if (isGoldSilverCup) {
+    const goldRounds = rounds.filter((round) => String(round?.label || '').trim().startsWith('金杯'));
+    const silverRounds = rounds.filter((round) => String(round?.label || '').trim().startsWith('銀杯'));
+    const goldPlan = goldRounds.length > 0
+      ? buildKnockoutShareCardPlan({
+          title: `${posterTitle} - 金杯`,
+          venueName,
+          venueLogoUrl,
+          focusLabel: '全部輪次',
+          rounds: goldRounds,
+          summaryCards: buildCupSpecificPosterSummaryCards(detail, formatTournamentParticipantLabel, 'gold'),
+        })
+      : [];
+    const silverPlan = silverRounds.length > 0
+      ? buildKnockoutShareCardPlan({
+          title: `${posterTitle} - 銀杯`,
+          venueName,
+          venueLogoUrl,
+          focusLabel: '全部輪次',
+          rounds: silverRounds,
+          summaryCards: buildCupSpecificPosterSummaryCards(detail, formatTournamentParticipantLabel, 'silver'),
+        })
+      : [];
+    return [
+      ...mapPlanItems(`${posterTitle} - 金杯`, 'KNOCKOUT MODE POSTER', goldPlan),
+      ...mapPlanItems(`${posterTitle} - 銀杯`, 'KNOCKOUT MODE POSTER', silverPlan),
+    ];
+  }
+
+  const planItems = buildKnockoutShareCardPlan({
+    title: posterTitle,
+    venueName,
+    venueLogoUrl,
+    focusLabel: '全部輪次',
+    rounds,
+    summaryCards: buildKnockoutPosterSummaryCards(detail, formatTournamentParticipantLabel),
+  });
+  return mapPlanItems(posterTitle, 'KNOCKOUT MODE POSTER', planItems);
 }
 
 export async function buildPublicTournamentPosterDataUrl(options: {
