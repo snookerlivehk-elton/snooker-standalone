@@ -1,5 +1,7 @@
 # snooker-standalone 現階段進程（AI 交接檔）
 
+> 快速交接入口：如要在新任務 / 新對話中快速接上目前狀態，請先看 [PROJECT_STATUS_SUMMARY.md](./PROJECT_STATUS_SUMMARY.md)。
+
 更新日期：2026-07-09（Asia/Hong_Kong）
 
 ## 最新已完成（2026-07-09）

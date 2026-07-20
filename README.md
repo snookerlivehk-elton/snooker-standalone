@@ -1,6 +1,8 @@
 # Snooker Standalone — 環境設定與啟動說明
 
 > **📢 最新部署指南**：關於詳細的生產環境部署、重部署步驟與驗證清單，請參閱 [DEPLOYMENT.md](./DEPLOYMENT.md)。
+>
+> **📌 任務交接 / 專案現況摘要**：若是新開任務或要快速接手目前進度，請先看 [PROJECT_STATUS_SUMMARY.md](./PROJECT_STATUS_SUMMARY.md)。
 
 本文件主要說明目前系統的開發環境設定。舊版房間計分、LiveView、Overlay 與 Socket 即時同步流程已永久移除。
 
