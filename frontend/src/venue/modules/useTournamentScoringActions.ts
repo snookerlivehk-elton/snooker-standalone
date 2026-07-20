@@ -79,7 +79,7 @@ export function useTournamentScoringActions({
   setBreakMemberId,
   setBreakNote,
   setBreakPoints,
-  setBreakRecordedAt,
+  setBreakRecordedAt: _setBreakRecordedAt,
   setBreakSaving,
   setResultEndedAt,
   setResultFrames,

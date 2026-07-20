@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import AdminAuth from './AdminAuth';
 import MemberRegister from './MemberRegister';
@@ -25,7 +25,6 @@ import { FeatureKey, type ModuleCode, useFeatureEnabled, useModuleVisible } from
 
 // Force frontend redeploy
 function LogoutButton() {
-  const navigate = useNavigate();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
       return (localStorage.getItem('theme') === 'light' ? 'light' : 'dark');
@@ -33,11 +32,6 @@ function LogoutButton() {
       return 'dark';
     }
   });
-  const session = (() => {
-    try { return JSON.parse(localStorage.getItem('memberSession') || '{}'); } catch { return {}; }
-  })() as { id?: string };
-  const hasSession = !!session?.id;
-
   useEffect(() => {
     try {
       document.documentElement.dataset.theme = theme;

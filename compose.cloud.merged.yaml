@@ -16,7 +16,7 @@ services:
     build:
       context: ./frontend
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_API_URL: ${VITE_API_URL}
     ports:
       - "5173:5173"
     depends_on:

@@ -24,7 +24,8 @@
 若使用 Vite 代理（預設於 `vite.config.ts`），前端可直接透過相對路徑呼叫 `/api/...`。
 如需指定 API 來源，請建立 `frontend/.env` 並設定：
 
-- `VITE_API_BASE_URL`：例如 `http://localhost:3000`
+- `VITE_API_URL`：例如 `http://localhost:3000`
+- 相容舊設定：`VITE_API_BASE_URL` 仍可作為 fallback，但新部署請統一改用 `VITE_API_URL`
 
 啟動前端：
 
@@ -57,4 +58,4 @@
 問題排查：
 - 資產 404 或白頁：確認 `BASE_PATH` 是否與實際部署子路徑一致（專案頁需為 `/<repo>/`）。
 - 子路徑跳轉錯誤：確認已存在 `404.html`（Actions 已自動生成）。
-- 後端 API 連線問題：檢查 `VITE_API_BASE_URL` 或 Nginx/反向代理設定是否正確，並驗證 `/health`、`/health/db`。
+- 後端 API 連線問題：檢查 `VITE_API_URL`（或舊版 `VITE_API_BASE_URL` fallback）與 Nginx/反向代理設定是否正確，並驗證 `/health`、`/health/db`。

@@ -156,9 +156,9 @@ const AdminVenues: React.FC = () => {
                     const isEditing = Boolean(editing[m.id]);
                     const row = editing[m.id] || m;
                     const feature = m.clubFeature || null;
-                    const enabled = Boolean(row.is_enabled);
+                    const enabled = row.is_enabled !== false;
                     const enabledCls = enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
-                    const pointsAssigned = Boolean(isEditing ? row.pointsAssignedEnabled : feature?.assignedEnabled);
+                    const pointsAssigned = isEditing ? row.pointsAssignedEnabled === true : feature?.assignedEnabled === true;
                     const pointsCls = pointsAssigned ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600';
                     const accessDate =
                       row.accessExpiresAt ||
@@ -194,10 +194,10 @@ const AdminVenues: React.FC = () => {
                               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                 <input
                                   type="checkbox"
-                                  checked={Boolean(row.is_enabled)}
+                                  checked={enabled}
                                   onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
                                 />
-                                <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                                <span>{enabled ? '啟用' : '停用'}</span>
                               </label>
                             ) : (
                               <div className="font-semibold">{m.is_enabled === false ? '停用' : '啟用'}</div>
@@ -209,11 +209,11 @@ const AdminVenues: React.FC = () => {
                               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                 <input
                                   type="checkbox"
-                                  checked={Boolean(row.pointsAssignedEnabled)}
+                                  checked={pointsAssigned}
                                   disabled={!row.clubId}
                                   onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), pointsAssignedEnabled: e.target.checked } }))}
                                 />
-                                <span>{Boolean(row.pointsAssignedEnabled) ? '已授權' : '未授權'}</span>
+                                <span>{pointsAssigned ? '已授權' : '未授權'}</span>
                               </label>
                             ) : (
                               <div className={`rounded-full px-2 py-0.5 text-xs font-semibold ${pointsCls}`}>
@@ -279,6 +279,8 @@ const AdminVenues: React.FC = () => {
                         const isEditing = Boolean(editing[m.id]);
                         const row = editing[m.id] || m;
                         const feature = m.clubFeature || null;
+                        const enabled = row.is_enabled !== false;
+                        const pointsAssigned = row.pointsAssignedEnabled === true;
                         return (
                           <tr key={m.id} className="odd:bg-white even:bg-slate-50">
                             <td className="border-b border-slate-100 px-3 py-2 align-top">
@@ -296,10 +298,10 @@ const AdminVenues: React.FC = () => {
                                 <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                   <input
                                     type="checkbox"
-                                    checked={Boolean(row.is_enabled)}
+                                    checked={enabled}
                                     onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
                                   />
-                                  <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                                  <span>{enabled ? '啟用' : '停用'}</span>
                                 </label>
                               ) : (
                                 <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${m.is_enabled === false ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -312,11 +314,11 @@ const AdminVenues: React.FC = () => {
                                 <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                   <input
                                     type="checkbox"
-                                    checked={Boolean(row.pointsAssignedEnabled)}
+                                    checked={pointsAssigned}
                                     disabled={!row.clubId}
                                     onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), pointsAssignedEnabled: e.target.checked } }))}
                                   />
-                                  <span>{Boolean(row.pointsAssignedEnabled) ? '已授權' : '未授權'}</span>
+                                  <span>{pointsAssigned ? '已授權' : '未授權'}</span>
                                 </label>
                               ) : (
                                 <div className="space-y-1">

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Tabs from './components/Tabs';
 import { API_URL } from './config';
@@ -53,7 +53,7 @@ const VenueModules: React.FC = () => {
   }, []);
   const memberId = String((session as any)?.id || '').trim();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!memberId) {
       setError('未登入');
       setLoading(false);
@@ -70,11 +70,11 @@ const VenueModules: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
 
   useEffect(() => {
     load();
-  }, [memberId]);
+  }, [load]);
 
   const visibleRows = useMemo(() => {
     if (category === 'all') return rows;

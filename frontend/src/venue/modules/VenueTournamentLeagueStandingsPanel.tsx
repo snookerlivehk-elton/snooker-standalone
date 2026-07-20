@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { downloadLeagueStandingsShareCard } from './TournamentShareCards';
 
 type VenueTournamentLeagueStandingsPanelProps = {
@@ -49,15 +49,15 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  const createParticipantSeedMap = () => {
+  const createParticipantSeedMap = useCallback(() => {
     const participantMap = new Map<string, any>();
-    for (const row of normalizedOverallRows) {
-      const participantId = String(row?.participantId || '');
+    for (const row of standingsRows) {
+      const participantId = String(row?.participantId || row?.participant_id || '');
       if (!participantId) continue;
       participantMap.set(participantId, {
         participantId,
         participant: row?.participant || null,
-        label: row?.label || '-',
+        label: formatParticipantLabel(row?.participant),
         seed: Number(row?.seed || row?.participant?.seed || 0),
         played: 0,
         won: 0,
@@ -104,9 +104,9 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
       }
     }
     return participantMap;
-  };
+  }, [formatParticipantLabel, matchesRows, standingsRows]);
 
-  const buildStandingsFromMatches = (sourceMatches: any[]) => {
+  const buildStandingsFromMatches = useCallback((sourceMatches: any[]) => {
     const participantMap = createParticipantSeedMap();
     for (const match of sourceMatches) {
       const aId = String(match?.player_a_participant_id || '');
@@ -170,7 +170,7 @@ const VenueTournamentLeagueStandingsPanel: React.FC<VenueTournamentLeagueStandin
         ...row,
         position: index + 1,
       }));
-  };
+  }, [createParticipantSeedMap, pointsDraw, pointsLoss, pointsWin]);
 
   const normalizedOverallRows = useMemo(() => {
     return standingsRows.map((row: any) => {

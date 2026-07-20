@@ -307,8 +307,9 @@ export const AdminMembersPanel: React.FC<AdminMembersPanelProps> = ({
                     const isEditing = Boolean(editing[m.id]);
                     const row = editing[m.id] || m;
                     const roleLabel = (row.role || m.role) === 'ADMIN' ? '場館/球會' : '普通會員';
-                    const enabledLabel = Boolean(row.is_enabled) ? '啟用' : '停用';
-                    const enabledCls = Boolean(row.is_enabled) ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
+                    const isEnabled = row.is_enabled !== false;
+                    const enabledLabel = isEnabled ? '啟用' : '停用';
+                    const enabledCls = isEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
                     const accessDate = row.accessExpiresAt || row.access_expires_at || (m.access_expires_at ? new Date(m.access_expires_at).toISOString().slice(0, 10) : '');
                     return (
                       <div key={m.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-900">
@@ -386,10 +387,10 @@ export const AdminMembersPanel: React.FC<AdminMembersPanelProps> = ({
                               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                 <input
                                   type="checkbox"
-                                  checked={Boolean(row.is_enabled)}
+                                  checked={isEnabled}
                                   onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
                                 />
-                                <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                                <span>{isEnabled ? '啟用' : '停用'}</span>
                               </label>
                             ) : (
                               <div className="font-semibold">{m.is_enabled === false ? '停用' : '啟用'}</div>
@@ -460,6 +461,7 @@ export const AdminMembersPanel: React.FC<AdminMembersPanelProps> = ({
                       {filteredMembers.map((m) => {
                         const isEditing = Boolean(editing[m.id]);
                         const row = editing[m.id] || m;
+                        const isEnabled = row.is_enabled !== false;
                         return (
                           <tr key={m.id} className="odd:bg-white even:bg-slate-50">
                             <td className="border-b border-slate-100 px-3 py-2 align-top font-mono text-xs text-slate-600">
@@ -517,10 +519,10 @@ export const AdminMembersPanel: React.FC<AdminMembersPanelProps> = ({
                                 <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                                   <input
                                     type="checkbox"
-                                    checked={Boolean(row.is_enabled)}
+                                    checked={isEnabled}
                                     onChange={(e) => setEditing((p) => ({ ...p, [m.id]: { ...(p[m.id] || m), is_enabled: e.target.checked } }))}
                                   />
-                                  <span>{Boolean(row.is_enabled) ? '啟用' : '停用'}</span>
+                                  <span>{isEnabled ? '啟用' : '停用'}</span>
                                 </label>
                               ) : (
                                 <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${m.is_enabled === false ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>

@@ -38,7 +38,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          ALLOW_ORIGINS: ${{ secrets.ALLOW_ORIGINS }}
+          CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
           SOCKET_PATH: ${{ secrets.SOCKET_PATH }}
           RAILWAY_SERVICE_NAME: ${{ secrets.RAILWAY_SERVICE_NAME }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
@@ -46,7 +46,7 @@ jobs:
           SERVICE_NAME="${RAILWAY_SERVICE_NAME:-snooker-standalone-backend}"
           railway up --service "$SERVICE_NAME" --project "$RAILWAY_PROJECT_ID"
           railway variables set ADMIN_TOKEN="$ADMIN_TOKEN" --service "$SERVICE_NAME" || true
-          railway variables set ALLOW_ORIGINS="$ALLOW_ORIGINS" --service "$SERVICE_NAME" || true
+          railway variables set CORS_ORIGIN="$CORS_ORIGIN" --service "$SERVICE_NAME" || true
           railway variables set SOCKET_PATH="$SOCKET_PATH" --service "$SERVICE_NAME" || true
           railway variables set NIXPACKS_NODE_INSTALL_CMD="npm install --no-audit --no-fund" --service "$SERVICE_NAME" || true
       - name: Get Service Domain

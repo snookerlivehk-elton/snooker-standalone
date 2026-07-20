@@ -34,15 +34,15 @@ type PricingRule = {
 
 const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSection, standaloneTitle, standaloneDescription, standaloneBackTo }) => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [venueAccessExpiresAt, setVenueAccessExpiresAt] = useState<string | null>(null);
   const [venueAccessDaysLeft, setVenueAccessDaysLeft] = useState<number | null>(null);
   const [clubProfile, setClubProfile] = useState<any>({});
   const [facilitiesDraft, setFacilitiesDraft] = useState('');
   const [clubMembers, setClubMembers] = useState<any[]>([]);
-  const [msgTitle, setMsgTitle] = useState('');
-  const [msgContent, setMsgContent] = useState('');
+  const [_msgTitle, _setMsgTitle] = useState('');
+  const [_msgContent, _setMsgContent] = useState('');
   const [tables, setTables] = useState<any[]>([]);
   const [newTableName, setNewTableName] = useState('');
   const [newTableNotes, setNewTableNotes] = useState('');
@@ -97,13 +97,13 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
   const [activeTab, setActiveTab] = useState<VenueDashboardTab>(forcedTab || 'home');
   const standaloneMode = !!forcedTab;
 
-  function buildDashboardTabPath(tab: VenueDashboardTab) {
+  const buildDashboardTabPath = useCallback((tab: VenueDashboardTab) => {
     const sp = new URLSearchParams();
     sp.set('tab', tab);
     return `/venue/dashboard?${sp.toString()}`;
-  }
+  }, []);
 
-  function resolveTab(): VenueDashboardTab {
+  const resolveTab = useCallback((): VenueDashboardTab => {
     if (forcedTab) return forcedTab;
     try {
       const params = new URLSearchParams(window.location.search);
@@ -113,9 +113,9 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
     } catch {
       return 'home';
     }
-  }
+  }, [forcedTab]);
 
-  function updateTab(t: VenueDashboardTab) {
+  const updateTab = useCallback((t: VenueDashboardTab) => {
     if (forcedTab && t !== forcedTab) {
       navigate(buildDashboardTabPath(t), { replace: true });
       return;
@@ -130,7 +130,7 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
       url.searchParams.set('tab', t);
       window.history.replaceState({}, '', url.toString());
     } catch {}
-  }
+  }, [buildDashboardTabPath, forcedTab, navigate]);
 
   const rawBase = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   const joinUrl = clubProfile?.id ? new URL(`/club/${clubProfile.id}`, window.location.origin).toString() : '';
@@ -223,7 +223,7 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
   useEffect(() => {
     const lines = Array.isArray(clubProfile?.facilities) ? clubProfile.facilities.map((x: any) => String(x)) : [];
     setFacilitiesDraft(lines.join('\n'));
-  }, [clubProfile?.id, clubProfile?.updatedAt]);
+  }, [clubProfile?.facilities]);
 
   const getGalleryArray = useCallback((raw: any) => {
     return Array.isArray(raw) ? raw.map((x: any) => String(x || '').trim()).filter(Boolean) : [];
@@ -472,11 +472,11 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
       if (!canceled) loadData();
     })();
     return () => { canceled = true; };
-  }, [operatorId, isOperator, navigate, loadData]);
+  }, [operatorId, isOperator, navigate, loadData, session?.role]);
 
   useEffect(() => {
     setActiveTab(resolveTab());
-  }, [forcedTab]);
+  }, [resolveTab]);
 
   useEffect(() => {
     const contentVisible = clubMessagesEnabled || liveEnabled || tournamentsEnabled;
@@ -485,7 +485,7 @@ const VenueDashboard: React.FC<VenueDashboardProps> = ({ forcedTab, forcedSectio
     if (activeTab === 'points' && clubFeatureAccessLoaded && !pointsEnabled) return updateTab('home');
     if (activeTab === 'highbreak' && !highbreakEnabled) return updateTab('home');
     if (activeTab === 'content' && !contentVisible) return updateTab('home');
-  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled]);
+  }, [activeTab, bookingEnabled, qrEnabled, pointsEnabled, clubFeatureAccessLoaded, highbreakEnabled, clubMessagesEnabled, liveEnabled, tournamentsEnabled, updateTab]);
 
   if (!operatorId || !isOperator) return null;
 

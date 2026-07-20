@@ -19,6 +19,7 @@
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:bootstrap:club": "ts-node scripts/bootstrapClubSchema.ts",
     "db:generate": "prisma generate",
     "env:check": "node envCheck.mjs",
     "env:export": "node envExport.mjs",

@@ -208,17 +208,17 @@ function formatPublicKnockoutRoundLabel(match: any, participantCount: number) {
   return formatKnockoutRoundLabel(match, participantCount);
 }
 
-function getPublicBracketColumnPaddingTop(roundIndex: number) {
+function _getPublicBracketColumnPaddingTop(roundIndex: number) {
   if (roundIndex <= 0) return 0;
   return ((2 ** roundIndex) - 1) * (PUBLIC_BRACKET_CARD_HEIGHT + PUBLIC_BRACKET_BASE_GAP) / 2;
 }
 
-function getPublicBracketColumnGap(roundIndex: number) {
+function _getPublicBracketColumnGap(roundIndex: number) {
   if (roundIndex <= 0) return PUBLIC_BRACKET_BASE_GAP;
   return (2 ** roundIndex) * (PUBLIC_BRACKET_CARD_HEIGHT + PUBLIC_BRACKET_BASE_GAP) - PUBLIC_BRACKET_CARD_HEIGHT;
 }
 
-function getPublicBracketColumnHeight(matchCount: number) {
+function _getPublicBracketColumnHeight(matchCount: number) {
   if (matchCount <= 0) return PUBLIC_BRACKET_CARD_HEIGHT;
   return matchCount * PUBLIC_BRACKET_CARD_HEIGHT + Math.max(0, matchCount - 1) * PUBLIC_BRACKET_BASE_GAP;
 }
@@ -263,9 +263,9 @@ const ClubPublicPage: React.FC = () => {
   const [clubMsgOpenId, setClubMsgOpenId] = useState<string | null>(null);
 
   const [clubLive, setClubLive] = useState<any[]>([]);
-  const [clubLiveLoading, setClubLiveLoading] = useState(false);
+  const [_clubLiveLoading, setClubLiveLoading] = useState(false);
   const [clubLiveState, setClubLiveState] = useState<{ read: Record<string, boolean>; hidden: Record<string, boolean> }>({ read: {}, hidden: {} });
-  const [clubLiveSelected, setClubLiveSelected] = useState<Record<string, boolean>>({});
+  const [_clubLiveSelected, setClubLiveSelected] = useState<Record<string, boolean>>({});
   const [clubLiveOpenKey, setClubLiveOpenKey] = useState<string | null>(null);
 
   const [tournaments, setTournaments] = useState<any[]>([]);
@@ -450,7 +450,7 @@ const ClubPublicPage: React.FC = () => {
     const ds = Math.max(3, Math.min(60, Number(siteAdConfig?.displaySeconds ?? 15) || 15));
     const t = window.setTimeout(() => setSiteAdOpen(false), ds * 1000);
     return () => window.clearTimeout(t);
-  }, [siteAdOpen, siteAdConfig?.versionUpdatedAt]);
+  }, [siteAdOpen, siteAdConfig?.displaySeconds, siteAdConfig?.versionUpdatedAt]);
 
   useEffect(() => {
     const wasOpen = siteAdWasOpenRef.current;
@@ -1503,7 +1503,7 @@ const ClubPublicPage: React.FC = () => {
     try { localStorage.setItem(`clubPageLiveState:${clubId}:${sessionMemberId || 'guest'}`, JSON.stringify(next)); } catch {}
   }, [clubId, clubLiveOpen, clubLiveState.hidden, clubLiveState.read, sessionMemberId]);
 
-  const clubLiveToggleSelect = (key: string, checked: boolean) => {
+  const _clubLiveToggleSelect = (key: string, checked: boolean) => {
     setClubLiveSelected((prev) => {
       const next = { ...(prev || {}) };
       if (checked) next[key] = true;
@@ -1512,7 +1512,7 @@ const ClubPublicPage: React.FC = () => {
     });
   };
 
-  const clubLiveDelete = async (keys: string[]) => {
+  const _clubLiveDelete = async (keys: string[]) => {
     if (!clubId) return;
     const nextHidden = { ...(clubLiveState.hidden || {}) };
     for (const k of keys) nextHidden[k] = true;

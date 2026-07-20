@@ -35,6 +35,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 console.log(`Starting Snooker Backend v1.0.1...`);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+const ENABLE_DB_BOOTSTRAP = String(process.env.ENABLE_DB_BOOTSTRAP || '').trim().toLowerCase() === 'true';
 const corsOriginRaw = process.env.CORS_ORIGIN || '*';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -83,7 +84,11 @@ app.use((err: any, _req: express.Request, res: express.Response, next: express.N
 });
 
 startNewsScheduler(prisma);
-createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
+if (ENABLE_DB_BOOTSTRAP) {
+  createClubTables(prisma).catch(e => console.error('Failed to init club tables', e));
+} else {
+  console.log('Skipping startup DB bootstrap; run migrations first or set ENABLE_DB_BOOTSTRAP=true for one-off legacy setup.');
+}
 
 let featureCache: { at: number; map: Record<string, boolean> } | null = null;
 

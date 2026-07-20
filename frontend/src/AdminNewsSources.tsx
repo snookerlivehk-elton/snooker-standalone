@@ -228,7 +228,7 @@ const AdminNewsSources: React.FC = () => {
                   <div className="mt-1 text-xs cue-muted break-words">{String(row.feedUrl || '')}</div>
                   {row.siteUrl ? <div className="mt-1 text-xs cue-muted break-words">{String(row.siteUrl)}</div> : null}
                   <div className="mt-1 text-xs cue-muted">
-                    更新小時：{Number(row.fetchEveryHours || 72)}　最後拉取：{row.lastFetchedAt ? String(row.lastFetchedAt) : '—'}
+                    更新小時：{Number(row.fetchEveryHours || 72)} / 最後拉取：{row.lastFetchedAt ? String(row.lastFetchedAt) : '-'}
                   </div>
                   {row.lastError ? <div className="mt-1 text-xs text-amber-200 break-words">上次錯誤：{String(row.lastError)}</div> : null}
                 </div>
@@ -268,4 +268,3 @@ const AdminNewsSources: React.FC = () => {
 };
 
 export default AdminNewsSources;
-

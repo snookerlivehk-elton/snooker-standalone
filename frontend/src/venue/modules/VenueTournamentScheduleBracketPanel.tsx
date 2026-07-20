@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TournamentPosterLightbox, { type TournamentPosterLightboxItem } from '../../components/TournamentPosterLightbox';
 import { formatKnockoutRoundLabel, formatLeagueRoundLabel } from './useTournamentStageViewData';
 import { buildKnockoutBracketPrintHtml } from './KnockoutBracketPrint';
@@ -99,13 +99,13 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
     return 'cue-border cue-surface hover:brightness-95';
   };
 
-  const matchesQuickFilter = (row: any) => {
+  const matchesQuickFilter = useCallback((row: any) => {
     const status = String(row?.status || '').trim().toUpperCase();
     const canRecordMatch = !!row?.player_a_participant_id && !!row?.player_b_participant_id && status !== 'PENDING';
     if (quickFilter === 'SCORABLE') return canRecordMatch;
     if (quickFilter === 'UNFINISHED') return status !== 'COMPLETED';
     return true;
-  };
+  }, [quickFilter]);
 
   const getRoundTheme = (label: string) => {
     if (label.includes('季軍戰')) {
@@ -171,7 +171,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
       if (isLeague || effectiveFocusedRoundLabel === 'ALL') return true;
       return formatKnockoutRoundLabel(row, participantsCount) === effectiveFocusedRoundLabel;
     });
-  }, [effectiveFocusedRoundLabel, isLeague, matchesRows, participantsCount, quickFilter, statusFilter]);
+  }, [effectiveFocusedRoundLabel, isLeague, matchesQuickFilter, matchesRows, participantsCount, statusFilter]);
 
   const filteredBracketColumns = useMemo(() => {
     return bracketColumns.map((column: any) => {
@@ -193,7 +193,7 @@ const VenueTournamentScheduleBracketPanel: React.FC<VenueTournamentScheduleBrack
         },
       };
     });
-  }, [bracketColumns, quickFilter, statusFilter]);
+  }, [bracketColumns, matchesQuickFilter, statusFilter]);
 
   const knockoutRoundCards = useMemo(() => {
     return filteredBracketColumns.map((column: any) => ({

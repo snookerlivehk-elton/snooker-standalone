@@ -88,7 +88,7 @@ const AdminBreaks: React.FC = () => {
 
   useEffect(() => {
     load(1);
-  }, []);
+  }, [load]);
 
   function startEdit(r: any) {
     setEditing((p) => ({

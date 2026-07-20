@@ -121,7 +121,7 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
   const remainingTournaments = sortedBoard.slice(1);
   const featuredBucket = featuredTournament ? getTournamentBoardBucket(featuredTournament) : 'quiet';
   const heroContent = getHeroContent(featuredBucket);
-  const heroTitle = featuredTournament ? heroContent.title : '公開賽況';
+  const _heroTitle = featuredTournament ? heroContent.title : '公開賽況';
   const heroSummary = featuredTournament
     ? heroContent.summary
     : '集中顯示目前可公開查看的賽事進度、即將上場與最近完成場次。';
@@ -162,15 +162,18 @@ const ClubPublicTournamentLiveBoard: React.FC<ClubPublicTournamentLiveBoardProps
       return undefined;
     }
     buildPublicTournamentPosterPreviewItems({
-        detail: featuredTournamentDetail,
-        formatTournamentParticipantLabel,
-        formatTournamentMatchStatusLabel,
-      })
+      detail: featuredTournamentDetail,
+      formatTournamentParticipantLabel,
+      formatTournamentMatchStatusLabel,
+    })
       .then((items) => {
-        if (!cancelled) setFeaturedPosterItems(items);
+        if (cancelled) return;
+        setFeaturedPosterItems(items);
       })
       .catch(() => {
-        if (!cancelled) setFeaturedPosterItems([]);
+        if (!cancelled) {
+          setFeaturedPosterItems([]);
+        }
       });
     return () => {
       cancelled = true;

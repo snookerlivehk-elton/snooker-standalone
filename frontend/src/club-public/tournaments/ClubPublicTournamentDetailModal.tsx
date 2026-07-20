@@ -47,7 +47,7 @@ const ClubPublicTournamentDetailModal: React.FC<ClubPublicTournamentDetailModalP
   openedTournamentLiveMatches,
   openedTournamentReadyMatches,
   openedTournamentRecentCompletedMatches,
-  openedTournamentStandings,
+  openedTournamentStandings: _openedTournamentStandings,
   openedTournamentBracketColumns,
   openedTournamentThirdPlaceMatch,
   openedTournamentLeagueRounds,

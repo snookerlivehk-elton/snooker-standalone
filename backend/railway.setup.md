@@ -39,6 +39,7 @@
 注意：
 - 不要手動設定 `PORT`；Railway 會自動注入 `PORT`，後端程式已使用 `process.env.PORT` 監聽對應埠。
 - `DATABASE_URL` 建議直接使用剛剛在資料庫服務 `Connect` 頁面複製的 URL，避免手動拼接錯誤。
+- `ENABLE_DB_BOOTSTRAP` 預設不要設定；只有舊資料庫缺少 club 相關資料表、而你明確要做一次性補表時才臨時設成 `true` 或手動執行 `npm run db:bootstrap:club`。
 
 > 已在 `backend/package.json` 加入 `prestart: prisma generate` 與 `postinstall: prisma generate`，並將 `prisma` 置於 `dependencies`；因此 Nixpacks 與 Docker 兩種模式都能自動生成 Prisma Client。
 
@@ -46,6 +47,7 @@
 - 觸發 `Deploy`，在 `Logs` 檢查：
   - 有 `Prisma Client` 生成成功（或顯示已存在）。
   - 進程以 `npm run start:migrate` 執行，先套用 `prisma migrate deploy`，再以 `node dist/index.js` 啟動且無錯誤。
+  - 正常情況下應看到略過 startup DB bootstrap 的訊息，而不是在啟動時大量執行 `CREATE TABLE` / `ALTER TABLE`。
   - 出現 `listening on 0.0.0.0:XXXX` 字樣（`XXXX` 為 Railway 注入的 `PORT`）。
 - 瀏覽器驗證：
   - `GET /health` 應回 `200 OK` 且無 `X-Railway-Fallback`。

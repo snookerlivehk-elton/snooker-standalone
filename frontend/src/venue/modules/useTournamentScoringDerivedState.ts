@@ -8,7 +8,6 @@ import {
   getBreakRowsInSegment,
   getCompletedEditableFrames,
   getPendingEditableFrame,
-  getRecommendedFrameNoForSegment,
   getSegmentBreakSummary,
   getSessionNoForFrame,
   getTargetWins,
@@ -17,7 +16,6 @@ import {
 import type {
   EditableFrame,
   MatchMemberOption,
-  MatchResultQuickType,
   TournamentScoringWorkspace,
 } from './VenueTournamentScoringTypes';
 

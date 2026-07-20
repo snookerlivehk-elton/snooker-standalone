@@ -20,6 +20,7 @@ const apiUrlOverride = params?.get('apiUrl') || params?.get('api') || undefined;
 export const API_URL: string =
   apiUrlOverride ||
   (import.meta.env.VITE_API_URL as string | undefined) ||
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
   (isDev ? 'http://localhost:3000' : prodDefaultBackend);
 
 // App display name (UI + document.title)

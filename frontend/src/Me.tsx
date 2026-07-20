@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import BottomNavPublic from './components/BottomNavPublic';
 import { API_URL } from './config';
 import {
@@ -81,7 +81,7 @@ type InboxItem = {
 
 const Me: React.FC = () => {
   const location = useLocation();
-  const session = readMemberSession() as MemberSession;
+  const session = useMemo(() => readMemberSession() as MemberSession, []);
   const memberId = session?.id;
   const [profile, setProfile] = useState<any>(null);
   const [myClubProfile, setMyClubProfile] = useState<any>(null);
@@ -119,7 +119,7 @@ const Me: React.FC = () => {
   const [siteAdOpen, setSiteAdOpen] = useState(false);
   const [siteAdNextAt, setSiteAdNextAt] = useState<number | null>(null);
   const siteAdWasOpenRef = useRef(false);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'clubs' | 'messages' | 'history' | 'settings'>('clubs');
   const [editMode, setEditMode] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -206,7 +206,7 @@ const Me: React.FC = () => {
       member_tier: String(profile?.member_tier || profile?.memberTier || session?.member_tier || 'BASIC').toUpperCase() === 'VERIFIED' ? 'VERIFIED' : 'BASIC',
       email_verified_at: profile?.email_verified_at ?? profile?.emailVerifiedAt ?? session?.email_verified_at ?? null,
     });
-  }, [memberId, profile]);
+  }, [memberId, profile, session]);
 
   useEffect(() => {
     let mounted = true;
@@ -349,7 +349,7 @@ const Me: React.FC = () => {
     const ds = Math.max(3, Math.min(60, Number(siteAdConfig?.displaySeconds ?? 15) || 15));
     const t = window.setTimeout(() => setSiteAdOpen(false), ds * 1000);
     return () => window.clearTimeout(t);
-  }, [siteAdOpen, siteAdConfig?.versionUpdatedAt]);
+  }, [siteAdOpen, siteAdConfig?.displaySeconds, siteAdConfig?.versionUpdatedAt]);
 
   useEffect(() => {
     const wasOpen = siteAdWasOpenRef.current;
@@ -634,7 +634,7 @@ const Me: React.FC = () => {
     if (breakYear == null && breakYears.length > 0) setBreakYear(breakYears[0]);
   }, [breakYear, breakYears]);
 
-  const breakSummary = useMemo(() => {
+  const _breakSummary = useMemo(() => {
     if (parsedBreaks.length === 0) return { highest: 0, total: 0 };
     let highest = 0;
     let total = 0;

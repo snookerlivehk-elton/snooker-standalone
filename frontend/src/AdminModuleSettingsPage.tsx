@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { API_URL } from './config';
 import { getAdminModuleSettings, updateAdminModuleSettings } from './lib/api';
@@ -23,7 +23,7 @@ const AdminModuleSettingsPage: React.FC = () => {
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>(config?.defaultSettings || {});
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!config) {
       setLoading(false);
       setError('此模組未提供獨立設定頁');
@@ -40,12 +40,12 @@ const AdminModuleSettingsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }
+  }, [config]);
 
   useEffect(() => {
     setDraft(config?.defaultSettings || {});
     load();
-  }, [moduleCode]);
+  }, [config?.defaultSettings, load]);
 
   async function save() {
     if (!config) return;

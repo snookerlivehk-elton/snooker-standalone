@@ -25,6 +25,7 @@
 | `CORS_ORIGIN` | **是** | 允許的前端來源 (包含 Protocol) | `https://your-username.github.io` |
 | `ADMIN_TOKEN` | **是** | 管理員後台登入 Token | `secret_admin_token_123` |
 | `NODE_ENV` | 否 | 執行環境 | `production` |
+| `ENABLE_DB_BOOTSTRAP` | 否 | 僅供舊資料庫一次性補表，預設關閉 | `true` |
 
 ### 2.2 建置與啟動指令 (Build & Start)
 
@@ -35,6 +36,9 @@ npm install
 # 資料庫遷移 (確保 Schema 最新)
 npm run db:deploy
 
+# 僅在舊資料庫需要一次性補 club schema 時才執行
+# npm run db:bootstrap:club
+
 # 建置 TypeScript 程式碼
 npm run build
 
@@ -42,7 +46,7 @@ npm run build
 npm start
 ```
 
-*注意：`npm start` 會執行 `node dist/index.js`。*
+*注意：`npm start` 會執行 `node dist/index.js`，預設不再於啟動時自動修改資料庫 schema。*
 
 ### 2.3 驗證方法 (Verification)
 
@@ -66,6 +70,8 @@ npm start
 | 變數名稱 | 說明 | 範例值 |
 | :--- | :--- | :--- |
 | `VITE_API_URL` | 後端 API 位址 (無結尾斜線) | `https://your-backend.up.railway.app` |
+
+註：前端仍相容舊的 `VITE_API_BASE_URL`，但新部署請統一使用 `VITE_API_URL`。
 
 ### 3.2 部署指令 (GitHub Pages)
 

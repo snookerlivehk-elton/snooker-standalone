@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { API_URL } from './config';
 import { createAdminSiteAdItem, deleteAdminSiteAdItem, getAdminFeatures, getAdminSiteAds, getSiteNotice, setAdminSiteAdPlacementItems, updateAdminFeatures, updateAdminSiteAd, updateAdminSiteAdItem, updateSiteNotice, uploadAdminSiteAdItemImage } from './lib/api';
 import { clearFeatureCache } from './lib/features';
@@ -124,7 +124,7 @@ const AdminOverview: React.FC = () => {
     }
   }
 
-  async function refreshAds(tok?: string) {
+  const refreshAds = useCallback(async (tok?: string) => {
     const t = tok || resolveToken();
     const row = await getAdminSiteAds(API_URL, t);
 
@@ -172,7 +172,7 @@ const AdminOverview: React.FC = () => {
     setAdItemsDraft(itemsNext);
     setPlacementItemIdsDraft(placementNext);
     return row;
-  }
+  }, []);
 
   async function saveAd(placement: 'system' | 'venue' | 'member') {
     setAdsSaveResult(null);
@@ -471,7 +471,7 @@ const AdminOverview: React.FC = () => {
     }
     fetchOverview();
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshAds]);
 
   useEffect(() => {
     setActiveTab(resolveTab());
